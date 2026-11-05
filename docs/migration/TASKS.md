@@ -17,7 +17,7 @@ Repo: LABCAT/mission-control — multi-tenant job board platform, fork of LABCAT
 First tenants: "hub" (LABCAT aggregate site) and "vwok" (vanuatuwok.vu, migrating off WordPress/JobRoller).
 Layout: apps/cms (multi-tenant Payload 4 beta + TanStack Start on Cloudflare Workers, Neon via Hyperdrive, R2),
 apps/hub + apps/vwok (Astro on Workers), packages/payload-jobs, packages/payload-xero, packages/payload-wp-import,
-packages/site-kit (Astro theme on @labcat2020/rocketship + typed CMS client).
+packages/launchpad (Astro theme on @labcat2020/rocketship + typed CMS client).
 Docs: docs/UPSTREAM.md, docs/migration/PLAN.md, AUDIT.md (what the old site does), USAGE.md (what is used — build only that).
 Legacy reference (read-only): LABCAT/vanuatuwok.vu @ migration-plan (web/app/themes/efate, web/app/plugins/*).
 Rules:
@@ -77,7 +77,7 @@ Rules:
 | PJ-08 | Cron Triggers → Payload jobs runner + heartbeat | Agent | PJ-04 |
 | PJ-09 | Email adapter: Cloudflare Email Sending, sender per tenant | Agent | PJ-06 |
 | PJ-10 | R2 storage for media + documents collections | Agent | PJ-06 |
-| PJ-11 | `packages/site-kit`: Astro theme on Rocketship + tenant tokens | Agent | PJ-04 |
+| PJ-11 | `packages/launchpad`: Astro theme on Rocketship + tenant tokens | Agent | PJ-04 |
 | PJ-12 | `apps/hub` Astro on Workers + Lighthouse CI budget | Agent | PJ-11 |
 | PJ-13 | `apps/vwok` Astro on Workers | Agent | PJ-12 |
 | PJ-14 | Deploy cms/hub/vwok to workers.dev + create the hub and vwok tenants | LABCAT | PJ-07–PJ-13 |
@@ -125,17 +125,17 @@ Rules:
 - Access tests.
 
 **PJ-11**
-- `packages/site-kit` (Astro), depending on `@labcat2020/rocketship` **0.3.0+**, pinned.
+- `packages/launchpad` (Astro), depending on `@labcat2020/rocketship` **0.3.0+**, pinned.
 - `BaseLayout`: head, SEO meta and canonical slot, header and footer slots. It loads the Rocketship styles and maps the tenant's branding onto `--rs-color-*` tokens (CSS custom properties only).
 - **Job-board compositions only**, built from Rocketship components:
   - `JobCard` and `OrgCard`, built on `Card`
   - `FilterBar`, built on `Field`, `Input` and `Select` in a GET form that works without JavaScript
   - `Turnstile`, a small island using `Field`
 - **Pagination:** if Rocketship doesn't have it, add it to Rocketship first (an RCL task) and use it here once it's released. A temporary local version is fine, as long as it's marked for removal.
-- No data fetching yet. A demo page in `packages/site-kit/demo` that builds in CI.
+- No data fetching yet. A demo page in `packages/launchpad/demo` that builds in CI.
 
 **PJ-12**
-- `apps/hub`: Astro with `@astrojs/cloudflare`, its own `wrangler.jsonc` (`mc-hub`), and site-kit.
+- `apps/hub`: Astro with `@astrojs/cloudflare`, its own `wrangler.jsonc` (`mc-hub`), and launchpad.
 - A placeholder home page.
 - Lighthouse CI (`@lhci/cli`) in CI (allowed) with performance, accessibility, best practices and SEO each at ≥ 0.98, plus a budget of under 50 KB total JavaScript.
 
@@ -303,11 +303,11 @@ All Agent tasks.
 
 ## Wave 4 – Astro sites
 
-All Agent tasks. Shared pages and components live in `site-kit`. The apps compose them.
+All Agent tasks. Shared pages and components live in `launchpad`. The apps compose them.
 
 | Slug | Title | After |
 |---|---|---|
-| PJ-35 | Typed CMS client in site-kit + edge cache helper | PJ-07, PJ-11 |
+| PJ-35 | Typed CMS client in launchpad + edge cache helper | PJ-07, PJ-11 |
 | PJ-36 | Job listing page + filters (SSR + edge cache) | PJ-35, PJ-19 |
 | PJ-37 | Job detail page + JobPosting JSON-LD + OG | PJ-35, PJ-19 |
 | PJ-38 | Organisation directory + organisation page | PJ-35, PJ-18 |

@@ -25,7 +25,7 @@ apps/vwok         Astro Worker – vanuatuwok.vu, the Vanuatu Wok tenant only
 packages/payload-jobs       jobs, organisations, taxonomies, locations, plans, orders, applications, alerts, emails
 packages/payload-xero       per-tenant Xero invoicing
 packages/payload-wp-import  WordPress/JobRoller importer
-packages/site-kit           Astro theme + data client on Rocketship, shared by every site app
+packages/launchpad           Astro theme + data client on Rocketship, shared by every site app
 ```
 
 Each new site sold = a new tenant row + a small `apps/<site>` (branding, domain, pages). There's no new back end per site.
@@ -39,9 +39,9 @@ Each new site sold = a new tenant row + a small `apps/<site>` (branding, domain,
    - Images go through R2 with resized variants.
    - Lighthouse CI is used as the performance budget check.
 4. **Rocketship first.** Before building a UI component, check Rocketship's repo and Storybook.
-   - A **generic** piece (pagination, tabs, badge, empty state, a form widget) goes into `LABCAT/rocketship` as a Rocketship Component Library task, gets released, and site-kit then uses it.
-   - Only **job-board** compositions (JobCard, OrgCard, FilterBar, apply form) live in `site-kit`, built from Rocketship parts and its `--rs-*` tokens.
-   - Site-kit never forks or restyles Rocketship. Tenant branding only sets `--rs-*` variables.
+   - A **generic** piece (pagination, tabs, badge, empty state, a form widget) goes into `LABCAT/rocketship` as a Rocketship Component Library task, gets released, and launchpad then uses it.
+   - Only **job-board** compositions (JobCard, OrgCard, FilterBar, apply form) live in `launchpad`, built from Rocketship parts and its `--rs-*` tokens.
+   - Launchpad never forks or restyles Rocketship. Tenant branding only sets `--rs-*` variables.
 5. **The Payload admin is the employer app, for v1.**
    - Employers sign up on the site, then post, pay (invoice), edit and end jobs in the Payload admin, which is scoped to their tenant and organisation.
    - Nicer front-end forms are a later choice, not a blocker.
@@ -83,7 +83,7 @@ Each new site sold = a new tenant row + a small `apps/<site>` (branding, domain,
 | Phase | What | Tasks |
 |---|---|---|
 | 0 | Setup: repo (done), Neon/Hyperdrive/R2, email domain, Turnstile | PJ-01–03 |
-| 1 | Monorepo foundation: multi-tenancy, cron, email, R2, site-kit, empty hub and vwok apps, deployed | PJ-04–14 |
+| 1 | Monorepo foundation: multi-tenancy, cron, email, R2, launchpad, empty hub and vwok apps, deployed | PJ-04–14 |
 | 2 | `payload-jobs` data model | PJ-15–28 |
 | 3 | Employer experience in the admin: sign-up, checkout, moderation, job actions | PJ-29–34 |
 | 4 | Astro sites: listings, job pages, organisations, pages, SEO, cache invalidation, redirects, performance | PJ-35–44 |
