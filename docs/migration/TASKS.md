@@ -20,8 +20,9 @@ apps/hub + apps/vwok (Astro on Workers), packages/payload-jobs, packages/payload
 packages/launchpad (Astro theme on @labcat2020/rocketship + typed CMS client).
 Docs: docs/UPSTREAM.md, docs/migration/PLAN.md, AUDIT.md (what the old site does), USAGE.md (what is used — build only that).
 Legacy reference (read-only): LABCAT/vanuatuwok.vu @ migration-plan (web/app/themes/efate, web/app/plugins/*).
+FIRST read AGENTS.md (setup, checks, migrations, Payload 4 gotchas).
 Rules:
-- One PR, small diff, this task only. PR body: "Fixes #<issue>", what changed, how verified.
+- One PR, based on main (never stack on another branch), small diff, this task only. PR body: "Fixes #<issue>", what changed, how verified.
 - Keep orbit's files untouched where possible; put job-board code in packages/ or new apps/ so upstream merges stay clean.
 - Pin exact versions (match orbit's Payload beta). No "latest"/"*".
 - Never hardcode tenant values: currency, timezone, locale, locations, email sender, domain come from the tenant.
