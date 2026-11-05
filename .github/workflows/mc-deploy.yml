@@ -1,0 +1,78 @@
+# Production deploy for mission-control: every push to main runs the checks, migrates Neon,
+# deploys mc-cms and smoke-tests the result. Orbit's release.yml is left untouched; this repo
+# doesn't use version tags.
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: mc-deploy-prod
+  cancel-in-progress: false
+
+env:
+  WORKER_NAME: ${{ vars.WORKER_NAME || 'mc-cms' }}
+  WORKERS_SUBDOMAIN: ${{ vars.WORKERS_SUBDOMAIN || 'labcat.workers.dev' }}
+  PROD_URL: https://${{ vars.WORKER_NAME || 'mc-cms' }}.${{ vars.WORKERS_SUBDOMAIN || 'labcat.workers.dev' }}
+
+jobs:
+  deploy:
+    name: Migrate and deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test
+
+      - name: Build
+        run: pnpm --filter cms build
+
+      # The connection string isn't stored in GitHub; Neon supplies it at run time.
+      - name: Look up the production database
+        id: db
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          URI=$(curl -sfS -G "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/connection_uri" \
+            -H "Authorization: Bearer $NEON_API_KEY" \
+            --data-urlencode database_name=neondb \
+            --data-urlencode role_name=neondb_owner | jq -r '.uri // empty')
+          [ -n "$URI" ] || { echo "::error::Neon returned no connection URI"; exit 1; }
+          echo "::add-mask::$URI"
+          echo "url=$URI" >> "$GITHUB_OUTPUT"
+
+      - name: Migrate
+        env:
+          DATABASE_URL: ${{ steps.db.outputs.url }}
+          # The CLI refuses to load the config without a secret; migrations don't use it.
+          PAYLOAD_SECRET: migrate-only
+        run: pnpm --filter cms payload migrate
+
+      - name: Deploy
+        working-directory: apps/cms
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm exec wrangler deploy --name "$WORKER_NAME" --message "Deploy $GITHUB_SHA"
+
+      - name: Smoke
+        run: |
+          for i in $(seq 1 10); do
+            if curl -sf --max-time 20 "$PROD_URL/api/users/init" | grep -q '"initialized"'; then
+              echo "Smoke passed on attempt $i: $PROD_URL"; exit 0
+            fi
+            sleep 6
+          done
+          echo "::error::$PROD_URL/api/users/init did not answer"; exit 1

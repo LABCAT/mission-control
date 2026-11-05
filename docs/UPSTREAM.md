@@ -38,6 +38,7 @@ The workflow needs a repo secret **`ORBIT_READ_TOKEN`**: a fine-grained PAT with
 ## Rules that keep merges clean
 
 - **CI:** our checks are in `.github/workflows/mc-checks.yml` (runs on PRs). Orbit's `ci.yml` and `release.yml` aren't edited here.
+- **Releases:** mission-control doesn't use version tags. Orbit's `release.yml` is left untouched and unused; `.github/workflows/mc-deploy.yml` migrates Neon and deploys `mc-cms` on every push to `main`.
 - **Root files:** `package.json` and `pnpm-workspace.yaml` carry small additions (the `packages/*` workspace and the root scripts). Expect minor conflicts there when orbit changes them.
 
 - **Fixes to orbit's files:** fix them in orbit, then sync them across. Don't edit them here.

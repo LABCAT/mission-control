@@ -62,6 +62,7 @@ Errors show up in `POST /cdn-cgi/local/explorer/api/local/observability/query` w
 - **`gh` defaults to this repo**, but the clone has two remotes. Pass `--repo LABCAT/mission-control` if `gh` complains.
 - **Never push to `upstream`** (orbit). See `docs/UPSTREAM.md`.
 - **One task per branch and per PR, based on `main`.** Don't stack PRs on other unmerged branches: a stacked PR gets merged into the wrong base.
+- **A merge to `main` deploys to production and runs migrations.** PRs labelled `migration` are always merged by the founder.
 - **PR body:** the task slug, what changed, how you checked it, and any migration.
 
 ## Boundaries

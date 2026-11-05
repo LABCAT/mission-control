@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "orbit-cms",
+  "name": "mc-cms", // mission-control: own production Worker
   "main": "./src/server.ts",
   "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
@@ -16,7 +16,7 @@
     {
       // Neon (direct endpoint), query caching off so the admin never reads stale data.
       "binding": "HYPERDRIVE",
-      "id": "b928e9a56a5243319f27e9c020d6585e",
+      "id": "600510da0e1f45958ba5d7c908090a22", // mission-control: Hyperdrive -> Neon mission-control main
       "localConnectionString": "postgres://orbit:orbit@localhost:8900/orbit"
     }
   ]
