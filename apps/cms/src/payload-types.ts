@@ -159,6 +159,8 @@ export interface UserAuthOperations {
  */
 export interface User {
   id: number;
+  firstName?: string | null;
+  lastName?: string | null;
   createdBy?: {
     relationTo: 'users';
     value: number | User;
@@ -489,6 +491,8 @@ export interface PayloadLlmInstruction {
  * via the `definition` "users_select".
  */
 export interface UsersSelect<T extends boolean = true> {
+  firstName?: T;
+  lastName?: T;
   createdBy?: T;
   updatedBy?: T;
   updatedAt?: T;
