@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@mission-control/payload-jobs": "workspace:*",
     "@payloadcms/db-postgres": "4.0.0-beta.7",
     "@payloadcms/graphql": "4.0.0-beta.7",
     "@payloadcms/richtext-lexical": "4.0.0-beta.7",

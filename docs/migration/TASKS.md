@@ -86,7 +86,7 @@ Rules:
 - Add `packages/*` to `pnpm-workspace.yaml`.
 - Add `tsconfig.base.json`, ESLint config and vitest at the root.
 - Add root scripts `typecheck`, `lint`, `test` and `build`, run with `pnpm -r`.
-- Edit `ci.yml` (allowed for this task) so it runs on PRs too and runs the root scripts.
+- Add `.github/workflows/mc-checks.yml` that runs the root scripts on PRs. Don't edit orbit's `ci.yml`, so upstream merges stay clean.
 - Create an empty `packages/payload-jobs` package exporting `payloadJobs(options): Plugin` (a no-op for now), registered in `apps/cms` `payload.config.ts`, with one test.
 
 **PJ-05**
