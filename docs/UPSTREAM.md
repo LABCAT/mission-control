@@ -16,7 +16,9 @@ git merge upstream/main
 # resolve conflicts, run checks, open a PR into main
 ```
 
-A weekly workflow that opens this PR automatically is planned in PJ-05.
+`.github/workflows/upstream-sync.yml` does this every Monday morning (NZ time), and can be run by hand from the Actions tab. It opens a PR named `Sync from orbit (<sha>)`. If the merge conflicts, it opens an issue listing the conflicting files instead.
+
+The workflow needs a repo secret **`ORBIT_READ_TOKEN`**: a fine-grained PAT with read access to the contents of `LABCAT/orbit`, because orbit is private.
 
 ## What goes where
 
