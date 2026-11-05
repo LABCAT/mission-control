@@ -1,0 +1,77 @@
+# Production release: a final semver tag (0.1.0, not 0.1.0-rc.1) on a main commit.
+# Order: build, migrate Neon, deploy, smoke. A failed build never touches the database,
+# and migrations are additive, so the live Worker keeps serving while they run.
+name: Release
+
+on:
+  push:
+    tags: ['[0-9]+.[0-9]+.[0-9]+']
+
+concurrency:
+  group: release-prod
+  cancel-in-progress: false
+
+env:
+  PROD_URL: https://orbit-cms.labcat.workers.dev
+
+jobs:
+  release:
+    name: Migrate and deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Require the tagged commit to be on main
+        run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm --filter cms build
+
+      # The connection string isn't stored in GitHub; Neon supplies it at run time.
+      - name: Look up the production database
+        id: db
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          URI=$(curl -sfS -G "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/connection_uri" \
+            -H "Authorization: Bearer $NEON_API_KEY" \
+            --data-urlencode database_name=neondb \
+            --data-urlencode role_name=neondb_owner | jq -r '.uri // empty')
+          [ -n "$URI" ] || { echo "::error::Neon returned no connection URI"; exit 1; }
+          echo "::add-mask::$URI"
+          echo "url=$URI" >> "$GITHUB_OUTPUT"
+
+      - name: Migrate
+        env:
+          DATABASE_URL: ${{ steps.db.outputs.url }}
+          # The CLI refuses to load the config without a secret; migrations don't use it.
+          PAYLOAD_SECRET: migrate-only
+        run: pnpm --filter cms payload migrate
+
+      - name: Deploy
+        working-directory: apps/cms
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm exec wrangler deploy --message "Release $GITHUB_REF_NAME"
+
+      - name: Smoke
+        run: |
+          for i in $(seq 1 10); do
+            if curl -sf --max-time 20 "$PROD_URL/api/users/init" | grep -q '"initialized"'; then
+              echo "Smoke passed on attempt $i"; exit 0
+            fi
+            sleep 6
+          done
+          echo "::error::$PROD_URL/api/users/init did not answer"; exit 1
