@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import {
   getTenantRole,
   getUserTenantIDs,
+  getUserTenantIDsByRole,
   hasAnyTenantRole,
   hasTenantRole,
   isSuperAdmin,
@@ -26,6 +27,9 @@ describe('tenant roles', () => {
     expect(getTenantRole(tenantAdminA, '20')).toBe('editor')
     expect(getTenantRole(tenantAdminA, 30)).toBeNull()
     expect(getUserTenantIDs(tenantAdminA)).toEqual([10, 20])
+    expect(getUserTenantIDsByRole(tenantAdminA, ['tenant-admin'])).toEqual([10])
+    expect(getUserTenantIDsByRole(tenantAdminA, ['editor'])).toEqual([20])
+    expect(getUserTenantIDsByRole(tenantAdminA, ['employer'])).toEqual([])
   })
 
   it('does not grant a role in a tenant the user is not a member of', () => {

@@ -8,7 +8,11 @@ import { Folders } from './collections/Folders'
 import { Media } from './collections/Media'
 import { Tags } from './collections/Tags'
 import { removeTenantMemberships, Tenants } from './collections/Tenants'
-import { ensureFirstUserIsSuperAdmin, Users } from './collections/Users'
+import {
+  ensureFirstUserIsSuperAdmin,
+  Users,
+  usersUpdateAccess,
+} from './collections/Users'
 import { multiTenantOptions } from './tenancy'
 
 type TestUser = MissionControlUser & { collection: 'users' }
@@ -181,6 +185,26 @@ describe('tenant isolation', () => {
     }
 
     expect(read).toEqual({ id: { in: [tenantA.id] } })
+  })
+
+  it('only lets users update themselves unless they are tenant-admins', async () => {
+    const editorA: TestUser = {
+      id: 11,
+      collection: 'users',
+      role: 'user',
+      tenants: [{ role: 'editor', tenant: tenantA }],
+    }
+    const argsFor = (user: MissionControlUser | null) =>
+      ({ req: { user } }) as unknown as Parameters<typeof usersUpdateAccess>[0]
+
+    expect(await usersUpdateAccess(argsFor(tenantAdminA))).toEqual({
+      'tenants.tenant': { in: [tenantA.id] },
+    })
+    expect(await usersUpdateAccess(argsFor(editorA))).toEqual({
+      id: { equals: editorA.id },
+    })
+    expect(await usersUpdateAccess(argsFor(superAdmin))).toBe(true)
+    expect(await usersUpdateAccess(argsFor(null))).toBe(false)
   })
 })
 

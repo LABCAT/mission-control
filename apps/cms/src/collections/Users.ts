@@ -1,11 +1,37 @@
-import type { CollectionBeforeChangeHook, CollectionConfig } from 'payload'
+import type { Access, CollectionBeforeChangeHook, CollectionConfig, Where } from 'payload'
 
 import {
   authenticatedAccess,
+  getUserTenantIDsByRole,
   globalRoleOptions,
+  isSuperAdmin,
+  type MissionControlUser,
   superAdminAccess,
   superAdminFieldAccess,
 } from '@mission-control/payload-jobs'
+
+// mission-control: ordinary users may only update themselves; tenant-admins may update
+// users in the tenants where they are tenant-admins. The plugin adds the tenant constraint too.
+export const usersUpdateAccess: Access = ({ req }) => {
+  const user = req.user as MissionControlUser | null | undefined
+  if (!user) return false
+  if (isSuperAdmin(user)) return true
+
+  const tenantAdminIDs = getUserTenantIDsByRole(user, ['tenant-admin'])
+  if (tenantAdminIDs.length > 0) {
+    return {
+      'tenants.tenant': {
+        in: tenantAdminIDs,
+      },
+    } as Where
+  }
+
+  return {
+    id: {
+      equals: user.id,
+    },
+  } as Where
+}
 
 // mission-control: a fresh database has no super-admin yet, so the first user must bootstrap it.
 export const ensureFirstUserIsSuperAdmin: CollectionBeforeChangeHook = async ({
@@ -35,7 +61,7 @@ export const Users: CollectionConfig = {
     create: superAdminAccess,
     delete: superAdminAccess,
     read: authenticatedAccess,
-    update: authenticatedAccess,
+    update: usersUpdateAccess,
   },
   auth: true,
   hooks: {

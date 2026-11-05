@@ -60,6 +60,21 @@ export const getUserTenantIDs = (
   return ids
 }
 
+export const getUserTenantIDsByRole = (
+  user: MissionControlUser | null | undefined,
+  roles: readonly TenantRole[],
+): (number | string)[] => {
+  const ids: (number | string)[] = []
+
+  for (const membership of user?.tenants ?? []) {
+    if (membership?.role == null || !roles.includes(membership.role)) continue
+    const id = tenantIDOf(membership.tenant)
+    if (id !== null) ids.push(id)
+  }
+
+  return ids
+}
+
 /** The user's role inside one tenant, or null when they are not a member. */
 export const getTenantRole = (
   user: MissionControlUser | null | undefined,
