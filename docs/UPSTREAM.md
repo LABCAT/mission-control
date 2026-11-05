@@ -35,6 +35,9 @@ A weekly workflow that opens this PR automatically is planned in PJ-05.
 
 ## Rules that keep merges clean
 
+- **CI:** our checks are in `.github/workflows/mc-checks.yml` (runs on PRs). Orbit's `ci.yml` and `release.yml` aren't edited here.
+- **Root files:** `package.json` and `pnpm-workspace.yaml` carry small additions (the `packages/*` workspace and the root scripts). Expect minor conflicts there when orbit changes them.
+
 - **Fixes to orbit's files:** fix them in orbit, then sync them across. Don't edit them here.
 - **Extending `apps/cms/src/payload.config.ts`:** keep the changes small. Plugins are registered in one block; collections and logic live in packages.
 - **Migrations:** never edit orbit's migrations. Our migrations come after them.

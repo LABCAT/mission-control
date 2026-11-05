@@ -8,6 +8,13 @@
   },
   "scripts": {
     "dev": "pnpm --filter cms dev",
-    "build": "pnpm --filter cms build"
+    "build": "pnpm --filter cms build",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "lint": "oxlint packages",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "oxlint": "1.91.0",
+    "vitest": "5.1.0"
   }
 }

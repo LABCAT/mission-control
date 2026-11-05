@@ -9,6 +9,9 @@ import { Media } from './collections/Media'
 import { Folders } from './collections/Folders'
 import { Tags } from './collections/Tags'
 
+// mission-control: job board plugins. Keep this block small so orbit merges stay clean.
+import { payloadJobs } from '@mission-control/payload-jobs'
+
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
 
@@ -49,6 +52,7 @@ export default buildConfig({
     // through migrations, run with the Node CLI (`pnpm payload migrate`).
     push: false,
   }),
+  plugins: [payloadJobs()],
   localization: {
     locales: [{ code: 'en', label: 'English' }],
     fallback: true,

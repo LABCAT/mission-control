@@ -1,0 +1,29 @@
+# mission-control checks for pull requests. Orbit's ci.yml stays untouched so upstream merges
+# don't conflict; this workflow covers the packages and runs on every PR.
+name: Mission Control checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: mc-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Typecheck, lint, test, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test
+      - run: pnpm --filter cms build
