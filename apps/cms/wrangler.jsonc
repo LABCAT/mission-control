@@ -5,6 +5,8 @@
   "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
+  // mission-control: drives Payload jobs via the scheduled() handler in src/server.ts
+  "triggers": { "crons": ["0 * * * *"] },
   "hyperdrive": [
     {
       // Neon (direct endpoint), query caching off so the admin never reads stale data.
