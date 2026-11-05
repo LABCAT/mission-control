@@ -20,8 +20,8 @@ concurrency:
 env:
   NEONCTL: neonctl@8.23.1
   WRANGLER: wrangler@4.157.0
-  WORKER: orbit-cms
-  WORKERS_SUBDOMAIN: labcat.workers.dev
+  WORKER_NAME: ${{ vars.WORKER_NAME || 'orbit-cms' }}
+  WORKERS_SUBDOMAIN: ${{ vars.WORKERS_SUBDOMAIN || 'labcat.workers.dev' }}
 
 jobs:
   publish:
@@ -99,11 +99,11 @@ jobs:
           SECRETS=$(mktemp)
           trap 'rm -f "$SECRETS"' EXIT
           jq -n '{DATABASE_URL: env.DATABASE_URL, PAYLOAD_SECRET: env.PAYLOAD_SECRET}' > "$SECRETS"
-          pnpm exec wrangler preview --name "$NAME" --message "$GITHUB_REF_NAME @ ${GITHUB_SHA::7}" --secrets-file "$SECRETS"
+          pnpm exec wrangler preview --name "$NAME" --worker-name "$WORKER_NAME" --message "$GITHUB_REF_NAME @ ${GITHUB_SHA::7}" --secrets-file "$SECRETS"
 
       - name: Smoke
         env:
-          URL: https://${{ steps.name.outputs.name }}-${{ env.WORKER }}.${{ env.WORKERS_SUBDOMAIN }}
+          URL: https://${{ steps.name.outputs.name }}-${{ env.WORKER_NAME }}.${{ env.WORKERS_SUBDOMAIN }}
         run: |
           for i in $(seq 1 10); do
             if curl -sf --max-time 20 "$URL/api/users/init" | grep -q '"initialized"'; then
@@ -130,7 +130,7 @@ jobs:
         run: |
           set -uo pipefail
           NAME=$(.github/scripts/preview-name.sh branch "$DELETED")
-          npx -y "$WRANGLER" preview delete --name "$NAME" --worker-name "$WORKER" --skip-confirmation \
+          npx -y "$WRANGLER" preview delete --name "$NAME" --worker-name "$WORKER_NAME" --skip-confirmation \
             || echo "No Worker Preview named $NAME"
           npx -y "$NEONCTL" branches delete "preview/$NAME" --project-id "$PROJECT" --api-key "$NEON_API_KEY" \
             || echo "No Neon branch preview/$NAME"

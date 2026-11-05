@@ -2,7 +2,7 @@
 # Prints the Worker Preview name, also used for its Neon branch (preview/<name>).
 #   preview-name.sh branch <git branch>   ->  feature/Foo_bar  -> feature-foo-bar
 #   preview-name.sh rc <version>          ->  0.2.0            -> rc-0-2-0
-# Names are DNS labels in <name>-orbit-cms.<subdomain>.workers.dev, so lowercase,
+# Names are DNS labels in <name>-<worker>.<subdomain>.workers.dev, so lowercase,
 # hyphens only, capped at 40 characters.
 set -euo pipefail
 kind=$1 value=$2
