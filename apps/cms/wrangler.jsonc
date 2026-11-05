@@ -1,0 +1,16 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "orbit-cms",
+  "main": "./src/server.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "hyperdrive": [
+    {
+      // Neon (direct endpoint), query caching off so the admin never reads stale data.
+      "binding": "HYPERDRIVE",
+      "id": "b928e9a56a5243319f27e9c020d6585e",
+      "localConnectionString": "postgres://orbit:orbit@localhost:8900/orbit"
+    }
+  ]
+}
