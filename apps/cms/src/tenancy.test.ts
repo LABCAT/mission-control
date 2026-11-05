@@ -7,7 +7,7 @@ import type { MissionControlUser } from '@mission-control/payload-jobs'
 import { Folders } from './collections/Folders'
 import { Media } from './collections/Media'
 import { Tags } from './collections/Tags'
-import { Tenants } from './collections/Tenants'
+import { removeTenantMemberships, Tenants } from './collections/Tenants'
 import { ensureFirstUserIsSuperAdmin, Users } from './collections/Users'
 import { multiTenantOptions } from './tenancy'
 
@@ -181,6 +181,58 @@ describe('tenant isolation', () => {
     }
 
     expect(read).toEqual({ id: { in: [tenantA.id] } })
+  })
+})
+
+describe('tenant deletion', () => {
+  it('removes the tenant from user memberships before deleting it', async () => {
+    const findCalls: unknown[] = []
+    const updates: unknown[] = []
+    const users = [
+      {
+        id: 10,
+        tenants: [
+          { role: 'tenant-admin', tenant: 1 },
+          { role: 'editor', tenant: 2 },
+        ],
+      },
+      { id: 20, tenants: [{ role: 'tenant-admin', tenant: 2 }] },
+    ]
+    const req = {
+      payload: {
+        find: async (args: unknown) => {
+          findCalls.push(args)
+          const tenantIDs = (
+            args as { where?: { 'tenants.tenant'?: { in?: number[] } } }
+          ).where?.['tenants.tenant']?.in
+
+          return {
+            docs: users.filter((user) =>
+              user.tenants.some((membership) => tenantIDs?.includes(membership.tenant as number)),
+            ),
+          }
+        },
+        update: async (args: unknown) => {
+          updates.push(args)
+          return {}
+        },
+      },
+    }
+
+    await removeTenantMemberships({ id: 1, req } as never)
+
+    expect(findCalls[0]).toEqual(
+      expect.objectContaining({
+        collection: 'users',
+        where: { 'tenants.tenant': { in: [1] } },
+      }),
+    )
+    expect(updates).toEqual([
+      expect.objectContaining({
+        id: 10,
+        data: { tenants: [{ role: 'editor', tenant: 2 }] },
+      }),
+    ])
   })
 })
 

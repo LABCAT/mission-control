@@ -1,4 +1,4 @@
-import type { CollectionConfig } from 'payload'
+import type { CollectionBeforeDeleteHook, CollectionConfig } from 'payload'
 
 import { authenticatedAccess, superAdminAccess } from '@mission-control/payload-jobs'
 
@@ -53,6 +53,44 @@ const validateDefaultLocale = (
     : 'Default locale must be one of the tenant locales'
 }
 
+type TenantMembership = { role?: unknown; tenant?: unknown }
+
+/**
+ * Remove user memberships before the tenant row is deleted. The users_tenants.tenant_id
+ * column is NOT NULL, so the relationship's ON DELETE SET NULL would otherwise make a
+ * tenant delete fail while memberships exist.
+ */
+export const removeTenantMemberships: CollectionBeforeDeleteHook = async ({ id, req }) => {
+  const users = await req.payload.find({
+    collection: 'users',
+    depth: 0,
+    limit: 0,
+    overrideAccess: true,
+    req,
+    where: {
+      'tenants.tenant': {
+        in: [id],
+      },
+    },
+  })
+
+  await Promise.all(
+    users.docs.map((user) => {
+      const memberships = (user as { tenants?: null | TenantMembership[] }).tenants ?? []
+
+      return req.payload.update({
+        id: user.id,
+        collection: 'users',
+        data: {
+          tenants: memberships.filter((membership) => String(membership.tenant) !== String(id)),
+        } as never,
+        overrideAccess: true,
+        req,
+      })
+    }),
+  )
+}
+
 export const Tenants: CollectionConfig = {
   slug: 'tenants',
   admin: {
@@ -65,6 +103,9 @@ export const Tenants: CollectionConfig = {
     delete: superAdminAccess,
     read: authenticatedAccess,
     update: superAdminAccess,
+  },
+  hooks: {
+    beforeDelete: [removeTenantMemberships],
   },
   fields: [
     {
