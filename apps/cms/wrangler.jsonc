@@ -5,6 +5,7 @@
   "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
+  "preview_urls": true, // mission-control: give Worker Previews a workers.dev URL for the smoke test
   // mission-control: drives Payload jobs via the scheduled() handler in src/server.ts
   "triggers": { "crons": ["0 * * * *"] },
   // Worker Previews don't inherit production bindings. Each preview gets no Hyperdrive and a
