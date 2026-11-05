@@ -431,7 +431,9 @@ All Agent tasks.
 
 ---
 
-## Wave 6 – `packages/payload-xero`
+## Wave 6 – `packages/payload-xero` (much later)
+
+Xero is deferred until after the sites are live. Until then, orders are created as `invoice` and invoiced by hand in Xero, as they are today. Priority: low.
 
 All Agent tasks except PJ-59. Legacy reference: `web/app/plugins/appthemes-xero-invoices`.
 

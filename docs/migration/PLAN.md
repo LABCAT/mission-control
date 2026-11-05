@@ -84,7 +84,7 @@ Each new site sold = a new tenant row + a small `apps/<site>` (branding, domain,
 | 3 | Employer experience in the admin: sign-up, checkout, moderation, job actions | PJ-29–34 |
 | 4 | Astro sites: listings, job pages, organisations, pages, SEO, cache invalidation, redirects, performance | PJ-35–44 |
 | 5 | Applications, alerts, contact, emails, scheduled jobs, reports | PJ-45–53 |
-| 6 | `payload-xero` | PJ-54–59 |
+| 6 | `payload-xero`, **much later**. Invoices are done by hand in Xero until then. | PJ-54–59 |
 | 7 | `payload-wp-import` | PJ-60–69 |
 | 8 | Verify, cut over, decommission | PJ-70–75 |
 
