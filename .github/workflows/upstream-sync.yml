@@ -1,0 +1,76 @@
+# Weekly merge of LABCAT/orbit main into a branch, opened as a PR for review.
+# Orbit is private, so the job needs ORBIT_READ_TOKEN: a fine-grained PAT with Contents: read on LABCAT/orbit.
+# On a merge conflict nothing is pushed; an issue is opened instead (one per conflicting orbit commit).
+name: Sync from orbit
+
+on:
+  schedule:
+    - cron: '0 18 * * 0' # Monday 07:00 NZDT
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: upstream-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch orbit
+        env:
+          ORBIT_READ_TOKEN: ${{ secrets.ORBIT_READ_TOKEN }}
+        run: |
+          test -n "$ORBIT_READ_TOKEN" || { echo "::error::ORBIT_READ_TOKEN secret is not set"; exit 1; }
+          git remote add upstream "https://x-access-token:${ORBIT_READ_TOKEN}@github.com/LABCAT/orbit.git"
+          git fetch upstream main
+
+      - name: Check for new commits
+        id: check
+        run: |
+          count=$(git rev-list --count HEAD..upstream/main)
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          echo "upstream_sha=$(git rev-parse --short upstream/main)" >> "$GITHUB_OUTPUT"
+          echo "$count new orbit commit(s)"
+
+      - name: Merge and open PR
+        if: steps.check.outputs.count != '0'
+        run: |
+          sha=${{ steps.check.outputs.upstream_sha }}
+          branch="upstream-sync/$sha"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if gh pr list --head "$branch" --state open --json number -q '.[0].number' | grep -q .; then
+            echo "PR for $branch already open"; exit 0
+          fi
+
+          git switch -c "$branch"
+          if git merge --no-edit upstream/main; then
+            git push origin "$branch"
+            gh pr create --base main --head "$branch" \
+              --title "Sync from orbit ($sha)" \
+              --body "Merges ${{ steps.check.outputs.count }} new commit(s) from LABCAT/orbit main. See docs/UPSTREAM.md before merging; migrations from orbit run before ours."
+          else
+            files=$(git diff --name-only --diff-filter=U | sed 's/^/- `/; s/$/`/')
+            git merge --abort
+            title="Orbit sync conflict ($sha)"
+            if ! gh issue list --state open --search "$title in:title" --json number -q '.[0].number' | grep -q .; then
+              gh issue create --title "$title" --body "Merging LABCAT/orbit main ($sha) conflicts in:
+
+          $files
+
+          Merge by hand: see docs/UPSTREAM.md."
+            fi
+            exit 1
+          fi
