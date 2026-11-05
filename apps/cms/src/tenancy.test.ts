@@ -8,7 +8,7 @@ import { Folders } from './collections/Folders'
 import { Media } from './collections/Media'
 import { Tags } from './collections/Tags'
 import { Tenants } from './collections/Tenants'
-import { Users } from './collections/Users'
+import { ensureFirstUserIsSuperAdmin, Users } from './collections/Users'
 import { multiTenantOptions } from './tenancy'
 
 type TestUser = MissionControlUser & { collection: 'users' }
@@ -161,5 +161,60 @@ describe('tenant isolation', () => {
     const noTenants: TestUser = { id: 30, collection: 'users', role: 'user', tenants: [] }
 
     expect(await baseAccess(config, 'read', 'media', noTenants)).toBe(false)
+  })
+
+  it('scopes user reads to the tenant plus the user themselves', async () => {
+    const config = await buildConfig()
+    const read = (await baseAccess(config, 'read', 'users', tenantAdminA)) as {
+      or: [{ id: { equals: number } }, { 'tenants.tenant': { in: number[] } }]
+    }
+
+    expect(read).toEqual({
+      or: [{ id: { equals: tenantAdminA.id } }, { 'tenants.tenant': { in: [tenantA.id] } }],
+    })
+  })
+
+  it('scopes tenant reads to the tenants on the user', async () => {
+    const config = await buildConfig()
+    const read = (await baseAccess(config, 'read', 'tenants', tenantAdminA)) as {
+      id: { in: number[] }
+    }
+
+    expect(read).toEqual({ id: { in: [tenantA.id] } })
+  })
+})
+
+describe('first user bootstrap', () => {
+  const requestWithCount = (totalDocs: number) =>
+    ({
+      payload: {
+        count: async () => ({ totalDocs }),
+      },
+    }) as never
+
+  it('promotes the first user and leaves later users unchanged', async () => {
+    await expect(
+      ensureFirstUserIsSuperAdmin({
+        data: { role: 'user' },
+        operation: 'create',
+        req: requestWithCount(0),
+      } as never),
+    ).resolves.toEqual({ role: 'super-admin' })
+
+    await expect(
+      ensureFirstUserIsSuperAdmin({
+        data: { role: 'user' },
+        operation: 'create',
+        req: requestWithCount(1),
+      } as never),
+    ).resolves.toEqual({ role: 'user' })
+
+    await expect(
+      ensureFirstUserIsSuperAdmin({
+        data: { role: 'user' },
+        operation: 'update',
+        req: requestWithCount(0),
+      } as never),
+    ).resolves.toEqual({ role: 'user' })
   })
 })

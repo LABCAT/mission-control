@@ -2,12 +2,25 @@ import type { CollectionConfig } from 'payload'
 
 import { authenticatedAccess, superAdminAccess } from '@mission-control/payload-jobs'
 
-const ISO_4217 = /^[A-Z]{3}$/
+const ISO_4217_CODES = new Set(
+  `AED AFN ALL AMD ANG AOA ARS AUD AWG AZN BAM BBD BDT BGN BHD BIF BMD BND BOB BRL BSD BTN
+  BWP BYN BZD CAD CDF CHF CLP CNY COP CRC CUC CUP CVE CZK DJF DKK DOP DZD EGP ERN ETB EUR FJD
+  FKP GBP GEL GHS GIP GMD GNF GTQ GYD HKD HNL HRK HTG HUF IDR ILS INR IQD IRR ISK JMD JOD JPY
+  KES KGS KHR KMF KPW KRW KWD KYD KZT LAK LBP LKR LRD LSL LYD MAD MDL MGA MKD MMK MNT MOP MRU
+  MUR MVR MWK MXN MYR MZN NAD NGN NIO NOK NPR NZD OMR PAB PEN PGK PHP PKR PLN PYG QAR RON RSD
+  RUB RWF SAR SBD SCR SDG SEK SGD SHP SLE SLL SOS SRD SSP STN SVC SYP SZL THB TJS TMT TND TOP
+  TRY TTD TWD TZS UAH UGX USD UYU UZS VES VND VUV WST XAF XCD XCG XDR XOF XPF XSU YER ZAR ZMW
+  ZWG ZWL`
+    .trim()
+    .split(/\s+/),
+)
 const HEX_COLOR = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 
 const validateCurrency = (value: null | string | undefined): string | true =>
-  value && ISO_4217.test(value) ? true : 'Use a three-letter ISO 4217 currency code, for example VUV'
+  value && ISO_4217_CODES.has(value)
+    ? true
+    : 'Use an ISO 4217 currency code, for example VUV'
 
 const validateHexColor = (value: null | string | undefined): string | true =>
   value && HEX_COLOR.test(value) ? true : 'Use a hex colour, for example #06914b'

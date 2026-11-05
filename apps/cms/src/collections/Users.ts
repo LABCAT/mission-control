@@ -1,4 +1,4 @@
-import type { CollectionConfig } from 'payload'
+import type { CollectionBeforeChangeHook, CollectionConfig } from 'payload'
 
 import {
   authenticatedAccess,
@@ -6,6 +6,25 @@ import {
   superAdminAccess,
   superAdminFieldAccess,
 } from '@mission-control/payload-jobs'
+
+// mission-control: a fresh database has no super-admin yet, so the first user must bootstrap it.
+export const ensureFirstUserIsSuperAdmin: CollectionBeforeChangeHook = async ({
+  data,
+  operation,
+  req,
+}) => {
+  if (operation !== 'create') return data
+
+  const { totalDocs } = await req.payload.count({
+    collection: 'users',
+    overrideAccess: true,
+    req,
+  })
+
+  if (totalDocs === 0) data.role = 'super-admin'
+
+  return data
+}
 
 export const Users: CollectionConfig = {
   slug: 'users',
@@ -19,6 +38,9 @@ export const Users: CollectionConfig = {
     update: authenticatedAccess,
   },
   auth: true,
+  hooks: {
+    beforeChange: [ensureFirstUserIsSuperAdmin],
+  },
   fields: [
     // mission-control: global role; per-tenant roles live in the plugin's `tenants` array.
     {
