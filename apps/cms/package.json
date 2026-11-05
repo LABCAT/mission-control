@@ -16,6 +16,7 @@
     "@mission-control/payload-jobs": "workspace:*",
     "@payloadcms/db-postgres": "4.0.0-beta.7",
     "@payloadcms/graphql": "4.0.0-beta.7",
+    "@payloadcms/plugin-multi-tenant": "4.0.0-beta.7",
     "@payloadcms/richtext-lexical": "4.0.0-beta.7",
     "@payloadcms/tanstack-start": "4.0.0-beta.7",
     "@payloadcms/ui": "4.0.0-beta.7",
