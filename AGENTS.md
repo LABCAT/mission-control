@@ -57,6 +57,21 @@ curl "http://localhost:<port>/cdn-cgi/handler/scheduled?cron=0+*+*+*+*"
 ```
 Errors show up in `POST /cdn-cgi/local/explorer/api/local/observability/query` with `{"sql":"SELECT * FROM logs ORDER BY rowid DESC LIMIT 10"}`.
 
+## Admin smoke (required after deploy changes)
+
+The admin is a TanStack Start RSC app. A Worker redeploy keeps the same workers.dev hostname but
+replaces the hashed `/assets/*` files. A tab, bfcache entry, or cached HTML from the previous
+deployment can point at files that no longer exist, and the admin sits on its loading spinner.
+
+`/api/users/init` returning 200 is **not** an admin smoke test. After a Preview or Deploy run:
+
+1. Open `/admin` in a fresh incognito window, or hard-refresh (Cmd/Ctrl+Shift+R) with the cache
+   disabled. Log in and confirm the dashboard, the Tenants list and a create form render.
+2. If it still spins, check DevTools → Network for old `/assets/*.js` requests returning 404, and
+   clear site data. Reusing a tab opened before the deploy is not a valid test.
+3. Admin responses are now `Cache-Control: no-store` (`apps/cms/src/server.ts`), but that cannot
+   fix a tab that was already open across a deploy. A hard refresh is still required once.
+
 ## Git and PRs
 
 - **`gh` defaults to this repo**, but the clone has two remotes. Pass `--repo LABCAT/mission-control` if `gh` complains.
