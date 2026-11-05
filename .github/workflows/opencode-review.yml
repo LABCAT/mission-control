@@ -1,0 +1,25 @@
+name: opencode-review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  review:
+    uses: LABCAT/kinsho/.github/workflows/review.yml@v0.2.0
+    with:
+      test_command: pnpm test
+      check_command: pnpm typecheck && pnpm lint
+      model: ${{ vars.KINSHO_MODEL }}
+      effort: ${{ vars.KINSHO_EFFORT }}
+    secrets:
+      OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+      KINSHO_APP_ID: ${{ secrets.KINSHO_APP_ID }}
+      KINSHO_APP_PRIVATE_KEY: ${{ secrets.KINSHO_APP_PRIVATE_KEY }}
