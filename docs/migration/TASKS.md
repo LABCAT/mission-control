@@ -2,7 +2,7 @@
 
 Small tasks for the Daruma board, project **Payload Jobs** (prefix `PJ-`).
 
-- **Agent** tasks: one OpenHands conversation, one PR.
+- **Agent** tasks: one coding-agent session, one PR.
 - **LABCAT** tasks: founder only (spend, secrets, DNS, applying migrations to prod, cutover).
 - **Repo for all Agent tasks:** `LABCAT/mission-control`, downstream of `LABCAT/orbit` (see `docs/UPSTREAM.md`).
 - **Dispatch:** OpenHands isn't set up yet. Tasks can be run by hand in OpenCode/OpenChamber with the prompt from the board.
