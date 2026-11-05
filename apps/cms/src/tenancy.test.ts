@@ -7,7 +7,7 @@ import type { MissionControlUser } from '@mission-control/payload-jobs'
 import { Folders } from './collections/Folders'
 import { Media } from './collections/Media'
 import { Tags } from './collections/Tags'
-import { removeTenantMemberships, Tenants } from './collections/Tenants'
+import { removeTenantMemberships, Tenants, validateCurrency } from './collections/Tenants'
 import {
   ensureFirstUserIsSuperAdmin,
   Users,
@@ -80,6 +80,16 @@ const beforeValidateFor = (config: Config, slug: string) => {
 
 const runHook = (hook: (args: unknown) => unknown, args: unknown) =>
   Promise.resolve().then(() => hook(args))
+
+describe('currency validation', () => {
+  it('accepts current ISO 4217 codes and rejects unknown codes', () => {
+    expect(validateCurrency('VUV')).toBe(true)
+    expect(validateCurrency('NZD')).toBe(true)
+    expect(validateCurrency('CHE')).toBe(true)
+    expect(validateCurrency('ZZZ')).toBe('Use an ISO 4217 currency code, for example VUV')
+    expect(validateCurrency(null)).toBe('Use an ISO 4217 currency code, for example VUV')
+  })
+})
 
 describe('tenant isolation', () => {
   it.each(['folders', 'media', 'tags'])(
