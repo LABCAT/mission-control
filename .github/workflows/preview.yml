@@ -1,0 +1,136 @@
+# Worker Previews, each on its own Neon branch with this code's migrations applied.
+#   Push a branch other than main  -> preview named after the branch. Its Neon branch
+#                                     (preview/<name>) is cut from prod once and kept,
+#                                     so test data survives later pushes.
+#   Push an RC tag (0.2.0-rc.1)    -> preview rc-0-2-0 on a fresh copy of prod, replaced by
+#                                     each later RC of that version. Released by release.yml.
+#   Delete a branch                -> its preview and Neon branch are deleted.
+name: Preview
+
+on:
+  push:
+    branches-ignore: [main]
+    tags: ['[0-9]+.[0-9]+.[0-9]+-rc.[0-9]+']
+  delete:
+
+concurrency:
+  group: preview-${{ github.event_name == 'delete' && github.event.ref || github.ref_name }}
+  cancel-in-progress: true
+
+env:
+  NEONCTL: neonctl@8.23.1
+  WRANGLER: wrangler@4.157.0
+  WORKER: orbit-cms
+  WORKERS_SUBDOMAIN: labcat.workers.dev
+
+jobs:
+  publish:
+    name: Publish preview
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Name the preview
+        id: name
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            git merge-base --is-ancestor "$GITHUB_SHA" origin/main || { echo "::error::RC tags must be on main"; exit 1; }
+            echo "name=$(.github/scripts/preview-name.sh rc "${GITHUB_REF_NAME%%-rc.*}")" >> "$GITHUB_OUTPUT"
+            echo "fresh=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=$(.github/scripts/preview-name.sh branch "$GITHUB_REF_NAME")" >> "$GITHUB_OUTPUT"
+            echo "fresh=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Prepare the Neon branch
+        id: db
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          PROJECT: ${{ vars.NEON_PROJECT_ID }}
+          BRANCH: preview/${{ steps.name.outputs.name }}
+          FRESH: ${{ steps.name.outputs.fresh }}
+        run: |
+          set -euo pipefail
+          neon() { npx -y "$NEONCTL" "$@" --project-id "$PROJECT" --api-key "$NEON_API_KEY"; }
+          exists=$(neon branches list --output json | jq --arg b "$BRANCH" '[.[] | select(.name == $b)] | length')
+          if [ "$exists" != 0 ] && [ "$FRESH" = true ]; then
+            neon branches delete "$BRANCH" > /dev/null
+            exists=0
+          fi
+          if [ "$exists" = 0 ]; then
+            neon branches create --name "$BRANCH" --parent main --output json > /dev/null
+          fi
+          URI=$(neon connection-string "$BRANCH" --database-name neondb --role-name neondb_owner)
+          echo "::add-mask::$URI"
+          echo "url=$URI" >> "$GITHUB_OUTPUT"
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm --filter cms build
+
+      - name: Migrate the Neon branch
+        env:
+          DATABASE_URL: ${{ steps.db.outputs.url }}
+          PAYLOAD_SECRET: migrate-only
+        run: pnpm --filter cms payload migrate
+
+      - name: Publish the Worker Preview
+        working-directory: apps/cms
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          DATABASE_URL: ${{ steps.db.outputs.url }}
+          PAYLOAD_SECRET: ${{ secrets.PREVIEW_PAYLOAD_SECRET }}
+          NAME: ${{ steps.name.outputs.name }}
+        run: |
+          set -euo pipefail
+          [ -n "$PAYLOAD_SECRET" ] || { echo "::error::PREVIEW_PAYLOAD_SECRET is not set"; exit 1; }
+          umask 077
+          SECRETS=$(mktemp)
+          trap 'rm -f "$SECRETS"' EXIT
+          jq -n '{DATABASE_URL: env.DATABASE_URL, PAYLOAD_SECRET: env.PAYLOAD_SECRET}' > "$SECRETS"
+          pnpm exec wrangler preview --name "$NAME" --message "$GITHUB_REF_NAME @ ${GITHUB_SHA::7}" --secrets-file "$SECRETS"
+
+      - name: Smoke
+        env:
+          URL: https://${{ steps.name.outputs.name }}-${{ env.WORKER }}.${{ env.WORKERS_SUBDOMAIN }}
+        run: |
+          for i in $(seq 1 10); do
+            if curl -sf --max-time 20 "$URL/api/users/init" | grep -q '"initialized"'; then
+              echo "### Preview: $URL/admin" >> "$GITHUB_STEP_SUMMARY"
+              echo "Smoke passed on attempt $i: $URL"; exit 0
+            fi
+            sleep 6
+          done
+          echo "::error::$URL/api/users/init did not answer"; exit 1
+
+  cleanup:
+    name: Delete preview
+    if: github.event_name == 'delete' && github.event.ref_type == 'branch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Delete the Worker Preview and its Neon branch
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          PROJECT: ${{ vars.NEON_PROJECT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          DELETED: ${{ github.event.ref }}
+        run: |
+          set -uo pipefail
+          NAME=$(.github/scripts/preview-name.sh branch "$DELETED")
+          npx -y "$WRANGLER" preview delete --name "$NAME" --worker-name "$WORKER" --skip-confirmation \
+            || echo "No Worker Preview named $NAME"
+          npx -y "$NEONCTL" branches delete "preview/$NAME" --project-id "$PROJECT" --api-key "$NEON_API_KEY" \
+            || echo "No Neon branch preview/$NAME"

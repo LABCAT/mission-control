@@ -5,6 +5,11 @@
   "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
+  // Worker Previews don't inherit production bindings. Each preview gets no Hyperdrive and a
+  // DATABASE_URL secret for its own Neon branch (.github/workflows/preview.yml).
+  "previews": {
+    "observability": { "enabled": true }
+  },
   "hyperdrive": [
     {
       // Neon (direct endpoint), query caching off so the admin never reads stale data.
