@@ -29,7 +29,9 @@ Rules:
 - Schema changes: generate the migration with `pnpm payload migrate:create` in a SEPARATE commit and add the
   `migration` label to the PR. Never edit existing migrations. Never run migrations against Neon main.
 - Every collection that is imported from WordPress gets an indexed optional `legacyId` (number).
-- Astro sites: zero client JS by default; islands only for forms. Do not add UI frameworks. Use Rocketship tokens/BEM.
+- Astro sites: zero client JS by default; islands only for forms. Do not add UI frameworks.
+- Rocketship first: use @labcat2020/rocketship components (forms, Card, Stack, Grid, Table, Dialog...) and --rs-* tokens.
+  Never restyle or copy them. If a GENERIC component is missing, stop and note it in the PR — it belongs in LABCAT/rocketship.
 - No secrets in code; document new env vars/bindings in the app's .env.example / .dev.vars.example.
 - Do not edit CI workflows unless the task says so.
 - Tests: meaningful tests for logic (access, pricing, matching, mapping, tenant isolation). No trivial happy-path tests.
@@ -123,12 +125,14 @@ Rules:
 - Access tests.
 
 **PJ-11**
-- `packages/site-kit` (Astro):
-  - Depends on `@labcat2020/rocketship`.
-  - Exports a `BaseLayout`: head, SEO meta and canonical slot, header and footer slots.
-  - Tenant branding colours are mapped onto Rocketship tokens as CSS custom properties.
-  - Components using Rocketship BEM classes: `JobCard`, `Pagination`, `FilterBar`, `OrgCard`, `Prose`, `FormField`, and `Turnstile` (an island).
-- No data fetching yet. Include a demo page in a `fixtures` Astro app or a story.
+- `packages/site-kit` (Astro), depending on `@labcat2020/rocketship` **0.3.0+**, pinned.
+- `BaseLayout`: head, SEO meta and canonical slot, header and footer slots. It loads the Rocketship styles and maps the tenant's branding onto `--rs-color-*` tokens (CSS custom properties only).
+- **Job-board compositions only**, built from Rocketship components:
+  - `JobCard` and `OrgCard`, built on `Card`
+  - `FilterBar`, built on `Field`, `Input` and `Select` in a GET form that works without JavaScript
+  - `Turnstile`, a small island using `Field`
+- **Pagination:** if Rocketship doesn't have it, add it to Rocketship first (an RCL task) and use it here once it's released. A temporary local version is fine, as long as it's marked for removal.
+- No data fetching yet. A demo page in `packages/site-kit/demo` that builds in CI.
 
 **PJ-12**
 - `apps/hub`: Astro with `@astrojs/cloudflare`, its own `wrangler.jsonc` (`mc-hub`), and site-kit.

@@ -13,7 +13,7 @@ Inputs:
 |---|---|
 | `LABCAT/orbit` | Upstream. A generic Payload 4 + TanStack Start CMS on Workers (Neon via Hyperdrive, release workflow that migrates and deploys). Generic fixes go here first. |
 | `LABCAT/mission-control` | **The repo we work in.** Created from orbit's history, with `upstream` = orbit (see `docs/UPSTREAM.md`). A weekly PR syncs from upstream (PJ-05). All job-board code lives in `packages/` and in new `apps/`, so merges from orbit stay clean. |
-| `LABCAT/rocketship` | The design system. The theme package uses `@labcat2020/rocketship` (Astro) as it is. |
+| `LABCAT/rocketship` | The design system, `@labcat2020/rocketship` on npm. From 0.3.0 it has 24 Astro components: layout, cards, typography, all the form controls, Table, Dialog, Popover, Tooltip, Disclosure. Generic components we need are added here first (see principle 4). |
 | `LABCAT/vanuatuwok.vu` | The legacy WordPress site. Read-only reference and the source of the import. Its `migration-plan` branch has the original audit; **`mission-control/docs/migration` is now the source of truth.** |
 
 ## Layout of `mission-control`
@@ -38,11 +38,15 @@ Each new site sold = a new tenant row + a small `apps/<site>` (branding, domain,
    - Astro, with mostly static/edge-cached HTML and no client JavaScript by default. Forms are the only interactive islands.
    - Images go through R2 with resized variants.
    - Lighthouse CI is used as the performance budget check.
-4. **The Payload admin is the employer app, for v1.**
+4. **Rocketship first.** Before building a UI component, check Rocketship's repo and Storybook.
+   - A **generic** piece (pagination, tabs, badge, empty state, a form widget) goes into `LABCAT/rocketship` as a Rocketship Component Library task, gets released, and site-kit then uses it.
+   - Only **job-board** compositions (JobCard, OrgCard, FilterBar, apply form) live in `site-kit`, built from Rocketship parts and its `--rs-*` tokens.
+   - Site-kit never forks or restyles Rocketship. Tenant branding only sets `--rs-*` variables.
+5. **The Payload admin is the employer app, for v1.**
    - Employers sign up on the site, then post, pay (invoice), edit and end jobs in the Payload admin, which is scoped to their tenant and organisation.
    - Nicer front-end forms are a later choice, not a blocker.
-5. **Specs live in the tasks.** Every task has its own done check. Where it makes sense, behaviour is checked against the old site.
-6. **Cutover is reversible.** The droplet is kept as a snapshot until 30 days after go-live.
+6. **Specs live in the tasks.** Every task has its own done check. Where it makes sense, behaviour is checked against the old site.
+7. **Cutover is reversible.** The droplet is kept as a snapshot until 30 days after go-live.
 
 ## Decisions vs the old site
 
