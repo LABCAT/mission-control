@@ -59,18 +59,26 @@ Errors show up in `POST /cdn-cgi/local/explorer/api/local/observability/query` w
 
 ## Admin smoke (required after deploy changes)
 
-The admin is a TanStack Start RSC app. A Worker redeploy keeps the same workers.dev hostname but
-replaces the hashed `/assets/*` files. A tab, bfcache entry, or cached HTML from the previous
-deployment can point at files that no longer exist, and the admin sits on its loading spinner.
+The admin is a TanStack Start RSC app. Two things can leave it blank or spinning:
+
+1. **A render-blocking third-party stylesheet.** The generated admin head used to load Google
+   Fonts from `fonts.googleapis.com`. If that host is blocked or slow, the page never paints
+   (reproduced by hanging the request: the body stayed empty for 20s+). It has been removed from
+   `apps/cms/src/app/_payload.tsx`; do not add Google Fonts or any render-blocking third-party
+   asset back. Payload's CSS falls back to the system sans-serif stack.
+2. **Stale admin HTML after a redeploy.** A Worker redeploy keeps the same workers.dev hostname
+   but replaces the hashed `/assets/*` files. A tab, bfcache entry, or cached HTML from the
+   previous deployment can point at files that no longer exist.
 
 `/api/users/init` returning 200 is **not** an admin smoke test. After a Preview or Deploy run:
 
 1. Open `/admin` in a fresh incognito window, or hard-refresh (Cmd/Ctrl+Shift+R) with the cache
    disabled. Log in and confirm the dashboard, the Tenants list and a create form render.
-2. If it still spins, check DevTools → Network for old `/assets/*.js` requests returning 404, and
-   clear site data. Reusing a tab opened before the deploy is not a valid test.
-3. Admin responses are now `Cache-Control: no-store` (`apps/cms/src/server.ts`), but that cannot
-   fix a tab that was already open across a deploy. A hard refresh is still required once.
+2. If it spins, check DevTools → Network for old `/assets/*.js` 404s and for pending
+   `fonts.googleapis.com` requests; clear site data. Reusing a tab opened before the deploy is not
+   a valid test.
+3. Admin responses are `Cache-Control: no-store` (`apps/cms/src/server.ts`), but that cannot fix
+   a tab that was already open across a deploy. A hard refresh is still required once.
 
 ## Git and PRs
 
