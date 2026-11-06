@@ -13,12 +13,16 @@ permissions:
 
 jobs:
   review:
-    uses: LABCAT/kinsho/.github/workflows/review.yml@v0.2.0
+    uses: LABCAT/kinsho/.github/workflows/review.yml@v0.3.0
     with:
       test_command: pnpm test
       check_command: pnpm typecheck && pnpm lint
       model: ${{ vars.KINSHO_MODEL }}
       effort: ${{ vars.KINSHO_EFFORT }}
+      # A runtime change can only PASS once this check is green on the head.
+      evidence_checks: |
+        Admin smoke
+      evidence_wait_minutes: 30
     secrets:
       OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
       KINSHO_APP_ID: ${{ secrets.KINSHO_APP_ID }}
