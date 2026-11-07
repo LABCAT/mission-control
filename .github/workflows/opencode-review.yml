@@ -22,6 +22,10 @@ jobs:
       check_command: pnpm typecheck && pnpm lint
       model: ${{ vars.KINSHO_MODEL }}
       effort: ${{ vars.KINSHO_EFFORT }}
+      # A runtime change can only PASS once this check is green on the head.
+      evidence_checks: |
+        Admin smoke
+      evidence_wait_minutes: 30
     secrets:
       OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
       KINSHO_APP_ID: ${{ secrets.KINSHO_APP_ID }}

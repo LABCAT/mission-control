@@ -20,6 +20,7 @@ concurrency:
 env:
   NEONCTL: neonctl@8.23.1
   WRANGLER: wrangler@4.157.0
+  PLAYWRIGHT: 1.64.1
   WORKER_NAME: ${{ vars.WORKER_NAME || 'orbit-cms' }}
   WORKERS_SUBDOMAIN: ${{ vars.WORKERS_SUBDOMAIN || 'labcat.workers.dev' }}
 
@@ -28,6 +29,8 @@ jobs:
     name: Publish preview
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
+    outputs:
+      name: ${{ steps.name.outputs.name }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -113,6 +116,40 @@ jobs:
             sleep 6
           done
           echo "::error::$URL/api/users/init did not answer"; exit 1
+
+  # Kinsho's runtime evidence (evidence_checks in opencode-review.yml): a real
+  # browser loads /admin on the preview and waits for the login form. The curl
+  # smoke above only proves the API answers; the admin can still hang client-side.
+  admin-smoke:
+    name: Admin smoke
+    needs: publish
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - name: Install Playwright
+        working-directory: ${{ runner.temp }}
+        run: |
+          npm init -y > /dev/null
+          npm install --no-audit --no-fund playwright@${{ env.PLAYWRIGHT }}
+          npx playwright install --with-deps chromium
+      - name: Load /admin in Chromium
+        env:
+          URL: https://${{ needs.publish.outputs.name }}-${{ env.WORKER_NAME }}.${{ env.WORKERS_SUBDOMAIN }}
+          SMOKE_SCREENSHOT: ${{ runner.temp }}/admin-smoke.png
+        run: |
+          cp .github/scripts/admin-smoke.mjs "$RUNNER_TEMP/"
+          node "$RUNNER_TEMP/admin-smoke.mjs" "$URL"
+      - name: Upload screenshot
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: admin-smoke
+          path: ${{ runner.temp }}/admin-smoke.png
+          if-no-files-found: ignore
 
   cleanup:
     name: Delete preview
