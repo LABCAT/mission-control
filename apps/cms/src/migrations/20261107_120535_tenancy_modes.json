@@ -2760,8 +2760,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.tenants_locales": {
-      "name": "tenants_locales",
+    "public.tenant_locale_list": {
+      "name": "tenant_locale_list",
       "schema": "",
       "columns": {
         "_order": {
@@ -2790,8 +2790,8 @@
         }
       },
       "indexes": {
-        "tenants_locales_order_idx": {
-          "name": "tenants_locales_order_idx",
+        "tenant_locale_list_order_idx": {
+          "name": "tenant_locale_list_order_idx",
           "columns": [
             {
               "expression": "_order",
@@ -2805,8 +2805,8 @@
           "method": "btree",
           "with": {}
         },
-        "tenants_locales_parent_id_idx": {
-          "name": "tenants_locales_parent_id_idx",
+        "tenant_locale_list_parent_id_idx": {
+          "name": "tenant_locale_list_parent_id_idx",
           "columns": [
             {
               "expression": "_parent_id",
@@ -2822,9 +2822,9 @@
         }
       },
       "foreignKeys": {
-        "tenants_locales_parent_id_fk": {
-          "name": "tenants_locales_parent_id_fk",
-          "tableFrom": "tenants_locales",
+        "tenant_locale_list_parent_id_fk": {
+          "name": "tenant_locale_list_parent_id_fk",
+          "tableFrom": "tenant_locale_list",
           "tableTo": "tenants",
           "columnsFrom": [
             "_parent_id"
@@ -4785,6 +4785,6 @@
     "tables": {},
     "columns": {}
   },
-  "id": "c43db37c-9f8c-4595-93bd-b165507d454c",
+  "id": "05498541-78c2-4c76-9046-f791beb9a9a9",
   "prevId": "00000000-0000-0000-0000-000000000000"
 }
