@@ -57,6 +57,12 @@ describe('payloadJobs tenancy modes', () => {
       expect.arrayContaining(['currency', 'timezone', 'locales', 'emailFromAddress']),
     )
     expect(result.custom?.payloadJobs).toEqual({ enabled: true, tenancy: 'single' })
+
+    const updateAccess = result.globals?.[0]?.access?.update
+    expect(updateAccess).toBeTypeOf('function')
+    if (!updateAccess) throw new Error('Missing global update access')
+    expect(await updateAccess({ req: { user: { role: 'user' } } } as never)).toBe(false)
+    expect(await updateAccess({ req: { user: { role: 'super-admin' } } } as never)).toBe(true)
   })
 
   it('fails with a clear error when multi mode has no tenants collection', () => {

@@ -1,6 +1,6 @@
 import type { Field, GlobalConfig } from 'payload'
 
-import { authenticatedAccess } from './access'
+import { authenticatedAccess, superAdminAccess } from './access'
 
 // Current ISO 4217 list one from SIX (the maintenance agency), fetched 2026-11-06.
 const ISO_4217_CODES = new Set(
@@ -204,7 +204,7 @@ export const jobBoardSettingsGlobal = (slug = 'job-board-settings'): GlobalConfi
   },
   access: {
     read: authenticatedAccess,
-    update: authenticatedAccess,
+    update: superAdminAccess,
   },
   fields: jobBoardTenantFields,
   versions: false,
