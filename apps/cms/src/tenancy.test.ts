@@ -258,9 +258,11 @@ describe('tenant deletion', () => {
     expect(findCalls[0]).toEqual(
       expect.objectContaining({
         collection: 'users',
+        pagination: false,
         where: { 'tenants.tenant': { in: [1] } },
       }),
     )
+    expect(findCalls[0]).not.toHaveProperty('limit')
     expect(updates).toEqual([
       expect.objectContaining({
         id: 10,

@@ -65,8 +65,8 @@ export const removeTenantMemberships: CollectionBeforeDeleteHook = async ({ id, 
   const users = await req.payload.find({
     collection: 'users',
     depth: 0,
-    limit: 0,
     overrideAccess: true,
+    pagination: false,
     req,
     where: {
       'tenants.tenant': {
