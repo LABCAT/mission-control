@@ -52,6 +52,11 @@ export default buildConfig({
         return workerEnv?.HYPERDRIVE?.connectionString ?? process.env.DATABASE_URL ?? ''
       },
       maxUses: 1,
+      // Never let the pool queue. When it's full (default max 10), pg-pool opens a waiting
+      // query's connection inside whichever request releases one, so the waiter ends up on
+      // another request's I/O. workerd cancels it and the request hangs forever.
+      // See docs/troubleshooting.md, "Admin hangs forever".
+      max: 10_000,
     },
     // Dev schema push needs drizzle-kit, which doesn't run in workerd. Schema changes go
     // through migrations, run with the Node CLI (`pnpm payload migrate`).
