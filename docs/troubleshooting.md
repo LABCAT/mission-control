@@ -2,59 +2,57 @@
 
 ## Admin hangs forever
 
-Seen on the `feature-user-fields` preview (2026-11-05) and on prod `0.1.1` (2026-11-07). Fixed in `apps/cms/src/payload.config.ts` (`pool.max`).
+**Status: fixed in `0.1.3`** by `patches/@vitejs__plugin-rsc@0.5.38.patch`. Seen on the `feature-user-fields` preview (2026-11-05) and on prod `0.1.1` and `0.1.2` (2026-11-07).
 
 ### Symptoms
 
-- `/admin` loads forever. No error, and the server never sends a byte. Logged-in pages are hit first.
+- Admin pages (`/admin`, `/admin/login`) load forever. The server never sends a byte.
 - On the same deployment, the home page and `/api/*` respond normally.
-- It stays broken until the Worker is redeployed. Redeploying the same commit "fixes" it.
-- workerd logs: `A promise was resolved or rejected from a different request context than the one it was created in. However, the creating request has already been completed or canceled.`
+- It's per Worker instance: some requests hang and others load, depending on which instance serves them.
+- A redeploy clears it, because it replaces every instance. It comes back once a browser visits `/admin` again.
+- `wrangler tail` shows hung requests as `canceled`, with no logs or exceptions.
 
 ### Cause
 
-Payload's Postgres adapter keeps one pg-pool per Worker instance, shared by every request it serves. When the pool is full (pg-pool's default `max` is 10), a waiting query gets a connection that pg-pool opens inside whichever request releases one. workerd ties I/O to the request that started it, so the waiting request resumes on another request's I/O. Once that request has finished, workerd cancels the waiter's continuations, and the waiter never responds. Its pool slot can be stranded too, so the instance gets worse until it's replaced.
+`@vitejs/plugin-rsc` memoizes its server-side module loaders (`setRequireModule` in `dist/core/ssr.js` and `dist/core/rsc.js`). The first request that needs a client component caches the pending `import()` promise, and every later request reuses it.
 
-Logged-in admin pages run many queries at once (dashboard, preferences, permissions), so they fill the pool first. Light requests still fit in the slots that are left, which is why the API keeps working.
+On Cloudflare Workers, a promise belongs to the request that created it. If that request finishes before the promise settles, the promise never settles.
+
+That's what a logged-out browser visit to `/admin` does:
+
+1. TanStack Start streams the page to browsers (`isbot` says not a bot), and the layout loader (`loadLayoutData`) starts decoding `PayloadRootProviders`, which loads client components through that cache.
+2. In parallel, the admin page redirects to `/admin/login`.
+3. The 307 ends the request while the module load is still pending.
+4. Every later layout decode in that instance awaits the dead promise forever.
+
+`curl` never triggered it, because TanStack waits for the full render for bots. Local `vite preview` doesn't either, because local workerd doesn't cancel a finished request's work.
 
 ### Fix
 
-`pool.max: 10_000` in `apps/cms/src/payload.config.ts`, so the pool never queues. Every query opens its own connection inside its own request. `maxUses: 1` already stops connections being shared between requests. In production, Hyperdrive does the real pooling to Neon, and Workers caps each request at six open connections.
+The patch swaps `memoize` for `memoizeLoaded`, which caches a module only once it has loaded. Concurrent first requests each start their own `import()`, which is harmless because the runtime still evaluates each module once. This needs reporting upstream to `vitejs/vite-plugin-react` (`packages/plugin-rsc`). When upgrading plugin-rsc, re-apply the patch or confirm upstream has fixed it, then run the check below.
 
-Trade-off: without Hyperdrive (previews connect straight to Neon, and local dev uses Docker), heavy load can reach Postgres's connection limit. That fails fast with `sorry, too many clients already` instead of hanging.
+Related fix in `0.1.2`: `pool.max: 10_000` in `apps/cms/src/payload.config.ts`. That fixed a separate real bug where pg-pool handed a waiting query a connection from another request. Keep it.
 
-Don't lower `max` or remove `maxUses: 1` without running the check below.
+### Check it
 
-### Check it locally
-
-Build for production and serve it in workerd against Docker Postgres:
+This needs a fresh deploy, because a warm instance has already cached its modules. Use a preview, or re-run its Preview workflow, then:
 
 ```bash
-cd apps/cms && pnpm build && pnpm exec vite preview --port 8903
+B=https://<preview>-orbit-cms.labcat.workers.dev
+UA='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36'
+curl -s -A "$UA" -o /dev/null -w '%{http_code}\n' $B/admin   # 307
+for i in 1 2 3 4 5; do curl -s -A "$UA" -o /dev/null -w '%{http_code} %{time_total}s\n' --max-time 30 $B/admin/login; done
 ```
 
-In another terminal, log in as a local admin and send 40 admin requests at once:
+| Build | Result |
+|---|---|
+| Without the patch | 2–3 of 5 hang |
+| With the patch | 14 of 14 returned 200 across two fresh deploys |
+
+Request tracing and a watchdog were used to find this; see the `admin-hang-diagnostics` tag (commit dca2922) if it ever recurs.
+
+To recover, re-run the latest Release workflow, which gives fresh instances:
 
 ```bash
-B=http://localhost:8903; CJ=$(mktemp)
-curl -s -c "$CJ" -o /dev/null -H 'Content-Type: application/json' \
-  -d '{"email":"<local admin email>","password":"<local admin password>"}' $B/api/users/login
-for i in $(seq 1 40); do curl -s -b "$CJ" -o /dev/null -w '%{http_code}\n' --max-time 30 $B/admin & done | sort | uniq -c
+gh run rerun $(gh run list --repo LABCAT/orbit --workflow Release --limit 1 --json databaseId --jq '.[0].databaseId') --repo LABCAT/orbit
 ```
-
-Then search the `vite preview` output for `different request context`.
-
-- Before the fix: 34 of 40 returned 500, with 94 warnings.
-- After the fix: no warnings. At 100 parallel requests, the only failures are local Postgres's 100-connection limit.
-
-### If it happens again
-
-1. **Recover** by redeploying the live tag, which gives fresh Worker instances:
-
-   ```bash
-   gh run rerun $(gh run list --repo LABCAT/orbit --workflow Release --limit 1 --json databaseId --jq '.[0].databaseId') --repo LABCAT/orbit
-   ```
-
-   For a preview, re-run that branch's Preview workflow instead.
-2. **Confirm** by running `cd apps/cms && pnpm exec wrangler tail orbit-cms --format pretty`, loading the admin, and looking for the warning above. `wrangler tail` doesn't stream previews.
-3. **Look for** anything shared across requests that does I/O, such as a module-level pool, client or cached promise. The fix is the same: make each request open its own I/O.
