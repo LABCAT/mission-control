@@ -133,6 +133,9 @@ export const jobBoardTenantFields: Field[] = [
   {
     name: 'locales',
     type: 'array',
+    // Avoid the `tenants_locales` table name: Payload mistakes that for its localized-fields
+    // table and adds an `_locales` relation that does not exist.
+    dbName: 'tenant_locale_list',
     admin: {
       condition: showForSiteTenant,
       description: 'One or more locales for this tenant. Add more when the site is translated.',

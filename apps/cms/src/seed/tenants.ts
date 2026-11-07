@@ -115,7 +115,7 @@ try {
 
     for (const [index, locale] of (tenant.locales ?? []).entries()) {
       await client.query(
-        'insert into tenants_locales (_order, _parent_id, id, locale) values ($1, $2, $3, $4)',
+        'insert into tenant_locale_list (_order, _parent_id, id, locale) values ($1, $2, $3, $4)',
         [index, id, randomUUID(), locale.locale],
       )
     }
