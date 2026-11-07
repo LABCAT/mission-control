@@ -1,4 +1,4 @@
-import type { Config } from 'payload'
+import type { CollectionBeforeChangeHook, Config } from 'payload'
 import { multiTenantPlugin } from '@payloadcms/plugin-multi-tenant'
 import { describe, expect, it } from 'vitest'
 
@@ -10,6 +10,7 @@ import { Tags } from './collections/Tags'
 import { removeTenantMemberships, Tenants, validateCurrency } from './collections/Tenants'
 import {
   ensureFirstUserIsSuperAdmin,
+  preventTenantAdminCredentialChanges,
   Users,
   usersUpdateAccess,
 } from './collections/Users'
@@ -80,6 +81,9 @@ const beforeValidateFor = (config: Config, slug: string) => {
 
 const runHook = (hook: (args: unknown) => unknown, args: unknown) =>
   Promise.resolve().then(() => hook(args))
+
+const runBeforeChange = (hook: CollectionBeforeChangeHook, args: Record<string, unknown>) =>
+  Promise.resolve().then(() => hook(args as never))
 
 describe('currency validation', () => {
   it('accepts current ISO 4217 codes and rejects unknown codes', () => {
@@ -215,6 +219,59 @@ describe('tenant isolation', () => {
     })
     expect(await usersUpdateAccess(argsFor(superAdmin))).toBe(true)
     expect(await usersUpdateAccess(argsFor(null))).toBe(false)
+  })
+})
+
+describe('credential updates', () => {
+  const target = { id: 20, email: 'b@example.com' }
+
+  it('rejects email and password changes for another user', async () => {
+    await expect(
+      runBeforeChange(preventTenantAdminCredentialChanges, {
+        data: { email: 'c@example.com' },
+        operation: 'update',
+        originalDoc: target,
+        req: requestFor(tenantAdminA),
+      }),
+    ).rejects.toThrow()
+
+    await expect(
+      runBeforeChange(preventTenantAdminCredentialChanges, {
+        data: { password: 'new-password' },
+        operation: 'update',
+        originalDoc: target,
+        req: requestFor(tenantAdminA),
+      }),
+    ).rejects.toThrow()
+  })
+
+  it('allows profile edits, self edits and super-admin edits', async () => {
+    await expect(
+      runBeforeChange(preventTenantAdminCredentialChanges, {
+        data: { firstName: 'B' },
+        operation: 'update',
+        originalDoc: target,
+        req: requestFor(tenantAdminA),
+      }),
+    ).resolves.toEqual({ firstName: 'B' })
+
+    await expect(
+      runBeforeChange(preventTenantAdminCredentialChanges, {
+        data: { email: 'new@example.com' },
+        operation: 'update',
+        originalDoc: { id: tenantAdminA.id, email: 'a@example.com' },
+        req: requestFor(tenantAdminA),
+      }),
+    ).resolves.toEqual({ email: 'new@example.com' })
+
+    await expect(
+      runBeforeChange(preventTenantAdminCredentialChanges, {
+        data: { email: 'new@example.com', password: 'new-password' },
+        operation: 'update',
+        originalDoc: target,
+        req: requestFor(superAdmin),
+      }),
+    ).resolves.toEqual({ email: 'new@example.com', password: 'new-password' })
   })
 })
 

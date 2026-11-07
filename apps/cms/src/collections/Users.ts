@@ -1,4 +1,4 @@
-import type { Access, CollectionBeforeChangeHook, CollectionConfig, Where } from 'payload'
+import { Forbidden, type Access, type CollectionBeforeChangeHook, type CollectionConfig, type Where } from 'payload'
 
 import {
   authenticatedAccess,
@@ -33,6 +33,24 @@ export const usersUpdateAccess: Access = ({ req }) => {
   } as Where
 }
 
+// mission-control: a tenant-admin may edit another member's profile, but not their login.
+export const preventTenantAdminCredentialChanges: CollectionBeforeChangeHook = ({
+  data,
+  operation,
+  originalDoc,
+  req,
+}) => {
+  if (operation !== 'update' || !originalDoc) return data
+
+  const actor = req.user as MissionControlUser | null | undefined
+  if (!actor || isSuperAdmin(actor) || String(actor.id) === String(originalDoc.id)) return data
+
+  if (data.email !== undefined && data.email !== originalDoc.email) throw new Forbidden(req.t)
+  if (data.password !== undefined) throw new Forbidden(req.t)
+
+  return data
+}
+
 // mission-control: a fresh database has no super-admin yet, so the first user must bootstrap it.
 export const ensureFirstUserIsSuperAdmin: CollectionBeforeChangeHook = async ({
   data,
@@ -65,7 +83,7 @@ export const Users: CollectionConfig = {
   },
   auth: true,
   hooks: {
-    beforeChange: [ensureFirstUserIsSuperAdmin],
+    beforeChange: [ensureFirstUserIsSuperAdmin, preventTenantAdminCredentialChanges],
   },
   fields: [
     // mission-control: global role; per-tenant roles live in the plugin's `tenants` array.
