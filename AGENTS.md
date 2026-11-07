@@ -79,6 +79,8 @@ The admin is a TanStack Start RSC app. Two things can leave it blank or spinning
    a valid test.
 3. Admin responses are `Cache-Control: no-store` (`apps/cms/src/server.ts`), but that cannot fix
    a tab that was already open across a deploy. A hard refresh is still required once.
+4. If `/admin` hangs while `/api/*` keeps working, read `docs/troubleshooting.md` → "Admin hangs
+   forever". The pg-pool `max: 10` bug is fixed by `pool.max: 10_000`; don't lower it.
 
 ## Git and PRs
 
