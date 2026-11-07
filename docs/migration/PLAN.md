@@ -34,6 +34,8 @@ Each new site sold = a new tenant row + a small `apps/<site>` (branding, domain,
 
 1. **Build only what's used** (`USAGE.md`). Features that are dropped stay dropped until a customer asks for them.
 2. **Nothing tenant-specific is hardcoded.** Each tenant has its own currency, timezone, locales, location list, tax label, email sender, domain, branding and Xero connection. Money is stored as integer minor units plus a currency code.
+
+   Tenant settings store `locales[]` and `defaultLocale`, so one tenant can serve multiple locales later. Vanuatu Wok is English-only for now; adding another locale must not require a schema change.
 3. **Public sites aim for a PageSpeed score of 100.**
    - Astro, with mostly static/edge-cached HTML and no client JavaScript by default. Forms are the only interactive islands.
    - Images go through R2 with resized variants.
