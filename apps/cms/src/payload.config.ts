@@ -11,8 +11,11 @@ import { Tags } from './collections/Tags'
 
 // mission-control: job board plugins. Keep this block small so orbit merges stay clean.
 import { payloadJobs } from '@mission-control/payload-jobs'
+import { multiTenantPlugin } from '@payloadcms/plugin-multi-tenant'
+import { Tenants } from './collections/Tenants'
 import { SystemStatus } from './globals/SystemStatus'
 import { heartbeatTask } from './jobs/heartbeat'
+import { multiTenantOptions } from './tenancy'
 
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
@@ -33,7 +36,7 @@ export default buildConfig({
   },
   // Cloudflare Workers rejects PBKDF2 above 100,000 iterations (Payload's default is 600,000).
   auth: { passwordHashIterations: 100000 },
-  collections: [Users, Media, Folders, Tags],
+  collections: [Users, Media, Folders, Tags, Tenants], // mission-control: tenants
   editor: lexicalEditor(),
   secret: process.env.PAYLOAD_SECRET || '',
   typescript: {
@@ -61,7 +64,7 @@ export default buildConfig({
   }),
   globals: [SystemStatus],
   jobs: { tasks: [heartbeatTask] },
-  plugins: [payloadJobs()],
+  plugins: [payloadJobs(), multiTenantPlugin(multiTenantOptions)],
   localization: {
     locales: [{ code: 'en', label: 'English' }],
     fallback: true,

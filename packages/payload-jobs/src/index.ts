@@ -1,5 +1,7 @@
 import type { Config, Plugin } from 'payload'
 
+export * from './access'
+
 export type PayloadJobsOptions = {
   /** Turn the plugin off without removing it from the config. Defaults to true. */
   enabled?: boolean

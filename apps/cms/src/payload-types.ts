@@ -83,6 +83,7 @@ export interface Config {
     media: Media;
     folders: Folder;
     tags: Tag;
+    tenants: Tenant;
     'payload-kv': PayloadKv;
     'payload-jobs': PayloadJob;
     'payload-locked-documents': PayloadLockedDocument;
@@ -96,6 +97,7 @@ export interface Config {
     media: MediaSelect<false> | MediaSelect<true>;
     folders: FoldersSelect<false> | FoldersSelect<true>;
     tags: TagsSelect<false> | TagsSelect<true>;
+    tenants: TenantsSelect<false> | TenantsSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-jobs': PayloadJobsSelect<false> | PayloadJobsSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
@@ -159,8 +161,16 @@ export interface UserAuthOperations {
  */
 export interface User {
   id: number;
+  role: 'super-admin' | 'user';
   firstName?: string | null;
   lastName?: string | null;
+  tenants?:
+    | {
+        tenant: number | Tenant;
+        role: 'tenant-admin' | 'editor' | 'employer';
+        id?: string | null;
+      }[]
+    | null;
   createdBy?: {
     relationTo: 'users';
     value: number | User;
@@ -193,10 +203,63 @@ export interface User {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "tenants".
+ */
+export interface Tenant {
+  id: number;
+  name: string;
+  slug: string;
+  domains?:
+    | {
+        domain: string;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * Aggregate tenants can read published content from every tenant.
+   */
+  isAggregate?: boolean | null;
+  currency: string;
+  /**
+   * 0 for VUV, 2 for NZD, AUD, USD and most other currencies.
+   */
+  currencyMinorUnits: number;
+  timezone: string;
+  locales?:
+    | {
+        locale: string;
+        id?: string | null;
+      }[]
+    | null;
+  defaultLocale: string;
+  taxLabel: string;
+  emailFromName: string;
+  emailFromAddress: string;
+  adminEmail: string;
+  branding: {
+    logo?: (number | null) | Media;
+    colorPrimary: string;
+    colorAccent: string;
+    colorHover: string;
+  };
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "media".
  */
 export interface Media {
   id: number;
+  tenant?: (number | null) | Tenant;
   alt: string;
   _h_folders?: (number | null) | Folder;
   _h_tags?: (number | Tag)[] | null;
@@ -237,6 +300,7 @@ export interface Media {
 export interface Folder {
   id: number;
   _h_folders?: (number | null) | Folder;
+  tenant?: (number | null) | Tenant;
   name: string;
   createdBy?: {
     relationTo: 'users';
@@ -258,6 +322,7 @@ export interface Folder {
 export interface Tag {
   id: number;
   _h_tags?: (number | null) | Tag;
+  tenant?: (number | null) | Tenant;
   name: string;
   createdBy?: {
     relationTo: 'users';
@@ -421,6 +486,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'tags';
         value: number | Tag;
+      } | null)
+    | ({
+        relationTo: 'tenants';
+        value: number | Tenant;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -491,8 +560,16 @@ export interface PayloadLlmInstruction {
  * via the `definition` "users_select".
  */
 export interface UsersSelect<T extends boolean = true> {
+  role?: T;
   firstName?: T;
   lastName?: T;
+  tenants?:
+    | T
+    | {
+        tenant?: T;
+        role?: T;
+        id?: T;
+      };
   createdBy?: T;
   updatedBy?: T;
   updatedAt?: T;
@@ -520,6 +597,7 @@ export interface UsersSelect<T extends boolean = true> {
  * via the `definition` "media_select".
  */
 export interface MediaSelect<T extends boolean = true> {
+  tenant?: T;
   alt?: T;
   _h_folders?: T;
   _h_tags?: T;
@@ -555,6 +633,7 @@ export interface MediaSelect<T extends boolean = true> {
  */
 export interface FoldersSelect<T extends boolean = true> {
   _h_folders?: T;
+  tenant?: T;
   name?: T;
   createdBy?: T;
   updatedBy?: T;
@@ -569,6 +648,7 @@ export interface FoldersSelect<T extends boolean = true> {
  */
 export interface TagsSelect<T extends boolean = true> {
   _h_tags?: T;
+  tenant?: T;
   name?: T;
   createdBy?: T;
   updatedBy?: T;
@@ -576,6 +656,47 @@ export interface TagsSelect<T extends boolean = true> {
   createdAt?: T;
   _h_slugPath?: T;
   _h_titlePath?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "tenants_select".
+ */
+export interface TenantsSelect<T extends boolean = true> {
+  name?: T;
+  slug?: T;
+  domains?:
+    | T
+    | {
+        domain?: T;
+        id?: T;
+      };
+  isAggregate?: T;
+  currency?: T;
+  currencyMinorUnits?: T;
+  timezone?: T;
+  locales?:
+    | T
+    | {
+        locale?: T;
+        id?: T;
+      };
+  defaultLocale?: T;
+  taxLabel?: T;
+  emailFromName?: T;
+  emailFromAddress?: T;
+  adminEmail?: T;
+  branding?:
+    | T
+    | {
+        logo?: T;
+        colorPrimary?: T;
+        colorAccent?: T;
+        colorHover?: T;
+      };
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -760,7 +881,7 @@ export interface CollectionsWidget {
 export interface CollectionQueryWidget {
   data?: {
     title?: string | null;
-    relatedCollection: 'users' | 'media' | 'folders' | 'tags';
+    relatedCollection: 'users' | 'media' | 'folders' | 'tags' | 'tenants';
     where?:
       | {
           [k: string]: unknown;
@@ -782,7 +903,7 @@ export interface CollectionQueryWidget {
  */
 export interface ActivityWidget {
   data?: {
-    excludedCollections?: ('users' | 'media' | 'folders' | 'tags')[] | null;
+    excludedCollections?: ('users' | 'media' | 'folders' | 'tags' | 'tenants')[] | null;
   };
   width: 'small' | 'medium' | 'large' | 'x-large' | 'full';
 }
