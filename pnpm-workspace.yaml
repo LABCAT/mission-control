@@ -6,3 +6,5 @@ onlyBuiltDependencies:
   - esbuild
   - unrs-resolver
   - workerd
+patchedDependencies:
+  '@vitejs/plugin-rsc@0.5.38': patches/@vitejs__plugin-rsc@0.5.38.patch

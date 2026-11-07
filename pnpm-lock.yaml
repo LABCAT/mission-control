@@ -4,6 +4,11 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  '@vitejs/plugin-rsc@0.5.38':
+    hash: 796b3a42df198af8659b659da8eeee2cc5473747deb1c2eb2c1007a4b266c358
+    path: patches/@vitejs__plugin-rsc@0.5.38.patch
+
 importers:
 
   .:
@@ -34,7 +39,7 @@ importers:
         version: 4.0.0-beta.7(@faceless-ui/modal@3.0.2(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(@faceless-ui/scroll-info@2.0.0(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(@types/react@19.3.0)(monaco-editor@0.57.0)(payload@4.0.0-beta.7(graphql@16.15.0)(typescript@6.0.3))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@6.0.3)(yjs@13.6.33)
       '@payloadcms/tanstack-start':
         specifier: 4.0.0-beta.7
-        version: 4.0.0-beta.7(@tanstack/react-router@1.170.46(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(@tanstack/react-start@1.169.4(@vitejs/plugin-rsc@0.5.38(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(vite@8.3.0(@types/node@24.12.3)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15)))(esbuild@0.25.12)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(rolldown@1.2.16)(vite@8.3.0(@types/node@24.12.3)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15)))(@types/react@19.3.0)(@vitejs/plugin-react@6.0.3(vite@8.3.0(@types/node@24.12.3)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15)))(@vitejs/plugin-rsc@0.5.38(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(vite@8.3.0(@types/node@24.12.3)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15)))(graphql@16.15.0)(monaco-editor@0.57.0)(payload@4.0.0-beta.7(graphql@16.15.0)(typescript@6.0.3))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@6.0.3)(vite@8.3.0(@types/node@24.12.3)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15))
+        version: 4.0.0-beta.7(ec480c35ec796d33becda247a6f0f971)
       '@payloadcms/ui':
         specifier: 4.0.0-beta.7
         version: 4.0.0-beta.7(@types/react@19.3.0)(monaco-editor@0.57.0)(payload@4.0.0-beta.7(graphql@16.15.0)(typescript@6.0.3))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@6.0.3)
@@ -43,7 +48,7 @@ importers:
         version: 1.170.46(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       '@tanstack/react-start':
         specifier: ^1.169.1
-        version: 1.169.4(@vitejs/plugin-rsc@0.5.38(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(vite@8.3.0(@types/node@24.12.3)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15)))(esbuild@0.25.12)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(rolldown@1.2.16)(vite@8.3.0(@types/node@24.12.3)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15))
+        version: 1.169.4(@vitejs/plugin-rsc@0.5.38(patch_hash=796b3a42df198af8659b659da8eeee2cc5473747deb1c2eb2c1007a4b266c358)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(vite@8.3.0(@types/node@24.12.3)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15)))(esbuild@0.25.12)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(rolldown@1.2.16)(vite@8.3.0(@types/node@24.12.3)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15))
       cross-env:
         specifier: 10.1.0
         version: 10.1.0
@@ -86,7 +91,7 @@ importers:
         version: 6.0.3(vite@8.3.0(@types/node@24.12.3)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15))
       '@vitejs/plugin-rsc':
         specifier: ^0.5.21
-        version: 0.5.38(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(vite@8.3.0(@types/node@24.12.3)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15))
+        version: 0.5.38(patch_hash=796b3a42df198af8659b659da8eeee2cc5473747deb1c2eb2c1007a4b266c358)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(vite@8.3.0(@types/node@24.12.3)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15))
       typescript:
         specifier: 6.0.3
         version: 6.0.3
@@ -4529,13 +4534,13 @@ snapshots:
       - utf-8-validate
       - yjs
 
-  '@payloadcms/tanstack-start@4.0.0-beta.7(@tanstack/react-router@1.170.46(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(@tanstack/react-start@1.169.4(@vitejs/plugin-rsc@0.5.38(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(vite@8.3.0(@types/node@24.12.3)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15)))(esbuild@0.25.12)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(rolldown@1.2.16)(vite@8.3.0(@types/node@24.12.3)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15)))(@types/react@19.3.0)(@vitejs/plugin-react@6.0.3(vite@8.3.0(@types/node@24.12.3)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15)))(@vitejs/plugin-rsc@0.5.38(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(vite@8.3.0(@types/node@24.12.3)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15)))(graphql@16.15.0)(monaco-editor@0.57.0)(payload@4.0.0-beta.7(graphql@16.15.0)(typescript@6.0.3))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@6.0.3)(vite@8.3.0(@types/node@24.12.3)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15))':
+  '@payloadcms/tanstack-start@4.0.0-beta.7(ec480c35ec796d33becda247a6f0f971)':
     dependencies:
       '@payloadcms/graphql': 4.0.0-beta.7(graphql@16.15.0)(payload@4.0.0-beta.7(graphql@16.15.0)(typescript@6.0.3))(typescript@6.0.3)
       '@payloadcms/translations': 4.0.0-beta.7
       '@payloadcms/ui': 4.0.0-beta.7(@types/react@19.3.0)(monaco-editor@0.57.0)(payload@4.0.0-beta.7(graphql@16.15.0)(typescript@6.0.3))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@6.0.3)
       '@tanstack/react-router': 1.170.46(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
-      '@tanstack/react-start': 1.169.4(@vitejs/plugin-rsc@0.5.38(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(vite@8.3.0(@types/node@24.12.3)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15)))(esbuild@0.25.12)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(rolldown@1.2.16)(vite@8.3.0(@types/node@24.12.3)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15))
+      '@tanstack/react-start': 1.169.4(@vitejs/plugin-rsc@0.5.38(patch_hash=796b3a42df198af8659b659da8eeee2cc5473747deb1c2eb2c1007a4b266c358)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(vite@8.3.0(@types/node@24.12.3)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15)))(esbuild@0.25.12)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(rolldown@1.2.16)(vite@8.3.0(@types/node@24.12.3)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15))
       graphql: 16.15.0
       graphql-http: 1.22.4(graphql@16.15.0)
       payload: 4.0.0-beta.7(graphql@16.15.0)(typescript@6.0.3)
@@ -4544,7 +4549,7 @@ snapshots:
       react-dom: 19.3.1(react@19.3.1)
     optionalDependencies:
       '@vitejs/plugin-react': 6.0.3(vite@8.3.0(@types/node@24.12.3)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15))
-      '@vitejs/plugin-rsc': 0.5.38(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(vite@8.3.0(@types/node@24.12.3)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15))
+      '@vitejs/plugin-rsc': 0.5.38(patch_hash=796b3a42df198af8659b659da8eeee2cc5473747deb1c2eb2c1007a4b266c358)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(vite@8.3.0(@types/node@24.12.3)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15))
       vite: 8.3.0(@types/node@24.12.3)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15)
     transitivePeerDependencies:
       - '@types/react'
@@ -4687,7 +4692,7 @@ snapshots:
       react: 19.3.1
       react-dom: 19.3.1(react@19.3.1)
 
-  '@tanstack/react-start-rsc@0.1.65(@vitejs/plugin-rsc@0.5.38(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(vite@8.3.0(@types/node@24.12.3)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15)))(esbuild@0.25.12)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(rolldown@1.2.16)(vite@8.3.0(@types/node@24.12.3)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15))':
+  '@tanstack/react-start-rsc@0.1.65(@vitejs/plugin-rsc@0.5.38(patch_hash=796b3a42df198af8659b659da8eeee2cc5473747deb1c2eb2c1007a4b266c358)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(vite@8.3.0(@types/node@24.12.3)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15)))(esbuild@0.25.12)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(rolldown@1.2.16)(vite@8.3.0(@types/node@24.12.3)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15))':
     dependencies:
       '@tanstack/react-router': 1.170.46(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       '@tanstack/router-core': 1.171.39
@@ -4700,7 +4705,7 @@ snapshots:
       react: 19.3.1
       react-dom: 19.3.1(react@19.3.1)
     optionalDependencies:
-      '@vitejs/plugin-rsc': 0.5.38(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(vite@8.3.0(@types/node@24.12.3)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15))
+      '@vitejs/plugin-rsc': 0.5.38(patch_hash=796b3a42df198af8659b659da8eeee2cc5473747deb1c2eb2c1007a4b266c358)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(vite@8.3.0(@types/node@24.12.3)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15))
     transitivePeerDependencies:
       - '@farmfe/core'
       - '@rsbuild/core'
@@ -4722,11 +4727,11 @@ snapshots:
       react: 19.3.1
       react-dom: 19.3.1(react@19.3.1)
 
-  '@tanstack/react-start@1.169.4(@vitejs/plugin-rsc@0.5.38(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(vite@8.3.0(@types/node@24.12.3)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15)))(esbuild@0.25.12)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(rolldown@1.2.16)(vite@8.3.0(@types/node@24.12.3)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15))':
+  '@tanstack/react-start@1.169.4(@vitejs/plugin-rsc@0.5.38(patch_hash=796b3a42df198af8659b659da8eeee2cc5473747deb1c2eb2c1007a4b266c358)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(vite@8.3.0(@types/node@24.12.3)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15)))(esbuild@0.25.12)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(rolldown@1.2.16)(vite@8.3.0(@types/node@24.12.3)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15))':
     dependencies:
       '@tanstack/react-router': 1.170.46(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       '@tanstack/react-start-client': 1.168.44(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
-      '@tanstack/react-start-rsc': 0.1.65(@vitejs/plugin-rsc@0.5.38(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(vite@8.3.0(@types/node@24.12.3)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15)))(esbuild@0.25.12)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(rolldown@1.2.16)(vite@8.3.0(@types/node@24.12.3)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15))
+      '@tanstack/react-start-rsc': 0.1.65(@vitejs/plugin-rsc@0.5.38(patch_hash=796b3a42df198af8659b659da8eeee2cc5473747deb1c2eb2c1007a4b266c358)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(vite@8.3.0(@types/node@24.12.3)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15)))(esbuild@0.25.12)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(rolldown@1.2.16)(vite@8.3.0(@types/node@24.12.3)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15))
       '@tanstack/react-start-server': 1.167.52(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       '@tanstack/router-utils': 1.162.4
       '@tanstack/start-client-core': 1.170.39
@@ -4736,7 +4741,7 @@ snapshots:
       react: 19.3.1
       react-dom: 19.3.1(react@19.3.1)
     optionalDependencies:
-      '@vitejs/plugin-rsc': 0.5.38(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(vite@8.3.0(@types/node@24.12.3)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15))
+      '@vitejs/plugin-rsc': 0.5.38(patch_hash=796b3a42df198af8659b659da8eeee2cc5473747deb1c2eb2c1007a4b266c358)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(vite@8.3.0(@types/node@24.12.3)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15))
       vite: 8.3.0(@types/node@24.12.3)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15)
     transitivePeerDependencies:
       - '@farmfe/core'
@@ -4965,7 +4970,7 @@ snapshots:
       '@rolldown/pluginutils': 1.0.1
       vite: 8.3.0(@types/node@24.12.3)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15)
 
-  '@vitejs/plugin-rsc@0.5.38(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(vite@8.3.0(@types/node@24.12.3)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15))':
+  '@vitejs/plugin-rsc@0.5.38(patch_hash=796b3a42df198af8659b659da8eeee2cc5473747deb1c2eb2c1007a4b266c358)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(vite@8.3.0(@types/node@24.12.3)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15))':
     dependencies:
       '@rolldown/pluginutils': 1.0.1
       es-module-lexer: 3.0.4
