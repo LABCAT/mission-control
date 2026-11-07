@@ -64,7 +64,7 @@ export default buildConfig({
   }),
   globals: [SystemStatus],
   jobs: { tasks: [heartbeatTask] },
-  plugins: [payloadJobs(), multiTenantPlugin(multiTenantOptions)],
+  plugins: [payloadJobs({ tenancy: 'multi' }), multiTenantPlugin(multiTenantOptions)],
   localization: {
     locales: [{ code: 'en', label: 'English' }],
     fallback: true,

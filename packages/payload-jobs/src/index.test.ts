@@ -14,7 +14,8 @@ describe('payloadJobs', () => {
     const result = await payloadJobs()(baseConfig)
 
     expect(result.collections).toBe(baseConfig.collections)
-    expect(result.custom).toEqual({ existing: true, payloadJobs: { enabled: true } })
+    expect(result.globals?.[0]?.slug).toBe('job-board-settings')
+    expect(result.custom).toEqual({ existing: true, payloadJobs: { enabled: true, tenancy: 'single' } })
   })
 
   it('returns the config untouched when disabled', async () => {

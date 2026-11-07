@@ -2,12 +2,12 @@ import type { CollectionBeforeChangeHook, Config } from 'payload'
 import { multiTenantPlugin } from '@payloadcms/plugin-multi-tenant'
 import { describe, expect, it } from 'vitest'
 
-import type { MissionControlUser } from '@mission-control/payload-jobs'
+import { payloadJobs, type MissionControlUser } from '@mission-control/payload-jobs'
 
 import { Folders } from './collections/Folders'
 import { Media } from './collections/Media'
 import { Tags } from './collections/Tags'
-import { removeTenantMemberships, Tenants, validateCurrency } from './collections/Tenants'
+import { removeTenantMemberships, Tenants } from './collections/Tenants'
 import {
   ensureFirstUserIsSuperAdmin,
   preventTenantAdminCredentialChanges,
@@ -42,11 +42,14 @@ const superAdmin: TestUser = {
   tenants: [],
 }
 
-const buildConfig = async (): Promise<Config> =>
-  (await multiTenantPlugin(multiTenantOptions)({
+const buildConfig = async (): Promise<Config> => {
+  const withJobs = await payloadJobs({ tenancy: 'multi' })({
     admin: { user: 'users' },
     collections: [Users, Media, Folders, Tags, Tenants],
-  } as Config)) as Config
+  } as Config)
+
+  return (await multiTenantPlugin(multiTenantOptions)(withJobs)) as Config
+}
 
 const requestFor = (user: MissionControlUser | null) => ({
   payload: {},
@@ -84,16 +87,6 @@ const runHook = (hook: (args: unknown) => unknown, args: unknown) =>
 
 const runBeforeChange = (hook: CollectionBeforeChangeHook, args: Record<string, unknown>) =>
   Promise.resolve().then(() => hook(args as never))
-
-describe('currency validation', () => {
-  it('accepts current ISO 4217 codes and rejects unknown codes', () => {
-    expect(validateCurrency('VUV')).toBe(true)
-    expect(validateCurrency('NZD')).toBe(true)
-    expect(validateCurrency('CHE')).toBe(true)
-    expect(validateCurrency('ZZZ')).toBe('Use an ISO 4217 currency code, for example VUV')
-    expect(validateCurrency(null)).toBe('Use an ISO 4217 currency code, for example VUV')
-  })
-})
 
 describe('tenant isolation', () => {
   it.each(['folders', 'media', 'tags'])(

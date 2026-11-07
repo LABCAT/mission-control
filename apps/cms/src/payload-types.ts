@@ -219,29 +219,44 @@ export interface Tenant {
    * Aggregate tenants can read published content from every tenant.
    */
   isAggregate?: boolean | null;
-  currency: string;
+  branding?: {
+    logo?: (number | null) | Media;
+    colorPrimary?: string | null;
+    colorAccent?: string | null;
+    colorHover?: string | null;
+  };
+  /**
+   * ISO 4217 code for prices and orders on this tenant.
+   */
+  currency?: string | null;
   /**
    * 0 for VUV, 2 for NZD, AUD, USD and most other currencies.
    */
-  currencyMinorUnits: number;
-  timezone: string;
+  currencyMinorUnits?: number | null;
+  /**
+   * IANA timezone used for job expiry and scheduled jobs.
+   */
+  timezone?: string | null;
+  /**
+   * One or more locales for this tenant. Add more when the site is translated.
+   */
   locales?:
     | {
         locale: string;
         id?: string | null;
       }[]
     | null;
-  defaultLocale: string;
-  taxLabel: string;
-  emailFromName: string;
-  emailFromAddress: string;
-  adminEmail: string;
-  branding: {
-    logo?: (number | null) | Media;
-    colorPrimary: string;
-    colorAccent: string;
-    colorHover: string;
-  };
+  defaultLocale?: string | null;
+  /**
+   * Shown on prices and invoices, for example VAT.
+   */
+  taxLabel?: string | null;
+  emailFromName?: string | null;
+  emailFromAddress?: string | null;
+  /**
+   * Receives contact and moderation notifications.
+   */
+  adminEmail?: string | null;
   createdBy?: {
     relationTo: 'users';
     value: number | User;
@@ -671,6 +686,14 @@ export interface TenantsSelect<T extends boolean = true> {
         id?: T;
       };
   isAggregate?: T;
+  branding?:
+    | T
+    | {
+        logo?: T;
+        colorPrimary?: T;
+        colorAccent?: T;
+        colorHover?: T;
+      };
   currency?: T;
   currencyMinorUnits?: T;
   timezone?: T;
@@ -685,14 +708,6 @@ export interface TenantsSelect<T extends boolean = true> {
   emailFromName?: T;
   emailFromAddress?: T;
   adminEmail?: T;
-  branding?:
-    | T
-    | {
-        logo?: T;
-        colorPrimary?: T;
-        colorAccent?: T;
-        colorHover?: T;
-      };
   createdBy?: T;
   updatedBy?: T;
   updatedAt?: T;
