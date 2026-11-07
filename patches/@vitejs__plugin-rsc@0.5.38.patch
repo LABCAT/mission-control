@@ -1,0 +1,63 @@
+diff --git a/dist/core/rsc.js b/dist/core/rsc.js
+index 2c6a9133cd40dab6780e7095d37de960dfb5224e..b6e47f01f775eb61990fbf03d00dbc63817b2c3a 100644
+--- a/dist/core/rsc.js
++++ b/dist/core/rsc.js
+@@ -1,6 +1,19 @@
+ import { r as tinyassert, t as memoize } from "../shared-BWJvctW6.js";
+ import { a as removeReferenceCacheTag, i as createReferenceCacheTag, n as SERVER_REFERENCE_PREFIX, o as setInternalRequire, r as SERVER_REFERENCE_PRESERVE_PREFIX, t as SERVER_DECODE_CLIENT_PREFIX } from "../shared-Y4B6DJ99.js";
+ import * as ReactServer from "@vitejs/plugin-rsc/vendor/react-server-dom/server.edge";
++// Share a loaded module, never a pending load. On Cloudflare Workers a promise belongs to the
++// request that created it: if that request finishes first (for example a redirect), the load
++// never settles and every later request awaiting the shared promise hangs.
++function memoizeLoaded(fn) {
++	const cache = /* @__PURE__ */ new Map();
++	return function(argument) {
++		if (cache.has(argument)) return cache.get(argument);
++		const value = fn.call(this, argument);
++		if (value && typeof value.then === "function") value.then(() => cache.set(argument, value), () => {});
++		else cache.set(argument, value);
++		return value;
++	};
++}
+ //#region src/core/rsc.ts
+ let init = false;
+ let requireModule;
+@@ -10,7 +23,7 @@ function setRequireModule(options) {
+ 	requireModule = (id) => {
+ 		return options.load(removeReferenceCacheTag(id));
+ 	};
+-	globalThis.__vite_rsc_server_require__ = memoize(async (id) => {
++	globalThis.__vite_rsc_server_require__ = memoizeLoaded(async (id) => {
+ 		if (id.startsWith("$$preserve:")) {
+ 			id = id.slice(SERVER_REFERENCE_PRESERVE_PREFIX.length);
+ 			id = removeReferenceCacheTag(id);
+diff --git a/dist/core/ssr.js b/dist/core/ssr.js
+index a2932fed2174718bf964e2e5bde54f80eed6f6f1..defecbcbd74ef68cebb735d1f1c04bf7898129eb 100644
+--- a/dist/core/ssr.js
++++ b/dist/core/ssr.js
+@@ -1,11 +1,24 @@
+ import { t as memoize } from "../shared-BWJvctW6.js";
+ import { a as removeReferenceCacheTag, o as setInternalRequire } from "../shared-Y4B6DJ99.js";
++// Share a loaded module, never a pending load. On Cloudflare Workers a promise belongs to the
++// request that created it: if that request finishes first (for example a redirect), the load
++// never settles and every later request awaiting the shared promise hangs.
++function memoizeLoaded(fn) {
++	const cache = /* @__PURE__ */ new Map();
++	return function(argument) {
++		if (cache.has(argument)) return cache.get(argument);
++		const value = fn.call(this, argument);
++		if (value && typeof value.then === "function") value.then(() => cache.set(argument, value), () => {});
++		else cache.set(argument, value);
++		return value;
++	};
++}
+ //#region src/core/ssr.ts
+ let init = false;
+ function setRequireModule(options) {
+ 	if (init) return;
+ 	init = true;
+-	const requireModule = memoize((id) => {
++	const requireModule = memoizeLoaded((id) => {
+ 		return options.load(removeReferenceCacheTag(id));
+ 	});
+ 	globalThis.__vite_rsc_client_require__ = requireModule;
