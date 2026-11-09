@@ -7,9 +7,22 @@ export * from './tenancy'
 
 export type TenancyMode = 'multi' | 'single'
 
+export type PayloadJobsFeatures = {
+  /** Job applications. The collection is added by a later task. Defaults to true. */
+  applications?: boolean
+  /** Job alert subscriptions. The collection is added by a later task. Defaults to true. */
+  alerts?: boolean
+  /** Organisation job credits. Added by a later task. Defaults to true. */
+  credits?: boolean
+  /** Coupons. Added by a later task. Defaults to true. */
+  coupons?: boolean
+}
+
 export type PayloadJobsOptions = {
   /** Turn the plugin off without removing it from the config. Defaults to true. */
   enabled?: boolean
+  /** Which job-board collections to enable. All default to true. */
+  features?: PayloadJobsFeatures
   /** Slug of the tenant settings global in single-tenant mode. */
   settingsSlug?: string
   /** `multi` requires a tenants collection; `single` uses a job-board settings global. */
@@ -17,6 +30,13 @@ export type PayloadJobsOptions = {
   /** Slug of the tenants collection in multi-tenant mode. */
   tenantsSlug?: string
 }
+
+const resolvedFeatures = (options: PayloadJobsOptions): Required<PayloadJobsFeatures> => ({
+  applications: options.features?.applications ?? true,
+  alerts: options.features?.alerts ?? true,
+  credits: options.features?.credits ?? true,
+  coupons: options.features?.coupons ?? true,
+})
 
 /**
  * Job board plugin for Mission Control. It owns the job-board tenant settings; later tasks
@@ -29,6 +49,7 @@ export const payloadJobs =
 
     const tenancy = options.tenancy ?? 'single'
     const tenantsSlug = options.tenantsSlug ?? 'tenants'
+    const features = resolvedFeatures(options)
 
     let config = incoming
 
@@ -70,7 +91,7 @@ export const payloadJobs =
       ...config,
       custom: {
         ...config.custom,
-        payloadJobs: { enabled: true, tenancy },
+        payloadJobs: { enabled: true, tenancy, features },
       },
     }
   }

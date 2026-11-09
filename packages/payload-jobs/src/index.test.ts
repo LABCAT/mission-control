@@ -15,10 +15,32 @@ describe('payloadJobs', () => {
 
     expect(result.collections).toBe(baseConfig.collections)
     expect(result.globals?.[0]?.slug).toBe('job-board-settings')
-    expect(result.custom).toEqual({ existing: true, payloadJobs: { enabled: true, tenancy: 'single' } })
+    expect(result.custom).toEqual({
+      existing: true,
+      payloadJobs: {
+        enabled: true,
+        features: { applications: true, alerts: true, credits: true, coupons: true },
+        tenancy: 'single',
+      },
+    })
   })
 
   it('returns the config untouched when disabled', async () => {
     expect(await payloadJobs({ enabled: false })(baseConfig)).toBe(baseConfig)
+  })
+
+  it('resolves feature toggles and records them in the config', async () => {
+    const result = await payloadJobs({
+      features: { applications: true, alerts: false, credits: true, coupons: false },
+    })(baseConfig)
+
+    expect(result.custom).toEqual({
+      existing: true,
+      payloadJobs: {
+        enabled: true,
+        features: { applications: true, alerts: false, credits: true, coupons: false },
+        tenancy: 'single',
+      },
+    })
   })
 })

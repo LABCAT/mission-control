@@ -46,7 +46,11 @@ describe('payloadJobs tenancy modes', () => {
         'adminEmail',
       ]),
     )
-    expect(result.custom?.payloadJobs).toEqual({ enabled: true, tenancy: 'multi' })
+    expect(result.custom?.payloadJobs).toEqual({
+      enabled: true,
+      features: { applications: true, alerts: true, credits: true, coupons: true },
+      tenancy: 'multi',
+    })
   })
 
   it('adds a job-board-settings global in single mode', async () => {
@@ -56,7 +60,11 @@ describe('payloadJobs tenancy modes', () => {
     expect(result.globals?.[0]?.fields.map((field) => ('name' in field ? field.name : ''))).toEqual(
       expect.arrayContaining(['currency', 'timezone', 'locales', 'emailFromAddress']),
     )
-    expect(result.custom?.payloadJobs).toEqual({ enabled: true, tenancy: 'single' })
+    expect(result.custom?.payloadJobs).toEqual({
+      enabled: true,
+      features: { applications: true, alerts: true, credits: true, coupons: true },
+      tenancy: 'single',
+    })
 
     const updateAccess = result.globals?.[0]?.access?.update
     expect(updateAccess).toBeTypeOf('function')
