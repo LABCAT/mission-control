@@ -225,7 +225,7 @@ export const tenantIsolation = ({ collection, createData }: TenantIsolationArgs)
     })
 
     afterAll(async () => {
-      await harness.destroy()
+      if (harness) await harness.destroy()
     })
 
     it('scopes reads to the user’s own tenant', async () => {
