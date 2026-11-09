@@ -177,8 +177,34 @@ export const bootTestPayload = async ({
     { role: 'tenant-admin', tenant: tenantB.id },
   ])
 
+  const destroy = async (): Promise<void> => {
+    try {
+      await Promise.all(
+        collections.map(({ slug }) =>
+          payload.delete({
+            collection: slug,
+            overrideAccess: true,
+            where: { tenant: { in: [tenantA.id, tenantB.id] } },
+          }),
+        ),
+      )
+      await payload.delete({
+        collection: 'users',
+        overrideAccess: true,
+        where: { id: { in: [superAdmin.id, tenantAdminA.id, tenantAdminB.id] } },
+      })
+      await payload.delete({
+        collection: 'tenants',
+        overrideAccess: true,
+        where: { id: { in: [tenantA.id, tenantB.id] } },
+      })
+    } finally {
+      await payload.destroy()
+    }
+  }
+
   return {
-    destroy: () => payload.destroy(),
+    destroy,
     payload,
     superAdmin,
     tenantA,
