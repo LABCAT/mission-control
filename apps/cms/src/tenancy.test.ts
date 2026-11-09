@@ -2,7 +2,7 @@ import type { CollectionBeforeChangeHook, Config } from 'payload'
 import { multiTenantPlugin } from '@payloadcms/plugin-multi-tenant'
 import { describe, expect, it } from 'vitest'
 
-import { payloadJobs, type MissionControlUser } from '@mission-control/payload-jobs'
+import { payloadJobs, hashSiteKey, type MissionControlUser } from '@mission-control/payload-jobs'
 
 import { Folders } from './collections/Folders'
 import { Media } from './collections/Media'
@@ -99,6 +99,54 @@ const beforeValidateFor = (config: Config, slug: string) => {
   if (!hook) throw new Error(`Missing beforeValidate hook for ${slug}`)
 
   return hook as (args: unknown) => unknown
+}
+
+/**
+ * An anonymous request like a public site sends: a keyed `x-site-key` header and a payload
+ * whose `find` resolves that digest to a site key document, unless `known` is false.
+ */
+const siteKeyRequest = async ({
+  drafts = false,
+  isAggregate = false,
+  key,
+  known = true,
+  tenant,
+}: {
+  drafts?: boolean
+  isAggregate?: boolean
+  key: string
+  known?: boolean
+  tenant: number
+}) => ({
+  context: {},
+  headers: new Headers({ 'x-site-key': key }),
+  payload: {
+    collections: { media: { config: { versions: { drafts } } } },
+    find: async (args: { where?: { keyHash?: { equals?: string } } }) => ({
+      docs:
+        known && args.where?.keyHash?.equals === (await hashSiteKey(key))
+          ? [{ id: 1, tenant: { id: tenant, isAggregate } }]
+          : [],
+    }),
+  },
+  payloadAPI: 'REST',
+  t: (path: string) => path,
+  user: null,
+})
+
+const collectionAccessWithReq = async (
+  config: Config,
+  operation: 'create' | 'read',
+  slug: string,
+  req: unknown,
+) => {
+  const access = config.collections?.find((candidate) => candidate.slug === slug)?.access?.[
+    operation
+  ] as ((args: unknown) => Promise<unknown>) | undefined
+
+  if (!access) throw new Error(`Missing collection access for ${slug}.${operation}`)
+
+  return access({ req, slug })
 }
 
 const runHook = (hook: (args: unknown) => unknown, args: unknown) =>
@@ -231,6 +279,70 @@ describe('tenant isolation', () => {
     })
     expect(await usersUpdateAccess(argsFor(superAdmin))).toBe(true)
     expect(await usersUpdateAccess(argsFor(null))).toBe(false)
+  })
+})
+
+describe('site key reads', () => {
+  it('lets a tenant key read its own tenant only', async () => {
+    const config = await buildConfig()
+    const req = await siteKeyRequest({ key: 'sk_tenant', tenant: tenantA.id })
+
+    expect(await collectionAccessWithReq(config, 'read', 'media', req)).toEqual({
+      tenant: { equals: tenantA.id },
+    })
+  })
+
+  it('lets an aggregate key read every tenant without the plugin re-adding a filter', async () => {
+    const config = await buildConfig()
+    const req = await siteKeyRequest({ isAggregate: true, key: 'sk_hub', tenant: 1 })
+
+    expect(await collectionAccessWithReq(config, 'read', 'media', req)).toBe(true)
+  })
+
+  it('scopes an aggregate key to published docs when the collection has drafts', async () => {
+    const config = await buildConfig()
+    const req = await siteKeyRequest({
+      drafts: true,
+      isAggregate: true,
+      key: 'sk_hub',
+      tenant: 1,
+    })
+
+    expect(await collectionAccessWithReq(config, 'read', 'media', req)).toEqual({
+      _status: { equals: 'published' },
+    })
+  })
+
+  it('hides drafts from a tenant key when the collection has drafts', async () => {
+    const config = await buildConfig()
+    const req = await siteKeyRequest({ drafts: true, key: 'sk_tenant', tenant: tenantA.id })
+
+    expect(await collectionAccessWithReq(config, 'read', 'media', req)).toEqual({
+      and: [{ tenant: { equals: tenantA.id } }, { _status: { equals: 'published' } }],
+    })
+  })
+
+  it('rejects an aggregate key write', async () => {
+    const config = await buildConfig()
+    const req = await siteKeyRequest({ isAggregate: true, key: 'sk_hub', tenant: 1 })
+
+    expect(await collectionAccessWithReq(config, 'create', 'media', req)).toBe(false)
+  })
+
+  it('rejects an unknown key', async () => {
+    const config = await buildConfig()
+    const req = await siteKeyRequest({ key: 'sk_unknown', known: false, tenant: tenantA.id })
+
+    expect(await collectionAccessWithReq(config, 'read', 'media', req)).toBe(false)
+  })
+
+  it('still scopes a collection whose own read access denies anonymous requests', async () => {
+    const config = await buildConfig()
+    const req = await siteKeyRequest({ key: 'sk_tenant', tenant: tenantA.id })
+
+    expect(await collectionAccessWithReq(config, 'read', 'tags', req)).toEqual({
+      tenant: { equals: tenantA.id },
+    })
   })
 })
 

@@ -1,12 +1,12 @@
 import type { AccessArgs, AccessResult, PayloadRequest } from 'payload'
 
 /**
- * Site keys let a public site read its own tenant's content without a user session.
+ * Site keys let a public site read content without a user session.
  *
  * - The key is 32 random bytes from the platform CSPRNG, base64url encoded.
  * - Only the SHA-256 digest is stored; the raw key is shown once on creation.
- * - A key is scoped to one tenant. Aggregate tenants fail closed until published-state
- *   filtering exists (PJ-19), so a leaked aggregate key cannot read drafts.
+ * - A site key reads only published content. A key on a normal tenant reads that tenant
+ *   only; a key on the aggregate tenant reads every tenant.
  */
 
 export const SITE_KEY_HEADER = 'x-site-key'
@@ -144,13 +144,25 @@ export type SiteKeyAccessOverrideOptions = {
   allowedCollections: Iterable<string>
 }
 
+type CollectionsBySlug = Record<string, undefined | { config?: { versions?: { drafts?: unknown } } }>
+
+/** Payload drafts are the only published-state source: no drafts means everything is live. */
+const isDraftEnabled = (req: PayloadRequest, slug: string): boolean => {
+  const collections = req.payload.collections as unknown as CollectionsBySlug | undefined
+
+  return Boolean(collections?.[slug]?.config?.versions?.drafts)
+}
+
 /**
  * Wrap a collection's access result so an anonymous request carrying a valid site key can
- * read only that key's tenant. User sessions are untouched. Writes, unknown keys, unknown
- * collections and aggregate tenants all fail closed.
+ * read published documents only. A key on a normal tenant is scoped to that tenant; a key on
+ * the aggregate tenant reads every tenant. User sessions are untouched, and writes, unknown
+ * keys and collections outside the allowlist fail closed.
  *
- * Use it as `accessResultOverride` for the collections in the allowlist; the multi-tenant
- * plugin then applies the returned `tenant` constraint.
+ * The plugin passes this result straight through for anonymous requests, so the aggregate
+ * case needs no tenant constraint and does not get one re-added.
+ *
+ * Use it as `accessResultOverride` for the collections in the allowlist.
  */
 export const createSiteKeyAccessOverride =
   ({ allowedCollections }: SiteKeyAccessOverrideOptions) =>
@@ -172,8 +184,14 @@ export const createSiteKeyAccessOverride =
     const siteKey = await resolveSiteKey(req)
     if (!siteKey) return false
 
-    // No published-state source yet, so an aggregate key must not read every tenant.
-    if (siteKey.isAggregate) return false
+    const published = isDraftEnabled(req, slug)
+      ? ({ _status: { equals: 'published' } } as const)
+      : null
 
-    return { tenant: { equals: siteKey.tenantID } }
+    if (siteKey.isAggregate) return published ?? true
+
+    const tenantScope: AccessResult = { tenant: { equals: siteKey.tenantID } }
+    if (!published) return tenantScope
+
+    return { and: [tenantScope, published] }
   }

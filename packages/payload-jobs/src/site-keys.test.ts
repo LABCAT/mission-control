@@ -14,10 +14,12 @@ type Doc = { id: number; tenant: number | { id: number; isAggregate?: boolean } 
 
 const requestFor = ({
   docs = [],
+  drafts = false,
   key,
   user = null,
 }: {
   docs?: Doc[]
+  drafts?: boolean
   key?: string
   user?: unknown
 }) => {
@@ -29,7 +31,10 @@ const requestFor = ({
   const req = {
     context: {},
     headers,
-    payload: { find },
+    payload: {
+      collections: { media: { config: { versions: { drafts } } } },
+      find,
+    },
     user,
   } as unknown as PayloadRequest
 
@@ -155,14 +160,45 @@ describe('site key access override', () => {
     expect(await override(args(req, 'read', 'media', true))).toBe(false)
   })
 
-  it('fails closed for an aggregate tenant', async () => {
+  it('lets an aggregate key read published docs from tenants A and B', async () => {
     const { key } = await generateSiteKey()
     const { req } = requestFor({
       docs: [{ id: 1, tenant: { id: 7, isAggregate: true } }],
       key,
     })
 
-    expect(await override(args(req, 'read'))).toBe(false)
+    // No tenant constraint at all: tenant A and tenant B documents both match.
+    expect(await override(args(req, 'read'))).toBe(true)
+  })
+
+  it('scopes an aggregate key to published docs when drafts are enabled', async () => {
+    const { key } = await generateSiteKey()
+    const { req } = requestFor({
+      docs: [{ id: 1, tenant: { id: 7, isAggregate: true } }],
+      drafts: true,
+      key,
+    })
+
+    expect(await override(args(req, 'read'))).toEqual({ _status: { equals: 'published' } })
+  })
+
+  it('scopes a tenant key to its tenant and hides drafts', async () => {
+    const { key } = await generateSiteKey()
+    const { req } = requestFor({ docs: [{ id: 1, tenant: 7 }], drafts: true, key })
+
+    expect(await override(args(req, 'read'))).toEqual({
+      and: [{ tenant: { equals: 7 } }, { _status: { equals: 'published' } }],
+    })
+  })
+
+  it('rejects writes even with an aggregate key', async () => {
+    const { key } = await generateSiteKey()
+    const { req } = requestFor({
+      docs: [{ id: 1, tenant: { id: 7, isAggregate: true } }],
+      key,
+    })
+
+    expect(await override(args(req, 'create'))).toBe(false)
   })
 
   it('rejects writes even with a valid key', async () => {
