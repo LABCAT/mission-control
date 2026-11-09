@@ -137,82 +137,124 @@ export const bootTestPayload = async ({
   // A unique key so concurrent tests never reuse a cached Payload instance.
   const payload = await getPayload({ config, key: `payload-jobs-test-${++bootCount}` })
 
-  // Unique slugs and emails per boot so the suite is re-runnable against the same
-  // database without a destructive wipe or clashing with earlier runs.
-  const runId = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
-
-  const createdA = (await payload.create({
-    collection: 'tenants',
-    data: { name: 'Tenant A', slug: `tenant-a-${runId}` },
-    overrideAccess: true,
-  })) as TestTenant
-  const createdB = (await payload.create({
-    collection: 'tenants',
-    data: { name: 'Tenant B', slug: `tenant-b-${runId}` },
-    overrideAccess: true,
-  })) as TestTenant
-
-  const tenantA = { id: createdA.id, name: createdA.name, slug: createdA.slug }
-  const tenantB = { id: createdB.id, name: createdB.name, slug: createdB.slug }
-
-  // Real users, because Payload's authorship tracking (createdBy / updatedBy) has a
-  // foreign key to the auth collection on every document a user creates.
-  const createUser = async (
-    email: string,
-    role: TestUser['role'],
-    tenants: TestUser['tenants'],
-  ): Promise<TestUser> => {
-    const doc = (await payload.create({
-      collection: 'users',
-      data: { email, password: 'test-password', role, tenants },
-      overrideAccess: true,
-    })) as { email: string; id: number }
-
-    return { collection: 'users', email: doc.email, id: doc.id, role, tenants }
-  }
-
-  const superAdmin = await createUser(`super-admin-${runId}@example.invalid`, 'super-admin', [])
-  const tenantAdminA = await createUser(`tenant-admin-a-${runId}@example.invalid`, 'user', [
-    { role: 'tenant-admin', tenant: tenantA.id },
-  ])
-  const tenantAdminB = await createUser(`tenant-admin-b-${runId}@example.invalid`, 'user', [
-    { role: 'tenant-admin', tenant: tenantB.id },
-  ])
-
+  const tenantIds: number[] = []
+  const userIds: number[] = []
   const destroy = async (): Promise<void> => {
+    const cleanupErrors: unknown[] = []
+
+    for (const { slug } of collections) {
+      if (tenantIds.length === 0) break
+
+      try {
+        await payload.delete({
+          collection: slug,
+          overrideAccess: true,
+          where: { tenant: { in: tenantIds } },
+        })
+      } catch (error) {
+        cleanupErrors.push(error)
+      }
+    }
+
+    if (userIds.length > 0) {
+      try {
+        await payload.delete({
+          collection: 'users',
+          overrideAccess: true,
+          where: { id: { in: userIds } },
+        })
+      } catch (error) {
+        cleanupErrors.push(error)
+      }
+    }
+
+    if (tenantIds.length > 0) {
+      try {
+        await payload.delete({
+          collection: 'tenants',
+          overrideAccess: true,
+          where: { id: { in: tenantIds } },
+        })
+      } catch (error) {
+        cleanupErrors.push(error)
+      }
+    }
+
     try {
-      await Promise.all(
-        collections.map(({ slug }) =>
-          payload.delete({
-            collection: slug,
-            overrideAccess: true,
-            where: { tenant: { in: [tenantA.id, tenantB.id] } },
-          }),
-        ),
-      )
-      await payload.delete({
-        collection: 'users',
-        overrideAccess: true,
-        where: { id: { in: [superAdmin.id, tenantAdminA.id, tenantAdminB.id] } },
-      })
-      await payload.delete({
-        collection: 'tenants',
-        overrideAccess: true,
-        where: { id: { in: [tenantA.id, tenantB.id] } },
-      })
-    } finally {
       await payload.destroy()
+    } catch (error) {
+      cleanupErrors.push(error)
+    }
+
+    if (cleanupErrors.length > 0) {
+      throw new AggregateError(cleanupErrors, 'Failed to clean up the Payload test harness')
     }
   }
 
-  return {
-    destroy,
-    payload,
-    superAdmin,
-    tenantA,
-    tenantAdminA,
-    tenantAdminB,
-    tenantB,
+  try {
+    // Unique slugs and emails per boot avoid collisions if a failed cleanup leaves rows.
+    const runId = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
+
+    const createdA = (await payload.create({
+      collection: 'tenants',
+      data: { name: 'Tenant A', slug: `tenant-a-${runId}` },
+      overrideAccess: true,
+    })) as TestTenant
+    tenantIds.push(createdA.id)
+
+    const createdB = (await payload.create({
+      collection: 'tenants',
+      data: { name: 'Tenant B', slug: `tenant-b-${runId}` },
+      overrideAccess: true,
+    })) as TestTenant
+    tenantIds.push(createdB.id)
+
+    const tenantA = { id: createdA.id, name: createdA.name, slug: createdA.slug }
+    const tenantB = { id: createdB.id, name: createdB.name, slug: createdB.slug }
+
+    // Real users, because authorship tracking has a foreign key to the auth collection.
+    const createUser = async (
+      email: string,
+      role: TestUser['role'],
+      tenants: TestUser['tenants'],
+    ): Promise<TestUser> => {
+      const doc = (await payload.create({
+        collection: 'users',
+        data: { email, password: 'test-password', role, tenants },
+        overrideAccess: true,
+      })) as { email: string; id: number }
+      userIds.push(doc.id)
+
+      return { collection: 'users', email: doc.email, id: doc.id, role, tenants }
+    }
+
+    const superAdmin = await createUser(`super-admin-${runId}@example.invalid`, 'super-admin', [])
+    const tenantAdminA = await createUser(`tenant-admin-a-${runId}@example.invalid`, 'user', [
+      { role: 'tenant-admin', tenant: tenantA.id },
+    ])
+    const tenantAdminB = await createUser(`tenant-admin-b-${runId}@example.invalid`, 'user', [
+      { role: 'tenant-admin', tenant: tenantB.id },
+    ])
+
+    return {
+      destroy,
+      payload,
+      superAdmin,
+      tenantA,
+      tenantAdminA,
+      tenantAdminB,
+      tenantB,
+    }
+  } catch (error) {
+    try {
+      await destroy()
+    } catch (cleanupError) {
+      throw new AggregateError([error, cleanupError], 'Test harness setup and cleanup both failed', {
+        cause: cleanupError,
+      })
+    }
+
+    throw error
   }
 }
 
