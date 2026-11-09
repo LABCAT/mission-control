@@ -3,6 +3,7 @@ import * as migration_20261105_063826_heartbeat_and_jobs from './20261105_063826
 import * as migration_20261105_065255_add_user_names from './20261105_065255_add_user_names';
 import * as migration_20261105_223955_multi_tenancy from './20261105_223955_multi_tenancy';
 import * as migration_20261107_120535_tenancy_modes from './20261107_120535_tenancy_modes';
+import * as migration_20261109_171926_site_keys from './20261109_171926_site_keys';
 
 export const migrations = [
   {
@@ -29,5 +30,10 @@ export const migrations = [
     up: migration_20261107_120535_tenancy_modes.up,
     down: migration_20261107_120535_tenancy_modes.down,
     name: '20261107_120535_tenancy_modes',
+  },
+  {
+    up: migration_20261109_171926_site_keys.up,
+    down: migration_20261109_171926_site_keys.down,
+    name: '20261109_171926_site_keys'
   },
 ];
