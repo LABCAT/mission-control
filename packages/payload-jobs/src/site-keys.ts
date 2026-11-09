@@ -184,14 +184,13 @@ export const createSiteKeyAccessOverride =
     const siteKey = await resolveSiteKey(req)
     if (!siteKey) return false
 
-    const published = isDraftEnabled(req, slug)
-      ? ({ _status: { equals: 'published' } } as const)
-      : null
+    const published: AccessResult = isDraftEnabled(req, slug)
+      ? { _status: { equals: 'published' } }
+      : true
 
-    if (siteKey.isAggregate) return published ?? true
+    if (siteKey.isAggregate) return published
 
     const tenantScope: AccessResult = { tenant: { equals: siteKey.tenantID } }
-    if (!published) return tenantScope
 
-    return { and: [tenantScope, published] }
+    return published === true ? tenantScope : { and: [tenantScope, published] }
   }
