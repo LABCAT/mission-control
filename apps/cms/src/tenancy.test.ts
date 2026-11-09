@@ -73,6 +73,25 @@ const baseAccess = async (
   return access({ req: requestFor(user), slug })
 }
 
+/**
+ * Collections with a site-key `accessResultOverride` get their combined access on the
+ * collection itself, not on `config.baseAccess`.
+ */
+const collectionAccess = async (
+  config: Config,
+  operation: 'delete' | 'read' | 'update',
+  slug: string,
+  user: MissionControlUser | null,
+) => {
+  const access = config.collections?.find((candidate) => candidate.slug === slug)?.access?.[
+    operation
+  ] as ((args: unknown) => Promise<unknown>) | undefined
+
+  if (!access) throw new Error(`Missing collection access for ${slug}.${operation}`)
+
+  return access({ req: requestFor(user), slug })
+}
+
 const beforeValidateFor = (config: Config, slug: string) => {
   const collection = config.collections?.find((candidate) => candidate.slug === slug)
   const hook = collection?.hooks?.beforeValidate?.[0]
@@ -94,13 +113,13 @@ describe('tenant isolation', () => {
     async (slug) => {
       const config = await buildConfig()
 
-      const read = (await baseAccess(config, 'read', slug, tenantAdminA)) as {
+      const read = (await collectionAccess(config, 'read', slug, tenantAdminA)) as {
         tenant: { in: number[] }
       }
-      const update = (await baseAccess(config, 'update', slug, tenantAdminA)) as {
+      const update = (await collectionAccess(config, 'update', slug, tenantAdminA)) as {
         tenant: { in: number[] }
       }
-      const remove = (await baseAccess(config, 'delete', slug, tenantAdminA)) as {
+      const remove = (await collectionAccess(config, 'delete', slug, tenantAdminA)) as {
         tenant: { in: number[] }
       }
 
@@ -158,7 +177,7 @@ describe('tenant isolation', () => {
     const config = await buildConfig()
     const beforeValidate = beforeValidateFor(config, 'media')
 
-    expect(await baseAccess(config, 'read', 'media', superAdmin)).toBe(true)
+    expect(await collectionAccess(config, 'read', 'media', superAdmin)).toBe(true)
     await expect(
       runHook(beforeValidate, {
         data: { tenant: tenantB.id },
@@ -171,7 +190,7 @@ describe('tenant isolation', () => {
     const config = await buildConfig()
     const noTenants: TestUser = { id: 30, collection: 'users', role: 'user', tenants: [] }
 
-    expect(await baseAccess(config, 'read', 'media', noTenants)).toBe(false)
+    expect(await collectionAccess(config, 'read', 'media', noTenants)).toBe(false)
   })
 
   it('scopes user reads to the tenant plus the user themselves', async () => {

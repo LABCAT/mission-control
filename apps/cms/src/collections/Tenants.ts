@@ -55,6 +55,24 @@ export const removeTenantMemberships: CollectionBeforeDeleteHook = async ({ id, 
   )
 }
 
+/**
+ * Delete a tenant's site keys before the tenant row is deleted. site_keys.tenant_id is
+ * NOT NULL, so the relationship's ON DELETE SET NULL would otherwise make a tenant delete
+ * fail while keys exist.
+ */
+export const removeTenantSiteKeys: CollectionBeforeDeleteHook = async ({ id, req }) => {
+  await req.payload.delete({
+    collection: 'site-keys',
+    overrideAccess: true,
+    req,
+    where: {
+      tenant: {
+        equals: id,
+      },
+    },
+  })
+}
+
 export const Tenants: CollectionConfig = {
   slug: 'tenants',
   admin: {
@@ -69,7 +87,7 @@ export const Tenants: CollectionConfig = {
     update: superAdminAccess,
   },
   hooks: {
-    beforeDelete: [removeTenantMemberships],
+    beforeDelete: [removeTenantMemberships, removeTenantSiteKeys],
   },
   fields: [
     {
