@@ -473,7 +473,7 @@ All returned 200. Site/job feeds have 20 items unless noted; 29 are per-organisa
 
 ## 10. Errors, duplicates, gaps, limitations
 
-- **404:** `/login/&role=job_seeker` (malformed link from 404 pagination pages); `resume/language/%e2%80%a2-fluent-in-bislama-…/`; `resume/speciality/troubleshooting-%e2%80%a2-…/` (the latter two are published in the resume sitemap but 404).
+- **404:** `/login/&role=job_seeker` (malformed link from 404 pagination pages); two sitemap-published CV taxonomy URLs (HEAD and GET both returned 404).
 - **405:** `/wp/xmlrpc.php` (HEAD/GET; POST-only endpoint), `/wp/xmlrpc.php?rsd` 200 text/xml.
 - **500:** all 174 reachable resume taxonomy pages; sampled `/resumes/` and `/resumes/<redacted>/`. HEAD for the same routes is 200. This is the central HEAD/GET discrepancy.
 - **Duplicates / near-duplicates:** `/jobs` and `/jobs/`; `about-us`/`about-us/`; `contact`/`contact/`; `login`/`login/`; `register`/`register/`; `sign-up`/`sign-up/`; `submit`/`submit/`; `my-profile`/`my-profile/`; `/employer/` 301 -> `/employers/`; `/wp/jobs/` 301 -> `/jobs/`; `/wp/rss-feed/` 301 -> `/rss-feed/`; `/wp/wp-login.php` 302 -> `/login/`; `mason（bricklayer-brickmason）` and its percent-encoded form both 200.
