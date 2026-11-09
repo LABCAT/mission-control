@@ -76,11 +76,9 @@ export const cloudflareEmailAdapter: PayloadEmailAdapter = ({ payload }) => ({
     if (!isWorkersRuntime()) {
       // Outside the Workers runtime (Node CLI, vitest) there is no send_email binding, so log
       // instead of sending. In `wrangler dev` the binding itself simulates delivery (logs, no
-      // real send). Never log the html/text body — it can contain secrets.
+      // real send). Keep recipient, subject, and body data out of development logs.
       payload.logger.info({
-        msg:
-          'Email not sent (no Cloudflare Email Sending binding outside Workers). ' +
-          `To: '${message.to}', Subject: '${message.subject ?? ''}'`,
+        msg: 'Email not sent (no Cloudflare Email Sending binding outside Workers).',
       })
       return
     }

@@ -33,21 +33,21 @@ describe('mapToCloudflareEmailMessage', () => {
 })
 
 describe('cloudflareEmailAdapter (dev)', () => {
-  it('logs instead of sending when there is no binding, and never logs the body', async () => {
+  it('logs without recipient, subject, or body when there is no binding', async () => {
     const info = vi.fn()
     const adapter = cloudflareEmailAdapter({ payload: { logger: { info } } as never })
 
     await adapter.sendEmail({
       from: 'jobs@vanuatuwok.vu',
-      to: 'applicant@example.com',
-      subject: 'Your application',
+      to: 'private-applicant@example.com',
+      subject: 'Private application subject',
       html: '<p>secret token 123</p>',
     })
 
     expect(info).toHaveBeenCalledTimes(1)
     const logged = String((info.mock.calls[0]?.[0] as { msg?: string })?.msg)
-    expect(logged).toContain('applicant@example.com')
-    expect(logged).toContain('Your application')
+    expect(logged).not.toContain('private-applicant@example.com')
+    expect(logged).not.toContain('Private application subject')
     expect(logged).not.toContain('secret token 123')
   })
 })
