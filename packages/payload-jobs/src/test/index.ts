@@ -16,8 +16,9 @@ import {
   tenantRoleOptions,
 } from '../access'
 
-// Same credentials as docker-compose.yml; CI overrides DATABASE_URL with its service.
-const DEFAULT_DATABASE_URL = 'postgres://orbit:orbit@localhost:5432/orbit'
+// Matches docker-compose.yml (localhost:8900) so local `pnpm test` works after
+// `docker compose up -d`; CI overrides DATABASE_URL with its service on 5432.
+const DEFAULT_DATABASE_URL = 'postgres://orbit:orbit@localhost:8900/orbit'
 
 export type TestTenant = { id: number; name: string; slug: string }
 
@@ -271,6 +272,7 @@ export const tenantIsolation = ({ collection, createData }: TenantIsolationArgs)
       const { docs } = await harness.payload.find({
         collection: slug,
         user: harness.superAdmin as never,
+        where: { tenant: { in: [harness.tenantA.id, harness.tenantB.id] } },
       })
 
       const ids = docs.map((doc) => String(doc.id))
