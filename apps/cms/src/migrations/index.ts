@@ -34,6 +34,6 @@ export const migrations = [
   {
     up: migration_20261109_171926_site_keys.up,
     down: migration_20261109_171926_site_keys.down,
-    name: '20261109_171926_site_keys'
+    name: '20261109_171926_site_keys',
   },
 ];
