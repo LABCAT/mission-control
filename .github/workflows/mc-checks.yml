@@ -31,6 +31,7 @@ jobs:
           --health-retries 10
     env:
       DATABASE_URL: postgres://orbit:orbit@localhost:5432/orbit
+      TEST_DATABASE_URL: postgres://orbit:orbit@localhost:5432/orbit
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

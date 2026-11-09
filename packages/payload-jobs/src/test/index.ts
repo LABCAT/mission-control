@@ -16,10 +16,6 @@ import {
   tenantRoleOptions,
 } from '../access'
 
-// Matches docker-compose.yml (localhost:8900) so local `pnpm test` works after
-// `docker compose up -d`; CI overrides DATABASE_URL with its service on 5432.
-const DEFAULT_DATABASE_URL = 'postgres://orbit:orbit@localhost:8900/orbit'
-
 export type TestTenant = { id: number; name: string; slug: string }
 
 export type TestUser = {
@@ -82,7 +78,7 @@ const Users: CollectionConfig = {
 type BootTestPayloadArgs = {
   /** Tenant-scoped collections under test, scoped by the multi-tenant plugin. */
   collections: CollectionConfig[]
-  /** Override the Postgres connection string (defaults to DATABASE_URL / localhost). */
+  /** Explicit disposable Postgres database; schema push must not target the CMS database. */
   databaseUrl?: string
 }
 
@@ -99,6 +95,12 @@ export const bootTestPayload = async ({
   collections,
   databaseUrl,
 }: BootTestPayloadArgs): Promise<TestHarness> => {
+  const testDatabaseUrl = databaseUrl ?? process.env.TEST_DATABASE_URL
+
+  if (!testDatabaseUrl) {
+    throw new Error('Set TEST_DATABASE_URL to a disposable Postgres database before running integration tests')
+  }
+
   const config = await buildConfig({
     admin: { user: 'users' },
     auth: { passwordHashIterations: 100000 },
@@ -106,7 +108,7 @@ export const bootTestPayload = async ({
     collections: [Users, Tenants, ...collections],
     db: postgresAdapter({
       pool: {
-        connectionString: databaseUrl ?? process.env.DATABASE_URL ?? DEFAULT_DATABASE_URL,
+        connectionString: testDatabaseUrl,
         max: 10,
       },
       // CI gets a fresh Postgres; push the schema for this test run instead of migrations.
