@@ -14,6 +14,7 @@ import { payloadJobs } from '@mission-control/payload-jobs'
 import { multiTenantPlugin } from '@payloadcms/plugin-multi-tenant'
 import { Tenants } from './collections/Tenants'
 import { SystemStatus } from './globals/SystemStatus'
+import { cloudflareEmailAdapter } from './email/cloudflare-email-adapter'
 import { heartbeatTask } from './jobs/heartbeat'
 import { multiTenantOptions } from './tenancy'
 
@@ -62,6 +63,9 @@ export default buildConfig({
     // through migrations, run with the Node CLI (`pnpm payload migrate`).
     push: false,
   }),
+  // mission-control: Cloudflare Email Sending adapter (PJ-09). Sends via the `EMAIL` binding in
+  // Workers and logs to the console in dev; tenant emails go through sendTenantEmail.
+  email: cloudflareEmailAdapter,
   globals: [SystemStatus],
   jobs: { tasks: [heartbeatTask] },
   plugins: [payloadJobs({ tenancy: 'multi' }), multiTenantPlugin(multiTenantOptions)],
