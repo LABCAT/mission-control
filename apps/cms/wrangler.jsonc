@@ -20,5 +20,10 @@
       "id": "600510da0e1f45958ba5d7c908090a22", // mission-control: Hyperdrive -> Neon mission-control main
       "localConnectionString": "postgres://orbit:orbit@localhost:8900/orbit"
     }
+  ],
+  // mission-control: Cloudflare Email Sending binding for the email adapter (PJ-09).
+  // The sending domain is provisioned by PJ-03; until then the binding only exists here.
+  "send_email": [
+    { "name": "EMAIL" }
   ]
 }

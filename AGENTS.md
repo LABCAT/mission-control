@@ -8,6 +8,7 @@ Read this before doing anything. Task prompts come from the Daruma board (projec
 fnm use                      # Node from .node-version (24.22.x). Wrong Node = engine warnings + odd failures
 pnpm install
 docker compose up -d         # Postgres on localhost:8900 (orbit/orbit/orbit)
+docker compose exec postgres createdb -U orbit orbit_test # once, for isolated integration tests
 cp apps/cms/.dev.vars.example apps/cms/.dev.vars   # then set PAYLOAD_SECRET to a random string
 cd apps/cms && DATABASE_URL=postgres://orbit:orbit@localhost:8900/orbit PAYLOAD_SECRET=dev pnpm payload migrate
 pnpm dev                     # from repo root; admin at the printed localhost URL + /admin
@@ -16,8 +17,10 @@ pnpm dev                     # from repo root; admin at the printed localhost UR
 ## Checks (all must pass before a PR)
 
 ```bash
-pnpm typecheck && pnpm lint && pnpm test && pnpm --filter cms build
+pnpm typecheck && pnpm lint && TEST_DATABASE_URL=postgres://orbit:orbit@localhost:8900/orbit_test pnpm test && pnpm --filter cms build
 ```
+
+Tests that push Payload schema require `TEST_DATABASE_URL` to point to a disposable database; do not use the CMS development database.
 
 CI is `.github/workflows/mc-checks.yml`. Don't edit orbit's `ci.yml` or `release.yml`.
 
