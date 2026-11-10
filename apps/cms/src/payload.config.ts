@@ -13,6 +13,7 @@ import { Tags } from './collections/Tags'
 import { payloadJobs } from '@mission-control/payload-jobs'
 import { multiTenantPlugin } from '@payloadcms/plugin-multi-tenant'
 import { Tenants } from './collections/Tenants'
+import { SiteKeys } from './collections/SiteKeys'
 import { SystemStatus } from './globals/SystemStatus'
 import { cloudflareEmailAdapter } from './email/cloudflare-email-adapter'
 import { heartbeatTask } from './jobs/heartbeat'
@@ -37,7 +38,7 @@ export default buildConfig({
   },
   // Cloudflare Workers rejects PBKDF2 above 100,000 iterations (Payload's default is 600,000).
   auth: { passwordHashIterations: 100000 },
-  collections: [Users, Media, Folders, Tags, Tenants], // mission-control: tenants
+  collections: [Users, Media, Folders, Tags, Tenants, SiteKeys], // mission-control: tenants, site keys
   editor: lexicalEditor(),
   secret: process.env.PAYLOAD_SECRET || '',
   typescript: {

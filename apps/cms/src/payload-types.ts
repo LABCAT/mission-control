@@ -84,6 +84,7 @@ export interface Config {
     folders: Folder;
     tags: Tag;
     tenants: Tenant;
+    'site-keys': SiteKey;
     'payload-kv': PayloadKv;
     'payload-jobs': PayloadJob;
     'payload-locked-documents': PayloadLockedDocument;
@@ -98,6 +99,7 @@ export interface Config {
     folders: FoldersSelect<false> | FoldersSelect<true>;
     tags: TagsSelect<false> | TagsSelect<true>;
     tenants: TenantsSelect<false> | TenantsSelect<true>;
+    'site-keys': SiteKeysSelect<false> | SiteKeysSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-jobs': PayloadJobsSelect<false> | PayloadJobsSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
@@ -353,6 +355,38 @@ export interface Tag {
   _h_titlePath?: string | null;
 }
 /**
+ * Keys public sites use to read their own tenant. The raw key is shown once.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "site-keys".
+ */
+export interface SiteKey {
+  id: number;
+  /**
+   * Where this key is used, for example vanuatu-wok-web.
+   */
+  label: string;
+  /**
+   * The only tenant this key can read.
+   */
+  tenant: number | Tenant;
+  keyHash: string;
+  /**
+   * Copy this now. It is shown once and cannot be retrieved again.
+   */
+  key?: string | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv".
  */
@@ -505,6 +539,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'tenants';
         value: number | Tenant;
+      } | null)
+    | ({
+        relationTo: 'site-keys';
+        value: number | SiteKey;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -715,6 +753,20 @@ export interface TenantsSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "site-keys_select".
+ */
+export interface SiteKeysSelect<T extends boolean = true> {
+  label?: T;
+  tenant?: T;
+  keyHash?: T;
+  key?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv_select".
  */
 export interface PayloadKvSelect<T extends boolean = true> {
@@ -896,7 +948,7 @@ export interface CollectionsWidget {
 export interface CollectionQueryWidget {
   data?: {
     title?: string | null;
-    relatedCollection: 'users' | 'media' | 'folders' | 'tags' | 'tenants';
+    relatedCollection: 'users' | 'media' | 'folders' | 'tags' | 'tenants' | 'site-keys';
     where?:
       | {
           [k: string]: unknown;
@@ -918,7 +970,7 @@ export interface CollectionQueryWidget {
  */
 export interface ActivityWidget {
   data?: {
-    excludedCollections?: ('users' | 'media' | 'folders' | 'tags' | 'tenants')[] | null;
+    excludedCollections?: ('users' | 'media' | 'folders' | 'tags' | 'tenants' | 'site-keys')[] | null;
   };
   width: 'small' | 'medium' | 'large' | 'x-large' | 'full';
 }
