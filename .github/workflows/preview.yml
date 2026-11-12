@@ -31,6 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       name: ${{ steps.name.outputs.name }}
+      database_url: ${{ steps.db.outputs.url }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -150,6 +151,32 @@ jobs:
           name: admin-smoke
           path: ${{ runner.temp }}/admin-smoke.png
           if-no-files-found: ignore
+
+  # Runtime evidence that site keys scope reads on a real deployment (PJ-76). The unit tests
+  # in apps/cms prove the access result; this proves it end to end, against this preview and
+  # its Neon branch. It seeds two tenants, the aggregate tenant, published documents and three
+  # keys, then asks the preview's REST API what each key can read.
+  site-key-smoke:
+    name: Site-key smoke
+    needs: publish
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The helper imports `generateSiteKey`/`hashSiteKey` straight from the workspace source,
+      # so there is no build or install step: Node strips the types.
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - name: Seed the Neon branch and check site keys on the preview
+        env:
+          DATABASE_URL: ${{ needs.publish.outputs.database_url }}
+          PREVIEW_URL: https://${{ needs.publish.outputs.name }}-${{ env.WORKER_NAME }}.${{ env.WORKERS_SUBDOMAIN }}
+        run: |
+          # Masks are per job, so repeat the publish job's mask before this URL is used here.
+          echo "::add-mask::$DATABASE_URL"
+          command -v psql > /dev/null || sudo apt-get install -y postgresql-client
+          node .github/scripts/site-key-smoke.mjs
 
   cleanup:
     name: Delete preview
