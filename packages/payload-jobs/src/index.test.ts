@@ -13,7 +13,11 @@ describe('payloadJobs', () => {
   it('keeps the existing config and custom keys when it registers itself', async () => {
     const result = await payloadJobs()(baseConfig)
 
-    expect(result.collections).toBe(baseConfig.collections)
+    expect(result.collections?.[0]).toBe(baseConfig.collections?.[0])
+    expect(result.collections?.map((collection) => collection.slug)).toEqual([
+      'users',
+      'email-templates',
+    ])
     expect(result.globals?.[0]?.slug).toBe('job-board-settings')
     expect(result.custom).toEqual({
       existing: true,
@@ -27,6 +31,27 @@ describe('payloadJobs', () => {
 
   it('returns the config untouched when disabled', async () => {
     expect(await payloadJobs({ enabled: false })(baseConfig)).toBe(baseConfig)
+  })
+
+  it('uses the configured email templates slug', async () => {
+    const result = await payloadJobs({ emailTemplatesSlug: 'tenant-emails' })(baseConfig)
+
+    expect(result.collections?.map((collection) => collection.slug)).toEqual([
+      'users',
+      'tenant-emails',
+    ])
+  })
+
+  it('does not register a second collection when the slug already exists', async () => {
+    const existing = { slug: 'email-templates', fields: [] }
+
+    const result = await payloadJobs()({
+      ...baseConfig,
+      collections: [...(baseConfig.collections ?? []), existing],
+    } as unknown as Config)
+
+    expect(result.collections).toHaveLength(2)
+    expect(result.collections?.[1]).toBe(existing)
   })
 
   it('resolves feature toggles and records them in the config', async () => {

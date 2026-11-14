@@ -203,6 +203,39 @@ describe('tenant isolation', () => {
     },
   )
 
+  it('scopes email-templates reads, updates and deletes to the tenant on the user', async () => {
+    const config = await buildConfig()
+
+    for (const operation of ['read', 'update', 'delete'] as const) {
+      expect(await baseAccess(config, operation, 'email-templates', tenantAdminA)).toEqual({
+        tenant: { in: [tenantA.id] },
+      })
+      expect(await baseAccess(config, operation, 'email-templates', tenantAdminB)).toEqual({
+        tenant: { in: [tenantB.id] },
+      })
+      expect(await baseAccess(config, operation, 'email-templates', superAdmin)).toBe(true)
+    }
+  })
+
+  it('rejects an email-templates create for another tenant in beforeValidate', async () => {
+    const config = await buildConfig()
+    const beforeValidate = beforeValidateFor(config, 'email-templates')
+
+    await expect(
+      runHook(beforeValidate, {
+        data: { key: 'new_user', tenant: tenantB.id },
+        req: requestFor(tenantAdminA),
+      }),
+    ).rejects.toThrow()
+
+    await expect(
+      runHook(beforeValidate, {
+        data: { key: 'new_user', tenant: tenantA.id },
+        req: requestFor(tenantAdminA),
+      }),
+    ).resolves.toEqual({ key: 'new_user', tenant: tenantA.id })
+  })
+
   it('lets tenant B’s admin write tenant B, but not tenant A', async () => {
     const config = await buildConfig()
     const beforeValidate = beforeValidateFor(config, 'media')

@@ -1,11 +1,17 @@
 import type { Config, GlobalConfig, Plugin } from 'payload'
 
+import { emailTemplatesCollection } from './email-templates'
 import { jobBoardSettingsGlobal, jobBoardTenantFields } from './tenancy'
 
 export * from './access'
 export * from './email'
+export * from './email-template-defaults'
+export * from './email-template-seed'
+export * from './email-templates'
 export * from './site-keys'
 export * from './tenancy'
+
+export const EMAIL_TEMPLATES_SLUG = 'email-templates'
 
 export type TenancyMode = 'multi' | 'single'
 
@@ -23,6 +29,8 @@ export type PayloadJobsFeatures = {
 export type PayloadJobsOptions = {
   /** Turn the plugin off without removing it from the config. Defaults to true. */
   enabled?: boolean
+  /** Slug of the email templates collection. Defaults to `email-templates`. */
+  emailTemplatesSlug?: string
   /** Which job-board collections to enable. All default to true. */
   features?: PayloadJobsFeatures
   /** Slug of the tenant settings global in single-tenant mode. */
@@ -41,8 +49,8 @@ const resolvedFeatures = (options: PayloadJobsOptions): Required<PayloadJobsFeat
 })
 
 /**
- * Job board plugin for Mission Control. It owns the job-board tenant settings; later tasks
- * (PJ-15 onwards) add the job collections.
+ * Job board plugin for Mission Control. It owns the job-board tenant settings and the
+ * email templates; later tasks (PJ-16 onwards) add the job collections.
  */
 export const payloadJobs =
   (options: PayloadJobsOptions = {}): Plugin =>
@@ -51,6 +59,7 @@ export const payloadJobs =
 
     const tenancy = options.tenancy ?? 'single'
     const tenantsSlug = options.tenantsSlug ?? 'tenants'
+    const emailTemplatesSlug = options.emailTemplatesSlug ?? EMAIL_TEMPLATES_SLUG
     const features = resolvedFeatures(options)
 
     let config = incoming
@@ -85,6 +94,16 @@ export const payloadJobs =
         globals: [
           ...(config.globals ?? []),
           jobBoardSettingsGlobal(settingsSlug) as GlobalConfig,
+        ],
+      }
+    }
+
+    if (!config.collections?.some((collection) => collection.slug === emailTemplatesSlug)) {
+      config = {
+        ...config,
+        collections: [
+          ...(config.collections ?? []),
+          emailTemplatesCollection({ slug: emailTemplatesSlug, tenantScoped: tenancy === 'multi' }),
         ],
       }
     }

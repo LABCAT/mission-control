@@ -85,6 +85,7 @@ export interface Config {
     tags: Tag;
     tenants: Tenant;
     'site-keys': SiteKey;
+    'email-templates': EmailTemplate;
     'payload-kv': PayloadKv;
     'payload-jobs': PayloadJob;
     'payload-locked-documents': PayloadLockedDocument;
@@ -100,6 +101,7 @@ export interface Config {
     tags: TagsSelect<false> | TagsSelect<true>;
     tenants: TenantsSelect<false> | TenantsSelect<true>;
     'site-keys': SiteKeysSelect<false> | SiteKeysSelect<true>;
+    'email-templates': EmailTemplatesSelect<false> | EmailTemplatesSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-jobs': PayloadJobsSelect<false> | PayloadJobsSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
@@ -387,6 +389,60 @@ export interface SiteKey {
   createdAt: string;
 }
 /**
+ * The emails this tenant sends. One entry per email key.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "email-templates".
+ */
+export interface EmailTemplate {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  /**
+   * Which email this template sends. One per key, per tenant.
+   */
+  key:
+    | 'new_user'
+    | 'new_user_admin'
+    | 'resend_confirmation'
+    | 'new_job_admin'
+    | 'new_job'
+    | 'job_approved'
+    | 'job_expiring'
+    | 'expired_job'
+    | 'job_canceled'
+    | 'new_order'
+    | 'order_complete'
+    | 'new_application'
+    | 'application_received'
+    | 'organisation_listing_request'
+    | 'organisation_live'
+    | 'contact_form'
+    | 'alert_confirm'
+    | 'job_alerts_digest';
+  /**
+   * May use {{placeholders}}.
+   */
+  subject: string;
+  /**
+   * HTML with {{placeholders}}. Values are escaped when it is rendered, so do not wrap them in tags.
+   */
+  body: string;
+  /**
+   * Turn off to stop sending this email.
+   */
+  enabled?: boolean | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv".
  */
@@ -543,6 +599,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'site-keys';
         value: number | SiteKey;
+      } | null)
+    | ({
+        relationTo: 'email-templates';
+        value: number | EmailTemplate;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -767,6 +827,21 @@ export interface SiteKeysSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "email-templates_select".
+ */
+export interface EmailTemplatesSelect<T extends boolean = true> {
+  tenant?: T;
+  key?: T;
+  subject?: T;
+  body?: T;
+  enabled?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv_select".
  */
 export interface PayloadKvSelect<T extends boolean = true> {
@@ -948,7 +1023,7 @@ export interface CollectionsWidget {
 export interface CollectionQueryWidget {
   data?: {
     title?: string | null;
-    relatedCollection: 'users' | 'media' | 'folders' | 'tags' | 'tenants' | 'site-keys';
+    relatedCollection: 'users' | 'media' | 'folders' | 'tags' | 'tenants' | 'site-keys' | 'email-templates';
     where?:
       | {
           [k: string]: unknown;
@@ -970,7 +1045,8 @@ export interface CollectionQueryWidget {
  */
 export interface ActivityWidget {
   data?: {
-    excludedCollections?: ('users' | 'media' | 'folders' | 'tags' | 'tenants' | 'site-keys')[] | null;
+    excludedCollections?:
+      ('users' | 'media' | 'folders' | 'tags' | 'tenants' | 'site-keys' | 'email-templates')[] | null;
   };
   width: 'small' | 'medium' | 'large' | 'x-large' | 'full';
 }

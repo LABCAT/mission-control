@@ -263,6 +263,12 @@ type TenantIsolationArgs = {
   collection: CollectionConfig
   /** Returns the non-tenant fields for a new document; the harness adds `tenant`. */
   createData: (tenant: TestTenant) => Record<string, unknown>
+  /**
+   * Extra collections to include in the same schema push. Drizzle prompts when a table it
+   * knows about is missing from the pushed schema, so a second suite in the same database
+   * must push every table the first one created.
+   */
+  withCollections?: CollectionConfig[]
 }
 
 /**
@@ -271,7 +277,11 @@ type TenantIsolationArgs = {
  * neither read, write nor delete tenant B's documents (and vice versa), while a
  * super-admin can see everything. Later tasks call this once per collection.
  */
-export const tenantIsolation = ({ collection, createData }: TenantIsolationArgs): void => {
+export const tenantIsolation = ({
+  collection,
+  createData,
+  withCollections = [],
+}: TenantIsolationArgs): void => {
   const slug = collection.slug
 
   describe(`tenant isolation: ${slug}`, () => {
@@ -280,7 +290,7 @@ export const tenantIsolation = ({ collection, createData }: TenantIsolationArgs)
     let docB: { id: number | string }
 
     beforeAll(async () => {
-      harness = await bootTestPayload({ collections: [collection] })
+      harness = await bootTestPayload({ collections: [collection, ...withCollections] })
 
       docA = (await harness.payload.create({
         collection: slug,

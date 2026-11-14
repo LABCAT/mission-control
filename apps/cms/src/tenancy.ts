@@ -12,6 +12,7 @@ import { siteKeyAccessOverride } from './site-keys'
  */
 export const multiTenantOptions = {
   collections: {
+    'email-templates': {},
     folders: { accessResultOverride: siteKeyAccessOverride },
     media: { accessResultOverride: siteKeyAccessOverride },
     tags: { accessResultOverride: siteKeyAccessOverride },
