@@ -2,6 +2,7 @@ import type { Config } from 'payload'
 import { describe, expect, it } from 'vitest'
 
 import { payloadJobs } from './index'
+import { TAXONOMY_SLUGS } from './taxonomies'
 
 const baseConfig = {
   collections: [{ slug: 'users', fields: [] }],
@@ -13,7 +14,11 @@ describe('payloadJobs', () => {
   it('keeps the existing config and custom keys when it registers itself', async () => {
     const result = await payloadJobs()(baseConfig)
 
-    expect(result.collections).toBe(baseConfig.collections)
+    expect(result.collections?.[0]).toBe(baseConfig.collections?.[0])
+    expect(result.collections?.map((collection) => collection.slug)).toEqual([
+      'users',
+      ...TAXONOMY_SLUGS,
+    ])
     expect(result.globals?.[0]?.slug).toBe('job-board-settings')
     expect(result.custom).toEqual({
       existing: true,

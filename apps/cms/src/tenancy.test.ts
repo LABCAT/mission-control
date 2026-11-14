@@ -60,7 +60,7 @@ const requestFor = (user: MissionControlUser | null) => ({
 
 const baseAccess = async (
   config: Config,
-  operation: 'delete' | 'read' | 'update',
+  operation: 'create' | 'delete' | 'read' | 'update',
   slug: string,
   user: MissionControlUser | null,
 ) => {
@@ -79,7 +79,7 @@ const baseAccess = async (
  */
 const collectionAccess = async (
   config: Config,
-  operation: 'delete' | 'read' | 'update',
+  operation: 'create' | 'delete' | 'read' | 'update',
   slug: string,
   user: MissionControlUser | null,
 ) => {
@@ -343,6 +343,47 @@ describe('site key reads', () => {
     expect(await collectionAccessWithReq(config, 'read', 'tags', req)).toEqual({
       tenant: { equals: tenantA.id },
     })
+  })
+})
+
+describe('job-board taxonomies', () => {
+  const taxonomySlugs = [
+    'job-categories',
+    'job-types',
+    'job-tags',
+    'salary-bands',
+    'areas-of-focus',
+  ]
+
+  it.each(taxonomySlugs)('registers %s and scopes its reads to the user’s tenants', async (slug) => {
+    const config = await buildConfig()
+
+    expect(config.collections?.some((collection) => collection.slug === slug)).toBe(true)
+    expect(await collectionAccess(config, 'read', slug, tenantAdminA)).toEqual({
+      tenant: { in: [tenantA.id] },
+    })
+  })
+
+  it.each(taxonomySlugs)('lets a site key read %s for one tenant only', async (slug) => {
+    const config = await buildConfig()
+    const req = await siteKeyRequest({ key: 'sk_tenant', tenant: tenantA.id })
+
+    expect(await collectionAccessWithReq(config, 'read', slug, req)).toEqual({
+      tenant: { equals: tenantA.id },
+    })
+  })
+
+  it('lets a tenant-admin create a taxonomy but not an employer', async () => {
+    const config = await buildConfig()
+    const employer: TestUser = {
+      id: 12,
+      collection: 'users',
+      role: 'user',
+      tenants: [{ role: 'employer', tenant: tenantA }],
+    }
+
+    expect(await collectionAccess(config, 'create', 'job-tags', tenantAdminA)).toBeTruthy()
+    expect(await collectionAccess(config, 'create', 'job-tags', employer)).toBe(false)
   })
 })
 

@@ -85,6 +85,11 @@ export interface Config {
     tags: Tag;
     tenants: Tenant;
     'site-keys': SiteKey;
+    'job-categories': JobCategory;
+    'job-types': JobType;
+    'job-tags': JobTag;
+    'salary-bands': SalaryBand;
+    'areas-of-focus': AreasOfFocus;
     'payload-kv': PayloadKv;
     'payload-jobs': PayloadJob;
     'payload-locked-documents': PayloadLockedDocument;
@@ -100,6 +105,11 @@ export interface Config {
     tags: TagsSelect<false> | TagsSelect<true>;
     tenants: TenantsSelect<false> | TenantsSelect<true>;
     'site-keys': SiteKeysSelect<false> | SiteKeysSelect<true>;
+    'job-categories': JobCategoriesSelect<false> | JobCategoriesSelect<true>;
+    'job-types': JobTypesSelect<false> | JobTypesSelect<true>;
+    'job-tags': JobTagsSelect<false> | JobTagsSelect<true>;
+    'salary-bands': SalaryBandsSelect<false> | SalaryBandsSelect<true>;
+    'areas-of-focus': AreasOfFocusSelect<false> | AreasOfFocusSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-jobs': PayloadJobsSelect<false> | PayloadJobsSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
@@ -388,6 +398,145 @@ export interface SiteKey {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "job-categories".
+ */
+export interface JobCategory {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  name: string;
+  /**
+   * Used in listing URLs and filters. Unique within the tenant.
+   */
+  slug: string;
+  /**
+   * WordPress term id, for the import.
+   */
+  legacyId?: number | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "job-types".
+ */
+export interface JobType {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  name: string;
+  /**
+   * Used in listing URLs and filters. Unique within the tenant.
+   */
+  slug: string;
+  /**
+   * WordPress term id, for the import.
+   */
+  legacyId?: number | null;
+  /**
+   * Volunteer job types are kept out of the main listing and can be posted for free.
+   */
+  isVolunteer?: boolean | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "job-tags".
+ */
+export interface JobTag {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  name: string;
+  /**
+   * Used in listing URLs and filters. Unique within the tenant.
+   */
+  slug: string;
+  /**
+   * WordPress term id, for the import.
+   */
+  legacyId?: number | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "salary-bands".
+ */
+export interface SalaryBand {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  name: string;
+  /**
+   * Used in listing URLs and filters. Unique within the tenant.
+   */
+  slug: string;
+  /**
+   * WordPress term id, for the import.
+   */
+  legacyId?: number | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "areas-of-focus".
+ */
+export interface AreasOfFocus {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  name: string;
+  /**
+   * Used in listing URLs and filters. Unique within the tenant.
+   */
+  slug: string;
+  /**
+   * WordPress term id, for the import.
+   */
+  legacyId?: number | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv".
  */
 export interface PayloadKv {
@@ -543,6 +692,26 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'site-keys';
         value: number | SiteKey;
+      } | null)
+    | ({
+        relationTo: 'job-categories';
+        value: number | JobCategory;
+      } | null)
+    | ({
+        relationTo: 'job-types';
+        value: number | JobType;
+      } | null)
+    | ({
+        relationTo: 'job-tags';
+        value: number | JobTag;
+      } | null)
+    | ({
+        relationTo: 'salary-bands';
+        value: number | SalaryBand;
+      } | null)
+    | ({
+        relationTo: 'areas-of-focus';
+        value: number | AreasOfFocus;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -767,6 +936,77 @@ export interface SiteKeysSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "job-categories_select".
+ */
+export interface JobCategoriesSelect<T extends boolean = true> {
+  tenant?: T;
+  name?: T;
+  slug?: T;
+  legacyId?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "job-types_select".
+ */
+export interface JobTypesSelect<T extends boolean = true> {
+  tenant?: T;
+  name?: T;
+  slug?: T;
+  legacyId?: T;
+  isVolunteer?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "job-tags_select".
+ */
+export interface JobTagsSelect<T extends boolean = true> {
+  tenant?: T;
+  name?: T;
+  slug?: T;
+  legacyId?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "salary-bands_select".
+ */
+export interface SalaryBandsSelect<T extends boolean = true> {
+  tenant?: T;
+  name?: T;
+  slug?: T;
+  legacyId?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "areas-of-focus_select".
+ */
+export interface AreasOfFocusSelect<T extends boolean = true> {
+  tenant?: T;
+  name?: T;
+  slug?: T;
+  legacyId?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv_select".
  */
 export interface PayloadKvSelect<T extends boolean = true> {
@@ -948,7 +1188,18 @@ export interface CollectionsWidget {
 export interface CollectionQueryWidget {
   data?: {
     title?: string | null;
-    relatedCollection: 'users' | 'media' | 'folders' | 'tags' | 'tenants' | 'site-keys';
+    relatedCollection:
+      | 'users'
+      | 'media'
+      | 'folders'
+      | 'tags'
+      | 'tenants'
+      | 'site-keys'
+      | 'job-categories'
+      | 'job-types'
+      | 'job-tags'
+      | 'salary-bands'
+      | 'areas-of-focus';
     where?:
       | {
           [k: string]: unknown;
@@ -970,7 +1221,21 @@ export interface CollectionQueryWidget {
  */
 export interface ActivityWidget {
   data?: {
-    excludedCollections?: ('users' | 'media' | 'folders' | 'tags' | 'tenants' | 'site-keys')[] | null;
+    excludedCollections?:
+      | (
+          | 'users'
+          | 'media'
+          | 'folders'
+          | 'tags'
+          | 'tenants'
+          | 'site-keys'
+          | 'job-categories'
+          | 'job-types'
+          | 'job-tags'
+          | 'salary-bands'
+          | 'areas-of-focus'
+        )[]
+      | null;
   };
   width: 'small' | 'medium' | 'large' | 'x-large' | 'full';
 }
