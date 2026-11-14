@@ -1,6 +1,10 @@
 import type { MultiTenantPluginConfig } from '@payloadcms/plugin-multi-tenant/types'
 
-import { isSuperAdmin, tenantRoleOptions } from '@mission-control/payload-jobs'
+import {
+  isSuperAdmin,
+  siteSettingsMultiTenantOptions,
+  tenantRoleOptions,
+} from '@mission-control/payload-jobs'
 
 import { siteKeyAccessOverride } from './site-keys'
 
@@ -14,6 +18,12 @@ export const multiTenantOptions = {
   collections: {
     folders: { accessResultOverride: siteKeyAccessOverride },
     media: { accessResultOverride: siteKeyAccessOverride },
+    // mission-control: PJ-20 CMS content, read by the Astro sites through a site key.
+    pages: { accessResultOverride: siteKeyAccessOverride },
+    'site-settings': {
+      ...siteSettingsMultiTenantOptions()['site-settings'],
+      accessResultOverride: siteKeyAccessOverride,
+    },
     tags: { accessResultOverride: siteKeyAccessOverride },
   },
   tenantsArrayField: {

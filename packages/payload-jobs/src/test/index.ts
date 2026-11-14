@@ -1,5 +1,6 @@
 import { postgresAdapter } from '@payloadcms/db-postgres'
 import { multiTenantPlugin } from '@payloadcms/plugin-multi-tenant'
+import { lexicalEditor } from '@payloadcms/richtext-lexical'
 import {
   buildConfig,
   getPayload,
@@ -52,6 +53,18 @@ const Tenants: CollectionConfig = {
   versions: false,
 }
 
+/**
+ * A minimal stand-in for orbit's `media` collection, so SEO and hero uploads resolve. Tests that
+ * do not pass it are booted without it; Payload rejects an upload field pointing at a missing
+ * collection, so pass `media: true` whenever the collection under test has upload fields.
+ */
+const Media: CollectionConfig = {
+  slug: 'media',
+  fields: [{ name: 'alt', type: 'text' }],
+  upload: true,
+  versions: false,
+}
+
 const Users: CollectionConfig = {
   slug: 'users',
   admin: { useAsTitle: 'email' },
@@ -80,6 +93,10 @@ type BootTestPayloadArgs = {
   collections: CollectionConfig[]
   /** Explicit disposable Postgres database; schema push must not target the CMS database. */
   databaseUrl?: string
+  /** Collections registered with the plugin's `isGlobal` option (one document per tenant). */
+  globalCollections?: string[]
+  /** Add the stub `media` collection, required by upload fields. */
+  media?: boolean
 }
 
 let bootCount = 0
@@ -90,10 +107,19 @@ let bootCount = 0
  *
  * The users are real auth documents: Payload's authorship tracking (`createdBy` /
  * `updatedBy`) foreign-keys every document a user creates back to the users collection.
+ *
+ * Rich text needs an editor, so a lexical editor is installed config-wide; that is what the
+ * real CMS does too.
+ *
+ * Each boot pushes into its own Postgres schema. Vitest runs test files in parallel and each
+ * file boots a different set of collections; sharing one schema would make drizzle-kit ask
+ * "create or rename this table?" and hang. The schema is dropped on `destroy()`.
  */
 export const bootTestPayload = async ({
   collections,
   databaseUrl,
+  globalCollections = [],
+  media = false,
 }: BootTestPayloadArgs): Promise<TestHarness> => {
   const testDatabaseUrl = databaseUrl ?? process.env.TEST_DATABASE_URL
 
@@ -101,11 +127,23 @@ export const bootTestPayload = async ({
     throw new Error('Set TEST_DATABASE_URL to a disposable Postgres database before running integration tests')
   }
 
+  const runId = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
+  const schemaName = `payload_jobs_test_${runId}`
+
+  const isGlobal = new Set(globalCollections)
+  const pluginCollections = Object.fromEntries(
+    collections.map((collection) => [
+      collection.slug,
+      isGlobal.has(collection.slug) ? { isGlobal: true } : {},
+    ]),
+  )
+
   const config = await buildConfig({
     admin: { user: 'users' },
     auth: { passwordHashIterations: 100000 },
+    editor: lexicalEditor(),
     secret: 'test-secret',
-    collections: [Users, Tenants, ...collections],
+    collections: [Users, Tenants, ...(media ? [Media] : []), ...collections],
     db: postgresAdapter({
       pool: {
         connectionString: testDatabaseUrl,
@@ -113,10 +151,11 @@ export const bootTestPayload = async ({
       },
       // CI gets a fresh Postgres; push the schema for this test run instead of migrations.
       push: true,
+      schemaName,
     }),
     plugins: [
       multiTenantPlugin({
-        collections: Object.fromEntries(collections.map((collection) => [collection.slug, {}])),
+        collections: pluginCollections,
         tenantsArrayField: {
           rowFields: [
             {
@@ -180,6 +219,14 @@ export const bootTestPayload = async ({
       }
     }
 
+    const pool = payload.db.pool as { query: (sql: string) => Promise<unknown> }
+    try {
+      // Drop this boot's schema so repeated local runs never accumulate tables.
+      await pool.query(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE`)
+    } catch (error) {
+      cleanupErrors.push(error)
+    }
+
     try {
       await payload.destroy()
     } catch (error) {
@@ -192,9 +239,6 @@ export const bootTestPayload = async ({
   }
 
   try {
-    // Unique slugs and emails per boot avoid collisions if a failed cleanup leaves rows.
-    const runId = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
-
     const createdA = (await payload.create({
       collection: 'tenants',
       data: { name: 'Tenant A', slug: `tenant-a-${runId}` },

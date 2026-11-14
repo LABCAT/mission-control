@@ -213,6 +213,7 @@ All Agent tasks except PJ-28. Each one is collection config, access control and 
 **PJ-20**
 - `pages`: `title`, `slug`, `content`, SEO group, `legacyId`.
 - A per-tenant `site-settings`, made a tenant-scoped collection or global per the plugin's pattern, with: hero image and text, promo blocks, nav links, footer text, analytics ID.
+- Built in `packages/payload-jobs`: `pagesCollection()` and `siteSettingsCollection()` are tenant-scoped collections with a compound unique index on `tenant` + `slug` (and on `tenant` alone for settings, via the plugin's `isGlobal` option). Single-tenant hosts get the same settings as a `site-settings` global instead. The slug derives from the title when empty, and the analytics ID accepts a GA4 measurement ID or a Cloudflare Web Analytics token.
 
 **PJ-21**
 - `plans`: `name`, `price` (minor units), `durationDays`, `jobCredits`, `allowedCategories`/`allowedTypes`, `isVolunteer`, `active`, `sortOrder`, `legacyId`.

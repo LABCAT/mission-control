@@ -62,6 +62,37 @@ export type SupportedTimezones =
   | 'Pacific/Fiji';
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "LexicalNodes_0F61F5BC".
+ */
+export type LexicalNodes_0F61F5BC =
+  | SerializedTextNode
+  | SerializedTabNode
+  | SerializedLineBreakNode
+  | SerializedParagraphNode<LexicalNodes_0F61F5BC>
+  | SerializedHorizontalRuleNode
+  | SerializedUploadNode<'media'>
+  | SerializedQuoteNode<LexicalNodes_0F61F5BC>
+  | SerializedRelationshipNode<
+      | 'users'
+      | 'folders'
+      | 'tags'
+      | 'tenants'
+      | 'site-keys'
+      | 'pages'
+      | 'site-settings'
+      | 'payload-kv'
+      | 'payload-jobs'
+      | 'payload-locked-documents'
+      | 'payload-preferences'
+      | 'payload-migrations'
+    >
+  | SerializedAutoLinkNode<LexicalNodes_0F61F5BC, LexicalLinkFields>
+  | SerializedLinkNode<LexicalNodes_0F61F5BC, LexicalLinkFields>
+  | SerializedListNode<LexicalNodes_0F61F5BC>
+  | SerializedListItemNode<LexicalNodes_0F61F5BC>
+  | SerializedHeadingNode<LexicalNodes_0F61F5BC>;
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "LexicalNodes_3DE324E4".
  */
 export type LexicalNodes_3DE324E4 =
@@ -85,6 +116,8 @@ export interface Config {
     tags: Tag;
     tenants: Tenant;
     'site-keys': SiteKey;
+    pages: Page;
+    'site-settings': SiteSetting;
     'payload-kv': PayloadKv;
     'payload-jobs': PayloadJob;
     'payload-locked-documents': PayloadLockedDocument;
@@ -100,6 +133,8 @@ export interface Config {
     tags: TagsSelect<false> | TagsSelect<true>;
     tenants: TenantsSelect<false> | TenantsSelect<true>;
     'site-keys': SiteKeysSelect<false> | SiteKeysSelect<true>;
+    pages: PagesSelect<false> | PagesSelect<true>;
+    'site-settings': SiteSettingsSelect<false> | SiteSettingsSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-jobs': PayloadJobsSelect<false> | PayloadJobsSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
@@ -388,6 +423,137 @@ export interface SiteKey {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "pages".
+ */
+export interface Page {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  title: string;
+  /**
+   * The URL path on this tenant’s site. Leave empty to derive it from the title.
+   */
+  slug: string;
+  /**
+   * The page body.
+   */
+  content?: LexicalRichText<LexicalNodes_0F61F5BC> | null;
+  /**
+   * Overrides for the page metadata. Empty fields fall back to the title.
+   */
+  seo?: {
+    /**
+     * Browser tab and search result title.
+     */
+    title?: string | null;
+    /**
+     * Meta description, ideally 50 to 160 characters.
+     */
+    description?: string | null;
+    /**
+     * Open Graph image. Falls back to the site-wide default.
+     */
+    image?: (number | null) | Media;
+    /**
+     * Ask search engines not to index this page.
+     */
+    noIndex?: boolean | null;
+  };
+  /**
+   * WordPress post ID, kept so the importer can match an existing page.
+   */
+  legacyId?: number | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "site-settings".
+ */
+export interface SiteSetting {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  /**
+   * The banner at the top of the home page.
+   */
+  hero?: {
+    /**
+     * Wide image behind the hero text.
+     */
+    image?: (number | null) | Media;
+    heading?: string | null;
+    subheading?: string | null;
+    /**
+     * Call-to-action button text.
+     */
+    ctaLabel?: string | null;
+    /**
+     * Where the call-to-action button goes.
+     */
+    ctaHref?: string | null;
+  };
+  /**
+   * Cards shown on the home page, in order.
+   */
+  promoBlocks?:
+    | {
+        heading: string;
+        body?: string | null;
+        image?: (number | null) | Media;
+        linkLabel?: string | null;
+        /**
+         * Where the card links to.
+         */
+        linkHref?: string | null;
+        /**
+         * Untick to keep a block without showing it on the site.
+         */
+        active?: boolean | null;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * Header navigation, in order.
+   */
+  navLinks?:
+    | {
+        label: string;
+        /**
+         * Site path or full URL.
+         */
+        href: string;
+        openInNewTab?: boolean | null;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * Shown at the bottom of every page.
+   */
+  footerText?: string | null;
+  /**
+   * GA4 measurement ID (G-XXXXXXXXXX) or Cloudflare Web Analytics token. Leave empty for none.
+   */
+  analyticsId?: string | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv".
  */
 export interface PayloadKv {
@@ -543,6 +709,14 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'site-keys';
         value: number | SiteKey;
+      } | null)
+    | ({
+        relationTo: 'pages';
+        value: number | Page;
+      } | null)
+    | ({
+        relationTo: 'site-settings';
+        value: number | SiteSetting;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -767,6 +941,70 @@ export interface SiteKeysSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "pages_select".
+ */
+export interface PagesSelect<T extends boolean = true> {
+  tenant?: T;
+  title?: T;
+  slug?: T;
+  content?: T;
+  seo?:
+    | T
+    | {
+        title?: T;
+        description?: T;
+        image?: T;
+        noIndex?: T;
+      };
+  legacyId?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "site-settings_select".
+ */
+export interface SiteSettingsSelect<T extends boolean = true> {
+  tenant?: T;
+  hero?:
+    | T
+    | {
+        image?: T;
+        heading?: T;
+        subheading?: T;
+        ctaLabel?: T;
+        ctaHref?: T;
+      };
+  promoBlocks?:
+    | T
+    | {
+        heading?: T;
+        body?: T;
+        image?: T;
+        linkLabel?: T;
+        linkHref?: T;
+        active?: T;
+        id?: T;
+      };
+  navLinks?:
+    | T
+    | {
+        label?: T;
+        href?: T;
+        openInNewTab?: T;
+        id?: T;
+      };
+  footerText?: T;
+  analyticsId?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv_select".
  */
 export interface PayloadKvSelect<T extends boolean = true> {
@@ -948,7 +1186,7 @@ export interface CollectionsWidget {
 export interface CollectionQueryWidget {
   data?: {
     title?: string | null;
-    relatedCollection: 'users' | 'media' | 'folders' | 'tags' | 'tenants' | 'site-keys';
+    relatedCollection: 'users' | 'media' | 'folders' | 'tags' | 'tenants' | 'site-keys' | 'pages' | 'site-settings';
     where?:
       | {
           [k: string]: unknown;
@@ -970,7 +1208,8 @@ export interface CollectionQueryWidget {
  */
 export interface ActivityWidget {
   data?: {
-    excludedCollections?: ('users' | 'media' | 'folders' | 'tags' | 'tenants' | 'site-keys')[] | null;
+    excludedCollections?:
+      ('users' | 'media' | 'folders' | 'tags' | 'tenants' | 'site-keys' | 'pages' | 'site-settings')[] | null;
   };
   width: 'small' | 'medium' | 'large' | 'x-large' | 'full';
 }
@@ -1049,6 +1288,62 @@ export interface SerializedParagraphNode<TChildren> extends SerializedLexicalEle
   type: 'paragraph';
   textFormat: number;
   textStyle: string;
+}
+
+export interface SerializedHorizontalRuleNode {
+  type: 'horizontalrule';
+  /** @deprecated Ignored when loading. Typed as required only to match Lexical's types: rich text sent through the API, CLI or MCP may not contain it. */
+  version: number;
+}
+
+export type SerializedUploadNode<TSlugs extends keyof Config['collections'], TFields = { [k: string]: unknown }> = {
+  type: 'upload';
+  format: LexicalElementFormat;
+  id: string;
+  /** @deprecated Ignored when loading. Typed as required only to match Lexical's types: rich text sent through the API, CLI or MCP may not contain it. */
+  version: number;
+  fields: TFields;
+} & {
+  [TSlug in TSlugs]: {
+    relationTo: TSlug;
+    value: Config['collections'][TSlug]['id'] | Config['collections'][TSlug];
+  };
+}[TSlugs];
+
+export interface SerializedQuoteNode<TChildren> extends SerializedLexicalElementBase<TChildren> {
+  type: 'quote';
+}
+
+export type SerializedRelationshipNode<TSlugs extends keyof Config['collections']> = {
+  type: 'relationship';
+  format: LexicalElementFormat;
+  /** @deprecated Ignored when loading. Typed as required only to match Lexical's types: rich text sent through the API, CLI or MCP may not contain it. */
+  version: number;
+} & {
+  [TSlug in TSlugs]: {
+    relationTo: TSlug;
+    value: Config['collections'][TSlug]['id'] | Config['collections'][TSlug];
+  };
+}[TSlugs];
+
+export interface LexicalLinkFields {
+  [k: string]: unknown;
+  doc?: {
+    relationTo: string;
+    value: Config['db']['defaultIDType'] | { [k: string]: unknown; id: Config['db']['defaultIDType'] };
+  } | null;
+  linkType: 'custom' | 'internal';
+  newTab: boolean;
+  url?: string;
+}
+export interface SerializedLinkNode<TChildren, TFields = LexicalLinkFields> extends SerializedLexicalElementBase<TChildren> {
+  type: 'link';
+  fields: TFields;
+  id?: string;
+}
+export interface SerializedAutoLinkNode<TChildren, TFields = LexicalLinkFields> extends SerializedLexicalElementBase<TChildren> {
+  type: 'autolink';
+  fields: TFields;
 }
 
 export interface SerializedListNode<TChildren> extends SerializedLexicalElementBase<TChildren> {

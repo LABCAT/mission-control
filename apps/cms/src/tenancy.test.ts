@@ -52,7 +52,7 @@ const buildConfig = async (): Promise<Config> => {
 }
 
 const requestFor = (user: MissionControlUser | null) => ({
-  payload: {},
+  payload: { count: async () => ({ totalDocs: 0 }) },
   payloadAPI: 'REST',
   t: (key: string) => key,
   user,
@@ -92,13 +92,25 @@ const collectionAccess = async (
   return access({ req: requestFor(user), slug })
 }
 
+/**
+ * Run every beforeValidate hook the collection has, in order, the way Payload does. Both the
+ * multi-tenant plugin and the collection itself contribute one.
+ */
 const beforeValidateFor = (config: Config, slug: string) => {
   const collection = config.collections?.find((candidate) => candidate.slug === slug)
-  const hook = collection?.hooks?.beforeValidate?.[0]
+  const hooks = collection?.hooks?.beforeValidate
 
-  if (!hook) throw new Error(`Missing beforeValidate hook for ${slug}`)
+  if (!hooks?.length) throw new Error(`Missing beforeValidate hook for ${slug}`)
 
-  return hook as (args: unknown) => unknown
+  return (async (args: { data?: Record<string, unknown>; req: unknown }) => {
+    let data = args.data
+
+    for (const hook of hooks) {
+      data = (await hook({ ...args, data } as never)) ?? data
+    }
+
+    return data
+  }) as (args: unknown) => unknown
 }
 
 /**
@@ -156,7 +168,7 @@ const runBeforeChange = (hook: CollectionBeforeChangeHook, args: Record<string, 
   Promise.resolve().then(() => hook(args as never))
 
 describe('tenant isolation', () => {
-  it.each(['folders', 'media', 'tags'])(
+  it.each(['folders', 'media', 'pages', 'site-settings', 'tags'])(
     'scopes %s reads, updates and deletes to the tenant on the user',
     async (slug) => {
       const config = await buildConfig()
@@ -181,7 +193,7 @@ describe('tenant isolation', () => {
     },
   )
 
-  it.each(['folders', 'media', 'tags'])(
+  it.each(['folders', 'media', 'pages', 'site-settings', 'tags'])(
     'rejects a %s create for another tenant in beforeValidate',
     async (slug) => {
       const config = await buildConfig()
@@ -334,6 +346,26 @@ describe('site key reads', () => {
     const req = await siteKeyRequest({ key: 'sk_unknown', known: false, tenant: tenantA.id })
 
     expect(await collectionAccessWithReq(config, 'read', 'media', req)).toBe(false)
+  })
+
+  it.each(['pages', 'site-settings'])(
+    'exposes %s to a site key, scoped to the key’s tenant',
+    async (slug) => {
+      const config = await buildConfig()
+      const req = await siteKeyRequest({ key: 'sk_tenant', tenant: tenantA.id })
+
+      expect(await collectionAccessWithReq(config, 'read', slug, req)).toEqual({
+        tenant: { equals: tenantA.id },
+      })
+    },
+  )
+
+  it('marks site settings as one document per tenant for the multi-tenant plugin', async () => {
+    const config = await buildConfig()
+
+    expect(config.collections?.some((collection) => collection.slug === 'site-settings')).toBe(
+      true,
+    )
   })
 
   it('still scopes a collection whose own read access denies anonymous requests', async () => {

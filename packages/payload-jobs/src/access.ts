@@ -106,3 +106,25 @@ export const hasAnyTenantRole = (
   (user?.tenants ?? []).some(
     (membership) => membership?.role != null && roles.includes(membership.role),
   )
+
+/** Roles allowed to edit CMS content (pages, site settings). */
+export const CONTENT_ROLES = ['tenant-admin', 'editor'] as const
+
+/**
+ * Content editors: super-admins, plus tenant-admins and editors in at least one tenant. The
+ * multi-tenant plugin narrows the result to the user's own tenants, so this only answers
+ * "may this user write content at all". Employers and anonymous visitors get false.
+ *
+ * Single-tenant hosts have no tenant memberships, so they pass `allowAnyAuthenticated` and
+ * any signed-in user may edit content.
+ */
+export const contentWriteAccess =
+  ({ allowAnyAuthenticated = false }: { allowAnyAuthenticated?: boolean } = {}): Access =>
+  ({ req }) => {
+    if (!req.user) return false
+
+    const user = req.user as MissionControlUser
+    if (isSuperAdmin(user) || hasAnyTenantRole(user, CONTENT_ROLES)) return true
+
+    return allowAnyAuthenticated && (user.tenants ?? []).length === 0
+  }
