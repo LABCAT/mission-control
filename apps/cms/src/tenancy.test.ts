@@ -272,7 +272,10 @@ describe('tenant isolation', () => {
       ({ req: { user } }) as unknown as Parameters<typeof usersUpdateAccess>[0]
 
     expect(await usersUpdateAccess(argsFor(tenantAdminA))).toEqual({
-      'tenants.tenant': { in: [tenantA.id] },
+      and: [
+        { 'tenants.tenant': { in: [tenantA.id] } },
+        { role: { not_equals: 'super-admin' } },
+      ],
     })
     expect(await usersUpdateAccess(argsFor(editorA))).toEqual({
       id: { equals: editorA.id },
