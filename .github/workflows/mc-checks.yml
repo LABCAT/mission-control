@@ -44,3 +44,4 @@ jobs:
       - run: pnpm lint
       - run: pnpm test
       - run: pnpm --filter cms build
+      - run: pnpm --filter @mission-control/launchpad build
