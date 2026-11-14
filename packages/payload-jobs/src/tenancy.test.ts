@@ -53,6 +53,20 @@ describe('payloadJobs tenancy modes', () => {
     })
   })
 
+  it('adds the per-tenant slug index in multi mode only', async () => {
+    const multi = await payloadJobs({ tenancy: 'multi' })(baseConfig)
+    const multiIndexes = multi.collections?.find(
+      (collection) => collection.slug === 'locations',
+    )?.indexes
+
+    expect(multiIndexes).toEqual([{ fields: ['tenant', 'slug'], unique: true }])
+
+    const single = await payloadJobs()(baseConfig)
+    expect(
+      single.collections?.find((collection) => collection.slug === 'locations')?.indexes,
+    ).toBeUndefined()
+  })
+
   it('adds a job-board-settings global in single mode', async () => {
     const result = await payloadJobs()(baseConfig)
 

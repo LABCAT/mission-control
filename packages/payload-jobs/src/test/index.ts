@@ -85,11 +85,33 @@ type BootTestPayloadArgs = {
 let bootCount = 0
 
 /**
+ * Reset the disposable database before each boot. `push: true` runs drizzle-kit, which stops
+ * to ask "is this table a rename of that one?" as soon as it sees tables it did not generate
+ * — the previous suite's collections, or leftovers from a failed run. Starting from an empty
+ * `public` schema keeps the push non-interactive. Only ever runs against `TEST_DATABASE_URL`.
+ */
+const resetPublicSchema = async (connectionString: string): Promise<void> => {
+  const { Client } = await import('pg')
+  const client = new Client({ connectionString })
+
+  try {
+    await client.connect()
+    await client.query('DROP SCHEMA IF EXISTS public CASCADE')
+    await client.query('CREATE SCHEMA public')
+  } finally {
+    await client.end()
+  }
+}
+
+/**
  * Boot a Payload instance against Postgres (schema pushed for the test run) and seed
  * two tenants, A and B, plus a super-admin and one tenant-admin per tenant.
  *
  * The users are real auth documents: Payload's authorship tracking (`createdBy` /
  * `updatedBy`) foreign-keys every document a user creates back to the users collection.
+ *
+ * Every boot drops and recreates the database's `public` schema, so passes must point
+ * `TEST_DATABASE_URL` at a disposable database and must not run concurrently.
  */
 export const bootTestPayload = async ({
   collections,
@@ -100,6 +122,8 @@ export const bootTestPayload = async ({
   if (!testDatabaseUrl) {
     throw new Error('Set TEST_DATABASE_URL to a disposable Postgres database before running integration tests')
   }
+
+  await resetPublicSchema(testDatabaseUrl)
 
   const config = await buildConfig({
     admin: { user: 'users' },

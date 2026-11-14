@@ -181,10 +181,15 @@ All Agent tasks except PJ-28. Each one is collection config, access control and 
 - Each has `name` (localized), a unique `slug` per tenant, and `legacyId`.
 - Public read; tenant-admin/editor write.
 
-**PJ-17**
-- `locations`: `name`, `slug`, `kind` (region, island or town), `parent`.
-- A seed script for Vanuatu built from `efate/_dev/js/modules/regions-and-towns.js`, plus an "Overseas" entry.
-- Test that the seed parses.
+**PJ-17** – done 2026-11-14
+- `locations`: `name`, `slug`, `kind` (region, island or town), `parent`, `legacyId`.
+- Public read; tenant-admin/editor write. Slug is unique per tenant (`validateSlug` plus a
+  `(tenant, slug)` unique index added in multi-tenant mode).
+- A parent must be broader than its child (region ← island ← town), which keeps the tree
+  acyclic; a parent in another tenant is rejected.
+- The seed mirrors the legacy picker (`island → town`, no province level) and adds the
+  `Overseas` and `Other` catch-alls. Run it with `SEED_LOCATIONS_CONFIRM=1 pnpm seed:locations`
+  in `apps/cms`; it is idempotent, and skips the aggregate tenant.
 
 **PJ-18**
 - `organisations`:

@@ -1,9 +1,12 @@
-import type { Config, GlobalConfig, Plugin } from 'payload'
+import type { CollectionConfig, Config, GlobalConfig, Plugin } from 'payload'
 
+import { Locations, locationsTenantSlugIndex } from './collections/locations'
 import { jobBoardSettingsGlobal, jobBoardTenantFields } from './tenancy'
 
 export * from './access'
+export * from './collections/locations'
 export * from './email'
+export * from './seed/vanuatu'
 export * from './site-keys'
 export * from './tenancy'
 
@@ -40,9 +43,12 @@ const resolvedFeatures = (options: PayloadJobsOptions): Required<PayloadJobsFeat
   coupons: options.features?.coupons ?? true,
 })
 
+/** Job-board collections owned by this plugin. Later tasks append to this list. */
+const jobBoardCollections = (): CollectionConfig[] => [Locations]
+
 /**
- * Job board plugin for Mission Control. It owns the job-board tenant settings; later tasks
- * (PJ-15 onwards) add the job collections.
+ * Job board plugin for Mission Control. It owns the job-board tenant settings and the
+ * job-board collections; later tasks (PJ-16 onwards) add the rest.
  */
 export const payloadJobs =
   (options: PayloadJobsOptions = {}): Plugin =>
@@ -54,6 +60,17 @@ export const payloadJobs =
     const features = resolvedFeatures(options)
 
     let config = incoming
+
+    const added = jobBoardCollections()
+    const existingSlugs = new Set((config.collections ?? []).map((collection) => collection.slug))
+    const clashes = added.filter((collection) => existingSlugs.has(collection.slug))
+    if (clashes.length > 0) {
+      throw new Error(
+        `payload-jobs: these collections already exist: ${clashes.map((c) => c.slug).join(', ')}`,
+      )
+    }
+
+    config = { ...config, collections: [...(config.collections ?? []), ...added] }
 
     if (tenancy === 'multi') {
       const tenants = config.collections?.find((collection) => collection.slug === tenantsSlug)
@@ -67,11 +84,20 @@ export const payloadJobs =
 
       config = {
         ...config,
-        collections: config.collections?.map((collection) =>
-          collection.slug === tenantsSlug
-            ? { ...collection, fields: [...collection.fields, ...jobBoardTenantFields] }
-            : collection,
-        ),
+        collections: config.collections?.map((collection) => {
+          if (collection.slug === tenantsSlug) {
+            return { ...collection, fields: [...collection.fields, ...jobBoardTenantFields] }
+          }
+
+          if (collection.slug === Locations.slug) {
+            return {
+              ...collection,
+              indexes: [...(collection.indexes ?? []), locationsTenantSlugIndex],
+            }
+          }
+
+          return collection
+        }),
       }
     } else {
       const settingsSlug = options.settingsSlug ?? 'job-board-settings'

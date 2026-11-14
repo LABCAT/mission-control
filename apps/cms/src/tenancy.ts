@@ -13,6 +13,7 @@ import { siteKeyAccessOverride } from './site-keys'
 export const multiTenantOptions = {
   collections: {
     folders: { accessResultOverride: siteKeyAccessOverride },
+    locations: { accessResultOverride: siteKeyAccessOverride },
     media: { accessResultOverride: siteKeyAccessOverride },
     tags: { accessResultOverride: siteKeyAccessOverride },
   },

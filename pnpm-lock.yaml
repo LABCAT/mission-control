@@ -107,9 +107,15 @@ importers:
       '@payloadcms/plugin-multi-tenant':
         specifier: 4.0.0-beta.7
         version: 4.0.0-beta.7(@payloadcms/ui@4.0.0-beta.7(monaco-editor@0.57.0)(payload@4.0.0-beta.7(graphql@16.15.0)(typescript@6.0.3))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@6.0.3))(payload@4.0.0-beta.7(graphql@16.15.0)(typescript@6.0.3))
+      '@types/pg':
+        specifier: 8.20.0
+        version: 8.20.0
       payload:
         specifier: 4.0.0-beta.7
         version: 4.0.0-beta.7(graphql@16.15.0)(typescript@6.0.3)
+      pg:
+        specifier: 8.20.0
+        version: 8.20.0
       typescript:
         specifier: 6.0.3
         version: 6.0.3
