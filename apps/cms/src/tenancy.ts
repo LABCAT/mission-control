@@ -1,7 +1,6 @@
 import type { MultiTenantPluginConfig } from '@payloadcms/plugin-multi-tenant/types'
 
-import { isSuperAdmin, tenantRoleOptions } from '@mission-control/payload-jobs'
-
+import { isSuperAdmin, tenantRoleOptions } from './access'
 import { siteKeyAccessOverride } from './site-keys'
 
 /**

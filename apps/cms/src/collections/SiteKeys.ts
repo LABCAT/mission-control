@@ -5,7 +5,8 @@ import type {
   CollectionConfig,
 } from 'payload'
 
-import { generateSiteKey, superAdminAccess } from '@mission-control/payload-jobs'
+import { superAdminAccess } from '../access'
+import { generateSiteKey } from '../site-keys'
 
 const RAW_KEY_CONTEXT = 'missionControlRawSiteKey'
 

@@ -1,4 +1,4 @@
-import { hashSiteKey } from '@mission-control/payload-jobs'
+import { hashSiteKey } from '../site-keys'
 import { describe, expect, it } from 'vitest'
 
 import { generateSiteKeyOnCreate, hideSiteKeyHash, revealSiteKeyOnce } from './SiteKeys'

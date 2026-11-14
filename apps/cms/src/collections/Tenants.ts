@@ -1,6 +1,6 @@
 import type { CollectionBeforeDeleteHook, CollectionConfig } from 'payload'
 
-import { authenticatedAccess, superAdminAccess } from '@mission-control/payload-jobs'
+import { authenticatedAccess, superAdminAccess } from '../access'
 
 // Job-board settings (currency, timezone, locales, email sender) are added to this
 // collection by @mission-control/payload-jobs in multi-tenant mode.

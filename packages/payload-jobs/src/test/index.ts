@@ -8,13 +8,25 @@ import {
 } from 'payload'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
-import {
-  authenticatedAccess,
-  globalRoleOptions,
-  isSuperAdmin,
-  superAdminAccess,
-  tenantRoleOptions,
-} from '../access'
+// Test fixtures only: the plugin has no role model, so the harness defines the smallest
+// one it needs. Hosts (like apps/cms) have their own roles and access helpers.
+const globalRoleOptions = [
+  { label: 'Super admin', value: 'super-admin' },
+  { label: 'User', value: 'user' },
+]
+
+const tenantRoleOptions = [
+  { label: 'Tenant admin', value: 'tenant-admin' },
+  { label: 'Editor', value: 'editor' },
+  { label: 'Employer', value: 'employer' },
+]
+
+const authenticatedAccess = ({ req }: { req: { user?: unknown } }) => Boolean(req.user)
+
+const isSuperAdmin = (user: unknown): boolean =>
+  typeof user === 'object' && user !== null && (user as { role?: unknown }).role === 'super-admin'
+
+const superAdminAccess = ({ req }: { req: { user?: unknown } }) => isSuperAdmin(req.user)
 
 export type TestTenant = { id: number; name: string; slug: string }
 

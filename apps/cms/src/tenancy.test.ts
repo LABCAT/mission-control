@@ -2,8 +2,9 @@ import type { CollectionBeforeChangeHook, Config } from 'payload'
 import { multiTenantPlugin } from '@payloadcms/plugin-multi-tenant'
 import { describe, expect, it } from 'vitest'
 
-import { payloadJobs, hashSiteKey, type MissionControlUser } from '@mission-control/payload-jobs'
+import { payloadJobs } from '@mission-control/payload-jobs'
 
+import { type MissionControlUser } from './access'
 import { Folders } from './collections/Folders'
 import { Media } from './collections/Media'
 import { Tags } from './collections/Tags'
@@ -14,6 +15,7 @@ import {
   Users,
   usersUpdateAccess,
 } from './collections/Users'
+import { hashSiteKey } from './site-keys'
 import { multiTenantOptions } from './tenancy'
 
 type TestUser = MissionControlUser & { collection: 'users' }

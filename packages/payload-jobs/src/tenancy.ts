@@ -1,7 +1,5 @@
 import type { Field, GlobalConfig } from 'payload'
 
-import { authenticatedAccess, superAdminAccess } from './access'
-
 // Current ISO 4217 list one from SIX (the maintenance agency), fetched 2026-11-06.
 const ISO_4217_CODES = new Set(
   `AED AFN ALL AMD AOA ARS AUD AWG AZN BAM BBD BDT BHD BIF BMD BND BOB BOV BRL BSD BTN BWP
@@ -197,14 +195,21 @@ export const jobBoardTenantFields: Field[] = [
   },
 ]
 
+type SettingsUser = null | undefined | { role?: null | string }
+
+/**
+ * Single-tenant settings global. Its access policy lives here, with the fields, because the
+ * plugin has no role model of its own: signed-in users may read it, only a super-admin may
+ * change it. In multi-tenant mode the host's collections own this instead.
+ */
 export const jobBoardSettingsGlobal = (slug = 'job-board-settings'): GlobalConfig => ({
   slug,
   admin: {
     group: 'Settings',
   },
   access: {
-    read: authenticatedAccess,
-    update: superAdminAccess,
+    read: ({ req }) => Boolean(req.user),
+    update: ({ req }) => (req.user as SettingsUser)?.role === 'super-admin',
   },
   fields: jobBoardTenantFields,
   versions: false,

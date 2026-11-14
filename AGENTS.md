@@ -71,6 +71,7 @@ Errors show up in `POST /cdn-cgi/local/explorer/api/local/observability/query` w
 ## Boundaries
 
 - **Job-board code** goes in `packages/*` and new `apps/*`. Edit orbit's files in `apps/cms` only as much as you have to, and mark the edits with `// mission-control:`.
+- **Roles and site keys belong to the app.** `packages/payload-jobs` has no role model and no site-key code: `isSuperAdmin`, `tenantRoleOptions`, `authenticatedAccess`, `hashSiteKey` and the `x-site-key` access override live in `apps/cms/src/access.ts` and `apps/cms/src/site-keys.ts`. The app applies the site-key override to any plugin collection it wants public (see `siteKeyAllowedCollections`).
 - **UI:** Rocketship first (`@labcat2020/rocketship`). A missing generic component belongs in `LABCAT/rocketship`: flag it in the PR and don't build it here.
 - **Pinned versions:** match orbit's Payload beta exactly.
 - **No secrets** in code, docs or logs.

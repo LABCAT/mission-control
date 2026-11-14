@@ -8,7 +8,7 @@ import {
   type MissionControlUser,
   superAdminAccess,
   superAdminFieldAccess,
-} from '@mission-control/payload-jobs'
+} from '../access'
 
 // mission-control: ordinary users may only update themselves; tenant-admins may update
 // users in the tenants where they are tenant-admins. The plugin adds the tenant constraint too.
