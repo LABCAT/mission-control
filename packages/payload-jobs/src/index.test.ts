@@ -1,6 +1,7 @@
 import type { Config } from 'payload'
 import { describe, expect, it } from 'vitest'
 
+import { ALERT_SUBSCRIPTIONS_SLUG } from './alert-subscriptions'
 import { EXPIRE_PLACEMENTS_TASK, payloadJobs } from './index'
 import { TAXONOMY_SLUGS } from './taxonomies'
 
@@ -15,12 +16,13 @@ describe('payloadJobs', () => {
     const result = await payloadJobs()(baseConfig)
 
     // mission-control: the users collection is extended (legacy password support PJ-34,
-    // organisation relation PJ-18), and locations (PJ-17), organisations (PJ-18), the
-    // taxonomies (PJ-16) and plans (PJ-21) are added.
+    // organisation relation PJ-18), and locations (PJ-17), organisations (PJ-18), alerts
+    // (PJ-26), the taxonomies (PJ-16) and plans (PJ-21) are added.
     expect(result.collections?.map((collection) => collection.slug)).toEqual([
       'users',
       'locations',
       'organisations',
+      ALERT_SUBSCRIPTIONS_SLUG,
       ...TAXONOMY_SLUGS,
       'plans',
       'add-ons',
