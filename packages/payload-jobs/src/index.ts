@@ -1,6 +1,7 @@
-import type { Config, GlobalConfig, Plugin } from 'payload'
+import type { CollectionConfig, Config, GlobalConfig, Plugin } from 'payload'
 
 import { accountAuthEndpoints, type AccountAuthOptions } from './account-auth'
+import { locationsCollection, locationsTenantSlugIndex } from './collections/locations'
 import { withLegacyPasswords } from './legacy-password'
 import { planCollection, PLANS_SLUG, withPlanRestrictionGuards } from './plans'
 import { TAXONOMY_SLUGS, taxonomyCollections } from './taxonomies'
@@ -8,6 +9,7 @@ import { jobBoardSettingsGlobal, jobBoardTenantFields } from './tenancy'
 
 export * from './access'
 export * from './account-auth'
+export * from './collections/locations'
 export * from './email'
 export * from './legacy-password'
 export * from './money'
@@ -15,6 +17,7 @@ export * from './plans'
 export * from './plans-seed'
 export * from './pricing'
 export * from './rate-limit'
+export * from './seed/vanuatu'
 export * from './site-keys'
 export * from './taxonomies'
 export * from './tenancy'
@@ -26,7 +29,7 @@ export type TenancyMode = 'multi' | 'single'
  * every one of them in the multi-tenant plugin's `collections`, which adds their `tenant`
  * field; Payload otherwise rejects the config ("Field tenant was not found").
  */
-export const PAYLOAD_JOBS_TENANT_COLLECTIONS = [...TAXONOMY_SLUGS, PLANS_SLUG] as const
+export const PAYLOAD_JOBS_TENANT_COLLECTIONS = ['locations', ...TAXONOMY_SLUGS, PLANS_SLUG] as const
 
 export type PayloadJobsFeatures = {
   /** Job applications. The collection is added by a later task. Defaults to true. */
@@ -66,9 +69,14 @@ const resolvedFeatures = (options: PayloadJobsOptions): Required<PayloadJobsFeat
   coupons: options.features?.coupons ?? true,
 })
 
+/** Job-board collections owned by this plugin. Later tasks append to this list. */
+const jobBoardCollections = (tenancy: TenancyMode): CollectionConfig[] => [
+  locationsCollection({ requireTenant: tenancy === 'multi' }),
+]
+
 /**
- * Job board plugin for Mission Control. It owns the job-board tenant settings; later tasks
- * (PJ-15 onwards) add the job collections.
+ * Job board plugin for Mission Control. It owns the job-board tenant settings and the
+ * job-board collections; later tasks (PJ-16 onwards) add the rest.
  */
 export const payloadJobs =
   (options: PayloadJobsOptions = {}): Plugin =>
@@ -91,6 +99,17 @@ export const payloadJobs =
     }
 
     const settingsSlug = options.settingsSlug ?? 'job-board-settings'
+
+    const added = jobBoardCollections(tenancy)
+    const existingSlugs = new Set((config.collections ?? []).map((collection) => collection.slug))
+    const clashes = added.filter((collection) => existingSlugs.has(collection.slug))
+    if (clashes.length > 0) {
+      throw new Error(
+        `payload-jobs: these collections already exist: ${clashes.map((c) => c.slug).join(', ')}`,
+      )
+    }
+
+    config = { ...config, collections: [...(config.collections ?? []), ...added] }
 
     if (tenancy === 'multi') {
       const tenants = config.collections?.find((collection) => collection.slug === tenantsSlug)
@@ -122,19 +141,28 @@ export const payloadJobs =
 
       config = {
         ...config,
-        collections: config.collections?.map((collection) =>
-          collection.slug === tenantsSlug
-            ? {
-                ...collection,
-                // Payload routes /api/tenants/* to the collection's endpoints, not the root's.
-                endpoints: [
-                  ...(Array.isArray(collection.endpoints) ? collection.endpoints : []),
-                  ...accountEndpoints,
-                ],
-                fields: [...collection.fields, ...jobBoardTenantFields],
-              }
-            : collection,
-        ),
+        collections: config.collections?.map((collection) => {
+          if (collection.slug === tenantsSlug) {
+            return {
+              ...collection,
+              // Payload routes /api/tenants/* to the collection's endpoints, not the root's.
+              endpoints: [
+                ...(Array.isArray(collection.endpoints) ? collection.endpoints : []),
+                ...accountEndpoints,
+              ],
+              fields: [...collection.fields, ...jobBoardTenantFields],
+            }
+          }
+
+          if (collection.slug === 'locations') {
+            return {
+              ...collection,
+              indexes: [...(collection.indexes ?? []), locationsTenantSlugIndex],
+            }
+          }
+
+          return collection
+        }),
       }
     } else {
       if (config.globals?.some((global) => global.slug === settingsSlug)) {
@@ -150,11 +178,11 @@ export const payloadJobs =
       }
     }
 
-    const existingSlugs = new Set(config.collections?.map((collection) => collection.slug))
+    const registeredSlugs = new Set(config.collections?.map((collection) => collection.slug))
     // Job types and categories that a plan is restricted to can't be deleted (PJ-21).
     const taxonomies = withPlanRestrictionGuards(
       taxonomyCollections({ tenantScoped: tenancy === 'multi' }).filter(
-        (collection) => !existingSlugs.has(collection.slug),
+        (collection) => !registeredSlugs.has(collection.slug),
       ),
       { tenantScoped: tenancy === 'multi' },
     )

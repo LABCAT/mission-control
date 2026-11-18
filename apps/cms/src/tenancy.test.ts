@@ -164,7 +164,7 @@ const runBeforeChange = (hook: CollectionBeforeChangeHook, args: Record<string, 
   Promise.resolve().then(() => hook(args as never))
 
 describe('tenant isolation', () => {
-  it.each(['folders', 'media', 'tags'])(
+  it.each(['folders', 'locations', 'media', 'tags'])(
     'scopes %s reads, updates and deletes to the tenant on the user',
     async (slug) => {
       const config = await buildConfig()
@@ -189,7 +189,7 @@ describe('tenant isolation', () => {
     },
   )
 
-  it.each(['folders', 'media', 'tags'])(
+  it.each(['folders', 'locations', 'media', 'tags'])(
     'rejects a %s create for another tenant in beforeValidate',
     async (slug) => {
       const config = await buildConfig()
@@ -389,6 +389,15 @@ describe('site key reads', () => {
     const req = await siteKeyRequest({ key: 'sk_unknown', known: false, tenant: tenantA.id })
 
     expect(await collectionAccessWithReq(config, 'read', 'media', req)).toBe(false)
+  })
+
+  it('exposes the public location tree to a site key, scoped to its tenant', async () => {
+    const config = await buildConfig()
+    const req = await siteKeyRequest({ key: 'sk_tenant', tenant: tenantA.id })
+
+    expect(await collectionAccessWithReq(config, 'read', 'locations', req)).toEqual({
+      tenant: { equals: tenantA.id },
+    })
   })
 
   it('still scopes a collection whose own read access denies anonymous requests', async () => {

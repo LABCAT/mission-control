@@ -18,6 +18,7 @@ describe('payloadJobs', () => {
     // the taxonomies (PJ-16) and plans (PJ-21) are added.
     expect(result.collections?.map((collection) => collection.slug)).toEqual([
       'users',
+      'locations',
       ...TAXONOMY_SLUGS,
       'plans',
     ])

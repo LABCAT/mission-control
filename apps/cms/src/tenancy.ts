@@ -20,6 +20,7 @@ export const multiTenantOptions = {
     // seekers (site accounts, PJ-81) are denied.
     documents: { accessResultOverride: denySeekerOnly(({ accessResult }) => accessResult) },
     folders: { accessResultOverride: tenantContentOverride },
+    locations: { accessResultOverride: tenantContentOverride },
     media: { accessResultOverride: tenantContentOverride },
     tags: { accessResultOverride: tenantContentOverride },
     // mission-control: job-board taxonomies (PJ-16).
