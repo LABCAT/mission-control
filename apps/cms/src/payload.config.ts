@@ -10,7 +10,7 @@ import { Folders } from './collections/Folders'
 import { Tags } from './collections/Tags'
 
 // mission-control: job board plugins. Keep this block small so orbit merges stay clean.
-import { payloadJobs } from '@mission-control/payload-jobs'
+import { payloadJobs, type RateLimiter } from '@mission-control/payload-jobs'
 import { multiTenantPlugin } from '@payloadcms/plugin-multi-tenant'
 import { Tenants } from './collections/Tenants'
 import { SiteKeys } from './collections/SiteKeys'
@@ -26,7 +26,10 @@ const dirname = path.dirname(filename)
 // type generation) has no bindings and uses DATABASE_URL.
 const workerEnv =
   globalThis.navigator?.userAgent === 'Cloudflare-Workers'
-    ? ((await import('cloudflare:workers')).env as { HYPERDRIVE?: { connectionString: string } })
+    ? ((await import('cloudflare:workers')).env as {
+        ACCOUNT_RATE_LIMIT?: RateLimiter // mission-control: account auth rate limit (PJ-81)
+        HYPERDRIVE?: { connectionString: string }
+      })
     : undefined
 
 export default buildConfig({
@@ -69,7 +72,15 @@ export default buildConfig({
   email: cloudflareEmailAdapter,
   globals: [SystemStatus],
   jobs: { tasks: [heartbeatTask] },
-  plugins: [payloadJobs({ tenancy: 'multi' }), multiTenantPlugin(multiTenantOptions)],
+  plugins: [
+    // mission-control: account auth endpoints (PJ-81) rate limit with the ACCOUNT_RATE_LIMIT
+    // binding in Workers, and fall back to an in-memory limiter in dev.
+    payloadJobs({
+      accountAuth: { rateLimiter: () => workerEnv?.ACCOUNT_RATE_LIMIT },
+      tenancy: 'multi',
+    }),
+    multiTenantPlugin(multiTenantOptions),
+  ],
   localization: {
     locales: [{ code: 'en', label: 'English' }],
     fallback: true,

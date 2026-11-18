@@ -1,8 +1,12 @@
 import type { MultiTenantPluginConfig } from '@payloadcms/plugin-multi-tenant/types'
 
-import { isSuperAdmin, tenantRoleOptions } from '@mission-control/payload-jobs'
+import { denySeekerOnly, isSuperAdmin, tenantRoleOptions } from '@mission-control/payload-jobs'
 
 import { siteKeyAccessOverride } from './site-keys'
+
+// mission-control: the plugin gives every tenant member access to the tenant's documents, so
+// seekers (site accounts, PJ-81) are denied here. Staff roles are unchanged.
+const tenantContentOverride = denySeekerOnly(siteKeyAccessOverride)
 
 /**
  * Every content collection that belongs to a tenant goes here. The plugin adds the
@@ -12,9 +16,9 @@ import { siteKeyAccessOverride } from './site-keys'
  */
 export const multiTenantOptions = {
   collections: {
-    folders: { accessResultOverride: siteKeyAccessOverride },
-    media: { accessResultOverride: siteKeyAccessOverride },
-    tags: { accessResultOverride: siteKeyAccessOverride },
+    folders: { accessResultOverride: tenantContentOverride },
+    media: { accessResultOverride: tenantContentOverride },
+    tags: { accessResultOverride: tenantContentOverride },
   },
   tenantsArrayField: {
     rowFields: [

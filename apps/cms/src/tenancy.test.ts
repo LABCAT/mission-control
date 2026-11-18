@@ -2,7 +2,12 @@ import type { CollectionBeforeChangeHook, Config } from 'payload'
 import { multiTenantPlugin } from '@payloadcms/plugin-multi-tenant'
 import { describe, expect, it } from 'vitest'
 
-import { payloadJobs, hashSiteKey, type MissionControlUser } from '@mission-control/payload-jobs'
+import {
+  ACCOUNT_SIGNUP_CONTEXT,
+  hashSiteKey,
+  payloadJobs,
+  type MissionControlUser,
+} from '@mission-control/payload-jobs'
 
 import { Folders } from './collections/Folders'
 import { Media } from './collections/Media'
@@ -12,6 +17,7 @@ import {
   ensureFirstUserIsSuperAdmin,
   preventTenantAdminCredentialChanges,
   Users,
+  usersReadAccess,
   usersUpdateAccess,
 } from './collections/Users'
 import { multiTenantOptions } from './tenancy'
@@ -282,6 +288,50 @@ describe('tenant isolation', () => {
   })
 })
 
+describe('seekers (site accounts)', () => {
+  const seeker: TestUser = {
+    id: 30,
+    collection: 'users',
+    role: 'user',
+    tenants: [{ role: 'seeker', tenant: tenantA }],
+  }
+  const argsFor = (user: MissionControlUser | null) =>
+    ({ req: { user } }) as unknown as Parameters<typeof usersReadAccess>[0]
+
+  it('lets a seeker read only their own user, and everyone else keep the tenant-scoped read', async () => {
+    expect(await usersReadAccess(argsFor(seeker))).toEqual({ id: { equals: seeker.id } })
+    expect(await usersReadAccess(argsFor(tenantAdminA))).toBe(true)
+    expect(await usersReadAccess(argsFor(superAdmin))).toBe(true)
+    expect(await usersReadAccess(argsFor(null))).toBe(false)
+  })
+
+  it('keeps seekers out of the admin panel', async () => {
+    const admin = Users.access?.admin as (args: unknown) => boolean
+
+    expect(admin({ req: { user: seeker } })).toBe(false)
+    expect(admin({ req: { user: tenantAdminA } })).toBe(true)
+  })
+
+  it('denies a seeker the tenant content their membership would otherwise open', async () => {
+    const config = await buildConfig()
+
+    for (const slug of ['media', 'folders', 'tags']) {
+      for (const operation of ['read', 'update', 'delete'] as const) {
+        expect(await collectionAccess(config, operation, slug, seeker), `${slug}.${operation}`).toBe(
+          false,
+        )
+      }
+
+      // A tenant-admin of the same tenant is unaffected.
+      expect(await collectionAccess(config, 'read', slug, tenantAdminA)).not.toBe(false)
+    }
+  })
+
+  it('verifies email on site sign-ups', () => {
+    expect(Users.auth).toMatchObject({ verify: true })
+  })
+})
+
 describe('site key reads', () => {
   it('lets a tenant key read its own tenant only', async () => {
     const config = await buildConfig()
@@ -484,6 +534,14 @@ describe('first user bootstrap', () => {
         operation: 'update',
         req: requestWithCount(0),
       } as never),
+    ).resolves.toEqual({ role: 'user' })
+  })
+
+  it('never promotes a site sign-up, even on an empty database', async () => {
+    const req = { ...requestWithCount(0), context: { [ACCOUNT_SIGNUP_CONTEXT]: true } } as never
+
+    await expect(
+      ensureFirstUserIsSuperAdmin({ data: { role: 'user' }, operation: 'create', req } as never),
     ).resolves.toEqual({ role: 'user' })
   })
 })
