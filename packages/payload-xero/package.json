@@ -1,0 +1,24 @@
+{
+  "name": "@mission-control/payload-xero",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@mission-control/payload-jobs": "workspace:*"
+  },
+  "peerDependencies": {
+    "payload": "4.0.0-beta.7"
+  },
+  "devDependencies": {
+    "@payloadcms/db-postgres": "4.0.0-beta.7",
+    "@payloadcms/plugin-multi-tenant": "4.0.0-beta.7",
+    "payload": "4.0.0-beta.7",
+    "typescript": "6.0.3"
+  }
+}
