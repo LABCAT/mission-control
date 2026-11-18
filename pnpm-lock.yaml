@@ -151,6 +151,9 @@ importers:
         specifier: 3.24.6
         version: 3.24.6(@types/node@24.12.3)
     devDependencies:
+      '@mission-control/payload-jobs':
+        specifier: workspace:*
+        version: link:../payload-jobs
       '@types/node':
         specifier: 24.12.3
         version: 24.12.3
