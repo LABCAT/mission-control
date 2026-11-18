@@ -321,6 +321,43 @@ describe('add-ons', () => {
     })
   })
 
+  describe('long grant chains', () => {
+    it('refuses a cycle however deep it closes', async () => {
+      // head → n1 → n2 → … → n40; then make n40 grant head.
+      const chain: { id: number }[] = []
+      for (let index = 40; index >= 1; index--) {
+        const next = chain[0]
+        chain.unshift(
+          await createAddOn(harness.tenantA.id, {
+            grants: next ? [{ addOn: next.id, durationDays: 1 }] : [],
+            key: `chain-${index}`,
+          }),
+        )
+      }
+      const head = await createAddOn(harness.tenantA.id, {
+        grants: [{ addOn: chain[0].id, durationDays: 1 }],
+        key: 'chain-head',
+      })
+
+      await expect(
+        harness.payload.update({
+          collection: ADD_ONS_SLUG,
+          data: { grants: [{ addOn: head.id, durationDays: 1 }] },
+          id: chain[chain.length - 1].id,
+          overrideAccess: true,
+        }),
+      ).rejects.toThrow()
+
+      // Ending the chain somewhere that leads nowhere is still fine.
+      await harness.payload.update({
+        collection: ADD_ONS_SLUG,
+        data: { grants: [{ addOn: docs.enhancedA.id, durationDays: 1 }] },
+        id: chain[chain.length - 1].id,
+        overrideAccess: true,
+      })
+    })
+  })
+
   describe('plans include add-ons', () => {
     it('includes an add-on from the plan’s tenant, but not another tenant’s or one twice', async () => {
       const ok = (await harness.payload.create({

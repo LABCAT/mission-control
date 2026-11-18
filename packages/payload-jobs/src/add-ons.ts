@@ -56,9 +56,6 @@ export const isAddOnPlacement = (value: unknown): value is AddOnPlacement =>
 
 const ON_SALE: Where = { active: { equals: true } }
 
-/** Grants can chain (A grants B grants C); this bounds the walk when checking for cycles. */
-const MAX_GRANT_DEPTH = 32
-
 type GrantRow = { addOn?: unknown; durationDays?: unknown }
 
 const grantIDsOf = (grants: unknown): (number | string)[] =>
@@ -100,9 +97,11 @@ export const addOnGrantsValid =
     // A new add-on can't be part of a cycle yet: nothing grants it.
     if (selfID === undefined) return data
 
+    // Walk everything reachable through grants, however deep. It ends because each add-on is
+    // visited once and a tenant has finitely many; a depth cap would let a long chain hide a cycle.
     const seen = new Set<string>()
     let frontier = granted.map(String)
-    for (let depth = 0; frontier.length > 0 && depth < MAX_GRANT_DEPTH; depth++) {
+    while (frontier.length > 0) {
       const { docs } = await req.payload.find({
         collection: collection.slug as CollectionSlug,
         depth: 0,
