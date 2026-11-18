@@ -138,7 +138,14 @@ Tokens are stored in a hidden `tokens` group on the settings row, encrypted with
 
 Refresh happens automatically: `getXeroAccessToken` returns the stored access token while it has more than a minute left, and otherwise refreshes it. Xero rotates the refresh token on every refresh, and the old one dies as soon as Xero answers, so the new pair is written back before the call returns.
 
-Because that rotation is destructive, refresh is single-flight per settings row. A request takes the row's short lease with one conditional update that also compares the refresh token it is about to spend, so of any number of concurrent requests exactly one calls Xero. The others wait for the winner to save and then use its tokens. A lease that is never released — a request that died mid-refresh — expires on its own after `XERO_REFRESH_LEASE_MS` (10 seconds), so it cannot block the tenant forever.
+Because that rotation is destructive, refresh is single-flight per settings row. A request takes the row's short lease with one conditional update that also compares the refresh token it is about to spend, so of any number of concurrent requests exactly one calls Xero. The others wait for the winner to save and then use its tokens. A lease that is never released — a request that died mid-refresh — expires on its own after `XERO_REFRESH_LEASE_MS` (15 seconds), so it cannot block the tenant forever.
+
+A lapsed lease is not enough on its own, because the request that held it may still be waiting on Xero. Two guards close that:
+
+- the token request is aborted after `XERO_TOKEN_REQUEST_TIMEOUT_MS` (10 seconds), deliberately shorter than the lease, so a hung Xero releases the request before a peer may claim the row;
+- the save is a conditional update matched on the lease token. A request whose lease lapsed while Xero was answering gets no row back, writes nothing, and reports `refresh_failed` instead of overwriting the pair a peer has already stored.
+
+Both are configurable: `oauth.tokenRequestTimeoutMs` overrides the request deadline, and `XERO_REFRESH_LEASE_MS` is exported.
 
 ```ts
 import { findSettingsWithTokens, getXeroAccessToken } from '@mission-control/payload-xero'

@@ -31,6 +31,11 @@ export const XERO_STATE_SECRET_ENV = 'XERO_STATE_SECRET'
 
 /** Refresh this long before expiry, so a request never races the access token's lifetime. */
 export const XERO_REFRESH_MARGIN_MS = 60_000
+/**
+ * Give up on a token request after this long. Kept below `XERO_REFRESH_LEASE_MS`, so a hung
+ * Xero cannot leave a request refreshing past the point where a peer may take the lease over.
+ */
+export const XERO_TOKEN_REQUEST_TIMEOUT_MS = 10_000
 /** How long the connect link (the signed state) stays valid. */
 export const XERO_STATE_TTL_SECONDS = 600
 /** Cookie that binds a connect attempt to the browser that started it. */
@@ -85,7 +90,7 @@ export class XeroOAuthError extends Error {
   }
 }
 
-type Resolvable<T> = T | (() => T | undefined)
+export type Resolvable<T> = T | (() => T | undefined)
 
 const readValue = <T>(value: Resolvable<T> | undefined): T | undefined =>
   typeof value === 'function' ? (value as () => T | undefined)() : value
@@ -123,6 +128,8 @@ export type XeroOAuthOptions = {
   stateSecret?: Resolvable<string>
   /** Lifetime of the signed state, in seconds. Defaults to 600. */
   stateTtlSeconds?: number
+  /** How long to wait for Xero's token endpoint. Defaults to 10s; keep it under the refresh lease. */
+  tokenRequestTimeoutMs?: number
   /** Token endpoint. Defaults to Xero's identity host; tests point it elsewhere. */
   tokenUrl?: string
 }
@@ -136,6 +143,8 @@ export type ResolvedXeroOAuth = {
   fetch: typeof globalThis.fetch
   /** Absent when only refreshing: a refresh needs no redirect URI. */
   redirectUri: string | undefined
+  /** Deadline for a token request, in milliseconds. */
+  tokenRequestTimeoutMs: number
   scopes: readonly string[]
   stateSecret: string | undefined
   stateTtlSeconds: number
@@ -170,6 +179,7 @@ export const resolveXeroOAuth = (options: XeroOAuthOptions = {}): ResolvedXeroOA
     scopes: options.scopes ?? XERO_OAUTH_SCOPES,
     stateSecret: readValue(options.stateSecret) ?? readEnv(XERO_STATE_SECRET_ENV),
     stateTtlSeconds: options.stateTtlSeconds ?? XERO_STATE_TTL_SECONDS,
+    tokenRequestTimeoutMs: options.tokenRequestTimeoutMs ?? XERO_TOKEN_REQUEST_TIMEOUT_MS,
     tokenUrl: options.tokenUrl ?? XERO_TOKEN_URL,
   }
 }
@@ -411,11 +421,16 @@ const requestTokens = async ({
         'content-type': 'application/x-www-form-urlencoded',
       },
       method: 'POST',
+      signal: AbortSignal.timeout(resolved.tokenRequestTimeoutMs),
     })
   } catch (error) {
+    const timedOut = error instanceof Error && error.name === 'TimeoutError'
+
     throw new XeroOAuthError(
       code === 'refresh' ? 'refresh_failed' : 'token_request_failed',
-      'Could not reach Xero. Try again shortly.',
+      timedOut
+        ? 'Xero did not answer in time. Try again shortly.'
+        : 'Could not reach Xero. Try again shortly.',
       { cause: error instanceof Error ? error.name : 'network_error' },
     )
   }

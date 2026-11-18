@@ -23,14 +23,18 @@ import { createPayloadRequest, docAccessOperation, type Payload } from 'payload'
 import { decryptToken, encryptToken, XERO_TOKEN_KEY_ENV } from './crypto'
 import {
   refreshAccessToken,
+  type Resolvable,
   type XeroOAuthOptions,
   XeroOAuthError,
   type XeroTokenSet,
   XERO_REFRESH_MARGIN_MS,
 } from './oauth'
 
-/** How long one request may hold the refresh lease before another may take it over. */
-export const XERO_REFRESH_LEASE_MS = 10_000
+/**
+ * How long one request may hold the refresh lease before another may take it over. Longer than
+ * `XERO_TOKEN_REQUEST_TIMEOUT_MS` by enough to leave room for the save that follows.
+ */
+export const XERO_REFRESH_LEASE_MS = 15_000
 /** How often a waiting request re-reads the row. */
 const REFRESH_POLL_MS = 100
 /** Added to the lease when waiting, so a wait outlives the holder rather than the holder's peer. */
@@ -304,6 +308,44 @@ const claimRefreshLease = async ({
   return claimed ? leaseToken : null
 }
 
+/**
+ * Save a refreshed token pair, but only while this request still owns the lease it took.
+ *
+ * Without the fence a request whose Xero call outlived its lease could write a pair derived
+ * from a refresh token the row has already moved past, overwriting the winner's tokens and
+ * disconnecting the tenant. Returns the updated row, or null when the lease had moved on.
+ */
+const saveRefreshedTokens = async ({
+  collection,
+  encryptionKey,
+  leaseToken,
+  payload,
+  settings,
+  tokens,
+}: {
+  collection: string
+  encryptionKey: Resolvable<string> | undefined
+  leaseToken: string
+  payload: Payload
+  settings: XeroSettingsDoc
+  tokens: XeroTokenSet
+}): Promise<null | XeroSettingsDoc> => {
+  const key = requireKey(encryptionKey)
+
+  const saved = await payload.db.updateOne({
+    collection,
+    data: { tokens: await encryptedTokenColumns(tokens, key, tokenContext(settings.id)) },
+    where: {
+      and: [
+        { id: { equals: settings.id } },
+        { 'tokens.refreshLockToken': { equals: leaseToken } },
+      ],
+    },
+  })
+
+  return (saved ?? null) as unknown as null | XeroSettingsDoc
+}
+
 /** Give the lease back after a failed refresh, so a retry need not wait it out. */
 const releaseRefreshLease = async ({
   collection,
@@ -445,9 +487,10 @@ export const getXeroAccessToken = async ({
       })
       // Xero may not repeat the refresh token; the old one stays valid only until it does, so
       // keep the current one when the response has none.
-      const updated = await saveXeroTokens({
+      const updated = await saveRefreshedTokens({
         collection,
         encryptionKey: oauth.encryptionKey,
+        leaseToken,
         payload,
         settings: current,
         tokens: {
@@ -455,6 +498,15 @@ export const getXeroAccessToken = async ({
           refreshToken: refreshedTokens.refreshToken ?? tokens.refreshToken,
         },
       })
+
+      if (!updated) {
+        // The lease lapsed while Xero was answering, so a peer has refreshed since. Its tokens
+        // are the current ones; this request's pair is already superseded.
+        throw new XeroOAuthError(
+          'refresh_failed',
+          'The Xero connection is being refreshed by another request. Try again.',
+        )
+      }
 
       return {
         accessToken: refreshedTokens.accessToken,

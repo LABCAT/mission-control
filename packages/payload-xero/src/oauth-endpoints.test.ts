@@ -968,6 +968,95 @@ describe('Xero OAuth endpoints', () => {
       expect(xeroCalls[0].body?.refresh_token).not.toBe('refresh-live-1')
     })
 
+    it('does not let a request whose lease lapsed overwrite a newer token pair', async () => {
+      const settings = await expiredRow(tenantA, { refreshToken: 'refresh-slow-1' })
+      xeroCalls.length = 0
+
+      const release = openRefreshGate()
+      try {
+        const slow = getXeroAccessToken({ collection: 'xero-settings', oauth, payload, settings })
+
+        // Let the slow request take the lease and reach Xero.
+        await new Promise((resolve) => setTimeout(resolve, 300))
+
+        // A peer takes the lease over, as it would once the slow request's lease lapsed, and
+        // stores the pair Xero gave it.
+        const peerSettings = await findSettingsWithTokens({
+          collection: 'xero-settings',
+          id: settings.id,
+          payload,
+        })
+        await payload.db.updateOne({
+          collection: 'xero-settings',
+          data: { tokens: { refreshLockToken: 'peer-lease', refreshLockedUntil: Date.now() + 60_000 } },
+          where: { id: { equals: settings.id } },
+        })
+        await saveXeroTokens({
+          collection: 'xero-settings',
+          encryptionKey: ENCRYPTION_KEY,
+          payload,
+          settings: peerSettings as never,
+          tokens: {
+            accessToken: 'access-peer',
+            expiresAt: new Date(Date.now() + 1_800_000).toISOString(),
+            refreshToken: 'refresh-peer',
+            scope: null,
+          },
+        })
+
+        release()
+
+        // The slow request's pair is stale by then, so it reports failure rather than writing.
+        await expect(slow).rejects.toMatchObject({ code: 'refresh_failed' })
+
+        const stored = await findSettingsWithTokens({
+          collection: 'xero-settings',
+          id: settings.id,
+          payload,
+        })
+        const winner = await getXeroAccessToken({
+          collection: 'xero-settings',
+          oauth,
+          payload,
+          settings: stored as never,
+        })
+        expect(winner.accessToken).toBe('access-peer')
+        expect(winner.refreshed).toBe(false)
+      } finally {
+        release()
+      }
+    })
+
+    it('gives up on a token request that outlives its deadline, and frees the lease', async () => {
+      const settings = await expiredRow(tenantA, { refreshToken: 'refresh-hang-1' })
+
+      // A Xero that never answers, but honours the abort signal the client sets.
+      const hangingOauth = {
+        ...oauth,
+        fetch: ((_input: RequestInfo | URL, init?: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () => {
+              const error = new Error('timed out')
+              error.name = 'TimeoutError'
+              reject(error)
+            })
+          })) as unknown as typeof fetch,
+        tokenRequestTimeoutMs: 50,
+      }
+
+      await expect(
+        getXeroAccessToken({ collection: 'xero-settings', oauth: hangingOauth, payload, settings }),
+      ).rejects.toMatchObject({ code: 'refresh_failed', status: 502 })
+
+      // The lease is handed back, so a later request is not locked out.
+      const after = await findSettingsWithTokens({
+        collection: 'xero-settings',
+        id: settings.id,
+        payload,
+      })
+      expect(after?.tokens?.refreshLockToken ?? null).toBeNull()
+    })
+
     it('says not_connected when the tenant never connected', async () => {
       const fresh = await createTenant('echo')
       const settings = (await payload.create({
