@@ -81,3 +81,4 @@ Spend at 02:05 UTC: sub-sessions $8.04 (PJ-10 2.19, PJ-81 2.42, RCL-86 1.00, PJ-
 - Founder will run the plans query (and an organisation count) on 19 Nov; the PJ-21 seed waits for it.
 - **Decision 18 (founder, 18 Nov): applications and CVs** are private (job's organisation + site managers), kept 12 months after the job closes, then auto-deleted (PJ-88). Privacy policy + terms: PJ-89 (founder writes or approves the text).
 - Founder: under 100 organisations, so 'show all on one page' is confirmed and the count query was dropped.
+- 09:50: merged #35 (PJ-16, migration, deploy OK). PJ-16 done. #21 and #37 conflict with main, so OpenHands was tagged to merge main. Opus PJ-21 resumed after the usage limit to fix 3 Kinsho findings (tenant null, type/category/volunteer restrictions, seed validation). PJ-90 (preview DB reset after renamed migrations) dispatched to the PJ-86 session.
