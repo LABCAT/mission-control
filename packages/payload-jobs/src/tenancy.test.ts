@@ -144,6 +144,50 @@ describe('payloadJobs tenancy modes', () => {
   })
 })
 
+describe('payloadJobs plugin', () => {
+  const withUsers = {
+    collections: [{ slug: 'users', fields: [] }, tenants],
+    custom: { existing: true },
+    secret: 'test',
+  } as unknown as Config
+
+  it('keeps the existing config and custom keys when it registers itself', async () => {
+    const result = await payloadJobs()(withUsers)
+
+    // mission-control: the users collection is extended (legacy password support, PJ-34).
+    expect(result.collections?.map((collection) => collection.slug)).toEqual([
+      'users',
+      'tenants',
+      'pages',
+    ])
+    expect(
+      result.collections?.[0]?.fields.map((field) => ('name' in field ? field.name : null)),
+    ).toContain('legacyPasswordHash')
+    expect(result.collections?.[0]?.hooks?.beforeOperation).toHaveLength(1)
+    expect(result.globals?.[0]?.slug).toBe('job-board-settings')
+    expect(result.custom).toMatchObject({
+      existing: true,
+      payloadJobs: { enabled: true, tenancy: 'single' },
+    })
+  })
+
+  it('returns the config untouched when disabled', async () => {
+    expect(await payloadJobs({ enabled: false })(withUsers)).toBe(withUsers)
+  })
+
+  it('resolves feature toggles and records them in the config', async () => {
+    const result = await payloadJobs({
+      features: { alerts: false, coupons: false },
+    })(withUsers)
+
+    expect(result.custom?.payloadJobs).toMatchObject({
+      enabled: true,
+      features: { applications: true, alerts: false, credits: true, coupons: false },
+      tenancy: 'single',
+    })
+  })
+})
+
 describe('job-board tenant settings', () => {
   it('accepts current ISO 4217 currency codes and rejects unknown codes', () => {
     expect(validateCurrency('VUV')).toBe(true)

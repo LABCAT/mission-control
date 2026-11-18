@@ -16,6 +16,7 @@ import { siteKeyAccessOverride } from './site-keys'
  */
 export const multiTenantOptions = {
   collections: {
+    documents: {}, // mission-control: private to tenant members; not exposed to site keys
     folders: { accessResultOverride: siteKeyAccessOverride },
     media: { accessResultOverride: siteKeyAccessOverride },
     // mission-control: PJ-20 CMS content, read by the Astro sites through a site key.

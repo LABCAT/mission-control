@@ -4,7 +4,8 @@ import * as migration_20261105_065255_add_user_names from './20261105_065255_add
 import * as migration_20261105_223955_multi_tenancy from './20261105_223955_multi_tenancy';
 import * as migration_20261107_120535_tenancy_modes from './20261107_120535_tenancy_modes';
 import * as migration_20261109_171926_site_keys from './20261109_171926_site_keys';
-import * as migration_20261114_115549_pages_and_site_settings from './20261114_115549_pages_and_site_settings';
+import * as migration_20261118_013433_media_documents_r2 from './20261118_013433_media_documents_r2';
+import * as migration_20261118_021548_legacy_password_hash from './20261118_021548_legacy_password_hash';
 
 export const migrations = [
   {
@@ -38,8 +39,13 @@ export const migrations = [
     name: '20261109_171926_site_keys',
   },
   {
-    up: migration_20261114_115549_pages_and_site_settings.up,
-    down: migration_20261114_115549_pages_and_site_settings.down,
-    name: '20261114_115549_pages_and_site_settings'
+    up: migration_20261118_013433_media_documents_r2.up,
+    down: migration_20261118_013433_media_documents_r2.down,
+    name: '20261118_013433_media_documents_r2',
+  },
+  {
+    up: migration_20261118_021548_legacy_password_hash.up,
+    down: migration_20261118_021548_legacy_password_hash.down,
+    name: '20261118_021548_legacy_password_hash'
   },
 ];

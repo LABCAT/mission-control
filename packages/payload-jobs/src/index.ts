@@ -1,11 +1,13 @@
 import type { CollectionSlug, Config, GlobalConfig, Plugin } from 'payload'
 
+import { withLegacyPasswords } from './legacy-password'
 import { pagesCollection } from './pages'
 import { siteSettingsCollection, siteSettingsGlobal } from './site-settings'
 import { jobBoardSettingsGlobal, jobBoardTenantFields } from './tenancy'
 
 export * from './access'
 export * from './email'
+export * from './legacy-password'
 export * from './pages'
 export * from './seo'
 export * from './site-keys'
@@ -39,6 +41,8 @@ export type PayloadJobsOptions = {
   mediaSlug?: CollectionSlug
   /** Slug of the pages collection. Defaults to `pages`. */
   pagesSlug?: CollectionSlug
+  /** Slug of the auth collection that gets legacy WordPress password support. Defaults to `users`. */
+  usersSlug?: string
   /** Slug of the tenant settings global in single-tenant mode. */
   settingsSlug?: string
   /** Slug of the site settings collection (multi) or global (single). Defaults to `site-settings`. */
@@ -81,6 +85,15 @@ export const payloadJobs =
 
     let config = incoming
 
+    // mission-control: imported WordPress users keep their passwords (PJ-34).
+    const usersSlug = options.usersSlug ?? 'users'
+    config = {
+      ...config,
+      collections: config.collections?.map((collection) =>
+        collection.slug === usersSlug ? withLegacyPasswords(collection) : collection,
+      ),
+    }
+
     if (tenancy === 'multi') {
       const tenants = config.collections?.find((collection) => collection.slug === tenantsSlug)
 
@@ -92,7 +105,9 @@ export const payloadJobs =
       }
 
       const contentCollections = [
-        ...(features.pages ? [pagesCollection({ mediaSlug, slug: pagesSlug, tenantScoped: true })] : []),
+        ...(features.pages
+          ? [pagesCollection({ mediaSlug, slug: pagesSlug, tenantScoped: true })]
+          : []),
         ...(features.siteSettings
           ? [siteSettingsCollection({ mediaSlug, slug: siteSettingsSlug })]
           : []),
@@ -134,7 +149,9 @@ export const payloadJobs =
         ...config,
         collections: [
           ...(config.collections ?? []),
-          ...(features.pages ? [pagesCollection({ mediaSlug, slug: pagesSlug, tenantScoped: false })] : []),
+          ...(features.pages
+            ? [pagesCollection({ mediaSlug, slug: pagesSlug, tenantScoped: false })]
+            : []),
         ],
         globals: [
           ...(config.globals ?? []),
