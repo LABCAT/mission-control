@@ -1,5 +1,6 @@
 import type { CollectionSlug, Payload, PayloadRequest, Where } from 'payload'
 
+import { ADD_ONS_SLUG } from './add-ons'
 import {
   planFieldValidators,
   PLAN_JOB_CATEGORIES_SLUG,
@@ -9,7 +10,7 @@ import {
   validateTaxonomySlugs,
 } from './plans'
 
-/** An add-on the plan includes, referenced by the add-on's `key` (add-ons arrive in PJ-87). */
+/** An add-on the plan includes, by the add-on's `key`. Seed the add-ons first. */
 export type PlanSeedIncludedAddOn = {
   addOnKey: string
   /** Defaults to the add-on's own duration. `null` = not confirmed yet. */
@@ -69,11 +70,6 @@ const CONFIRMABLE = Object.keys(UNCONFIRMED_MESSAGES) as (keyof typeof UNCONFIRM
 export type SeedPlansResult = {
   /** Keys of the plans this run created. */
   created: string[]
-  /**
-   * Keys of plans with included add-ons, which are not created until the add-ons collection
-   * exists (PJ-87). Creating them without their add-on would sell the wrong thing.
-   */
-  deferred: string[]
   /** Keys of the plans that already existed and were left untouched. */
   existing: string[]
 }
@@ -234,15 +230,35 @@ export const seedPlans = async ({
     throw new PlanSeedError(`Plan seed is not ready:\n- ${missing.join('\n- ')}`)
   }
 
-  const result: SeedPlansResult = { created: [], deferred: [], existing: [] }
+  // The included add-ons must already be in the tenant (run `seedAddOns` first).
+  const addOnKeys = [
+    ...new Set(plans.flatMap((plan) => (plan.includedAddOns ?? []).map((row) => row.addOnKey))),
+  ]
+  const addOnIDs = new Map<string, number | string>()
+  if (addOnKeys.length > 0) {
+    const { docs } = await payload.find({
+      collection: ADD_ONS_SLUG as CollectionSlug,
+      depth: 0,
+      limit: addOnKeys.length,
+      overrideAccess: true,
+      pagination: false,
+      req,
+      where: { and: [{ tenant: { equals: tenantID } }, { key: { in: addOnKeys } }] },
+    })
+    for (const doc of docs) addOnIDs.set(String((doc as { key?: unknown }).key), doc.id)
+    const unknown = plans.flatMap((plan) =>
+      (plan.includedAddOns ?? [])
+        .filter((row) => !addOnIDs.has(row.addOnKey))
+        .map((row) => `"${plan.key}": no add-on "${row.addOnKey}" in this tenant (seed add-ons first)`),
+    )
+    if (unknown.length > 0) {
+      throw new PlanSeedError(`Plan seed is not ready:\n- ${unknown.join('\n- ')}`)
+    }
+  }
+
+  const result: SeedPlansResult = { created: [], existing: [] }
 
   for (const plan of plans) {
-    // TODO(PJ-87): resolve `addOnKey` in the tenant and create the plan with its add-ons.
-    if ((plan.includedAddOns ?? []).length > 0) {
-      result.deferred.push(plan.key)
-      continue
-    }
-
     const match: Where[] = [{ key: { equals: plan.key } }]
     if (plan.legacyId !== null && plan.legacyId !== undefined) {
       match.push({ legacyId: { equals: plan.legacyId } })
@@ -271,6 +287,10 @@ export const seedPlans = async ({
         creditExpiryDays: plan.creditExpiryDays ?? null,
         description: plan.description,
         durationDays: plan.durationDays,
+        includedAddOns: (plan.includedAddOns ?? []).map((row) => ({
+          addOn: addOnIDs.get(row.addOnKey),
+          durationDays: row.durationDays ?? null,
+        })),
         isVolunteer: plan.isVolunteer ?? false,
         jobCredits: plan.jobCredits,
         key: plan.key,

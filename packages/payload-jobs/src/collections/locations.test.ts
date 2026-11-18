@@ -29,8 +29,10 @@ describe('locations collection', () => {
     expect(config.collections?.map((collection) => collection.slug)).toEqual([
       'users',
       'locations',
+      'organisations',
       ...TAXONOMY_SLUGS,
       'plans',
+      'add-ons',
     ])
     expect(Locations.slug).toBe('locations')
     expect(Locations.versions).toBe(false)

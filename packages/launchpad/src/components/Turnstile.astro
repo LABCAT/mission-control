@@ -1,0 +1,114 @@
+---
+/**
+ * Turnstile is a form island: the only JavaScript a site ships. With JavaScript off the
+ * widget never renders, so the noscript message explains the step and the form still posts.
+ */
+import Field from '@labcat2020/rocketship/components/Field'
+
+import { TURNSTILE_NOSCRIPT_MESSAGE, TURNSTILE_RESPONSE_FIELD, turnstileWidgetOptions } from '../tenant/turnstile'
+
+type Props = {
+  /** Public Turnstile site key. The secret key stays on the server. */
+  siteKey: string
+  /** Action name, checked again when the server validates the token. */
+  action?: string
+  /** Tenant language, so the widget speaks the language of the site. */
+  language?: string
+  theme?: 'auto' | 'dark' | 'light'
+  /** Unique id; defaults to the action name, so set it when a page has two forms. */
+  id?: string
+  class?: string
+}
+
+const { siteKey, action, language, theme, id, class: className } = Astro.props as Props
+
+const widgetId = id ?? `turnstile-${action ?? 'form'}`
+const options = turnstileWidgetOptions({ action, language, siteKey, theme })
+---
+
+<Field class:list={['lp-turnstile', className]}>
+  <div class="lp-turnstile__widget" id={widgetId} data-turnstile-options={JSON.stringify(options)}>
+  </div>
+  <input
+    type="hidden"
+    name={TURNSTILE_RESPONSE_FIELD}
+    id={`${widgetId}-response`}
+    data-turnstile-response
+  />
+  <noscript>
+    <p class="lp-turnstile__noscript">{TURNSTILE_NOSCRIPT_MESSAGE}</p>
+  </noscript>
+  <p class="lp-turnstile__error" data-turnstile-error hidden>
+    Verification failed. Please reload the page and try again.
+  </p>
+</Field>
+
+<script>
+  import { turnstileScriptUrl } from '../tenant/turnstile'
+
+  type TurnstileApi = {
+    render: (container: HTMLElement, options: Record<string, unknown>) => string
+  }
+
+  const responseField = (container: HTMLElement): HTMLInputElement | null => {
+    const field = document.getElementById(`${container.id}-response`)
+    return field instanceof HTMLInputElement ? field : null
+  }
+
+  const setToken = (container: HTMLElement, token: string): void => {
+    const field = responseField(container)
+    if (field) field.value = token
+    const error = container.parentElement?.querySelector<HTMLElement>('[data-turnstile-error]')
+    if (error) error.hidden = token !== ''
+  }
+
+  const renderWidgets = (): void => {
+    const api = (window as unknown as { turnstile?: TurnstileApi }).turnstile
+    if (!api) return
+
+    for (const container of document.querySelectorAll<HTMLElement>('[data-turnstile-options]')) {
+      if (container.dataset.rendered === 'true') continue
+      container.dataset.rendered = 'true'
+
+      const options = JSON.parse(container.dataset.turnstileOptions ?? '{}') as Record<
+        string,
+        unknown
+      >
+
+      api.render(container, {
+        ...options,
+        'error-callback': () => setToken(container, ''),
+        'expired-callback': () => setToken(container, ''),
+        callback: (token: string) => setToken(container, token),
+      })
+    }
+  }
+
+  if (document.querySelector('[data-turnstile-options]')) {
+    const existing = (window as unknown as { turnstile?: TurnstileApi }).turnstile
+    if (existing) {
+      renderWidgets()
+    } else {
+      const script = document.createElement('script')
+      script.src = turnstileScriptUrl()
+      script.async = true
+      script.addEventListener('load', renderWidgets)
+      document.head.append(script)
+    }
+  }
+</script>
+
+<style>
+  .lp-turnstile__noscript {
+    color: var(--rs-color-muted);
+    font-size: var(--rs-font-size-sm);
+    margin: 0;
+  }
+
+  .lp-turnstile__error {
+    color: var(--rs-color-danger-text);
+    font-size: var(--rs-font-size-sm);
+    font-weight: var(--rs-font-weight-semibold);
+    margin: 0;
+  }
+</style>

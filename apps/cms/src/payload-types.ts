@@ -87,12 +87,14 @@ export interface Config {
     'site-keys': SiteKey;
     documents: Document;
     locations: Location;
+    organisations: Organisation;
     'job-categories': JobCategory;
     'job-types': JobType;
     'job-tags': JobTag;
     'salary-bands': SalaryBand;
     'areas-of-focus': AreasOfFocus;
     plans: Plan;
+    'add-ons': AddOn;
     'payload-kv': PayloadKv;
     'payload-jobs': PayloadJob;
     'payload-locked-documents': PayloadLockedDocument;
@@ -110,12 +112,14 @@ export interface Config {
     'site-keys': SiteKeysSelect<false> | SiteKeysSelect<true>;
     documents: DocumentsSelect<false> | DocumentsSelect<true>;
     locations: LocationsSelect<false> | LocationsSelect<true>;
+    organisations: OrganisationsSelect<false> | OrganisationsSelect<true>;
     'job-categories': JobCategoriesSelect<false> | JobCategoriesSelect<true>;
     'job-types': JobTypesSelect<false> | JobTypesSelect<true>;
     'job-tags': JobTagsSelect<false> | JobTagsSelect<true>;
     'salary-bands': SalaryBandsSelect<false> | SalaryBandsSelect<true>;
     'areas-of-focus': AreasOfFocusSelect<false> | AreasOfFocusSelect<true>;
     plans: PlansSelect<false> | PlansSelect<true>;
+    'add-ons': AddOnsSelect<false> | AddOnsSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-jobs': PayloadJobsSelect<false> | PayloadJobsSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
@@ -183,6 +187,10 @@ export interface User {
   firstName?: string | null;
   lastName?: string | null;
   legacyPasswordHash?: string | null;
+  /**
+   * The organisation this employer belongs to.
+   */
+  organisation?: (number | null) | Organisation;
   tenants?:
     | {
         tenant: number | Tenant;
@@ -221,6 +229,87 @@ export interface User {
     | null;
   password?: string | null;
   collection: 'users';
+}
+/**
+ * Employer profiles. An employer edits their own; tenant admins approve them and set billing.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "organisations".
+ */
+export interface Organisation {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  name: string;
+  /**
+   * Used in the organisation page URL. Unique within the tenant.
+   */
+  slug: string;
+  type?: ('business' | 'government' | 'nfp' | 'consultant' | 'recruiter' | 'social-enterprise') | null;
+  size?: ('1-10' | '11-50' | '51-200' | '201-500' | '500-plus') | null;
+  /**
+   * From the tenant’s areas of focus. The directory filter uses these.
+   */
+  areasOfFocus?: (number | AreasOfFocus)[] | null;
+  about?: string | null;
+  /**
+   * Shown in the directory and on the organisation page.
+   */
+  logo?: (number | null) | Media;
+  /**
+   * Wide banner at the top of the organisation page.
+   */
+  cover?: (number | null) | Media;
+  website?: string | null;
+  phone?: string | null;
+  /**
+   * The tenant’s location tree, not a free-text address.
+   */
+  location?: (number | null) | Location;
+  socials?: {
+    facebook?: string | null;
+    instagram?: string | null;
+    linkedin?: string | null;
+    x?: string | null;
+    youtube?: string | null;
+  };
+  /**
+   * The employer has asked for a public page. The admin is notified.
+   */
+  listingRequested?: boolean | null;
+  /**
+   * Set by a tenant admin. Unapproved organisations cannot publish jobs.
+   */
+  approved?: boolean | null;
+  /**
+   * Set by a tenant admin. The public page and directory entry go live.
+   */
+  pageEnabled?: boolean | null;
+  /**
+   * Known customers pay by invoice instead of at checkout.
+   */
+  canPayByInvoice?: boolean | null;
+  /**
+   * Receives invoices. Falls back to the account email when empty.
+   */
+  billingEmail?: string | null;
+  /**
+   * Xero contact for this organisation, used by invoice orders.
+   */
+  xeroContactCode?: string | null;
+  /**
+   * WordPress user id of the legacy employer, for the import.
+   */
+  legacyId?: number | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -459,6 +548,59 @@ export interface Tag {
   _h_titlePath?: string | null;
 }
 /**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "areas-of-focus".
+ */
+export interface AreasOfFocus {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  name: string;
+  /**
+   * Used in listing URLs and filters. Unique within the tenant.
+   */
+  slug: string;
+  /**
+   * WordPress term id, for the import.
+   */
+  legacyId?: number | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "locations".
+ */
+export interface Location {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  name: string;
+  slug: string;
+  kind: 'region' | 'island' | 'town';
+  parent?: (number | null) | Location;
+  /**
+   * WordPress id, so the importer can match an existing location.
+   */
+  legacyId?: number | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
  * Keys public sites use to read their own tenant. The raw key is shown once.
  *
  * This interface was referenced by `Config`'s JSON-Schema
@@ -530,32 +672,6 @@ export interface Document {
   };
   focalX?: number | null;
   focalY?: number | null;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "locations".
- */
-export interface Location {
-  id: number;
-  tenant?: (number | null) | Tenant;
-  name: string;
-  slug: string;
-  kind: 'region' | 'island' | 'town';
-  parent?: (number | null) | Location;
-  /**
-   * WordPress id, so the importer can match an existing location.
-   */
-  legacyId?: number | null;
-  createdBy?: {
-    relationTo: 'users';
-    value: number | User;
-  } | null;
-  updatedBy?: {
-    relationTo: 'users';
-    value: number | User;
-  } | null;
-  updatedAt: string;
-  createdAt: string;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -670,33 +786,6 @@ export interface SalaryBand {
   createdAt: string;
 }
 /**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "areas-of-focus".
- */
-export interface AreasOfFocus {
-  id: number;
-  tenant?: (number | null) | Tenant;
-  name: string;
-  /**
-   * Used in listing URLs and filters. Unique within the tenant.
-   */
-  slug: string;
-  /**
-   * WordPress term id, for the import.
-   */
-  legacyId?: number | null;
-  createdBy?: {
-    relationTo: 'users';
-    value: number | User;
-  } | null;
-  updatedBy?: {
-    relationTo: 'users';
-    value: number | User;
-  } | null;
-  updatedAt: string;
-  createdAt: string;
-}
-/**
  * What employers buy. Archive a plan to stop selling it; past orders keep what they bought.
  *
  * This interface was referenced by `Config`'s JSON-Schema
@@ -736,6 +825,19 @@ export interface Plan {
    */
   acceptsCredits?: boolean | null;
   /**
+   * Add-ons that come with this plan at no extra charge.
+   */
+  includedAddOns?:
+    | {
+        addOn: number | AddOn;
+        /**
+         * Days the add-on lasts. Empty: the add-on’s own duration.
+         */
+        durationDays?: number | null;
+        id?: string | null;
+      }[]
+    | null;
+  /**
    * Only for voluntary jobs (a job type marked as volunteer).
    */
   isVolunteer?: boolean | null;
@@ -759,6 +861,74 @@ export interface Plan {
    * WordPress pricing-plan post id, for the import.
    */
   legacyId?: number | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * Extras on a listing, such as featuring it. Mark one inactive to stop selling it; past orders keep what they bought.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "add-ons".
+ */
+export interface AddOn {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  name: string;
+  /**
+   * Stable identifier used by seeds and imports, e.g. enhanced. Unique in the tenant.
+   */
+  key: string;
+  description?: string | null;
+  /**
+   * Whole minor units of the tenant currency: 2500 is Vt 2,500, or $25.00 in NZD.
+   */
+  price: number;
+  /**
+   * Copied from the tenant when the add-on is saved.
+   */
+  currency?: string | null;
+  /**
+   * How long the add-on lasts on a job, in days.
+   */
+  durationDays: number;
+  /**
+   * Where the add-on shows the job.
+   */
+  placement: 'featured-in-listings' | 'featured-in-category';
+  /**
+   * Other add-ons this one gives for free, each for its own duration.
+   */
+  grants?:
+    | {
+        addOn: number | AddOn;
+        durationDays: number;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * Inactive add-ons can no longer be bought. Plans and grants that give them still do.
+   */
+  active?: boolean | null;
+  /**
+   * Lower numbers are shown first.
+   */
+  sortOrder?: number | null;
+  /**
+   * WordPress id, for the import, when there is one.
+   */
+  legacyId?: number | null;
+  /**
+   * The JobRoller job meta key this replaces, e.g. _jr_featured-listings, for the import.
+   */
+  legacyKey?: string | null;
   createdBy?: {
     relationTo: 'users';
     value: number | User;
@@ -937,6 +1107,10 @@ export interface PayloadLockedDocument {
         value: number | Location;
       } | null)
     | ({
+        relationTo: 'organisations';
+        value: number | Organisation;
+      } | null)
+    | ({
         relationTo: 'job-categories';
         value: number | JobCategory;
       } | null)
@@ -959,6 +1133,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'plans';
         value: number | Plan;
+      } | null)
+    | ({
+        relationTo: 'add-ons';
+        value: number | AddOn;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -1033,6 +1211,7 @@ export interface UsersSelect<T extends boolean = true> {
   firstName?: T;
   lastName?: T;
   legacyPasswordHash?: T;
+  organisation?: T;
   tenants?:
     | T
     | {
@@ -1341,6 +1520,44 @@ export interface LocationsSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "organisations_select".
+ */
+export interface OrganisationsSelect<T extends boolean = true> {
+  tenant?: T;
+  name?: T;
+  slug?: T;
+  type?: T;
+  size?: T;
+  areasOfFocus?: T;
+  about?: T;
+  logo?: T;
+  cover?: T;
+  website?: T;
+  phone?: T;
+  location?: T;
+  socials?:
+    | T
+    | {
+        facebook?: T;
+        instagram?: T;
+        linkedin?: T;
+        x?: T;
+        youtube?: T;
+      };
+  listingRequested?: T;
+  approved?: T;
+  pageEnabled?: T;
+  canPayByInvoice?: T;
+  billingEmail?: T;
+  xeroContactCode?: T;
+  legacyId?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "job-categories_select".
  */
 export interface JobCategoriesSelect<T extends boolean = true> {
@@ -1425,12 +1642,48 @@ export interface PlansSelect<T extends boolean = true> {
   jobCredits?: T;
   creditExpiryDays?: T;
   acceptsCredits?: T;
+  includedAddOns?:
+    | T
+    | {
+        addOn?: T;
+        durationDays?: T;
+        id?: T;
+      };
   isVolunteer?: T;
   allowedJobTypes?: T;
   allowedJobCategories?: T;
   status?: T;
   sortOrder?: T;
   legacyId?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "add-ons_select".
+ */
+export interface AddOnsSelect<T extends boolean = true> {
+  tenant?: T;
+  name?: T;
+  key?: T;
+  description?: T;
+  price?: T;
+  currency?: T;
+  durationDays?: T;
+  placement?: T;
+  grants?:
+    | T
+    | {
+        addOn?: T;
+        durationDays?: T;
+        id?: T;
+      };
+  active?: T;
+  sortOrder?: T;
+  legacyId?: T;
+  legacyKey?: T;
   createdBy?: T;
   updatedBy?: T;
   updatedAt?: T;
@@ -1628,12 +1881,14 @@ export interface CollectionQueryWidget {
       | 'site-keys'
       | 'documents'
       | 'locations'
+      | 'organisations'
       | 'job-categories'
       | 'job-types'
       | 'job-tags'
       | 'salary-bands'
       | 'areas-of-focus'
-      | 'plans';
+      | 'plans'
+      | 'add-ons';
     where?:
       | {
           [k: string]: unknown;
@@ -1665,12 +1920,14 @@ export interface ActivityWidget {
           | 'site-keys'
           | 'documents'
           | 'locations'
+          | 'organisations'
           | 'job-categories'
           | 'job-types'
           | 'job-tags'
           | 'salary-bands'
           | 'areas-of-focus'
           | 'plans'
+          | 'add-ons'
         )[]
       | null;
   };
