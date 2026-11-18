@@ -6,6 +6,9 @@
 #   Push an RC tag (0.2.0-rc.1)      -> preview rc-0-2-0 on a fresh copy of prod, replaced by
 #                                      each later RC of that version. Released by release.yml.
 #   PR closed/merged, branch deleted -> its preview and Neon branch are deleted.
+#   Push after a migration was re-created -> the kept preview DB has a migration this branch
+#                                      no longer has, so the Neon branch is reset from prod.
+#   Run by hand with reset_preview   -> reset that one preview (Neon branch and Worker Preview).
 #   Daily, or run by hand            -> sweep: delete every preview/* Neon branch (and its
 #                                      Worker Preview) that has no open PR. See docs/INFRA.md.
 name: Preview
@@ -25,6 +28,10 @@ on:
         description: List the stale previews without deleting anything
         type: boolean
         default: true
+      reset_preview:
+        description: Reset one preview from prod. Give the git branch (e.g. feature/foo), not the preview name. Leave empty to sweep instead.
+        type: string
+        default: ''
 
 concurrency:
   group: preview-${{ github.event_name == 'delete' && github.event.ref || github.event_name == 'pull_request' && github.head_ref || (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && 'sweep' || github.ref_name }}
@@ -123,8 +130,33 @@ jobs:
               || { echo "::error::Neon branch limit reached, see the log for the existing preview/* branches"; exit 1; }
             neon branches create --name "$BRANCH" --parent main --output json > /dev/null
           fi
-          URI=$(neon connection-string "$BRANCH" --database-name neondb --role-name neondb_owner)
+          uri() { neon connection-string "$BRANCH" --database-name neondb --role-name neondb_owner; }
+          URI=$(uri)
           echo "::add-mask::$URI"
+
+          # A kept preview DB can hold a migration this branch re-created under a new name (PJ-90).
+          # Then `payload migrate` fails on objects that already exist, so start over from prod.
+          # Skipped for a fresh RC copy, and never for preview/rc-* or anything but preview/<name>.
+          if [ "$exists" != 0 ] && [ "$FRESH" != true ] && .github/scripts/preview-neon.mjs deletable "$BRANCH" 2> /dev/null; then
+            git ls-tree --name-only origin/main apps/cms/src/migrations/ | sed -n 's|.*/||; s|\.ts$||p' | grep -v '^index$' > "$RUNNER_TEMP/main-migrations.txt" || true
+            has_table=$(psql "$URI" -Atc "select to_regclass('public.payload_migrations') is not null")
+            if [ "$has_table" = t ]; then
+              psql "$URI" -Atc "select name from payload_migrations" > "$RUNNER_TEMP/applied.txt"
+            else
+              : > "$RUNNER_TEMP/applied.txt"
+            fi
+            decision=$(.github/scripts/preview-migrations.mjs decide "$RUNNER_TEMP/applied.txt" apps/cms/src/migrations "$RUNNER_TEMP/main-migrations.txt")
+            if [ "$decision" = reset ]; then
+              echo "::warning::$BRANCH has migrations this branch no longer has; resetting it from prod. Test data in this preview is lost."
+              neon branches delete "$BRANCH" > /dev/null
+              neon branches list --output json > "$LIST"
+              .github/scripts/preview-neon.mjs capacity "$LIST" "$LIMIT" "$BRANCH" \
+                || { echo "::error::Neon branch limit reached, see the log for the existing preview/* branches"; exit 1; }
+              neon branches create --name "$BRANCH" --parent main --output json > /dev/null
+              URI=$(uri)
+              echo "::add-mask::$URI"
+            fi
+          fi
           echo "url=$URI" >> "$GITHUB_OUTPUT"
 
       - uses: pnpm/action-setup@v4
@@ -271,7 +303,7 @@ jobs:
   # open PR. Catches whatever the event-driven cleanup missed. Manual runs default to a dry run.
   sweep:
     name: Sweep stale previews
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.reset_preview == '')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -307,3 +339,44 @@ jobs:
           while IFS= read -r BRANCH; do
             .github/scripts/delete-preview.sh "${BRANCH#preview/}"
           done < "$RUNNER_TEMP/stale.txt"
+
+  # By hand: throw away one preview's Neon branch and Worker Preview, then re-run its latest
+  # push run so it is rebuilt from prod. For a preview that is stuck with bad data.
+  reset:
+    name: Reset preview
+    if: github.event_name == 'workflow_dispatch' && inputs.reset_preview != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - name: Delete the preview, then rebuild it
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          PROJECT: ${{ vars.NEON_PROJECT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          INPUT: ${{ inputs.reset_preview }}
+          # The PR is open on purpose here, so skip the "still in use" check. Every other guard stays.
+          ALLOW_LIVE: 'true'
+        run: |
+          set -euo pipefail
+          # Must be a real git branch, checked before anything is deleted (the rebuild needs its runs).
+          .github/scripts/check-reset-branch.sh "$INPUT"
+          NAME=$(.github/scripts/preview-name.sh branch "$INPUT")
+          # delete-preview.sh refuses anything but preview/<name>, and preview/rc-*.
+          .github/scripts/delete-preview.sh "$NAME"
+          # Rebuild: re-run the branch's latest push run (its gate now sees the open PR).
+          run_id=$(gh run list --workflow preview.yml --branch "$INPUT" --event push --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+          if [ -n "$run_id" ]; then
+            gh run rerun "$run_id" && echo "Re-running Preview run $run_id for $INPUT"
+          else
+            echo "::warning::No push run found for '$INPUT'. Push to the branch to rebuild its preview."
+          fi
