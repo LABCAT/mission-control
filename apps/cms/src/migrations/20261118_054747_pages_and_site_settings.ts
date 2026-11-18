@@ -129,8 +129,8 @@ export async function down({ db, payload, req }: MigrateDownArgs): Promise<void>
   
   ALTER TABLE "payload_locked_documents_rels" DROP CONSTRAINT IF EXISTS "payload_locked_documents_rels_site_settings_fk";
   
-  DROP INDEX IF EXISTS "payload_locked_documents_rels_pages_id_idx";
-  DROP INDEX IF EXISTS "payload_locked_documents_rels_site_settings_id_idx";
-  ALTER TABLE "payload_locked_documents_rels" DROP COLUMN IF EXISTS "pages_id";
-  ALTER TABLE "payload_locked_documents_rels" DROP COLUMN IF EXISTS "site_settings_id";`)
+  DROP INDEX "payload_locked_documents_rels_pages_id_idx";
+  DROP INDEX "payload_locked_documents_rels_site_settings_id_idx";
+  ALTER TABLE "payload_locked_documents_rels" DROP COLUMN "pages_id";
+  ALTER TABLE "payload_locked_documents_rels" DROP COLUMN "site_settings_id";`)
 }

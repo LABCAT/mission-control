@@ -249,12 +249,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "legacy_password_hash": {
-          "name": "legacy_password_hash",
-          "type": "varchar",
-          "primaryKey": false,
-          "notNull": false
-        },
         "updated_at": {
           "name": "updated_at",
           "type": "timestamp(3) with time zone",
@@ -305,6 +299,18 @@
           "primaryKey": false,
           "notNull": false
         },
+        "_verified": {
+          "name": "_verified",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "_verificationtoken": {
+          "name": "_verificationtoken",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
         "login_attempts": {
           "name": "login_attempts",
           "type": "numeric",
@@ -315,6 +321,12 @@
         "lock_until": {
           "name": "lock_until",
           "type": "timestamp(3) with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "legacy_password_hash": {
+          "name": "legacy_password_hash",
+          "type": "varchar",
           "primaryKey": false,
           "notNull": false
         }
@@ -7494,7 +7506,8 @@
       "values": [
         "tenant-admin",
         "editor",
-        "employer"
+        "employer",
+        "seeker"
       ]
     },
     "public.enum_users_role": {
@@ -7556,6 +7569,6 @@
     "tables": {},
     "columns": {}
   },
-  "id": "16ec67a9-e7fa-4f1a-b1d4-1b42cf5601d0",
+  "id": "5c1e22ac-99ae-45ea-bc5d-5e1bf061b5fb",
   "prevId": "00000000-0000-0000-0000-000000000000"
 }
