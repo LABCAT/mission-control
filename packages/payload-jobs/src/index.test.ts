@@ -1,7 +1,7 @@
 import type { Config } from 'payload'
 import { describe, expect, it } from 'vitest'
 
-import { payloadJobs } from './index'
+import { EXPIRE_PLACEMENTS_TASK, jobPlacementsField, payloadJobs } from './index'
 import { TAXONOMY_SLUGS } from './taxonomies'
 
 const baseConfig = {
@@ -20,6 +20,7 @@ describe('payloadJobs', () => {
       'users',
       'locations',
       ...TAXONOMY_SLUGS,
+      'add-ons',
       'plans',
     ])
     expect(result.collections?.[0]?.fields.map((f) => ('name' in f ? f.name : null))).toContain(
@@ -54,5 +55,22 @@ describe('payloadJobs', () => {
         tenancy: 'single',
       },
     })
+  })
+
+  it('registers the placement expiry task only once a jobs collection has placements (PJ-19)', async () => {
+    const taskSlugs = (config: Config) => (config.jobs?.tasks ?? []).map((task) => task.slug)
+    const withJobs = (fields: unknown[]) =>
+      ({
+        ...baseConfig,
+        collections: [...(baseConfig.collections ?? []), { slug: 'jobs', fields }],
+        jobs: { tasks: [{ handler: () => ({ output: {} }), slug: 'heartbeat' }] },
+      }) as unknown as Config
+
+    expect(taskSlugs(await payloadJobs()(baseConfig))).toEqual([])
+    expect(taskSlugs(await payloadJobs()(withJobs([{ name: 'title', type: 'text' }])))).toEqual(['heartbeat'])
+    expect(taskSlugs(await payloadJobs()(withJobs([jobPlacementsField()])))).toEqual([
+      'heartbeat',
+      EXPIRE_PLACEMENTS_TASK,
+    ])
   })
 })
