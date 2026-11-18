@@ -10,7 +10,7 @@
     "dev": "pnpm --filter cms dev",
     "build": "pnpm --filter cms build",
     "typecheck": "pnpm -r --if-present typecheck",
-    "lint": "oxlint packages",
+    "lint": "oxlint packages tools",
     "test": "vitest run"
   },
   "devDependencies": {
