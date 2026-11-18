@@ -10,8 +10,9 @@ import {
   superAdminFieldAccess,
 } from '@mission-control/payload-jobs'
 
-// mission-control: ordinary users may only update themselves; tenant-admins may update
-// users in the tenants where they are tenant-admins. The plugin adds the tenant constraint too.
+// mission-control: ordinary users may only update themselves; tenant-admins may update users
+// in the tenants where they are tenant-admins, but never a super-admin, even a super-admin who
+// is a member of those tenants. The plugin adds its own tenant constraint on top.
 export const usersUpdateAccess: Access = ({ req }) => {
   const user = req.user as MissionControlUser | null | undefined
   if (!user) return false
@@ -20,9 +21,10 @@ export const usersUpdateAccess: Access = ({ req }) => {
   const tenantAdminIDs = getUserTenantIDsByRole(user, ['tenant-admin'])
   if (tenantAdminIDs.length > 0) {
     return {
-      'tenants.tenant': {
-        in: tenantAdminIDs,
-      },
+      and: [
+        { 'tenants.tenant': { in: tenantAdminIDs } },
+        { role: { not_equals: 'super-admin' } },
+      ],
     } as Where
   }
 
@@ -77,6 +79,7 @@ export const Users: CollectionConfig = {
   },
   access: {
     create: superAdminAccess,
+    // mission-control: super-admin only, so a tenant-admin can never delete a super-admin.
     delete: superAdminAccess,
     read: authenticatedAccess,
     update: usersUpdateAccess,
