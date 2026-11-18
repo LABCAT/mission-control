@@ -10,7 +10,7 @@ Orchestrator: session_01H9XNhzozJtHHbbc8KMd38e (replaces session_01H9XNhytrTqfZd
 | PJ-60 WP import framework | session_01H9XNhzHksGv6x3guC2Y9cE | pj-60-wp-import-framework | PR #42: CI green | $0.63 |
 | PJ-70 URL parity crawler | session_01H9XNhyQDYHaQY97Xektbzw | pj-70-url-parity | PR #43: CI green; Kinsho blocked (follow redirects, title check) → fixing | – |
 | RCL-86 Pagination (Astro) | session_01H9XNhxyWEqz3FKnUHMSwGq | rcl-pagination (rocketship) | rocketship PR #117 open, checks pass; not merged | – |
-| PJ-10 R2 media + documents | session_01H9XNi2ukPLFrf7UXZq26qo | pj-10-r2-media | PR #45 (migration): CI green; Kinsho blocked: no variants in Worker → waiting on founder (Cloudflare Images spend) | – |
+| PJ-10 R2 media + documents | session_01H9XNi2ukPLFrf7UXZq26qo | pj-10-r2-media | PR #45 (migration): CI green; Kinsho blocked: no variants in Worker → variants deferred to 1.x (PJ-85), updating PR | – |
 | PJ-81 Front-end account auth API | session_01H9XNhyACB3KEWtUM95Dxix | pj-81-account-auth | PR #46 (migration): CI green; Kinsho blocked (stale JWT membership) → fixing | – |
 | PJ-54 Xero plugin skeleton | session_01H9XNi2enTmhN3JrbmoUZFh | pj-54-xero-skeleton | PR #44: CI green; Kinsho blocked (non-atomic one-row check) → fixing | – |
 
@@ -46,3 +46,5 @@ Spend at 02:05 UTC: sub-sessions $8.04 (PJ-10 2.19, PJ-81 2.42, RCL-86 1.00, PJ-
   - Tickets: PJ-81 (auth API, dispatched), PJ-82 (lister dashboard) and PJ-83 (seeker dashboard) in backlog. PJ-30/31/33/46: move the employer-facing UI to PJ-82 before dispatch.
 - **Decision 3 (founder, 18 Nov): site managers** use the Payload admin, scoped to their tenant (cut-down menu, dashboard of pending jobs and recent orders). It may move into the Astro site later, so keep the business logic (moderation, approve, reports) in collections, endpoints and hooks, not in admin-only components.
 - **Decision 4 (founder, 18 Nov): rocketship-payload.** A generic package `packages/rocketship-payload`, publishable to npm later. Per-block subpath exports (`/blocks/<name>` Payload config, `/astro/<name>` component, `/types`); `RenderBlocks` with an explicit component map, so consumers only bundle what they import. Blocks take plain data and never fetch; a Payload Local API helper ships for in-process sites, and the job sites keep REST + site key. Inspiration: @payload-bites/astro-richtext-renderer, @orion-studios/payload-blocks, @grantcodes/astro-blocks. Ticket PJ-84 (backlog, held by the WIP rule).
+- **Decision 5 (founder, 18 Nov): production image variants are not in the MVP.** They're a 1.x feature (PJ-85, Cloudflare Images). The MVP stores originals in the Worker; variants are generated only under Node.
+- Founder usage: 76% of the 5-hour window at ~$11 estimated (18 Nov 02:10 UTC), so 1% ≈ $0.15.
