@@ -1,6 +1,7 @@
 /**
  * Money is always an integer number of minor units plus a currency code, never a float.
- * `currencyMinorUnits` comes from the tenant (0 for VUV, 2 for NZD).
+ * `currencyMinorUnits` comes from the tenant; when the tenant omits it, ICU supplies the
+ * currency's own exponent (0 for VUV, 2 for NZD).
  */
 import { resolveLocale } from './locale'
 
@@ -18,13 +19,20 @@ type FormatMoneyOptions = {
 
 const CURRENCY = /^[A-Z]{3}$/
 
-/** The ISO 4217 exponent for a currency. Defaults to 2, with the usual exceptions. */
+/**
+ * The ISO 4217 exponent for a currency, as ICU knows it: 0 for VUV, VND, XOF and JPY,
+ * 2 for USD, 3 for KWD, 4 for CLF. ICU is the only source of truth, so this can never drift
+ * from the exponent `formatMoney` formats with. A code Intl rejects (not three letters)
+ * throws a RangeError; an unknown three-letter code gets ICU's two-decimal fallback.
+ */
 export const currencyMinorUnits = (currency: string): number => {
-  const code = currency.toUpperCase()
+  const { maximumFractionDigits } = new Intl.NumberFormat('en', {
+    currency: currency.toUpperCase(),
+    style: 'currency',
+  }).resolvedOptions()
 
-  if (['VUV', 'JPY', 'KRW', 'CLP', 'ISK'].includes(code)) return 0
-  if (['BHD', 'JOD', 'KWD', 'OMR', 'TND'].includes(code)) return 3
-  return 2
+  // Intl types the field as optional; it is always present for a valid code.
+  return maximumFractionDigits ?? 2
 }
 
 const MINOR_UNIT_LIMIT = 3
@@ -57,13 +65,19 @@ export const formatMoney = (
     throw new TypeError(`Money needs an integer amount of minor units, got ${money.amountMinor}`)
   }
 
-  const units = minorUnits ?? currencyMinorUnits(currency)
-
-  if (!Number.isInteger(units) || units < 0 || units > MINOR_UNIT_LIMIT) {
+  // The tenant override is bounded like the CMS field; an exponent derived from ICU is ISO's
+  // own, and is used as ICU reports it.
+  if (
+    minorUnits !== undefined &&
+    minorUnits !== null &&
+    (!Number.isInteger(minorUnits) || minorUnits < 0 || minorUnits > MINOR_UNIT_LIMIT)
+  ) {
     throw new TypeError(
-      `Minor units must be a whole number from 0 to ${MINOR_UNIT_LIMIT}, got ${units}`,
+      `Minor units must be a whole number from 0 to ${MINOR_UNIT_LIMIT}, got ${minorUnits}`,
     )
   }
+
+  const units = minorUnits ?? currencyMinorUnits(currency)
 
   return new Intl.NumberFormat(locale, {
     currency,

@@ -46,6 +46,40 @@ jobs:
       - run: pnpm --filter cms build
       - run: pnpm --filter @mission-control/launchpad build
 
+  # Runtime evidence for the theme: the build job proves the demo's HTML exists, this loads it
+  # in a real browser and checks the page renders with the tenant tokens in effect.
+  launchpad-smoke:
+    name: Launchpad smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @mission-control/launchpad build
+      - name: Install Playwright
+        working-directory: ${{ runner.temp }}
+        run: |
+          npm init -y > /dev/null
+          npm install --no-audit --no-fund playwright@1.64.1
+          npx playwright install --with-deps chromium
+      - name: Load the demo in Chromium
+        env:
+          SMOKE_SCREENSHOT: ${{ runner.temp }}/launchpad-smoke.png
+        run: |
+          cp .github/scripts/launchpad-smoke.mjs "$RUNNER_TEMP/"
+          node "$RUNNER_TEMP/launchpad-smoke.mjs" packages/launchpad/demo/dist
+      - name: Upload screenshot
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: launchpad-smoke
+          path: ${{ runner.temp }}/launchpad-smoke.png
+          if-no-files-found: ignore
+
   # A down() that no longer matches its up() only shows up on a rollback, which nothing else
   # runs. This job migrates a disposable Postgres up, rolls every migration back, and
   # migrates up again, then compares the schema.

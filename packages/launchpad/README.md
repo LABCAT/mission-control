@@ -12,6 +12,10 @@ pnpm --filter @mission-control/launchpad typecheck  # astro check over src/ and 
 pnpm --filter @mission-control/launchpad test
 ```
 
+CI then loads the built demo in Chromium (`.github/scripts/launchpad-smoke.mjs`, job
+`Launchpad smoke`): the build proves the HTML exists, the smoke proves the page renders with
+the tenant tokens in effect.
+
 ## Tenant tokens
 
 `BaseLayout` takes a tenant document and writes its branding onto Rocketship tokens as a
@@ -26,7 +30,10 @@ class name and no Rocketship component is restyled.
 | derived         | `--rs-color-accent-contrast`, readable on the primary |
 
 Currency, timezone and locale always come from the tenant: `formatMoney` takes integer minor
-units plus the tenant currency and exponent, `formatDate` takes the tenant timezone.
+units plus the tenant currency and exponent, `formatDate` takes the tenant timezone. When a
+tenant omits `currencyMinorUnits`, the exponent comes from ICU
+(`Intl.NumberFormat(…, { style: 'currency', currency }).resolvedOptions().maximumFractionDigits`),
+so VUV, VND, XOF and JPY divide by nothing and USD divides by 100.
 
 ## Components
 

@@ -8,12 +8,39 @@ import {
 } from './money'
 
 describe('currencyMinorUnits', () => {
-  it('knows the common exponents', () => {
+  it('takes the exponent from ICU, not a hand-kept list', () => {
     expect(currencyMinorUnits('VUV')).toBe(0)
+    expect(currencyMinorUnits('VND')).toBe(0)
+    expect(currencyMinorUnits('XOF')).toBe(0)
     expect(currencyMinorUnits('JPY')).toBe(0)
+    expect(currencyMinorUnits('USD')).toBe(2)
     expect(currencyMinorUnits('NZD')).toBe(2)
-    expect(currencyMinorUnits('usd')).toBe(2)
     expect(currencyMinorUnits('KWD')).toBe(3)
+    expect(currencyMinorUnits('usd')).toBe(2)
+  })
+
+  it('agrees with the fraction digits of the currency format it is used for', () => {
+    for (const currency of ['VUV', 'VND', 'XOF', 'JPY', 'USD', 'NZD', 'KWD']) {
+      const { maximumFractionDigits } = new Intl.NumberFormat('en', {
+        currency,
+        style: 'currency',
+      }).resolvedOptions()
+
+      expect(currencyMinorUnits(currency)).toBe(maximumFractionDigits)
+    }
+  })
+
+  it('reports exponents outside the tenant range for the currencies that have them', () => {
+    // The CMS override is capped at 0-3, but ICU knows CLF has four decimals. The derived
+    // exponent is the currency's, so it is used as ICU reports it.
+    expect(currencyMinorUnits('CLF')).toBe(4)
+    expect(formatMoney({ amountMinor: 150000, currency: 'CLF' }, { locale: 'en' })).toBe(
+      'CLF\u00a015.0000',
+    )
+  })
+
+  it('falls back to two decimals for an unknown three-letter code, as ICU does', () => {
+    expect(currencyMinorUnits('XYZ')).toBe(2)
   })
 })
 
@@ -25,6 +52,42 @@ describe('formatMoney', () => {
     // 150000 minor units is 150000 VUV: VUV has no cents, so nothing is divided.
     expect(formatMoney({ amountMinor: 150000, currency: 'VUV' }, { locale: 'en' })).toBe(
       'VUV\u00a0150,000',
+    )
+  })
+
+  it('derives the omitted exponent from the currency itself', () => {
+    // A tenant may omit `currencyMinorUnits`; the currency then decides what 150000 minor
+    // units means. VUV, VND, XOF and JPY have none, so nothing is divided; USD has two.
+    const amount = 150000
+    const zeroDecimal = ['VUV', 'VND', 'XOF', 'JPY'] as const
+
+    for (const currency of zeroDecimal) {
+      const formatted = formatMoney({ amountMinor: amount, currency }, { locale: 'en' })
+
+      expect(formatted.endsWith('150,000')).toBe(true)
+      expect(formatted).not.toContain('.')
+    }
+
+    expect(formatMoney({ amountMinor: amount, currency: 'USD' }, { locale: 'en' })).toBe(
+      '$1,500.00',
+    )
+  })
+
+  it('formats the same minor units per the currency exponent it derived', () => {
+    const amount = 150000
+
+    for (const [currency, units] of [
+      ['VND', 0],
+      ['USD', 2],
+    ] as const) {
+      expect(formatMoney({ amountMinor: amount, currency }, { locale: 'en' })).toBe(
+        formatMoney({ amountMinor: amount, currency }, { locale: 'en', minorUnits: units }),
+      )
+    }
+
+    // The exponent is what differs, not the amount: 150000 VND is not 150000.00 USD.
+    expect(formatMoney({ amountMinor: amount, currency: 'USD' }, { locale: 'en' })).not.toBe(
+      formatMoney({ amountMinor: amount, currency: 'USD' }, { locale: 'en', minorUnits: 0 }),
     )
   })
 
