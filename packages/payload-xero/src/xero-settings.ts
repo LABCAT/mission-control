@@ -196,6 +196,29 @@ export const buildXeroSettingsCollection = (options: XeroSettingsOptions = {}): 
           { name: 'option', type: 'text', admin: { description: 'Tracking option applied to invoices.' } },
         ],
       },
+      {
+        name: 'connectedAt',
+        type: 'date',
+        admin: {
+          date: { pickerAppearance: 'dayAndTime' },
+          description: 'When Xero was last connected. Set by the callback.',
+          readOnly: true,
+        },
+      },
+      {
+        name: 'tokens',
+        type: 'group',
+        // Written and read only by `token-store.ts`, which decrypts them with the env key.
+        // The API and the admin panel never see the ciphertext.
+        access: { create: () => false, read: () => false, update: () => false },
+        admin: { hidden: true },
+        fields: [
+          { name: 'accessToken', type: 'text' },
+          { name: 'expiresAt', type: 'date' },
+          { name: 'refreshToken', type: 'text' },
+          { name: 'scope', type: 'text' },
+        ],
+      },
     ],
     versions: false,
   }
