@@ -99,6 +99,74 @@ describe.skipIf(!databaseUrl)('legacy WordPress login through payload.login', ()
     expect((await legacyHashOf(`lockme-${run}@example.com`)).legacyPasswordHash).toBe(PHPASS)
   })
 
+  it('imported user → reset: the old WordPress password is rejected and the new one works', async () => {
+    const email = `reset-${run}@example.com`
+    await addUser(email, PHPASS)
+
+    const token = await payload.forgotPassword({
+      collection: 'users',
+      data: { email },
+      disableEmail: true,
+    })
+    await payload.resetPassword({
+      collection: 'users',
+      data: { password: 'brand-new-pass', token },
+      overrideAccess: true,
+    })
+
+    expect((await legacyHashOf(email)).legacyPasswordHash).toBeNull()
+    await expect(
+      payload.login({ collection: 'users', data: { email, password: PASSWORD } }),
+    ).rejects.toThrow()
+    const ok = await payload.login({ collection: 'users', data: { email, password: 'brand-new-pass' } })
+    expect(ok.token).toBeTruthy()
+  })
+
+  it('clears the legacy hash when the password is changed through update', async () => {
+    const email = `change-${run}@example.com`
+    const created = await payload.create({ collection: 'users', data: { email, password: 'first-pass' }, overrideAccess: true })
+    // A stale WordPress hash somehow present next to a usable Payload password.
+    await payload.db.updateOne({
+      collection: 'users',
+      id: created.id,
+      data: { legacyPasswordHash: PHPASS },
+    } as never)
+
+    await payload.update({
+      collection: 'users',
+      id: created.id,
+      data: { password: 'second-pass' },
+      user: { ...created, collection: 'users' },
+      overrideAccess: false,
+    })
+
+    expect((await legacyHashOf(email)).legacyPasswordHash).toBeNull()
+    await expect(
+      payload.login({ collection: 'users', data: { email, password: PASSWORD } }),
+    ).rejects.toThrow()
+    expect(
+      (await payload.login({ collection: 'users', data: { email, password: 'second-pass' } })).token,
+    ).toBeTruthy()
+  })
+
+  it('ignores a stale legacy hash for users who already have a Payload password', async () => {
+    const email = `stale-${run}@example.com`
+    const created = await payload.create({ collection: 'users', data: { email, password: 'real-pass' }, overrideAccess: true })
+    await payload.db.updateOne({
+      collection: 'users',
+      id: created.id,
+      data: { legacyPasswordHash: PHPASS },
+    } as never)
+
+    // The old WordPress password must not log in, nor overwrite the real password.
+    await expect(
+      payload.login({ collection: 'users', data: { email, password: PASSWORD } }),
+    ).rejects.toThrow()
+    expect(
+      (await payload.login({ collection: 'users', data: { email, password: 'real-pass' }, overrideAccess: true })).token,
+    ).toBeTruthy()
+  })
+
   it('is hidden from the API: no one can read or write the field', () => {
     const field = payload.collections.users.config.fields.find(
       (f) => 'name' in f && f.name === 'legacyPasswordHash',

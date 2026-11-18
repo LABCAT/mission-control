@@ -1,7 +1,12 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto'
 
 import { compare } from 'bcryptjs'
-import type { CollectionBeforeOperationHook, CollectionConfig, Field } from 'payload'
+import type {
+  CollectionBeforeOperationHook,
+  CollectionBeforeValidateHook,
+  CollectionConfig,
+  Field,
+} from 'payload'
 
 /**
  * Verifier for imported WordPress password hashes (PJ-34).
@@ -175,9 +180,20 @@ export const legacyBeforeLoginOperation: CollectionBeforeOperationHook = async (
     pagination: false,
   })
   const user = docs[0] as
-    | { id: number | string; lockUntil?: string | null; legacyPasswordHash?: string | null }
+    | {
+        id: number | string
+        hash?: string | null
+        lockUntil?: string | null
+        legacyPasswordHash?: string | null
+        salt?: string | null
+      }
     | undefined
   if (!user) return args
+  // The legacy hash is only for users who have no usable Payload password yet. Once one exists
+  // (set, changed or reset) a stale WordPress hash must never overwrite it.
+  if (typeof user.hash === 'string' && user.hash && typeof user.salt === 'string' && user.salt) {
+    return args
+  }
   if (user.lockUntil && new Date(user.lockUntil).getTime() > Date.now()) return args
 
   const result = await legacyLoginHook({ user, password: data.password })
@@ -192,12 +208,28 @@ export const legacyBeforeLoginOperation: CollectionBeforeOperationHook = async (
   return args
 }
 
+/**
+ * Whenever a Payload password is set, changed or reset, the WordPress hash is dead.
+ * `password` is present on create/update through the API; the reset-password flow instead
+ * hands the hook the user row with the new `hash`/`salt` already generated and persists
+ * that same object, so mutating `data` there is what clears the column.
+ */
+export const clearLegacyHashOnPasswordSet: CollectionBeforeValidateHook = ({ data, operation }) => {
+  if (!data) return data
+  const passwordSet = typeof data.password === 'string' && data.password.length > 0
+  const resetHashed =
+    operation === 'update' && typeof data.hash === 'string' && typeof data.salt === 'string'
+  if (passwordSet || resetHashed) data[LEGACY_PASSWORD_FIELD] = null
+  return data
+}
+
 /** Adds the legacy hash field and the login hook to an auth collection. */
 export const withLegacyPasswords = (collection: CollectionConfig): CollectionConfig => ({
   ...collection,
   fields: [...collection.fields, legacyPasswordHashField],
   hooks: {
     ...collection.hooks,
+    beforeValidate: [...(collection.hooks?.beforeValidate ?? []), clearLegacyHashOnPasswordSet],
     beforeOperation: [...(collection.hooks?.beforeOperation ?? []), legacyBeforeLoginOperation],
   },
 })
