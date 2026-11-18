@@ -18,3 +18,9 @@ SELECT option_name, option_value FROM wp_options WHERE option_name = 'wp_page_fo
 -- 3. Expired jobs: shown with a notice, or hidden? (decision 17 context)
 SELECT option_name, LEFT(option_value, 300) AS value FROM wp_options
 WHERE option_name LIKE '%jr_options%' OR option_name LIKE '%expired%' LIMIT 20;
+
+-- 4. Users by last login year (PJ-62: which users to migrate)
+SELECT COALESCE(YEAR(um.meta_value), 'never') AS last_login_year, COUNT(*) AS users
+FROM wp_users u
+LEFT JOIN wp_usermeta um ON um.user_id = u.ID AND um.meta_key = 'last_login'
+GROUP BY last_login_year ORDER BY last_login_year DESC;
