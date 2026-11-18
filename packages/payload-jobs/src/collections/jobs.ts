@@ -228,6 +228,33 @@ export const jobStaffFieldAccess =
     return isStaffIn(user, tenantIDOf(doc?.tenant ?? (data as { tenant?: unknown } | undefined)?.tenant))
   }
 
+/**
+ * Read access for job fields the public site must never see (the applications email, the plan,
+ * the view count, which add-on bought a placement): staff of the job's tenant, super admins, and
+ * employers of the job's own organisation. Site keys, anonymous callers and seekers get the job
+ * without them. System code reads with `overrideAccess`; application submission (PJ-45) resolves
+ * the recipient server-side.
+ */
+export const jobPrivateFieldRead =
+  (tenantScoped: boolean): FieldAccess =>
+  ({ doc, req }) => {
+    const user = userOf(req)
+    if (!user) return false
+    if (isSuperAdmin(user)) return true
+    if (isSeekerOnly(user)) return false
+
+    const tenantID = tenantIDOf((doc as { tenant?: unknown } | undefined)?.tenant)
+    if (tenantScoped ? isStaffIn(user, tenantID) : hasAnyTenantRole(user, JOB_STAFF_ROLES)) return true
+
+    const organisation = getUserOrganisationID(user)
+    const jobOrganisation = tenantIDOf((doc as { organisation?: unknown } | undefined)?.organisation)
+    if (organisation === null || jobOrganisation === null) return false
+    if (String(organisation) !== String(jobOrganisation)) return false
+    return tenantScoped
+      ? tenantID !== null && hasTenantRole(user, tenantID, JOB_EMPLOYER_ROLES)
+      : hasAnyTenantRole(user, JOB_EMPLOYER_ROLES)
+  }
+
 /** Turn a title into a slug: lowercase ASCII words joined by single hyphens. */
 export const slugifyTitle = (title: string): string =>
   title
@@ -508,6 +535,7 @@ export const jobsCollection = ({
 }: JobsCollectionOptions = {}): CollectionConfig => {
   const staffOnly = jobStaffFieldAccess(tenantScoped)
   const staffWrite = { create: staffOnly, update: staffOnly }
+  const privateRead = jobPrivateFieldRead(tenantScoped)
 
   const fields: Field[] = [
     { name: 'title', type: 'text', localized: true, required: true },
@@ -596,6 +624,7 @@ export const jobsCollection = ({
         {
           name: 'applicationsRecipient',
           type: 'email',
+          access: { read: privateRead },
           admin: { description: 'Where online applications go. Empty: the organisation’s contacts.' },
         },
       ],
@@ -604,13 +633,14 @@ export const jobsCollection = ({
       name: 'plan',
       type: 'relationship',
       relationTo: 'plans' as CollectionSlug,
-      access: staffWrite,
+      access: { ...staffWrite, read: privateRead },
       admin: { description: 'Set at checkout.', position: 'sidebar' },
     },
-    jobPlacementsField(),
+    jobPlacementsField({ addOnRead: privateRead }),
     {
       name: 'views',
       type: 'number',
+      access: { read: privateRead },
       defaultValue: 0,
       min: 0,
       admin: { position: 'sidebar', readOnly: true },

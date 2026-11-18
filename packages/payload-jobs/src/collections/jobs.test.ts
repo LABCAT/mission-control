@@ -181,6 +181,73 @@ describe('jobs', () => {
     })
   })
 
+  const read = async (args: { req?: PayloadRequest; user?: unknown }) =>
+    (await harness.payload.findByID({
+      collection: JOBS_SLUG,
+      depth: 0,
+      id: ids.privateA,
+      overrideAccess: false,
+      req: args.req,
+      user: args.user as never,
+    })) as unknown as Record<string, unknown> & { placements: Record<string, unknown>[] }
+
+  describe('private fields', () => {
+    const PRIVATE = ['applicationsRecipient', 'plan', 'views'] as const
+
+    beforeAll(async () => {
+      ids.privateA = await job({
+        applicationsRecipient: 'hr@org-a.example.invalid',
+        organisation: ids.orgA,
+        placements: [{ addOn: null, expiresAt: at(5), placement: 'featured-in-listings', startsAt: at(-1) }],
+        plan: ids.regularA,
+        status: 'published',
+        tenant: harness.tenantA.id,
+        title: 'Private fields A',
+      })
+    })
+
+    it('hides the applications email, plan, views and placement add-on from site keys', async () => {
+      const req = await anonymousReq(siteKeyA)
+      const doc = await read({ req })
+      expect(doc.title).toBe('Private fields A')
+      for (const field of PRIVATE) expect(doc).not.toHaveProperty(field)
+      expect(doc.placements[0].placement).toBe('featured-in-listings')
+      expect(doc.placements[0]).toHaveProperty('expiresAt')
+      expect(doc.placements[0]).not.toHaveProperty('addOn')
+
+      const { docs } = await harness.payload.find({ collection: JOBS_SLUG, depth: 0, overrideAccess: false, req })
+      expect(docs.length).toBeGreaterThan(0)
+      for (const listed of docs) expect(listed).not.toHaveProperty('applicationsRecipient')
+    })
+
+    it('refuses to filter public reads by a private field (no guessing the email)', async () => {
+      await expect(
+        harness.payload.find({
+          collection: JOBS_SLUG,
+          overrideAccess: false,
+          req: await anonymousReq(siteKeyA),
+          where: { applicationsRecipient: { equals: 'hr@org-a.example.invalid' } },
+        }),
+      ).rejects.toThrow()
+    })
+
+    it('gives anonymous callers without a key nothing at all', async () => {
+      await expect(read({ req: await anonymousReq() })).rejects.toThrow()
+    })
+
+    it('shows them to the owning employer and to staff, but never to seekers or other employers', async () => {
+      for (const user of [users.employerA, users.editorA]) {
+        const doc = await read({ user })
+        expect(doc.applicationsRecipient).toBe('hr@org-a.example.invalid')
+        expect(doc.plan).toBe(ids.regularA)
+        expect(doc.views).toBe(0)
+        expect(doc.placements[0]).toHaveProperty('addOn')
+      }
+      await expect(read({ user: users.employerA2 })).rejects.toThrow()
+      await expect(read({ user: users.seekerA })).rejects.toThrow()
+    })
+  })
+
   describe('employers', () => {
     it('create drafts for their own organisation, without setting staff-only fields', async () => {
       const id = (

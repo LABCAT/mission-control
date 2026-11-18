@@ -46,7 +46,7 @@ const staffOnly: FieldAccess = ({ req }) => {
  * The `placements` field for the jobs collection (PJ-19). Paid orders fill it; staff may also
  * set it by hand (a manual "featured" flag). Employers can read it but not change it.
  */
-export const jobPlacementsField = (): Field => ({
+export const jobPlacementsField = ({ addOnRead }: { addOnRead?: FieldAccess } = {}): Field => ({
   name: PLACEMENTS_FIELD,
   type: 'array',
   access: { create: staffOnly, update: staffOnly },
@@ -58,7 +58,9 @@ export const jobPlacementsField = (): Field => ({
       required: true,
       options: [...ADD_ON_PLACEMENTS],
     },
-    { name: 'addOn', type: 'relationship', relationTo: ADD_ONS_SLUG },
+    // Which purchase made the placement is not for the public site; the jobs collection passes
+    // its private-field rule (`addOnRead`). The placement and its dates stay readable (badges).
+    { name: 'addOn', type: 'relationship', relationTo: ADD_ONS_SLUG, ...(addOnRead ? { access: { read: addOnRead } } : {}) },
     { name: 'startsAt', type: 'date', required: true },
     { name: 'expiresAt', type: 'date', index: true, required: true },
   ],
