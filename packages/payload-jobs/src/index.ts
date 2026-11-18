@@ -250,7 +250,9 @@ export const payloadJobs =
 
     return {
       ...config,
-      collections: [...(config.collections ?? []), ...taxonomies, addOns, plans],
+      // Plans before add-ons: Payload numbers compound index names in collection order, and
+      // plans' existing `tenant_key_idx` must keep its name.
+      collections: [...(config.collections ?? []), ...taxonomies, plans, addOns],
       jobs: jobsConfig,
       custom: {
         ...config.custom,

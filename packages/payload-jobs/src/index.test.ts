@@ -22,8 +22,8 @@ describe('payloadJobs', () => {
       'locations',
       'organisations',
       ...TAXONOMY_SLUGS,
-      'add-ons',
       'plans',
+      'add-ons',
     ])
     expect(result.collections?.[0]?.fields.map((f) => ('name' in f ? f.name : null))).toContain(
       'legacyPasswordHash',
