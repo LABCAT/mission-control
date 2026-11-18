@@ -2,6 +2,7 @@ import type { Config } from 'payload'
 import { describe, expect, it } from 'vitest'
 
 import { payloadJobs } from './index'
+import { TAXONOMY_SLUGS } from './taxonomies'
 
 const baseConfig = {
   collections: [{ slug: 'users', fields: [] }],
@@ -13,9 +14,13 @@ describe('payloadJobs', () => {
   it('keeps the existing config and custom keys when it registers itself', async () => {
     const result = await payloadJobs()(baseConfig)
 
-    // mission-control: the users collection is extended (legacy password support, PJ-34) and
-    // the plans collection is added (PJ-21).
-    expect(result.collections?.map((c) => c.slug)).toEqual(['users', 'plans'])
+    // mission-control: the users collection is extended (legacy password support, PJ-34), and
+    // the taxonomies (PJ-16) and plans (PJ-21) are added.
+    expect(result.collections?.map((collection) => collection.slug)).toEqual([
+      'users',
+      ...TAXONOMY_SLUGS,
+      'plans',
+    ])
     expect(result.collections?.[0]?.fields.map((f) => ('name' in f ? f.name : null))).toContain(
       'legacyPasswordHash',
     )

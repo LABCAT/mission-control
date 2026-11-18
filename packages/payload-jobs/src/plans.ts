@@ -21,6 +21,7 @@ import {
 import { isMinorUnits } from './money'
 import { PLAN_STATUSES, type PlanStatus } from './pricing'
 import { getSiteKeyHeader, resolveSiteKey } from './site-keys'
+import { TAXONOMY_SLUG_PATTERN } from './taxonomies'
 
 /**
  * Plans are what employers buy: a single listing, a pack of listings, a free volunteer
@@ -53,9 +54,6 @@ export const PLAN_EDITOR_ROLES = ['tenant-admin', 'editor'] as const satisfies r
 export const PLAN_BUYER_ROLES = ['employer'] as const satisfies readonly TenantRole[]
 
 export const PLAN_KEY_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
-
-/** Taxonomy slugs use the same kebab-case shape as plan keys. */
-export const TAXONOMY_SLUG_PATTERN = PLAN_KEY_PATTERN
 
 const ACTIVE_ONLY: Where = { status: { equals: 'active' satisfies PlanStatus } }
 

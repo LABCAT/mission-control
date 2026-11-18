@@ -22,6 +22,8 @@ pnpm typecheck && pnpm lint && TEST_DATABASE_URL=postgres://orbit:orbit@localhos
 
 Tests that push Payload schema require `TEST_DATABASE_URL` to point to a disposable database; do not use the CMS development database.
 
+Each `bootTestPayload` call pushes into its own throwaway schema (`mc_test_*`) and drops it on teardown, so one test database serves the whole suite and drizzle never offers one test's tables as a rename of another's.
+
 CI is `.github/workflows/mc-checks.yml`. Don't edit orbit's `ci.yml` or `release.yml`.
 
 The `Migration round-trip` job runs `.github/scripts/migration-round-trip.sh`, which migrates a disposable Postgres up, rolls every batch back down, and migrates up again, then compares the schema. Run it locally against the dev database with:

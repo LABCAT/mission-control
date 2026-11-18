@@ -3,6 +3,7 @@ import type { Config, GlobalConfig, Plugin } from 'payload'
 import { accountAuthEndpoints, type AccountAuthOptions } from './account-auth'
 import { withLegacyPasswords } from './legacy-password'
 import { planCollection, PLANS_SLUG } from './plans'
+import { TAXONOMY_SLUGS, taxonomyCollections } from './taxonomies'
 import { jobBoardSettingsGlobal, jobBoardTenantFields } from './tenancy'
 
 export * from './access'
@@ -15,6 +16,7 @@ export * from './plans-seed'
 export * from './pricing'
 export * from './rate-limit'
 export * from './site-keys'
+export * from './taxonomies'
 export * from './tenancy'
 
 export type TenancyMode = 'multi' | 'single'
@@ -24,7 +26,7 @@ export type TenancyMode = 'multi' | 'single'
  * every one of them in the multi-tenant plugin's `collections`, which adds their `tenant`
  * field; Payload otherwise rejects the config ("Field tenant was not found").
  */
-export const PAYLOAD_JOBS_TENANT_COLLECTIONS = [PLANS_SLUG] as const
+export const PAYLOAD_JOBS_TENANT_COLLECTIONS = [...TAXONOMY_SLUGS, PLANS_SLUG] as const
 
 export type PayloadJobsFeatures = {
   /** Job applications. The collection is added by a later task. Defaults to true. */
@@ -148,12 +150,16 @@ export const payloadJobs =
       }
     }
 
+    const existingSlugs = new Set(config.collections?.map((collection) => collection.slug))
+    const taxonomies = taxonomyCollections({ tenantScoped: tenancy === 'multi' }).filter(
+      (collection) => !existingSlugs.has(collection.slug),
+    )
     // Plans are always on: every job board sells listings, even if every plan is free.
     const plans = planCollection({ settingsSlug, tenantScoped: tenancy === 'multi', tenantsSlug })
 
     return {
       ...config,
-      collections: [...(config.collections ?? []), plans],
+      collections: [...(config.collections ?? []), ...taxonomies, plans],
       custom: {
         ...config.custom,
         payloadJobs: { enabled: true, tenancy, features },
