@@ -29,4 +29,5 @@ Sub-session spend so far: ~$1.05 (2 sessions not yet reporting).
 - PJ-54 was dispatched ahead of its D1 blocker (PJ-23): it's package-only and not wired into apps/cms, so it adds no migration.
 - PJ-10 assumes the R2 bucket `mission-control-media` exists (PJ-02 done). The proxy token has no R2 scope, so I couldn't verify it.
 - New sub-sessions run in the Orchestrator environment, so the proxy also injects Cloudflare auth for them.
-- Decision CVs (pending founder): recommended default is apply-form CV attachments only (PJ-25/45) and no seeker resumes or resume search in MVP (USAGE.md: no resume-access use recorded).
+- **Decision 1 (founder, 18 Nov): CVs.** Keep online apply going forward (PJ-25/45 store the application + CV). Do NOT migrate past applications or their CVs, so PJ-66 becomes alert subscribers only. Drop seeker resume profiles and resume search.
+  - What the legacy code shows (fxtender-pro): an application is a P2P link from job to *user*, plus meta (date, type, resume/cover-letter attachment IDs). The message text isn't stored. Only logged-in applicants are recorded, and guests are email-only. The lister dashboard queries `post_status => any`, so listers saw applications on expired jobs too.
