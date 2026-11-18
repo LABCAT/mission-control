@@ -15,7 +15,8 @@ import { multiTenantPlugin } from '@payloadcms/plugin-multi-tenant'
 import { Tenants } from './collections/Tenants'
 import { SiteKeys } from './collections/SiteKeys'
 import { SystemStatus } from './globals/SystemStatus'
-import { cloudflareEmailAdapter } from './email/cloudflare-email-adapter'
+// mission-control: email adapter lives in a generic package (PJ-92)
+import { cloudflareEmail } from '@mission-control/payload-email-cloudflare'
 import { heartbeatTask } from './jobs/heartbeat'
 import { Documents } from './collections/Documents'
 import { createMediaTransformers } from './media'
@@ -75,7 +76,7 @@ export default buildConfig({
   }),
   // mission-control: Cloudflare Email Sending adapter (PJ-09). Sends via the `EMAIL` binding in
   // Workers and logs to the console in dev; tenant emails go through sendTenantEmail.
-  email: cloudflareEmailAdapter,
+  email: cloudflareEmail(),
   globals: [SystemStatus],
   jobs: { tasks: [heartbeatTask] },
   // mission-control: resized media variants (PJ-10)
