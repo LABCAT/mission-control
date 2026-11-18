@@ -594,13 +594,31 @@ export const organisationsCollection = ({
   versions: false,
 })
 
-const tenantsOf = (user: Record<string, unknown> | undefined): (number | string)[] =>
-  idsOf((user?.tenants as { tenant?: unknown }[] | undefined)?.map((entry) => entry?.tenant))
+/**
+ * Tenants where the user may hold an organisation. Seeking is not enough: a seeker membership in
+ * the organisation's tenant would otherwise let staff hand them a profile to edit there.
+ */
+const organisationHoldersTenantsOf = (user: Record<string, unknown> | undefined): Set<string> => {
+  const tenants = new Set<string>()
+
+  for (const entry of (user?.tenants as { role?: TenantRole | null; tenant?: unknown }[] | undefined) ??
+    []) {
+    if (entry?.role !== 'employer' && !ORGANISATION_EDITOR_ROLES.includes(entry?.role as never)) {
+      continue
+    }
+
+    const id = tenantIDOf(entry?.tenant)
+    if (id !== null) tenants.add(String(id))
+  }
+
+  return tenants
+}
 
 /**
- * An employer's organisation must belong to a tenant that employer is a member of. Field access
- * only says *who* may set the link; without this an admin of tenant A could point a user at a
- * tenant B organisation, which would then leak that organisation to them on read.
+ * An employer's organisation must belong to a tenant where that user may hold one — an employer
+ * or staff membership, not a seeker one. Field access only says *who* may set the link; without
+ * this an admin of tenant A could point a user at a tenant B organisation, which would then let
+ * them edit it there under a seeker membership.
  *
  * A super admin acting has no tenant membership, so the link is theirs to set.
  */
@@ -640,11 +658,9 @@ export const organisationMatchesUserTenants: Validate = async (
       : submitted
 
   if ((req.user as Record<string, unknown> | null)?.role === 'super-admin') return true
-  if (tenantsOf(user ?? undefined).some((tenant) => String(tenant) === String(organisationTenant))) {
-    return true
-  }
+  if (organisationHoldersTenantsOf(user ?? undefined).has(String(organisationTenant))) return true
 
-  return 'Pick an organisation from one of this user’s tenants'
+  return 'Pick an organisation from a tenant where this user is an employer'
 }
 
 /**

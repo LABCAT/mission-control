@@ -355,6 +355,35 @@ describe('organisations integration', () => {
     ).resolves.toMatchObject({ id: employer.id })
   })
 
+  it('refuses to link an organisation to a user who only seeks in that tenant', async () => {
+    const employerAndSeeker = await makeUser('employer-and-seeker', [
+      { role: 'employer', tenant: harness.tenantA.id },
+      { role: 'seeker', tenant: harness.tenantB.id },
+    ])
+    const adminA = await makeUser('admin-a-seeker', [
+      { role: 'tenant-admin', tenant: harness.tenantA.id },
+    ])
+
+    await expect(
+      harness.payload.update({
+        collection: 'users',
+        data: { organisation: orgB.id } as never,
+        id: employerAndSeeker.id,
+        user: adminA as never,
+      }),
+    ).rejects.toThrow(/Organisation/)
+
+    // Their own tenant still works.
+    await expect(
+      harness.payload.update({
+        collection: 'users',
+        data: { organisation: orgA.id } as never,
+        id: employerAndSeeker.id,
+        user: adminA as never,
+      }),
+    ).resolves.toMatchObject({ id: employerAndSeeker.id })
+  })
+
   it('lets a super admin link an organisation without a tenant membership', async () => {
     const superAdmin = await makeUser('root-link', null, { role: 'super-admin' })
 
