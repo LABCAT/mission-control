@@ -21,6 +21,10 @@
       "localConnectionString": "postgres://orbit:orbit@localhost:8900/orbit"
     }
   ],
+  // mission-control: R2 bucket for the media and documents collections (PJ-10).
+  "r2_buckets": [
+    { "binding": "MEDIA", "bucket_name": "mission-control-media" }
+  ],
   // mission-control: Cloudflare Email Sending binding for the email adapter (PJ-09).
   // The sending domain is provisioned by PJ-03; until then the binding only exists here.
   "send_email": [

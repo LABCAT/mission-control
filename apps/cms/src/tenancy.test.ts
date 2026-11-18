@@ -9,6 +9,7 @@ import {
   type MissionControlUser,
 } from '@mission-control/payload-jobs'
 
+import { Documents } from './collections/Documents'
 import { Folders } from './collections/Folders'
 import { Media } from './collections/Media'
 import { Tags } from './collections/Tags'
@@ -51,7 +52,7 @@ const superAdmin: TestUser = {
 const buildConfig = async (): Promise<Config> => {
   const withJobs = await payloadJobs({ tenancy: 'multi' })({
     admin: { user: 'users' },
-    collections: [Users, Media, Folders, Tags, Tenants],
+    collections: [Users, Media, Folders, Tags, Tenants, Documents],
   } as Config)
 
   return (await multiTenantPlugin(multiTenantOptions)(withJobs)) as Config
@@ -315,7 +316,7 @@ describe('seekers (site accounts)', () => {
   it('denies a seeker the tenant content their membership would otherwise open', async () => {
     const config = await buildConfig()
 
-    for (const slug of ['media', 'folders', 'tags']) {
+    for (const slug of ['media', 'folders', 'tags', 'documents']) {
       for (const operation of ['read', 'update', 'delete'] as const) {
         expect(await collectionAccess(config, operation, slug, seeker), `${slug}.${operation}`).toBe(
           false,

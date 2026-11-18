@@ -16,6 +16,9 @@ const tenantContentOverride = denySeekerOnly(siteKeyAccessOverride)
  */
 export const multiTenantOptions = {
   collections: {
+    // mission-control: documents are private to tenant members and not exposed to site keys;
+    // seekers (site accounts, PJ-81) are denied.
+    documents: { accessResultOverride: denySeekerOnly(({ accessResult }) => accessResult) },
     folders: { accessResultOverride: tenantContentOverride },
     media: { accessResultOverride: tenantContentOverride },
     tags: { accessResultOverride: tenantContentOverride },
