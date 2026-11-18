@@ -134,6 +134,8 @@ Tokens are stored in a hidden `tokens` group on the settings row, encrypted with
 
 Refresh happens automatically: `getXeroAccessToken` returns the stored access token while it has more than a minute left, and otherwise refreshes it. Xero rotates the refresh token on every refresh, and the old one dies as soon as Xero answers, so the new pair is written back before the call returns.
 
+Because that rotation is destructive, refresh is single-flight per settings row. A request takes the row's short lease with one conditional update that also compares the refresh token it is about to spend, so of any number of concurrent requests exactly one calls Xero. The others wait for the winner to save and then use its tokens. A lease that is never released — a request that died mid-refresh — expires on its own after `XERO_REFRESH_LEASE_MS` (10 seconds), so it cannot block the tenant forever.
+
 ```ts
 import { findSettingsWithTokens, getXeroAccessToken } from '@mission-control/payload-xero'
 

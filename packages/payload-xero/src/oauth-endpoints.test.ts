@@ -85,6 +85,26 @@ const issueTokens = (body: Record<string, string>) => {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' }, status })
 
+/**
+ * Holds refresh token exchanges inside Xero until the test releases them, so two refreshes can
+ * genuinely overlap instead of running one after the other in a single tick.
+ */
+let refreshGate: null | { release: () => void; wait: Promise<void> } = null
+
+const openRefreshGate = (): (() => void) => {
+  const gate: { release: () => void; wait: Promise<void> } = {
+    release: () => {},
+    wait: Promise.resolve(),
+  }
+
+  gate.wait = new Promise<void>((resolve) => {
+    gate.release = resolve
+  })
+  refreshGate = gate
+
+  return gate.release
+}
+
 const xeroFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
   const url = String(input)
   const method = init?.method ?? 'GET'
@@ -102,6 +122,12 @@ const xeroFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<
     if (body?.grant_type === 'refresh_token') {
       // Xero invalidates the old refresh token the moment it answers.
       if (!body.refresh_token || !liveRefreshTokens.has(body.refresh_token)) {
+        return json({ error: 'invalid_grant' }, 400)
+      }
+
+      if (refreshGate) await refreshGate.wait
+      // Re-check after the gate: a token spent while this call was suspended is dead.
+      if (!liveRefreshTokens.has(body.refresh_token)) {
         return json({ error: 'invalid_grant' }, 400)
       }
       liveRefreshTokens.delete(body.refresh_token)
@@ -206,6 +232,8 @@ const goodState = async (tenant: Tenant, user: number) => {
 /** A row whose access token has expired but whose refresh token is live. */
 const expiredRow = async (tenant: Tenant, overrides: Record<string, unknown> = {}) => {
   const settings = (await settingsFor(tenant))!
+  const refreshToken = (overrides.refreshToken as string | undefined) ?? 'refresh-live-1'
+
   await saveXeroTokens({
     collection: 'xero-settings',
     encryptionKey: ENCRYPTION_KEY,
@@ -214,12 +242,12 @@ const expiredRow = async (tenant: Tenant, overrides: Record<string, unknown> = {
     tokens: {
       accessToken: 'access-stale',
       expiresAt: new Date(Date.now() - 1000).toISOString(),
-      refreshToken: 'refresh-live-1',
+      refreshToken,
       scope: null,
       ...overrides,
     } as never,
   })
-  liveRefreshTokens.add('refresh-live-1')
+  liveRefreshTokens.add(refreshToken)
 
   return (await findSettingsWithTokens({
     collection: 'xero-settings',
@@ -658,6 +686,156 @@ describe('Xero OAuth endpoints', () => {
           settings: settings as never,
         }),
       ).rejects.toMatchObject({ code: 'not_connected', status: 409 })
+    })
+
+    it('refreshes once when two requests race on the same expired token', async () => {
+      const settings = await expiredRow(tenantA, { refreshToken: 'refresh-race-1' })
+      xeroCalls.length = 0
+
+      // Hold Xero's answer so both requests are in flight before either one saves.
+      const release = openRefreshGate()
+      try {
+        const both = Promise.all([
+          getXeroAccessToken({ collection: 'xero-settings', oauth, payload, settings }),
+          getXeroAccessToken({ collection: 'xero-settings', oauth, payload, settings }),
+        ])
+
+        // Let the winner reach Xero and the loser bounce off the lease.
+        await new Promise((resolve) => setTimeout(resolve, 300))
+        release()
+
+        const results = await both
+
+        // Exactly one request spent the rotating refresh token.
+        const refreshCalls = xeroCalls.filter((c) => c.body?.grant_type === 'refresh_token')
+        expect(refreshCalls).toHaveLength(1)
+        expect(refreshCalls[0].body?.refresh_token).toBe('refresh-race-1')
+
+        // Both callers get a usable token: one refreshed it, the other read the winner's.
+        expect(results.map((result) => result.accessToken)).toEqual([
+          expect.stringMatching(/^access-/),
+          expect.stringMatching(/^access-/),
+        ])
+        // One refreshed it; the other read the result.
+        expect(results.filter((result) => result.refreshed)).toHaveLength(1)
+      } finally {
+        refreshGate = null
+      }
+
+      // The winner's rotation was persisted exactly once, so a later refresh uses the new token.
+      const stored = (await settingsFor(tenantA))!
+      expect(stored.tokens.refreshLockToken ?? null).toBeNull()
+      expect(stored.tokens.refreshLockedUntil ?? null).toBeNull()
+
+      xeroCalls.length = 0
+      const later = await getXeroAccessToken({
+        collection: 'xero-settings',
+        oauth,
+        payload,
+        settings: {
+          ...(await findSettingsWithTokens({ collection: 'xero-settings', id: stored.id, payload }))!,
+          tokens: {
+            ...(stored as never as { tokens: Record<string, unknown> }).tokens,
+            expiresAt: new Date(Date.now() - 1000).toISOString(),
+          },
+        },
+      })
+      expect(later.refreshed).toBe(true)
+      expect(xeroCalls[0].body?.refresh_token).not.toBe('refresh-race-1')
+    })
+
+    it('does not spend a token a peer has already rotated', async () => {
+      const settings = await expiredRow(tenantA, { refreshToken: 'refresh-stale-read' })
+      xeroCalls.length = 0
+
+      // Another request refreshes and saves first, leaving no lease behind.
+      const winner = await getXeroAccessToken({ collection: 'xero-settings', oauth, payload, settings })
+      const rotated = (await settingsFor(tenantA))!
+      expect(rotated.tokens.refreshToken).not.toBe(settings.tokens?.refreshToken)
+
+      // This caller still holds the row as it was before that save: an expired access token and
+      // the refresh token that has already been spent. It must not send that token to Xero.
+      xeroCalls.length = 0
+      const loser = await getXeroAccessToken({ collection: 'xero-settings', oauth, payload, settings })
+
+      expect(xeroCalls.filter((c) => c.body?.grant_type === 'refresh_token')).toHaveLength(0)
+      expect(loser.refreshed).toBe(false)
+      expect(loser.accessToken).toBe(winner.accessToken)
+    })
+
+    it('refreshes once when many requests race', async () => {
+      const settings = await expiredRow(tenantA, { refreshToken: 'refresh-race-many' })
+      xeroCalls.length = 0
+
+      const release = openRefreshGate()
+      try {
+        const all = Promise.all(
+          Array.from({ length: 5 }, () =>
+            getXeroAccessToken({ collection: 'xero-settings', oauth, payload, settings }),
+          ),
+        )
+
+        await new Promise((resolve) => setTimeout(resolve, 300))
+        release()
+
+        const results = await all
+        expect(xeroCalls.filter((c) => c.body?.grant_type === 'refresh_token')).toHaveLength(1)
+        expect(results.every((result) => result.accessToken.startsWith('access-'))).toBe(true)
+        expect(results.filter((result) => result.refreshed)).toHaveLength(1)
+      } finally {
+        refreshGate = null
+      }
+    })
+
+    it('hands the lease back when Xero refuses the refresh', async () => {
+      // The stored refresh token is not one Xero will accept, so the call fails.
+      const settings = await expiredRow(tenantA, { refreshToken: 'refresh-dead' })
+      liveRefreshTokens.delete('refresh-dead')
+      xeroCalls.length = 0
+
+      await expect(
+        getXeroAccessToken({ collection: 'xero-settings', oauth, payload, settings }),
+      ).rejects.toMatchObject({ code: 'refresh_failed' })
+
+      const stored = (await settingsFor(tenantA))!
+      expect(stored.tokens.refreshLockToken ?? null).toBeNull()
+      expect(stored.tokens.refreshLockedUntil ?? null).toBeNull()
+    })
+
+    it('takes over a lease left behind by a request that died', async () => {
+      const settings = await expiredRow(tenantA, { refreshToken: 'refresh-orphan' })
+      xeroCalls.length = 0
+
+      // A lease in the past is nobody's: the next refresh must not wait for it.
+      await payload.update({
+        collection: 'xero-settings',
+        data: { tokens: { refreshLockToken: 'gone', refreshLockedUntil: Date.now() - 1000 } },
+        id: settings.id,
+        overrideAccess: true,
+      })
+
+      const result = await getXeroAccessToken({ collection: 'xero-settings', oauth, payload, settings })
+
+      expect(result.refreshed).toBe(true)
+      expect(xeroCalls.filter((c) => c.body?.grant_type === 'refresh_token')).toHaveLength(1)
+    })
+
+    it('leaves the tokens out of the API when a refresh happens', async () => {
+      const settings = await expiredRow(tenantA, { refreshToken: 'refresh-hidden' })
+      await getXeroAccessToken({ collection: 'xero-settings', oauth, payload, settings })
+
+      const { docs } = await payload.find({
+        collection: 'xero-settings',
+        overrideAccess: false,
+        user: {
+          collection: 'users',
+          ...adminA.user,
+          tenants: [{ role: 'tenant-admin', tenant: tenantA.id }],
+        } as never,
+      })
+
+      expect(docs[0]).not.toHaveProperty('tokens')
+      expect(JSON.stringify(docs[0])).not.toContain('v1.')
     })
 
     it('treats a token that will not decrypt as absent', async () => {

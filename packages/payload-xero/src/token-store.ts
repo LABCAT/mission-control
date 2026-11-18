@@ -8,6 +8,14 @@
  *
  * Xero rotates the refresh token on every refresh: the old one stops working as soon as Xero
  * answers. Every refresh is therefore written straight back to the settings row.
+ *
+ * That rotation makes concurrent refreshes dangerous: two requests holding the same expired
+ * access token would both spend the same refresh token, and the slower one would be refused
+ * with the token the faster one already retired. Refresh is therefore single-flight per
+ * settings row. A request takes the row's short lease with one conditional `UPDATE` that also
+ * compares the refresh token it is about to spend, so exactly one request calls Xero; the
+ * others wait for that request to save and then read its tokens. The lease expires on its own,
+ * so a request that dies mid-refresh never blocks the next one.
  */
 
 import type { Payload } from 'payload'
@@ -21,11 +29,22 @@ import {
   XERO_REFRESH_MARGIN_MS,
 } from './oauth'
 
+/** How long one request may hold the refresh lease before another may take it over. */
+export const XERO_REFRESH_LEASE_MS = 10_000
+/** How often a waiting request re-reads the row. */
+const REFRESH_POLL_MS = 100
+/** Added to the lease when waiting, so a wait outlives the holder rather than the holder's peer. */
+const REFRESH_WAIT_SLACK_MS = 1_000
+
 export type XeroStoredTokens = {
   /** Encrypted access token. */
   accessToken?: null | string
   /** ISO timestamp of the access token's expiry. */
   expiresAt?: null | string
+  /** Identifies the request holding the refresh lease; null when nobody does. */
+  refreshLockToken?: null | string
+  /** Epoch milliseconds after which the refresh lease may be taken over. */
+  refreshLockedUntil?: null | number
   /** Encrypted refresh token. */
   refreshToken?: null | string
   /** Scopes Xero granted, space separated. */
@@ -76,6 +95,21 @@ export type SaveTokensArgs = {
   tokens: XeroTokenSet
 }
 
+/** The encrypted columns for a token set, as the `tokens` group stores them. */
+const encryptedTokenColumns = async (
+  tokens: XeroTokenSet,
+  key: string,
+  context: string,
+): Promise<XeroStoredTokens> => ({
+  accessToken: await encryptToken(tokens.accessToken, key, context),
+  expiresAt: tokens.expiresAt,
+  // A completed write ends any refresh lease this row carried.
+  refreshLockToken: null,
+  refreshLockedUntil: null,
+  refreshToken: tokens.refreshToken ? await encryptToken(tokens.refreshToken, key, context) : null,
+  scope: tokens.scope,
+})
+
 /** Encrypt and store a token set on the settings row. Returns the updated row. */
 export const saveXeroTokens = async ({
   collection,
@@ -86,20 +120,12 @@ export const saveXeroTokens = async ({
   tokens,
 }: SaveTokensArgs): Promise<XeroSettingsDoc> => {
   const key = requireKey(encryptionKey)
-  const context = tokenContext(settings.id)
 
   return (await payload.update({
     collection,
     data: {
       ...data,
-      tokens: {
-        accessToken: await encryptToken(tokens.accessToken, key, context),
-        expiresAt: tokens.expiresAt,
-        refreshToken: tokens.refreshToken
-          ? await encryptToken(tokens.refreshToken, key, context)
-          : null,
-        scope: tokens.scope,
-      },
+      tokens: await encryptedTokenColumns(tokens, key, tokenContext(settings.id)),
     },
     id: settings.id,
     overrideAccess: true,
@@ -165,9 +191,159 @@ export type AccessTokenArgs = {
   settings: XeroSettingsDoc
 }
 
+/** A decrypted view of the row's token columns. */
+type StoredTokens = {
+  accessToken: null | string
+  expiresAt: null | string
+  refreshToken: null | string
+  /** The encrypted refresh token, which is what the compare-and-swap matches on. */
+  refreshTokenCipher: null | string
+}
+
+const readStoredTokens = async (
+  stored: null | XeroStoredTokens | undefined,
+  key: string,
+  context: string,
+): Promise<StoredTokens> => ({
+  accessToken: await decryptOrNull(stored?.accessToken, key, context),
+  expiresAt: stored?.expiresAt ?? null,
+  refreshToken: await decryptOrNull(stored?.refreshToken, key, context),
+  refreshTokenCipher: stored?.refreshToken ?? null,
+})
+
+/** True when the stored access token lives past the refresh margin. */
+const isLive = (tokens: StoredTokens, now: number): boolean =>
+  Boolean(
+    tokens.accessToken &&
+      tokens.expiresAt &&
+      Date.parse(tokens.expiresAt) - XERO_REFRESH_MARGIN_MS > now,
+  )
+
+const sleep = async (ms: number): Promise<void> =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms)
+  })
+
+/**
+ * Take the row's refresh lease, but only while the refresh token is still the one this request
+ * read and nobody else holds an unexpired lease. One conditional `UPDATE` decides all of that,
+ * so of any number of concurrent requests exactly one wins. Returns the lease token on success.
+ *
+ * The lease runs on the wall clock rather than the caller's `now`: it is about real requests
+ * racing, not about the access token's lifetime.
+ */
+const claimRefreshLease = async ({
+  collection,
+  payload,
+  refreshTokenCipher,
+  settingsID,
+}: {
+  collection: string
+  payload: Payload
+  refreshTokenCipher: null | string
+  settingsID: number | string
+}): Promise<null | string> => {
+  const leaseToken = crypto.randomUUID()
+
+  const claimed = await payload.db.updateOne({
+    collection,
+    data: {
+      tokens: {
+        refreshLockToken: leaseToken,
+        refreshLockedUntil: Date.now() + XERO_REFRESH_LEASE_MS,
+      },
+    },
+    where: {
+      and: [
+        { id: { equals: settingsID } },
+        { 'tokens.refreshToken': { equals: refreshTokenCipher } },
+        {
+          or: [
+            { 'tokens.refreshLockedUntil': { exists: false } },
+            { 'tokens.refreshLockedUntil': { less_than: Date.now() } },
+          ],
+        },
+      ],
+    },
+  })
+
+  return claimed ? leaseToken : null
+}
+
+/** Give the lease back after a failed refresh, so a retry need not wait it out. */
+const releaseRefreshLease = async ({
+  collection,
+  leaseToken,
+  payload,
+  settingsID,
+}: {
+  collection: string
+  leaseToken: string
+  payload: Payload
+  settingsID: number | string
+}): Promise<void> => {
+  try {
+    await payload.db.updateOne({
+      collection,
+      data: { tokens: { refreshLockToken: null, refreshLockedUntil: null } },
+      where: {
+        and: [
+          { id: { equals: settingsID } },
+          { 'tokens.refreshLockToken': { equals: leaseToken } },
+        ],
+      },
+    })
+  } catch {
+    // The lease expires by itself; failing to hand it back only delays the next refresh.
+  }
+}
+
+/** The row as it is in the database now, tokens included. */
+const reloadSettings = ({
+  collection,
+  id,
+  payload,
+}: {
+  collection: string
+  id: number | string
+  payload: Payload
+}): Promise<null | XeroSettingsDoc> => findSettingsWithTokens({ collection, id, payload })
+
+/**
+ * Wait for whoever holds the lease to save its tokens, then return the reloaded row. The wait
+ * is bounded by the caller's deadline, so a holder that dies never hangs this request.
+ */
+const waitForLease = async ({
+  collection,
+  deadline,
+  payload,
+  settings,
+}: {
+  collection: string
+  deadline: number
+  payload: Payload
+  settings: XeroSettingsDoc
+}): Promise<null | XeroSettingsDoc> => {
+  while (Date.now() < deadline) {
+    await sleep(REFRESH_POLL_MS)
+
+    const reloaded = await reloadSettings({ collection, id: settings.id, payload })
+    if (!reloaded) return null
+
+    const heldUntil = reloaded.tokens?.refreshLockedUntil ?? 0
+    // The holder either saved (tokens changed, lease cleared) or gave up (lease cleared).
+    if (!heldUntil || heldUntil <= Date.now()) return reloaded
+  }
+
+  return reloadSettings({ collection, id: settings.id, payload })
+}
+
 /**
  * A currently valid access token for this tenant, refreshing it when it is missing, expired
  * or about to expire. Throws `not_connected` when the tenant has never connected.
+ *
+ * Only one request per settings row refreshes at a time. A request that loses the race waits
+ * for the winner's tokens instead of spending a refresh token Xero has already retired.
  */
 export const getXeroAccessToken = async ({
   collection,
@@ -177,36 +353,84 @@ export const getXeroAccessToken = async ({
   settings,
 }: AccessTokenArgs): Promise<XeroAccessToken> => {
   const key = requireKey(oauth.encryptionKey)
-  const context = tokenContext(settings.id)
-  const stored = settings.tokens
+  // One deadline for the whole call, so a row that stays busy cannot hold the request open
+  // for several leases in a row.
+  const deadline = Date.now() + XERO_REFRESH_LEASE_MS + REFRESH_WAIT_SLACK_MS
+  let current = settings
 
-  const accessToken = await decryptOrNull(stored?.accessToken, key, context)
-  const storedExpiry = stored?.expiresAt ?? null
-  const expiry = storedExpiry ? Date.parse(storedExpiry) : Number.NaN
+  for (;;) {
+    const tokens = await readStoredTokens(current.tokens, key, tokenContext(current.id))
 
-  if (accessToken && storedExpiry && expiry - XERO_REFRESH_MARGIN_MS > now) {
-    return { accessToken, expiresAt: storedExpiry, refreshed: false, settings }
+    if (isLive(tokens, now)) {
+      return {
+        accessToken: tokens.accessToken as string,
+        expiresAt: tokens.expiresAt as string,
+        refreshed: false,
+        settings: current,
+      }
+    }
+
+    if (!tokens.refreshToken) {
+      throw new XeroOAuthError(
+        'not_connected',
+        'Xero is not connected for this tenant. Connect it from the Xero settings.',
+      )
+    }
+
+    if (Date.now() >= deadline) {
+      // Out of time with a peer still refreshing. Report that rather than spend a refresh
+      // token that may already be retired.
+      throw new XeroOAuthError(
+        'refresh_failed',
+        'The Xero connection is being refreshed by another request. Try again.',
+      )
+    }
+
+    const leaseToken = await claimRefreshLease({
+      collection,
+      payload,
+      refreshTokenCipher: tokens.refreshTokenCipher,
+      settingsID: current.id,
+    })
+
+    if (!leaseToken) {
+      // Another request holds the lease, or has just finished with it. Take its result.
+      const reloaded = await waitForLease({ collection, deadline, payload, settings: current })
+      if (!reloaded) {
+        throw new XeroOAuthError('settings_not_found', 'These Xero settings no longer exist.')
+      }
+
+      current = reloaded
+      continue
+    }
+
+    try {
+      const refreshedTokens = await refreshAccessToken(oauth, {
+        now,
+        refreshToken: tokens.refreshToken,
+      })
+      // Xero may not repeat the refresh token; the old one stays valid only until it does, so
+      // keep the current one when the response has none.
+      const updated = await saveXeroTokens({
+        collection,
+        encryptionKey: oauth.encryptionKey,
+        payload,
+        settings: current,
+        tokens: {
+          ...refreshedTokens,
+          refreshToken: refreshedTokens.refreshToken ?? tokens.refreshToken,
+        },
+      })
+
+      return {
+        accessToken: refreshedTokens.accessToken,
+        expiresAt: refreshedTokens.expiresAt,
+        refreshed: true,
+        settings: updated,
+      }
+    } catch (error) {
+      await releaseRefreshLease({ collection, leaseToken, payload, settingsID: current.id })
+      throw error
+    }
   }
-
-  const refreshToken = await decryptOrNull(stored?.refreshToken, key, context)
-
-  if (!refreshToken) {
-    throw new XeroOAuthError(
-      'not_connected',
-      'Xero is not connected for this tenant. Connect it from the Xero settings.',
-    )
-  }
-
-  const tokens = await refreshAccessToken(oauth, { now, refreshToken })
-  // Xero may not repeat the refresh token; the old one stays valid only until it does, so keep
-  // the current one when the response has none.
-  const updated = await saveXeroTokens({
-    collection,
-    encryptionKey: oauth.encryptionKey,
-    payload,
-    settings,
-    tokens: { ...tokens, refreshToken: tokens.refreshToken ?? refreshToken },
-  })
-
-  return { accessToken: tokens.accessToken, expiresAt: tokens.expiresAt, refreshed: true, settings: updated }
 }

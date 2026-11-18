@@ -217,6 +217,10 @@ export const buildXeroSettingsCollection = (options: XeroSettingsOptions = {}): 
           { name: 'expiresAt', type: 'date' },
           { name: 'refreshToken', type: 'text' },
           { name: 'scope', type: 'text' },
+          // Single-flight refresh: one request leases the row while it spends the rotating
+          // refresh token, so concurrent requests cannot retire each other's token.
+          { name: 'refreshLockToken', type: 'text' },
+          { name: 'refreshLockedUntil', type: 'number' },
         ],
       },
     ],
