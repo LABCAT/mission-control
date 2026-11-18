@@ -54,7 +54,7 @@ const tenantsCollection = (extraFields: Field[]): CollectionConfig => ({
   versions: false,
 })
 
-const Users: CollectionConfig = {
+const Users = (extraFields: Field[] = []): CollectionConfig => ({
   slug: 'users',
   admin: { useAsTitle: 'email' },
   auth: true,
@@ -73,9 +73,10 @@ const Users: CollectionConfig = {
       options: globalRoleOptions,
       saveToJWT: true,
     },
+    ...extraFields,
   ],
   versions: false,
-}
+})
 
 type BootTestPayloadArgs = {
   /** Tenant-scoped collections under test, scoped by the multi-tenant plugin. */
@@ -88,6 +89,8 @@ type BootTestPayloadArgs = {
   tenantData?: (which: 'A' | 'B') => Record<string, unknown>
   /** Extra fields on the tenants collection. */
   tenantFields?: Field[]
+  /** Extra fields on the users collection, e.g. `organisation` (PJ-18). */
+  userFields?: Field[]
 }
 
 let bootCount = 0
@@ -108,6 +111,7 @@ export const bootTestPayload = async ({
   globalCollections = [],
   tenantData = () => ({}),
   tenantFields = [],
+  userFields = [],
 }: BootTestPayloadArgs): Promise<TestHarness> => {
   const testDatabaseUrl = databaseUrl ?? process.env.TEST_DATABASE_URL
 
@@ -127,7 +131,7 @@ export const bootTestPayload = async ({
     admin: { user: 'users' },
     auth: { passwordHashIterations: 100000 },
     secret: 'test-secret',
-    collections: [Users, tenantsCollection(tenantFields), ...globalCollections, ...collections],
+    collections: [Users(userFields), tenantsCollection(tenantFields), ...globalCollections, ...collections],
     db: postgresAdapter({
       pool: {
         connectionString: testDatabaseUrl,
