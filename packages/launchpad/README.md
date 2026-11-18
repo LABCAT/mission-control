@@ -35,6 +35,11 @@ tenant omits `currencyMinorUnits`, the exponent comes from ICU
 (`Intl.NumberFormat(…, { style: 'currency', currency }).resolvedOptions().maximumFractionDigits`),
 so VUV, VND, XOF and JPY divide by nothing and USD divides by 100.
 
+A date-only value such as `2026-12-01` is a calendar day, not an instant: `formatDate` keeps it
+on that day in every timezone, so a tenant west of UTC never shows a closing date as the day
+before. Only timestamps (an ISO instant, a `Date` or an epoch) are converted to the tenant
+timezone.
+
 ## Components
 
 | Component    | Built from                          | Notes                                       |

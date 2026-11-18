@@ -131,6 +131,15 @@ describe('JobCard', () => {
     expect(html).toContain('rs-card')
   })
 
+  it('shows a date-only closing date on its calendar day even west of UTC', async () => {
+    const html = await container.renderToString(JobCard, {
+      props: { job, locale: 'en', timezone: 'Pacific/Honolulu' },
+    })
+
+    expect(html).toContain('Dec 1, 2026')
+    expect(html).not.toContain('Nov 30, 2026')
+  })
+
   it('omits the salary and closing date rows when the job has neither', async () => {
     const html = await container.renderToString(JobCard, {
       props: {

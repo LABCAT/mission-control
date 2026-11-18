@@ -29,7 +29,7 @@ export type JobSummary = {
   /** `Full time`, `Voluntary` … already labelled for the tenant. */
   jobType?: null | string
   salary?: null | Salary
-  /** ISO date or instant. Rendered in the tenant timezone. */
+  /** ISO date (`2026-12-01`, a calendar day) or instant, rendered in the tenant timezone. */
   closes?: null | string
   summary?: null | string
   featured?: boolean
