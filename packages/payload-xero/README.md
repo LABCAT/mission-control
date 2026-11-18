@@ -87,7 +87,7 @@ The plugin adds three endpoints under the API root:
 | `GET /api/xero/callback` | Xero's redirect back. Exchanges the code, records the organisation ID, stores the tokens, then redirects to the settings row in the admin. |
 | `POST /api/xero/refresh?tenant=<id or slug>` | Refreshes a stale access token on demand and answers `{ refreshed, expiresAt }`. Never returns a token. |
 
-Scopes are fixed: `offline_access accounting.transactions accounting.settings accounting.contacts`.
+Scopes are fixed: `offline_access accounting.transactions accounting.settings accounting.contacts`. `XeroOAuthOptions` has no `scopes` option, so no caller can widen what a tenant consents to.
 
 In tenant scope the `tenant` parameter is required; a tenant admin can only connect their own tenants, and a super-admin can connect any. Both are decided by your access rules and tenancy layer, not by this plugin.
 

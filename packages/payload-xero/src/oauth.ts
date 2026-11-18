@@ -13,6 +13,11 @@
  * The client is a confidential client (ID and secret from env), so PKCE is not used.
  */
 
+/**
+ * The scopes the plugin requests, always. They are not configurable: the set is what the
+ * package's connection needs, and letting a caller widen it would make tenants consent to
+ * permissions the documented connection never asks for.
+ */
 export const XERO_OAUTH_SCOPES = [
   'offline_access',
   'accounting.transactions',
@@ -122,8 +127,6 @@ export type XeroOAuthOptions = {
   fetch?: typeof globalThis.fetch
   /** Must match the redirect URI registered on the Xero app. Defaults to `XERO_REDIRECT_URI`. */
   redirectUri?: Resolvable<string>
-  /** Scopes to request. Defaults to `XERO_OAUTH_SCOPES`. */
-  scopes?: readonly string[]
   /** HMAC key for the signed `state`. Defaults to `XERO_STATE_SECRET`, then the Payload secret. */
   stateSecret?: Resolvable<string>
   /** Lifetime of the signed state, in seconds. Defaults to 600. */
@@ -176,7 +179,7 @@ export const resolveXeroOAuth = (options: XeroOAuthOptions = {}): ResolvedXeroOA
     encryptionKey: readValue(options.encryptionKey),
     fetch: fetchFn,
     redirectUri: readValue(options.redirectUri) ?? readEnv(XERO_REDIRECT_URI_ENV),
-    scopes: options.scopes ?? XERO_OAUTH_SCOPES,
+    scopes: XERO_OAUTH_SCOPES,
     stateSecret: readValue(options.stateSecret) ?? readEnv(XERO_STATE_SECRET_ENV),
     stateTtlSeconds: options.stateTtlSeconds ?? XERO_STATE_TTL_SECONDS,
     tokenRequestTimeoutMs: options.tokenRequestTimeoutMs ?? XERO_TOKEN_REQUEST_TIMEOUT_MS,

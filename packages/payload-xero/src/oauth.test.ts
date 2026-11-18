@@ -70,6 +70,14 @@ describe('resolveXeroOAuth', () => {
     expect(resolved.stateTtlSeconds).toBe(600)
   })
 
+  it('ignores a caller-supplied scope list', () => {
+    // The scopes are fixed by the package: a wider list would ask tenants for permissions the
+    // documented connection does not use.
+    const resolved = resolveXeroOAuth({ ...baseOptions, scopes: ['accounting.transactions.read'] } as never)
+
+    expect(resolved.scopes).toEqual([...XERO_OAUTH_SCOPES])
+  })
+
   it('reads the credentials from the environment and latest function values', () => {
     vi.stubEnv('XERO_CLIENT_ID', 'env-id')
     vi.stubEnv('XERO_CLIENT_SECRET', 'env-secret')
