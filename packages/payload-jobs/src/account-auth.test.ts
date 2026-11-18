@@ -431,6 +431,49 @@ describe('account auth endpoints', () => {
       expect((await post(tenantA, 'login', 'not an object')).status).toBe(400)
     })
 
+    it('rejects an old token once the membership is removed or changes to a role that cannot sign in', async () => {
+      const email = await createUser({ tenant: tenantA })
+      const { body } = await login(tenantA, email)
+      const asUser = { key: tenantA.key, token: body.token }
+      const id = (
+        await payload.find({
+          collection: 'users',
+          overrideAccess: true,
+          where: { email: { equals: email } },
+        })
+      ).docs[0]!.id
+
+      expect((await call('GET', tenantA.slug, 'me', asUser)).status).toBe(200)
+
+      // Role change: the token's claims still say seeker, the database no longer allows it.
+      await payload.update({
+        collection: 'users',
+        data: { tenants: [{ role: 'editor', tenant: tenantA.id }] } as never,
+        id,
+        overrideAccess: true,
+      })
+      expect((await call('GET', tenantA.slug, 'me', asUser)).status).toBe(401)
+
+      // Membership restored, then removed altogether.
+      await payload.update({
+        collection: 'users',
+        data: { tenants: [{ role: 'seeker', tenant: tenantA.id }] } as never,
+        id,
+        overrideAccess: true,
+      })
+      expect((await call('GET', tenantA.slug, 'me', asUser)).status).toBe(200)
+
+      await payload.update({
+        collection: 'users',
+        data: { tenants: [] } as never,
+        id,
+        overrideAccess: true,
+      })
+      const removed = await call('GET', tenantA.slug, 'me', asUser)
+      expect(removed.status).toBe(401)
+      expect(removed.body.error.code).toBe('not_authenticated')
+    })
+
     it('ends the session on logout', async () => {
       const email = await createUser({ tenant: tenantA })
       const { body } = await login(tenantA, email)

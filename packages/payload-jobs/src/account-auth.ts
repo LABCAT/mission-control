@@ -627,20 +627,30 @@ const login: Handler = async ({ options, req, tenant }) => {
   })
 }
 
-const currentUser = (
+/**
+ * The signed-in user, or null. Membership is re-read from the database here instead of trusting
+ * `req.user` (Payload's JWT strategy loads it too, but authorisation must not depend on that),
+ * so removing a membership or changing a role takes effect on the next request.
+ */
+const currentUser = async (
   req: PayloadRequest,
   tenant: AccountTenant,
   options: ResolvedOptions,
-): RawUser | null => {
-  const user = req.user as (RawUser & { collection?: string }) | null
+): Promise<RawUser | null> => {
+  const session = req.user as (RawUser & { collection?: string }) | null
 
-  if (!user || user.collection !== options.usersSlug) return null
+  if (!session || session.collection !== options.usersSlug) return null
 
-  return canSignInOn(user, tenant.id, options) ? user : null
+  const fresh = (await req.payload.db.findOne({
+    collection: options.usersSlug as CollectionSlug,
+    where: { id: { equals: session.id } },
+  })) as unknown as RawUser | null
+
+  return fresh && canSignInOn(fresh, tenant.id, options) ? fresh : null
 }
 
 const me: Handler = async ({ options, req, tenant }) => {
-  const user = currentUser(req, tenant, options)
+  const user = await currentUser(req, tenant, options)
   if (!user) throw new AccountAuthError(ERRORS.notAuthenticated)
 
   return accountResponse({ user: publicUser(user, tenant.id) })
@@ -649,7 +659,7 @@ const me: Handler = async ({ options, req, tenant }) => {
 const logout: Handler = async ({ options, req, tenant }) => {
   // Logging out is idempotent: a missing or expired token still answers 200, so the site can
   // always clear its cookie.
-  if (currentUser(req, tenant, options)) {
+  if (await currentUser(req, tenant, options)) {
     await logoutOperation({
       collection: req.payload.collections[options.usersSlug as CollectionSlug],
       req,
