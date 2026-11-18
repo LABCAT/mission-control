@@ -38,4 +38,8 @@ GROUP BY c.post_title;
 
 -- 6. Tax / VAT settings in the old site (PJ-91): JobRoller and Xero plugin options mentioning tax or VAT
 SELECT option_name, LEFT(option_value, 400) AS value FROM wp_options
-WHERE option_name LIKE '%tax%' OR option_name LIKE '%vat%' OR option_name LIKE '%xero%' OR option_name LIKE 'jr_%';
+WHERE (option_name LIKE '%tax%' OR option_name LIKE '%vat%' OR option_name LIKE '%xero%' OR option_name LIKE 'jr_%')
+  -- never print credentials:
+  AND option_name NOT LIKE '%token%' AND option_name NOT LIKE '%secret%' AND option_name NOT LIKE '%key%'
+  AND option_name NOT LIKE '%password%' AND option_name NOT LIKE '%auth%' AND option_name NOT LIKE '%credential%';
+-- Before pasting the output anywhere, scan it for anything that looks like a key or token and remove it.
