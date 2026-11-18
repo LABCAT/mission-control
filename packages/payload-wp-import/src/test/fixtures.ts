@@ -27,6 +27,80 @@ export const fixtureTables: Record<string, Row[]> = {
 }
 
 /**
+ * Taxonomies and job locations as a JobRoller site keeps them. Terms live in `wp_terms`, their
+ * taxonomy and parent in `wp_term_taxonomy`, and job locations are post meta, not terms.
+ */
+export const taxonomyTables: Record<string, Row[]> = {
+  wp_posts: [
+    { ID: 301, post_type: 'job_listing', post_status: 'publish', post_title: 'Front Desk Clerk' },
+    { ID: 302, post_type: 'job_listing', post_status: 'publish', post_title: 'Boat Skipper' },
+    { ID: 303, post_type: 'job_listing', post_status: 'expired', post_title: 'Past role' },
+    { ID: 304, post_type: 'job_listing', post_status: 'publish', post_title: 'Campus Lecturer' },
+  ],
+  wp_postmeta: [
+    { meta_id: 1, post_id: 301, meta_key: '_jr_geo_short_address', meta_value: 'Port Vila, Efate' },
+    { meta_id: 2, post_id: 302, meta_key: '_jr_geo_short_address', meta_value: 'Luganville, Espiritu Santo' },
+    { meta_id: 3, post_id: 303, meta_key: '_jr_geo_short_address', meta_value: 'Nowhere, Atlantis' },
+    // Santo is the legacy name the site's own search placeholder uses for Espiritu Santo.
+    { meta_id: 4, post_id: 304, meta_key: '_jr_geo_address', meta_value: 'Main Street, Santo' },
+    { meta_id: 5, post_id: 301, meta_key: '_Company', meta_value: 'Example Resort Ltd' },
+  ],
+  wp_terms: [
+    { term_id: 11, name: 'Hospitality &amp; Tourism', slug: 'hospitality-tourism' },
+    { term_id: 12, name: 'Construction &amp; roading', slug: 'construction-roading' },
+    { term_id: 13, name: '!!!', slug: '!!!' },
+    { term_id: 21, name: 'Full-Time', slug: 'full-time' },
+    { term_id: 22, name: 'Voluntary', slug: 'voluntary' },
+    { term_id: 23, name: 'Board position', slug: 'board-position' },
+    { term_id: 24, name: 'Internship', slug: 'internship-voluntary' },
+    { term_id: 25, name: 'Not Stated', slug: 'not-stated' },
+    { term_id: 31, name: 'Accommodation', slug: 'accommodation' },
+    { term_id: 41, name: 'Vt 0 &#8211; 1,000,000', slug: '0-100000' },
+    { term_id: 51, name: 'Health', slug: 'health' },
+    // Two legacy slugs that differ only in punctuation: both sanitise to `trades-services`.
+    { term_id: 32, name: 'Trades & Services', slug: 'trades-services' },
+    { term_id: 33, name: 'Trades and services', slug: 'trades_&_services' },
+  ],
+  wp_term_taxonomy: [
+    { term_taxonomy_id: 101, term_id: 11, taxonomy: 'job_cat', parent: 0, count: 4 },
+    { term_taxonomy_id: 102, term_id: 12, taxonomy: 'job_cat', parent: 0, count: 2 },
+    { term_taxonomy_id: 103, term_id: 13, taxonomy: 'job_cat', parent: 0, count: 1 },
+    { term_taxonomy_id: 201, term_id: 21, taxonomy: 'job_type', parent: 0, count: 9 },
+    { term_taxonomy_id: 202, term_id: 22, taxonomy: 'job_type', parent: 0, count: 5 },
+    // Children of Voluntary: volunteer jobs by AUDIT.md.
+    { term_taxonomy_id: 203, term_id: 23, taxonomy: 'job_type', parent: 202, count: 1 },
+    { term_taxonomy_id: 204, term_id: 24, taxonomy: 'job_type', parent: 202, count: 1 },
+    { term_taxonomy_id: 205, term_id: 25, taxonomy: 'job_type', parent: 0, count: 3 },
+    { term_taxonomy_id: 301, term_id: 31, taxonomy: 'job_tag', parent: 0, count: 7 },
+    { term_taxonomy_id: 401, term_id: 41, taxonomy: 'job_salary', parent: 0, count: 6 },
+    { term_taxonomy_id: 501, term_id: 51, taxonomy: 'area-of-focus', parent: 0, count: 2 },
+    { term_taxonomy_id: 502, term_id: 32, taxonomy: 'job_tag', parent: 0, count: 1 },
+    { term_taxonomy_id: 503, term_id: 33, taxonomy: 'job_tag', parent: 0, count: 1 },
+    // A stray term of another taxonomy, which the importers must ignore.
+    { term_taxonomy_id: 601, term_id: 31, taxonomy: 'category', parent: 0, count: 12 },
+    // A term_taxonomy row whose term row is gone.
+    { term_taxonomy_id: 701, term_id: 999, taxonomy: 'job_cat', parent: 0, count: 0 },
+  ],
+}
+
+/**
+ * The locations a tenant tree would hold for these fixtures, in the shape `seedVanuatuLocations`
+ * writes: islands at the root with their picker towns under them, and the picker's catch-alls
+ * (`Overseas`, `Other`) as region roots.
+ */
+export const locationDocs = [
+  { id: 1, kind: 'island', name: 'Efate', parent: null, slug: 'efate' },
+  { id: 2, kind: 'town', name: 'Port Vila', parent: { id: 1, name: 'Efate', slug: 'efate' }, slug: 'port-vila' },
+  { id: 3, kind: 'island', name: 'Espiritu Santo', parent: null, slug: 'espiritu-santo' },
+  { id: 4, kind: 'town', name: 'Luganville', parent: { id: 3, name: 'Espiritu Santo', slug: 'espiritu-santo' }, slug: 'luganville' },
+  { id: 5, kind: 'town', name: 'White Sands', parent: { id: 9, name: 'Tanna', slug: 'tanna' }, slug: 'white-sands' },
+  { id: 6, kind: 'region', name: 'Overseas', parent: null, slug: 'overseas' },
+  { id: 7, kind: 'region', name: 'Other', parent: null, slug: 'other' },
+  { id: 8, kind: 'town', name: 'Anywhere/Work From Home', parent: { id: 7, name: 'Other', slug: 'other' }, slug: 'anywhere-work-from-home' },
+  { id: 9, kind: 'island', name: 'Tanna', parent: null, slug: 'tanna' },
+]
+
+/**
  * A fake mysql2 connection over `fixtureTables`. It understands only the SELECT shapes the
  * reader produces: `WHERE` conditions joined by AND (`col = ?`, `col IN (?, ?)`, `col > ?`,
  * with optional parentheses), `ORDER BY col ASC` and `LIMIT n`.
