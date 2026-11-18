@@ -363,9 +363,16 @@ export const organisationTenantIsStable =
     })
   }
 
+/** Write-only: the employer still sees whether their page is live. */
 const adminOnlyFor = (tenantScoped: boolean) => {
   const access = organisationAdminFieldAccess(tenantScoped)
   return { create: access, update: access }
+}
+
+/** Billing terms and the legacy id are not the employer's business, so reads are hidden too. */
+const adminOnlyForReads = (tenantScoped: boolean) => {
+  const write = adminOnlyFor(tenantScoped)
+  return { ...write, read: write.update }
 }
 
 const imageFields = (mediaSlug: string): Field[] => [
@@ -385,6 +392,7 @@ const imageFields = (mediaSlug: string): Field[] => [
 
 const profileFields = (mediaSlug: null | string, tenantScoped: boolean): Field[] => {
   const adminOnly = adminOnlyFor(tenantScoped)
+  const billingOnly = adminOnlyForReads(tenantScoped)
 
   return [
   {
@@ -509,19 +517,19 @@ const profileFields = (mediaSlug: null | string, tenantScoped: boolean): Field[]
         name: 'canPayByInvoice',
         type: 'checkbox',
         defaultValue: false,
-        access: adminOnly,
+        access: billingOnly,
         admin: { description: 'Known customers pay by invoice instead of at checkout.' },
       },
       {
         name: 'billingEmail',
         type: 'email',
-        access: adminOnly,
+        access: billingOnly,
         admin: { description: 'Receives invoices. Falls back to the account email when empty.' },
       },
       {
         name: 'xeroContactCode',
         type: 'text',
-        access: adminOnly,
+        access: billingOnly,
         admin: { description: 'Xero contact for this organisation, used by invoice orders.' },
       },
     ],
@@ -530,7 +538,7 @@ const profileFields = (mediaSlug: null | string, tenantScoped: boolean): Field[]
     name: 'legacyId',
     type: 'number',
     index: true,
-    access: adminOnly,
+    access: billingOnly,
     admin: {
       description: 'WordPress user id of the legacy employer, for the import.',
       position: 'sidebar',

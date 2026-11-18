@@ -31,13 +31,19 @@ tenantIsolation({
   extraCollections: organisations().slice(1),
 })
 
-type Employer = MissionControlUser & { collection: 'users'; id: number; role: 'user' }
+type Employer = MissionControlUser & {
+  collection: 'users'
+  email: string
+  id: number
+  role: 'user'
+}
 
 describe('organisations integration', () => {
   let harness: TestHarness
   let orgA: { id: number }
   let orgB: { id: number }
   let employer: Employer
+  let employerEmail: null | string = null
   let createdUserIDs: number[] = []
 
   const makeUser = async (
@@ -55,14 +61,22 @@ describe('organisations integration', () => {
         ...extra,
       },
       overrideAccess: true,
-    })) as { id: number }
+    })) as { email: string; id: number }
     createdUserIDs.push(doc.id)
 
-    return { collection: 'users', id: doc.id, role: 'user', tenants, ...extra } as Employer
+    return {
+      collection: 'users',
+      email: doc.email,
+      id: doc.id,
+      role: 'user',
+      tenants,
+      ...extra,
+    } as Employer
   }
 
   beforeEach(async () => {
     createdUserIDs = []
+    employerEmail = null
     harness = await bootTestPayload({
       collections: organisations(),
       userFields: [organisationField()],
@@ -85,6 +99,7 @@ describe('organisations integration', () => {
       [{ role: 'employer', tenant: harness.tenantA.id }],
       { organisation: orgA.id },
     )
+    employerEmail = employer.email
   })
 
   afterEach(async () => {
@@ -232,6 +247,51 @@ describe('organisations integration', () => {
       canPayByInvoice: false,
       name: 'Renamed by the employer',
       pageEnabled: false,
+    })
+  })
+
+  it('hides billing terms and the legacy id from an employer read', async () => {
+    await harness.payload.update({
+      collection: 'organisations',
+      data: {
+        approved: true,
+        billingEmail: 'pay@example.invalid',
+        canPayByInvoice: true,
+        legacyId: 4711,
+        pageEnabled: true,
+        xeroContactCode: 'XERO-1',
+      } as never,
+      id: orgA.id,
+      overrideAccess: true,
+    })
+
+    const own = (await harness.payload.findByID({
+      collection: 'organisations',
+      depth: 0,
+      id: orgA.id,
+      user: employer as never,
+    })) as Record<string, unknown>
+
+    // The employer still sees their own page status and approval.
+    expect(own).toMatchObject({ approved: true, id: orgA.id, pageEnabled: true })
+    expect(own.billingEmail ?? null).toBeNull()
+    expect(own.canPayByInvoice ?? null).toBeNull()
+    expect(own.legacyId ?? null).toBeNull()
+    expect(own.xeroContactCode ?? null).toBeNull()
+
+    // Staff read everything.
+    const asStaff = (await harness.payload.findByID({
+      collection: 'organisations',
+      depth: 0,
+      id: orgA.id,
+      user: harness.tenantAdminA as never,
+    })) as Record<string, unknown>
+
+    expect(asStaff).toMatchObject({
+      billingEmail: 'pay@example.invalid',
+      canPayByInvoice: true,
+      legacyId: 4711,
+      xeroContactCode: 'XERO-1',
     })
   })
 
@@ -404,6 +464,33 @@ describe('organisations integration', () => {
       id: orgA.id,
       overrideAccess: true,
     })
+  })
+
+  it('resolves the employer’s organisation from a real login, not just a stubbed user', async () => {
+    // The unit tests pass a hand-built user object; this goes through the JWT strategy, which
+    // reads the user document back, so the relation the access checks rely on is the real one.
+    const login = await harness.payload.login({
+      collection: 'users',
+      data: { email: employerEmail!, password: 'test-password' },
+    })
+    expect(login.token).toBeTruthy()
+
+    const headers = new Headers({ Authorization: `JWT ${login.token}` })
+    const { user } = await harness.payload.auth({ headers })
+    const loggedIn = user as unknown as MissionControlUser
+
+    expect(
+      typeof loggedIn.organisation === 'object' && loggedIn.organisation !== null
+        ? (loggedIn.organisation as { id: number }).id
+        : loggedIn.organisation,
+    ).toBe(orgA.id)
+
+    const { docs } = await harness.payload.find({
+      collection: 'organisations',
+      user: user as never,
+    })
+
+    expect(docs.map((doc) => doc.id)).toEqual([orgA.id])
   })
 
   it('stores the employer’s organisation on the user', async () => {
