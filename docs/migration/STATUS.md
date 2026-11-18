@@ -64,3 +64,4 @@ Spend at 02:05 UTC: sub-sessions $8.04 (PJ-10 2.19, PJ-81 2.42, RCL-86 1.00, PJ-
 - **Rule (founder, 18 Nov): at most 10 open PRs at once** (the Neon plan has 10 branches; no plan upgrade). No new PR or ticket while 10 or more are open. At 05:00, 15 are open (5 sprint + 10 Hisha), so merging comes first.
 - Preview cleanup: #47 merged at 04:58. The sweep dry run found no stale previews; all 10 Neon branches belong to open PRs. Confirm on the next merge that "Delete preview" runs.
 - Hisha's stalled PRs (#21, #31–#38, #40): left for now. On 19 Nov, if they're still stuck, Sonnet sessions take them over (founder).
+- **Decision 11 (founder, 18 Nov): plans.** If a plan is still live and someone buys it, keep it. So: Regular, Job pack, 10 Job pack and Volunteer listing are kept, and the Enhanced/Premium featured add-ons are KEPT (new ticket PJ-87, blocked by PJ-21; PLAN.md updated). "Unlimited 6 month" is pending, not sold, and not built.

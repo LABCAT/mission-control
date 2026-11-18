@@ -61,13 +61,13 @@ Each new site sold = a new tenant row + a small `apps/<site>` (branding, domain,
 
 **Dropped:**
 - online payment gateways
-- featured add-ons
 - resumes and resume access
 - blog
 - the separate volunteer flow ("Voluntary" is just a job type)
 - MailChimp
 
 **Kept:**
+- featured add-ons (Enhanced, Premium): still sold, so kept (founder, 18 Nov; PJ-87)
 - invoice checkout with plans, packs (as credits) and coupons
 - Xero invoicing
 - PDF job descriptions
