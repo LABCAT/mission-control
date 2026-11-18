@@ -11,6 +11,7 @@ import {
   type QuoteArgs,
   type QuoteCouponTerms,
 } from './pricing'
+import type { TaxSettings } from './tax'
 
 // Amounts up to 10^12 minor units: far beyond any real price, still well inside safe integers
 // even when several are summed.
@@ -764,6 +765,95 @@ describe('add-on grants', () => {
         expect(result.subtotal).toBe(planPrice + links[0].price)
         expect(result.entitlements.addOns.map((row) => row.ref.id)).toEqual(ids)
         expect(result.entitlements.addOns.slice(1).every((row) => row.source === 'grant')).toBe(true)
+      }),
+    )
+  })
+})
+
+const vatSettings = (overrides: Partial<TaxSettings> = {}): TaxSettings => ({
+  defaultRateKey: 'vat',
+  enabled: true,
+  exemptXeroTaxType: 'EXEMPTOUTPUT',
+  label: 'VAT',
+  pricesIncludeTax: false,
+  rates: [{ key: 'vat', name: 'VAT', rate: 1500, xeroTaxType: 'OUTPUT' }],
+  rounding: 'invoice',
+  ...overrides,
+})
+
+describe('quote with tax', () => {
+  it('adds exclusive VAT after the coupon, line by line', () => {
+    const result = quote({
+      addOns: [enhanced],
+      coupon: { amount: 10, discountType: 'percent' },
+      plan: vatu(),
+      tax: vatSettings(),
+    })
+
+    // 7000 subtotal, 700 coupon spread 500/200, 15% on 6300 = 945.
+    expect(result.lines.map((line) => [line.discount, line.net, line.tax, line.gross])).toEqual([
+      [500, 4500, 675, 5175],
+      [200, 1800, 270, 2070],
+    ])
+    expect(result.tax).toMatchObject({ enabled: true, gross: 7245, label: 'VAT', net: 6300, tax: 945 })
+    expect(result.total).toBe(7245)
+  })
+
+  it('carves inclusive VAT out of the price without changing what is paid', () => {
+    const result = quote({ plan: vatu({ price: 5750 }), tax: vatSettings({ pricesIncludeTax: true }) })
+
+    expect(result.total).toBe(5750)
+    expect(result.tax).toMatchObject({ net: 5000, tax: 750 })
+  })
+
+  it('charges no tax on what a credit pays, nor on exempt add-ons', () => {
+    const result = quote({
+      addOns: [{ ...enhanced, taxExempt: true }],
+      availableCredits: 1,
+      plan: vatu(),
+      tax: vatSettings(),
+    })
+
+    expect(result.lines.map((line) => [line.tax, line.xeroTaxType])).toEqual([
+      [0, 'OUTPUT'],
+      [0, 'EXEMPTOUTPUT'],
+    ])
+    expect(result.total).toBe(2000)
+  })
+
+  it('refuses a plan naming a rate the tenant does not have', () => {
+    expect(codeOf(() => quote({ plan: vatu({ taxRateKey: 'ghost' }), tax: vatSettings() }))).toBe('invalid-tax')
+    expect(codeOf(() => quote({ plan: vatu(), tax: vatSettings({ rates: [] }) }))).toBe('invalid-tax')
+  })
+
+  it('keeps every money invariant with any tax settings (property)', () => {
+    const taxArb = fc.record({
+      enabled: fc.boolean(),
+      pricesIncludeTax: fc.boolean(),
+      rate: fc.integer({ min: 0, max: 5000 }),
+      rounding: fc.constantFrom('invoice' as const, 'line' as const),
+    })
+
+    fc.assert(
+      fc.property(argsArb, taxArb, ({ ...args }, { enabled, pricesIncludeTax, rate, rounding }) => {
+        const tax = vatSettings({ enabled, pricesIncludeTax, rates: [{ key: 'vat', name: 'VAT', rate }], rounding })
+        const result = quote({ ...args, tax })
+        const untaxed = quote(args)
+
+        expect(result.lines.reduce((acc, line) => acc + line.discount, 0)).toBe(result.discount)
+        expect(result.lines.reduce((acc, line) => acc + line.gross, 0)).toBe(result.total)
+        expect(result.tax.net + result.tax.tax).toBe(result.total)
+        for (const line of result.lines) {
+          expect(line.amount - line.discount).toBe(pricesIncludeTax ? line.gross : line.net)
+          expect(line.discount).toBeLessThanOrEqual(line.amount)
+        }
+        // Prices, discounts and coupons don't depend on tax; only the total can grow by it.
+        expect(result.discount).toBe(untaxed.discount)
+        expect(result.subtotal).toBe(untaxed.subtotal)
+        expect(result.total).toBe(
+          enabled && !pricesIncludeTax ? untaxed.total + result.tax.tax : untaxed.total,
+        )
+        if (!enabled) expect(result.tax.tax).toBe(0)
       }),
     )
   })

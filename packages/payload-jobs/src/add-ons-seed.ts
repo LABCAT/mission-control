@@ -1,7 +1,7 @@
 import type { Payload, PayloadRequest, Where } from 'payload'
 
 import { addOnFieldValidators, ADD_ONS_SLUG, type AddOnPlacement } from './add-ons'
-import { CATALOG_KEY_PATTERN } from './catalog'
+import { CATALOG_KEY_PATTERN, missingTaxRateKeys } from './catalog'
 
 /** An add-on this one grants, by the granted add-on's `key`. */
 export type AddOnSeedGrant = {
@@ -27,6 +27,9 @@ export type AddOnSeed = {
   placement: AddOnPlacement
   price: null | number
   sortOrder: number
+  taxExempt?: boolean
+  /** One of the tenant's tax rate keys; omitted: the default rate. */
+  taxRateKey?: null | string
 }
 
 const ADD_ON_SEED_KEYS = new Set<string>([
@@ -41,6 +44,8 @@ const ADD_ON_SEED_KEYS = new Set<string>([
   'placement',
   'price',
   'sortOrder',
+  'taxExempt',
+  'taxRateKey',
 ])
 
 const UNCONFIRMED_MESSAGES = {
@@ -243,6 +248,18 @@ export const seedAddOns = async ({
     }
   }
 
+  const unknownRates = await missingTaxRateKeys({
+    keys: addOns.flatMap((addOn) => (addOn.taxRateKey ? [addOn.taxRateKey] : [])),
+    payload: payload as never,
+    req,
+    tenantID,
+  })
+  if (unknownRates.length > 0) {
+    throw new AddOnSeedError(
+      `Add-on seed is not ready:\n- ${unknownRates.map((key) => `no tax rate "${key}" on this tenant`).join('\n- ')}`,
+    )
+  }
+
   const result: SeedAddOnsResult = { created: [], existing: [] }
 
   for (const addOn of seedCreationOrder(addOns) ?? []) {
@@ -271,6 +288,8 @@ export const seedAddOns = async ({
         placement: addOn.placement,
         price: addOn.price,
         sortOrder: addOn.sortOrder,
+        taxExempt: addOn.taxExempt ?? false,
+        taxRateKey: addOn.taxRateKey ?? null,
         tenant: tenantID,
       } as never,
       overrideAccess: true,

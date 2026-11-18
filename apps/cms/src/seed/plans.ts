@@ -1,17 +1,20 @@
 import { getPayload } from 'payload'
 
-import { seedAddOns, seedPlans } from '@mission-control/payload-jobs'
+import { seedAddOns, seedPlans, seedTenantTax } from '@mission-control/payload-jobs'
 
 import config from '../payload.config'
 import { vwokAddOns } from './vwok-add-ons'
 import { vwokPlans } from './vwok-plans'
+import { vwokTax } from './vwok-tax'
 
 /**
- * Seed a tenant's add-ons, then its plans (plans include add-ons):
+ * Seed a tenant's tax settings, add-ons, then plans (plans and add-ons name tax rates, and plans
+ * include add-ons):
  * `SEED_PLANS_CONFIRM=1 SEED_PLANS_TENANT=vwok pnpm seed:plans`.
- * Idempotent: existing add-ons and plans (same key or legacy id) are never changed.
+ * Idempotent: tax settings already set, and existing add-ons and plans (same key or legacy id),
+ * are never changed.
  */
-const seeds = { vwok: { addOns: vwokAddOns, plans: vwokPlans } }
+const seeds = { vwok: { addOns: vwokAddOns, plans: vwokPlans, tax: vwokTax } }
 
 if (process.env.SEED_PLANS_CONFIRM !== '1') {
   throw new Error('Refusing to seed plans. Set SEED_PLANS_CONFIRM=1 for the intended database.')
@@ -33,7 +36,9 @@ try {
   const tenant = docs[0]
   if (!tenant) throw new Error(`Tenant "${tenantSlug}" not found. Run seed:tenants first.`)
 
-  // Both seeds check all their data before writing; plans need the add-ons to exist first.
+  // Each seed checks all its data before writing; each step needs the one before it.
+  const tax = await seedTenantTax({ payload, tax: seed.tax, tenantID: tenant.id })
+  payload.logger.info(`Tax for ${tenantSlug}: ${tax.applied ? 'set' : 'already set, kept'}`)
   const addOns = await seedAddOns({ addOns: seed.addOns, payload, tenantID: tenant.id })
   payload.logger.info(
     `Add-ons for ${tenantSlug}: created [${addOns.created.join(', ')}], kept [${addOns.existing.join(', ')}]`,

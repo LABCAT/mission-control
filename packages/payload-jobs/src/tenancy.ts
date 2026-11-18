@@ -1,6 +1,7 @@
 import type { Field, GlobalConfig } from 'payload'
 
 import { authenticatedAccess, superAdminAccess } from './access'
+import { tenantTaxField } from './tax-settings'
 
 // Current ISO 4217 list one from SIX (the maintenance agency), fetched 2026-11-06.
 const ISO_4217_CODES = new Set(
@@ -167,6 +168,8 @@ export const jobBoardTenantFields: Field[] = [
     validate: (value: null | string | undefined, options: ValidationOptions) =>
       requiredUnlessAggregate(value, options, 'Tax label is required'),
   },
+  // Rates, inclusive/exclusive prices, rounding and Xero tax types (PJ-91). Off by default.
+  tenantTaxField(showForSiteTenant),
   {
     name: 'emailFromName',
     type: 'text',
