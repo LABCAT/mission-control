@@ -56,6 +56,23 @@ Rocketship. When Rocketship releases one, delete `src/components/Pagination.astr
 Rocketship version, and keep `src/tenant/pagination.ts` (the page-number model) if it is still
 useful.
 
+## CMS client and edge cache (`@mission-control/launchpad/cms`)
+
+Server-side only; import the subpath so none of it reaches a browser bundle.
+
+```ts
+import { cached, cacheTag, createCmsClient } from '@mission-control/launchpad/cms'
+
+const cms = createCmsClient({ baseUrl: env.CMS_URL, siteKey: env.SITE_KEY }) // both from the site's env
+const orgs = await cached(`org:${site}:all`, 300, () => cms.findAll('organisations'), {
+  tags: [cacheTag('site', site), 'organisations'],
+})
+```
+
+- Typed from `apps/cms/src/payload-types.ts` (type-only import). Sends `x-site-key`; throws `CmsError` (`http`, `network`, `timeout`, `invalid_response`) with no key in the message. `createCmsClient` throws if `window` exists.
+- `findAll` is one request with `limit=0` (no pagination: listings show everything). Lists filter explicitly (e.g. live jobs: `where: { status: { equals: 'published' } }`); `findBySlug` adds no filter, so an expired job's page still resolves.
+- `cached(key, ttl, fn, { tags })` uses `caches.default`; with no cache it just calls `fn`. `purgeTags(tags)` bumps each tag's version. The Cache API is per data centre, so a purge reaches only the colo that runs it: PJ-41 needs a shared store or the zone purge API (entries already carry a `Cache-Tag` header). Put the site in the key; nothing here knows the tenant.
+
 ## Conventions
 
 - Zero client JavaScript by default. Only `Turnstile` ships a script, and only the forms that
