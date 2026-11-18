@@ -14,7 +14,9 @@ Orchestrator: session_01H9XNhzozJtHHbbc8KMd38e (replaces session_01H9XNhytrTqfZd
 | PJ-81 Front-end account auth API | session_01H9XNhyACB3KEWtUM95Dxix | pj-81-account-auth | PR #46 (migration): CI green; Kinsho blocked (stale JWT membership) → fixing | – |
 | PJ-54 Xero plugin skeleton | session_01H9XNi2enTmhN3JrbmoUZFh | pj-54-xero-skeleton | PR #44: CI green; Kinsho blocked (non-atomic one-row check) → fixing | – |
 
-Sub-session spend so far: ~$1.05 (2 sessions not yet reporting).
+Spend at 02:05 UTC: sub-sessions $8.04 (PJ-10 2.19, PJ-81 2.42, RCL-86 1.00, PJ-54 0.76, PJ-60 0.63, PJ-34 0.57, PJ-70 0.47) + orchestrator $3.13 = **$11.17**.
+
+**WIP rule (founder, 18 Nov):** merge before dispatch. No new tickets while 3 or more sprint PRs are unmerged. Existing sessions only fix review findings and rebase after merges.
 
 ## Blockers (founder)
 
@@ -43,3 +45,4 @@ Sub-session spend so far: ~$1.05 (2 sessions not yet reporting).
   - Auth: the CMS auth API is called server-side with the site key; the session is an httpOnly cookie on the site's domain; one tenant per account; seeker accounts optional (guests can apply).
   - Tickets: PJ-81 (auth API, dispatched), PJ-82 (lister dashboard) and PJ-83 (seeker dashboard) in backlog. PJ-30/31/33/46: move the employer-facing UI to PJ-82 before dispatch.
 - **Decision 3 (founder, 18 Nov): site managers** use the Payload admin, scoped to their tenant (cut-down menu, dashboard of pending jobs and recent orders). It may move into the Astro site later, so keep the business logic (moderation, approve, reports) in collections, endpoints and hooks, not in admin-only components.
+- **Decision 4 (founder, 18 Nov): rocketship-payload.** A generic package `packages/rocketship-payload`, publishable to npm later. Per-block subpath exports (`/blocks/<name>` Payload config, `/astro/<name>` component, `/types`); `RenderBlocks` with an explicit component map, so consumers only bundle what they import. Blocks take plain data and never fetch; a Payload Local API helper ships for in-process sites, and the job sites keep REST + site key. Inspiration: @payload-bites/astro-richtext-renderer, @orion-studios/payload-blocks, @grantcodes/astro-blocks. Ticket PJ-84 (backlog, held by the WIP rule).
