@@ -168,6 +168,7 @@ export interface User {
   role: 'super-admin' | 'user';
   firstName?: string | null;
   lastName?: string | null;
+  legacyPasswordHash?: string | null;
   tenants?:
     | {
         tenant: number | Tenant;
@@ -750,6 +751,7 @@ export interface UsersSelect<T extends boolean = true> {
   role?: T;
   firstName?: T;
   lastName?: T;
+  legacyPasswordHash?: T;
   tenants?:
     | T
     | {
