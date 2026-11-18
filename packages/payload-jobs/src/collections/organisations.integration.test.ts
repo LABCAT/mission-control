@@ -309,12 +309,14 @@ describe('organisations integration', () => {
   })
 
   it('rejects an employer re-pointing their user at another organisation', async () => {
-    await harness.payload.update({
-      collection: 'users',
-      data: { organisation: orgB.id } as never,
-      id: employer.id,
-      user: employer as never,
-    })
+    await expect(
+      harness.payload.update({
+        collection: 'users',
+        data: { organisation: orgB.id } as never,
+        id: employer.id,
+        user: employer as never,
+      }),
+    ).rejects.toThrow(/organisation/i)
 
     const user = (await harness.payload.findByID({
       collection: 'users',
@@ -342,7 +344,7 @@ describe('organisations integration', () => {
         id: employer.id,
         user: adminA as never,
       }),
-    ).rejects.toThrow(/Organisation/)
+    ).rejects.toThrow(/organisation/i)
 
     // Same tenant is fine.
     await expect(
@@ -371,7 +373,7 @@ describe('organisations integration', () => {
         id: employerAndSeeker.id,
         user: adminA as never,
       }),
-    ).rejects.toThrow(/Organisation/)
+    ).rejects.toThrow(/organisation/i)
 
     // Their own tenant still works.
     await expect(
@@ -382,6 +384,39 @@ describe('organisations integration', () => {
         user: adminA as never,
       }),
     ).resolves.toMatchObject({ id: employerAndSeeker.id })
+  })
+
+  it('lets only an admin of the organisation’s tenant set the link', async () => {
+    // The user employs in both tenants, so the user-side check alone would allow either link.
+    const bothTenants = await makeUser('both-tenants', [
+      { role: 'employer', tenant: harness.tenantA.id },
+      { role: 'employer', tenant: harness.tenantB.id },
+    ])
+    const adminA = await makeUser('admin-a-authority', [
+      { role: 'tenant-admin', tenant: harness.tenantA.id },
+    ])
+    const adminB = await makeUser('admin-b-authority', [
+      { role: 'tenant-admin', tenant: harness.tenantB.id },
+    ])
+
+    await expect(
+      harness.payload.update({
+        collection: 'users',
+        data: { organisation: orgB.id } as never,
+        id: bothTenants.id,
+        user: adminA as never,
+      }),
+    ).rejects.toThrow(/organisation/i)
+
+    // The admin of the organisation's own tenant may.
+    await expect(
+      harness.payload.update({
+        collection: 'users',
+        data: { organisation: orgB.id } as never,
+        id: bothTenants.id,
+        user: adminB as never,
+      }),
+    ).resolves.toMatchObject({ id: bothTenants.id })
   })
 
   it('lets a super admin link an organisation without a tenant membership', async () => {
@@ -397,38 +432,43 @@ describe('organisations integration', () => {
     ).resolves.toMatchObject({ id: employer.id })
   })
 
-  it('refuses to demote a linked employer to seeker in their organisation’s tenant', async () => {
-    // Otherwise users.organisation would outlive the role that justifies it, and the employer
-    // scope would keep the profile open. The scope itself also re-checks the role (unit tests).
-    await expect(
-      harness.payload.update({
-        collection: 'users',
-        data: {
-          tenants: [
-            { role: 'seeker', tenant: harness.tenantA.id },
-            { role: 'employer', tenant: harness.tenantB.id },
-          ],
-        } as never,
-        id: employer.id,
-        overrideAccess: true,
-      }),
-    ).rejects.toThrow(/Organisation/)
-
-    // Unlink first, then the demotion is fine.
+  it('stops an employer editing their organisation after a demotion to seeker there', async () => {
+    // Staff demote the employer to seeker in tenant A and leave the link behind; the account
+    // keeps an employer membership in tenant B. The link alone must not keep the profile open.
     await harness.payload.update({
       collection: 'users',
-      data: { organisation: null } as never,
+      data: {
+        tenants: [
+          { role: 'seeker', tenant: harness.tenantA.id },
+          { role: 'employer', tenant: harness.tenantB.id },
+        ],
+      } as never,
       id: employer.id,
       overrideAccess: true,
     })
+
+    const demoted = {
+      ...employer,
+      tenants: [
+        { role: 'seeker', tenant: harness.tenantA.id },
+        { role: 'employer', tenant: harness.tenantB.id },
+      ],
+    }
+
+    expect(
+      await harness.payload.find({ collection: 'organisations', user: demoted as never }),
+    ).toMatchObject({ docs: [] })
+
     await expect(
       harness.payload.update({
-        collection: 'users',
-        data: { tenants: [{ role: 'seeker', tenant: harness.tenantA.id }] } as never,
-        id: employer.id,
-        overrideAccess: true,
+        collection: 'organisations',
+        data: { name: 'Still mine' } as never,
+        id: orgA.id,
+        user: demoted as never,
       }),
-    ).resolves.toMatchObject({ id: employer.id })
+    ).rejects.toThrow()
+
+    expect((await stored(orgA.id)).name).not.toBe('Still mine')
   })
 
   it('rejects a relation from another tenant', async () => {

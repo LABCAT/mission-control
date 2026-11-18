@@ -618,14 +618,57 @@ const organisationHoldersTenantsOf = (user: Record<string, unknown> | undefined)
     ),
   )
 
+const organisationTenantOf = async (
+  organisationID: number | string,
+  req: PayloadRequest,
+): Promise<{ error: string } | { tenant: null | number | string }> => {
+  const organisation = (await req.payload.findByID({
+    collection: ORGANISATIONS_SLUG as CollectionSlug,
+    depth: 0,
+    disableErrors: true,
+    id: organisationID,
+    overrideAccess: true,
+    req,
+  })) as null | { tenant?: unknown }
+  if (!organisation) return { error: 'Pick an existing organisation' }
+
+  return { tenant: tenantIDOf(organisation.tenant) }
+}
+
 /**
  * An employer's organisation must belong to a tenant where that user may hold one — an employer
- * or staff membership, not a seeker one. Field access only says *who* may set the link; without
- * this an admin of tenant A could point a user at a tenant B organisation, which would then let
- * them edit it there under a seeker membership.
+ * or staff membership, not a seeker one — and only an admin of that tenant may make the link.
+ * Field access only says *who* may write the field; without this an admin of tenant A could
+ * point a user at a tenant B organisation, which would then let them edit it there.
  *
- * A super admin acting has no tenant membership, so the link is theirs to set.
+ * A super admin acting has no tenant membership, so the link is theirs to set, and a system
+ * write (no user, `overrideAccess`) — the importer or the sign-up endpoint — is let through.
  */
+export const checkOrganisationLink = async (
+  organisationID: number | string,
+  user: Record<string, unknown> | null | undefined,
+  req: PayloadRequest,
+): Promise<string | true> => {
+  const found = await organisationTenantOf(organisationID, req)
+  if ('error' in found) return found.error
+  if (found.tenant === null) return true
+
+  const tenant = String(found.tenant)
+
+  const actor = userOf(req)
+  if (!actor) return true
+  if (isSuperAdmin(actor)) return true
+
+  const actorAdminTenants = getUserTenantIDsByRole(actor, ORGANISATION_ADMIN_ROLES)
+  if (!actorAdminTenants.some((id) => String(id) === tenant)) {
+    return 'Only an admin of the organisation’s tenant can link this user to it'
+  }
+
+  if (organisationHoldersTenantsOf(user ?? undefined).has(tenant)) return true
+
+  return 'Pick an organisation from a tenant where this user is an employer'
+}
+
 export const organisationMatchesUserTenants: Validate = async (
   value,
   { collectionSlug, data, id, operation, req },
@@ -635,24 +678,13 @@ export const organisationMatchesUserTenants: Validate = async (
   const organisationID = idsOf(value)[0]
   if (organisationID === undefined) return true
 
-  const organisation = (await req.payload.findByID({
-    collection: ORGANISATIONS_SLUG as CollectionSlug,
-    depth: 0,
-    disableErrors: true,
-    id: organisationID,
-    overrideAccess: true,
-    req,
-  })) as null | { tenant?: unknown }
-  if (!organisation) return 'Pick an existing organisation'
-
-  const organisationTenant = tenantIDOf(organisation.tenant)
-  if (organisationTenant === null) return true
-
   const submitted = data as Record<string, unknown>
   const user =
     submitted.tenants === undefined && operation === 'update' && id !== undefined
       ? ((await req.payload.findByID({
-          collection: (collectionSlug ?? req.payload.config.admin?.user ?? 'users') as CollectionSlug,
+          collection: (collectionSlug ??
+            req.payload.config.admin?.user ??
+            'users') as CollectionSlug,
           depth: 0,
           disableErrors: true,
           id,
@@ -661,10 +693,7 @@ export const organisationMatchesUserTenants: Validate = async (
         })) as null | Record<string, unknown>)
       : submitted
 
-  if ((req.user as Record<string, unknown> | null)?.role === 'super-admin') return true
-  if (organisationHoldersTenantsOf(user ?? undefined).has(String(organisationTenant))) return true
-
-  return 'Pick an organisation from a tenant where this user is an employer'
+  return checkOrganisationLink(organisationID, user, req)
 }
 
 /**
