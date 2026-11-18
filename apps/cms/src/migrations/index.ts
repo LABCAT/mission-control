@@ -10,6 +10,7 @@ import * as migration_20261118_044335_account_auth from './20261118_044335_accou
 import * as migration_20261118_053124_job_taxonomies from './20261118_053124_job_taxonomies';
 import * as migration_20261118_095105_locations from './20261118_095105_locations';
 import * as migration_20261118_103105_plans from './20261118_103105_plans';
+import * as migration_20261118_112249_organisations from './20261118_112249_organisations';
 
 export const migrations = [
   {
@@ -70,6 +71,11 @@ export const migrations = [
   {
     up: migration_20261118_103105_plans.up,
     down: migration_20261118_103105_plans.down,
-    name: '20261118_103105_plans'
+    name: '20261118_103105_plans',
+  },
+  {
+    up: migration_20261118_112249_organisations.up,
+    down: migration_20261118_112249_organisations.down,
+    name: '20261118_112249_organisations'
   },
 ];
