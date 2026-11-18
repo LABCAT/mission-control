@@ -99,3 +99,9 @@ Spend at 02:05 UTC: sub-sessions $8.04 (PJ-10 2.19, PJ-81 2.42, RCL-86 1.00, PJ-
 - 14:45: merged #57 (PJ-61 mapping), #34 (PJ-11 launchpad), #56 (PJ-18 organisations, migration). All 3 done in D1. Shogi applied the 9-PR cap to Hisha (daruma a654024). Resumed PJ-94 (it had been waiting for a go-ahead) and Opus PJ-87 (it had stopped). Next merge queue: #55 (PJ-26), then #21, #36, #40, #38, #31, #58.
 - 15:20: merged #59 (PJ-87 add-ons, migration, deploy OK); PJ-87 done. #60 (PJ-91 tax) awaiting CI/Kinsho. Hisha migration PRs keep conflicting as ours merge. **Plan:** after #60, let Hisha migration PRs go first, one at a time (#55, then #21, #36, #40, #38). #58 sent to OpenHands for the concurrent Xero token-refresh finding.
 - 15:25: merged #60 (PJ-91 tax, migration); PJ-91 done. #55 is first in the migration queue (OpenHands merging main). Dispatched: PJ-19 Jobs to Opus (same session; wires placements, status state machine, live-jobs helper) and PJ-35 typed CMS client to Sonnet (session_01H9XNhxUqa2Sr8uACcPtUS8). Both claimed in D1. Open PRs: 7, plus up to 3 incoming (PJ-19, PJ-35, PJ-94), within the cap of 9 as long as Hisha's PRs keep merging.
+
+## PAUSED 18 Nov 23:15 UTC (founder)
+- 23:10: merged #58 (PJ-55 Xero OAuth). 22 PRs merged on 18 Nov.
+- Paused: sessions told to push their work and stop (Opus #62 jobs privacy fix, PJ-38, PJ-94). No new dispatches or merges until the founder resumes.
+- On hold: #63 (deletes alert subscribers on tenant delete; conflicts with PJ-93). Recommend closing it.
+- Waiting on founder: QUERIES-19NOV.sql output; #63; cutover plan; PJ-96/95/97.
