@@ -20,15 +20,17 @@ node --experimental-strip-types tools/url-parity/src/cli.ts \
 | `--delay` | `250` | ms each worker waits after a request |
 | `--strict` | off | Also exit 1 on `other` and `redirect-unmapped` |
 
-Each path is requested with `HEAD`, redirects off, `User-Agent: url-parity-check` (429/503 are retried honouring `Retry-After`). Results:
+Each path is requested with `GET`, redirects off, `User-Agent: url-parity-check` (429/503 are retried honouring `Retry-After`). 301/308 redirects are then followed (up to 5 hops) and must end in a 200. A 200 must have the same `<title>` as the legacy page (compared case/space-insensitively, ignoring a trailing ` » Site name` or ` | Site name`). Results:
 
-- `ok`: 200
-- `redirect-ok`: 301/308 to the path in `--map`
-- `redirect-wrong`: 301/308 to anywhere else (or another host)
-- `redirect-unmapped`: 301/308 with no `--map` entry (cannot be proven right; add it to the map)
+- `ok`: 200 and title matches
+- `title-mismatch`: 200 but the title differs from the legacy page
+- `redirect-ok`: 301/308 to the path in `--map`, destination returns 200
+- `redirect-wrong`: 301/308 to anywhere else (or another host), or with no `Location`
+- `redirect-broken`: the redirect chain does not end in a 200
+- `redirect-unmapped`: 301/308 with no `--map` entry whose destination returns 200 (cannot be proven the *right* place; add it to the map)
 - `not-found`: 404/410
-- `other`: anything else (302/307, 5xx, network error)
+- `other`: anything else (302/307, 5xx, network error, or legacy title unavailable)
 
-Exit code: `1` on any `not-found` or `redirect-wrong`, `2` on bad arguments or an unreadable sitemap, else `0`.
+Exit code: `1` on any `not-found`, `redirect-wrong`, `redirect-broken` or `title-mismatch`, `2` on bad arguments or an unreadable sitemap, else `0`.
 
 Tests: `pnpm test`. Type check: `pnpm --filter @mission-control/url-parity typecheck`.

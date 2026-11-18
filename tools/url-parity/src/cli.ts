@@ -1,14 +1,16 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import { parseArgs } from 'node:util'
 import {
-  classify,
+  checkTarget,
   collectUrls,
+  extractTitle,
   isFailure,
   parseRedirectMap,
   summarize,
   toCsv,
-  uniquePaths,
+  toPath,
   type Check,
+  type Fetched,
   type RedirectMap,
 } from './lib.ts'
 
@@ -35,23 +37,41 @@ async function fetchText(url: string): Promise<string> {
   return res.text()
 }
 
-async function checkPath(path: string, target: string, map: RedirectMap, delay: number): Promise<Check> {
+async function getOnce(url: string): Promise<Fetched> {
+  const res = await request(url, 'GET', 'manual')
+  const body = res.status === 200 ? await res.text() : ''
+  if (res.status !== 200) await res.body?.cancel()
+  return { status: res.status, location: res.headers.get('location') ?? '', body }
+}
+
+async function checkPath(
+  path: string,
+  legacyUrl: string,
+  target: string,
+  map: RedirectMap,
+  delay: number,
+): Promise<Check> {
   const expected = map.get(path)
   let check: Check
   try {
-    const res = await request(new URL(path, target).href, 'HEAD', 'manual')
-    const location = res.headers.get('location') ?? ''
-    check = {
-      path,
-      status: res.status,
-      location,
-      expected: expected ?? '',
-      result: classify(res.status, location, expected, target),
-    }
+    check = await checkTarget(path, target, expected, {
+      get: async (url) => {
+        const r = await getOnce(url)
+        if (delay > 0) await sleep(delay)
+        return r
+      },
+      legacyTitle: async () => {
+        try {
+          const r = await getOnce(legacyUrl)
+          return r.status === 200 ? extractTitle(r.body) : null
+        } catch {
+          return null
+        }
+      },
+    })
   } catch {
-    check = { path, status: 0, location: '', expected: expected ?? '', result: 'other' }
+    check = { path, status: 0, location: '', expected: expected ?? '', result: 'other', finalStatus: '' }
   }
-  if (delay > 0) await sleep(delay)
   return check
 }
 
@@ -75,7 +95,11 @@ async function main(): Promise<number> {
   const delay = Math.max(0, Number(values.delay) || 0)
   const map = values.map ? parseRedirectMap(await readFile(values.map, 'utf8')) : new Map()
 
-  const paths = uniquePaths(await collectUrls(values.sitemap, fetchText))
+  const entries = new Map<string, string>() // path -> first legacy URL
+  for (const url of await collectUrls(values.sitemap, fetchText)) {
+    if (!entries.has(toPath(url))) entries.set(toPath(url), url)
+  }
+  const paths = [...entries.keys()]
   console.log(`Checking ${paths.length} legacy paths against ${values.target} (concurrency ${concurrency})`)
 
   const checks: Check[] = Array.from({ length: paths.length })
@@ -84,7 +108,7 @@ async function main(): Promise<number> {
     Array.from({ length: Math.min(concurrency, paths.length) }, async () => {
       while (next < paths.length) {
         const i = next++
-        checks[i] = await checkPath(paths[i]!, values.target!, map, delay)
+        checks[i] = await checkPath(paths[i]!, entries.get(paths[i]!)!, values.target!, map, delay)
       }
     }),
   )
