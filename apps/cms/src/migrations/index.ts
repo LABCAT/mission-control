@@ -9,7 +9,7 @@ import * as migration_20261118_021548_legacy_password_hash from './20261118_0215
 import * as migration_20261118_044335_account_auth from './20261118_044335_account_auth';
 import * as migration_20261118_053124_job_taxonomies from './20261118_053124_job_taxonomies';
 import * as migration_20261118_095105_locations from './20261118_095105_locations';
-import * as migration_20261118_102928_tags_drafts from './20261118_102928_tags_drafts';
+import * as migration_20261118_103105_plans from './20261118_103105_plans';
 
 export const migrations = [
   {
@@ -68,8 +68,8 @@ export const migrations = [
     name: '20261118_095105_locations',
   },
   {
-    up: migration_20261118_102928_tags_drafts.up,
-    down: migration_20261118_102928_tags_drafts.down,
-    name: '20261118_102928_tags_drafts'
+    up: migration_20261118_103105_plans.up,
+    down: migration_20261118_103105_plans.down,
+    name: '20261118_103105_plans',
   },
 ];

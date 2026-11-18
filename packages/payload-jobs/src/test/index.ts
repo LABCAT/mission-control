@@ -4,6 +4,7 @@ import {
   buildConfig,
   getPayload,
   type CollectionConfig,
+  type Field,
   type Payload,
 } from 'payload'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -36,7 +37,7 @@ export type TestHarness = {
   tenantB: TestTenant
 }
 
-const Tenants: CollectionConfig = {
+const tenantsCollection = (extraFields: Field[]): CollectionConfig => ({
   slug: 'tenants',
   admin: { useAsTitle: 'name' },
   access: {
@@ -48,9 +49,10 @@ const Tenants: CollectionConfig = {
   fields: [
     { name: 'name', type: 'text', required: true },
     { name: 'slug', type: 'text', required: true, unique: true, index: true },
+    ...extraFields,
   ],
   versions: false,
-}
+})
 
 const Users: CollectionConfig = {
   slug: 'users',
@@ -80,6 +82,12 @@ type BootTestPayloadArgs = {
   collections: CollectionConfig[]
   /** Explicit disposable Postgres database; schema push must not target the CMS database. */
   databaseUrl?: string
+  /** Collections that are not tenant-scoped, e.g. a site-keys stand-in. */
+  globalCollections?: CollectionConfig[]
+  /** Extra data for the seeded tenants, e.g. a currency. Needs matching `tenantFields`. */
+  tenantData?: (which: 'A' | 'B') => Record<string, unknown>
+  /** Extra fields on the tenants collection. */
+  tenantFields?: Field[]
 }
 
 let bootCount = 0
@@ -97,6 +105,9 @@ let bootCount = 0
 export const bootTestPayload = async ({
   collections,
   databaseUrl,
+  globalCollections = [],
+  tenantData = () => ({}),
+  tenantFields = [],
 }: BootTestPayloadArgs): Promise<TestHarness> => {
   const testDatabaseUrl = databaseUrl ?? process.env.TEST_DATABASE_URL
 
@@ -116,7 +127,7 @@ export const bootTestPayload = async ({
     admin: { user: 'users' },
     auth: { passwordHashIterations: 100000 },
     secret: 'test-secret',
-    collections: [Users, Tenants, ...collections],
+    collections: [Users, tenantsCollection(tenantFields), ...globalCollections, ...collections],
     db: postgresAdapter({
       pool: {
         connectionString: testDatabaseUrl,
@@ -221,14 +232,14 @@ export const bootTestPayload = async ({
 
     const createdA = (await payload.create({
       collection: 'tenants',
-      data: { name: 'Tenant A', slug: `tenant-a-${runId}` },
+      data: { name: 'Tenant A', slug: `tenant-a-${runId}`, ...tenantData('A') },
       overrideAccess: true,
     })) as TestTenant
     tenantIds.push(createdA.id)
 
     const createdB = (await payload.create({
       collection: 'tenants',
-      data: { name: 'Tenant B', slug: `tenant-b-${runId}` },
+      data: { name: 'Tenant B', slug: `tenant-b-${runId}`, ...tenantData('B') },
       overrideAccess: true,
     })) as TestTenant
     tenantIds.push(createdB.id)
@@ -283,8 +294,12 @@ export const bootTestPayload = async ({
 }
 
 type TenantIsolationArgs = {
+  /** Extra harness options, e.g. tenant fields the collection reads. */
+  boot?: Omit<BootTestPayloadArgs, 'collections'>
   /** The collection to exercise; it must be tenant-scoped by the multi-tenant plugin. */
   collection: CollectionConfig
+  /** Other tenant-scoped collections it needs, e.g. the taxonomies plans relate to. */
+  extraCollections?: CollectionConfig[]
   /** Returns the non-tenant fields for a new document; the harness adds `tenant`. */
   createData: (tenant: TestTenant) => Record<string, unknown>
 }
@@ -295,7 +310,12 @@ type TenantIsolationArgs = {
  * neither read, write nor delete tenant B's documents (and vice versa), while a
  * super-admin can see everything. Later tasks call this once per collection.
  */
-export const tenantIsolation = ({ collection, createData }: TenantIsolationArgs): void => {
+export const tenantIsolation = ({
+  boot,
+  collection,
+  createData,
+  extraCollections = [],
+}: TenantIsolationArgs): void => {
   const slug = collection.slug
 
   describe(`tenant isolation: ${slug}`, () => {
@@ -304,7 +324,7 @@ export const tenantIsolation = ({ collection, createData }: TenantIsolationArgs)
     let docB: { id: number | string }
 
     beforeAll(async () => {
-      harness = await bootTestPayload({ collections: [collection] })
+      harness = await bootTestPayload({ ...boot, collections: [collection, ...extraCollections] })
 
       docA = (await harness.payload.create({
         collection: slug,

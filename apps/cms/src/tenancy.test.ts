@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 import {
   ACCOUNT_SIGNUP_CONTEXT,
   hashSiteKey,
+  PAYLOAD_JOBS_TENANT_COLLECTIONS,
   payloadJobs,
   type MissionControlUser,
 } from '@mission-control/payload-jobs'
@@ -447,6 +448,70 @@ describe('job-board taxonomies', () => {
 
     expect(await collectionAccess(config, 'create', 'job-tags', tenantAdminA)).toBeTruthy()
     expect(await collectionAccess(config, 'create', 'job-tags', employer)).toBe(false)
+  })
+})
+
+describe('plans (PJ-21)', () => {
+  const employerA: TestUser = {
+    id: 30,
+    collection: 'users',
+    role: 'user',
+    tenants: [{ role: 'employer', tenant: tenantA }],
+  }
+  const seekerA: TestUser = {
+    id: 31,
+    collection: 'users',
+    role: 'user',
+    tenants: [{ role: 'seeker', tenant: tenantA }],
+  }
+  const active = { status: { equals: 'active' } }
+
+  it('registers every tenant-scoped job-board collection with the multi-tenant plugin', () => {
+    for (const slug of PAYLOAD_JOBS_TENANT_COLLECTIONS) {
+      expect(Object.keys(multiTenantOptions.collections)).toContain(slug)
+    }
+  })
+
+  it('registers the plans collection with its tenant field', async () => {
+    const config = await buildConfig()
+    const plans = config.collections?.find((collection) => collection.slug === 'plans')
+
+    expect(plans?.fields.some((field) => 'name' in field && field.name === 'tenant')).toBe(true)
+  })
+
+  it('shows staff every plan in their tenant and employers only active ones', async () => {
+    const config = await buildConfig()
+
+    expect(await collectionAccess(config, 'read', 'plans', tenantAdminA)).toEqual({
+      and: [{ tenant: { in: [tenantA.id] } }, { tenant: { in: [tenantA.id] } }],
+    })
+    expect(await collectionAccess(config, 'read', 'plans', employerA)).toEqual({
+      and: [
+        { and: [{ tenant: { in: [tenantA.id] } }, active] },
+        { tenant: { in: [tenantA.id] } },
+      ],
+    })
+    expect(await collectionAccess(config, 'read', 'plans', seekerA)).toBe(false)
+    expect(await collectionAccess(config, 'read', 'plans', null)).toBe(false)
+  })
+
+  it('lets a site key read only its tenant’s active plans', async () => {
+    const config = await buildConfig()
+    const req = await siteKeyRequest({ key: 'sk_tenant', tenant: tenantA.id })
+    ;(req.payload.collections as Record<string, unknown>)['site-keys'] = {}
+
+    expect(await collectionAccessWithReq(config, 'read', 'plans', req)).toEqual({
+      and: [{ tenant: { equals: tenantA.id } }, active],
+    })
+  })
+
+  it('does not let employers or site keys write plans', async () => {
+    const config = await buildConfig()
+    const req = await siteKeyRequest({ key: 'sk_tenant', tenant: tenantA.id })
+
+    expect(await collectionAccess(config, 'update', 'plans', employerA)).toBe(false)
+    expect(await collectionAccess(config, 'delete', 'plans', tenantAdminA)).toBe(false)
+    expect(await collectionAccessWithReq(config, 'create', 'plans', req)).toBe(false)
   })
 })
 
