@@ -515,6 +515,51 @@ describe('plans (PJ-21)', () => {
   })
 })
 
+describe('alert subscriptions (PJ-26)', () => {
+  const seekerA: TestUser = {
+    id: 31,
+    collection: 'users',
+    role: 'user',
+    tenants: [{ role: 'seeker', tenant: tenantA }],
+  }
+
+  it('registers the collection and scopes reads to the tenant admin', async () => {
+    const config = await buildConfig()
+    const alerts = config.collections?.find(
+      (collection) => collection.slug === 'alert-subscriptions',
+    )
+
+    expect(alerts?.fields.some((field) => 'name' in field && field.name === 'tenant')).toBe(true)
+    expect(await collectionAccess(config, 'read', 'alert-subscriptions', tenantAdminA)).toEqual({
+      tenant: { in: [tenantA.id] },
+    })
+    // The plugin's own tenant constraint sits in front of the collection's read access.
+    expect(await baseAccess(config, 'read', 'alert-subscriptions', tenantAdminA)).toEqual({
+      tenant: { in: [tenantA.id] },
+    })
+    // Editors and seekers never see the subscriber list.
+    const editorA: TestUser = {
+      id: 32,
+      collection: 'users',
+      role: 'user',
+      tenants: [{ role: 'editor', tenant: tenantA }],
+    }
+    expect(await collectionAccess(config, 'read', 'alert-subscriptions', editorA)).toBe(false)
+    expect(await collectionAccess(config, 'read', 'alert-subscriptions', seekerA)).toBe(false)
+  })
+
+  it('rejects anonymous and site-key writes, so subscribers use their token links', async () => {
+    const config = await buildConfig()
+    const req = await siteKeyRequest({ key: 'sk_tenant', tenant: tenantA.id })
+
+    expect(await collectionAccess(config, 'create', 'alert-subscriptions', tenantAdminA)).toBe(
+      false,
+    )
+    expect(await collectionAccessWithReq(config, 'read', 'alert-subscriptions', req)).toBe(false)
+    expect(await collectionAccessWithReq(config, 'create', 'alert-subscriptions', req)).toBe(false)
+  })
+})
+
 describe('organisations (PJ-18)', () => {
   const employerA: TestUser = {
     id: 40,

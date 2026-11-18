@@ -37,6 +37,9 @@ export const multiTenantOptions = {
     plans: { accessResultOverride: denySeekerOnly(({ accessResult }) => accessResult) },
     // mission-control: add-ons, like plans, read site keys themselves (on-sale only) (PJ-87).
     'add-ons': { accessResultOverride: denySeekerOnly(({ accessResult }) => accessResult) },
+    // mission-control: alert subscribers are personal data (PJ-26). The collection's own access
+    // already denies site keys, seekers and anonymous callers, so no override is needed here.
+    'alert-subscriptions': {},
   },
   tenantsArrayField: {
     rowFields: [

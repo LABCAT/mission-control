@@ -88,6 +88,7 @@ export interface Config {
     documents: Document;
     locations: Location;
     organisations: Organisation;
+    'alert-subscriptions': AlertSubscription;
     'job-categories': JobCategory;
     'job-types': JobType;
     'job-tags': JobTag;
@@ -113,6 +114,7 @@ export interface Config {
     documents: DocumentsSelect<false> | DocumentsSelect<true>;
     locations: LocationsSelect<false> | LocationsSelect<true>;
     organisations: OrganisationsSelect<false> | OrganisationsSelect<true>;
+    'alert-subscriptions': AlertSubscriptionsSelect<false> | AlertSubscriptionsSelect<true>;
     'job-categories': JobCategoriesSelect<false> | JobCategoriesSelect<true>;
     'job-types': JobTypesSelect<false> | JobTypesSelect<true>;
     'job-tags': JobTagsSelect<false> | JobTagsSelect<true>;
@@ -708,6 +710,60 @@ export interface Document {
   focalY?: number | null;
 }
 /**
+ * Job alert subscribers. They confirm by email and manage themselves through their link; staff only read this list.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "alert-subscriptions".
+ */
+export interface AlertSubscription {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  /**
+   * Stored lowercase. The subscriber confirms it before any alert is sent.
+   */
+  email: string;
+  /**
+   * Set when the subscriber follows the double opt-in link. Only confirmed subscribers get alerts.
+   */
+  confirmed?: boolean | null;
+  confirmToken?: string | null;
+  manageToken?: string | null;
+  /**
+   * Words a job must mention, separated by spaces. Empty means any job.
+   */
+  keywords?: string | null;
+  /**
+   * Only jobs in these job categories. Empty means any.
+   */
+  categories?: (number | JobCategory)[] | null;
+  /**
+   * Only jobs in these job types. Empty means any.
+   */
+  types?: (number | JobType)[] | null;
+  /**
+   * Only jobs in these locations. Empty means any.
+   */
+  locations?: (number | Location)[] | null;
+  /**
+   * When the daily digest last went out. The next digest starts from here.
+   */
+  lastSentAt?: string | null;
+  /**
+   * WordPress user id for the alert meta, so the importer can match it.
+   */
+  legacyId?: number | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "job-categories".
  */
@@ -1159,6 +1215,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'organisations';
         value: number | Organisation;
+      } | null)
+    | ({
+        relationTo: 'alert-subscriptions';
+        value: number | AlertSubscription;
       } | null)
     | ({
         relationTo: 'job-categories';
@@ -1626,6 +1686,27 @@ export interface OrganisationsSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "alert-subscriptions_select".
+ */
+export interface AlertSubscriptionsSelect<T extends boolean = true> {
+  tenant?: T;
+  email?: T;
+  confirmed?: T;
+  confirmToken?: T;
+  manageToken?: T;
+  keywords?: T;
+  categories?: T;
+  types?: T;
+  locations?: T;
+  lastSentAt?: T;
+  legacyId?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "job-categories_select".
  */
 export interface JobCategoriesSelect<T extends boolean = true> {
@@ -1954,6 +2035,7 @@ export interface CollectionQueryWidget {
       | 'documents'
       | 'locations'
       | 'organisations'
+      | 'alert-subscriptions'
       | 'job-categories'
       | 'job-types'
       | 'job-tags'
@@ -1993,6 +2075,7 @@ export interface ActivityWidget {
           | 'documents'
           | 'locations'
           | 'organisations'
+          | 'alert-subscriptions'
           | 'job-categories'
           | 'job-types'
           | 'job-tags'
