@@ -1,0 +1,260 @@
+import { MigrateUpArgs, MigrateDownArgs, sql } from '@payloadcms/db-postgres'
+
+export async function up({ db, payload, req }: MigrateUpArgs): Promise<void> {
+  await db.execute(sql`
+   CREATE TABLE "job_categories" (
+  	"id" serial PRIMARY KEY NOT NULL,
+  	"tenant_id" integer,
+  	"slug" varchar NOT NULL,
+  	"legacy_id" numeric,
+  	"updated_at" timestamp(3) with time zone DEFAULT now() NOT NULL,
+  	"created_at" timestamp(3) with time zone DEFAULT now() NOT NULL
+  );
+  
+  CREATE TABLE "job_categories_locales" (
+  	"name" varchar NOT NULL,
+  	"id" serial PRIMARY KEY NOT NULL,
+  	"_locale" "_locales" NOT NULL,
+  	"_parent_id" integer NOT NULL
+  );
+  
+  CREATE TABLE "job_categories_rels" (
+  	"id" serial PRIMARY KEY NOT NULL,
+  	"order" integer,
+  	"parent_id" integer NOT NULL,
+  	"path" varchar NOT NULL,
+  	"users_id" integer
+  );
+  
+  CREATE TABLE "job_types" (
+  	"id" serial PRIMARY KEY NOT NULL,
+  	"tenant_id" integer,
+  	"slug" varchar NOT NULL,
+  	"legacy_id" numeric,
+  	"is_volunteer" boolean DEFAULT false,
+  	"updated_at" timestamp(3) with time zone DEFAULT now() NOT NULL,
+  	"created_at" timestamp(3) with time zone DEFAULT now() NOT NULL
+  );
+  
+  CREATE TABLE "job_types_locales" (
+  	"name" varchar NOT NULL,
+  	"id" serial PRIMARY KEY NOT NULL,
+  	"_locale" "_locales" NOT NULL,
+  	"_parent_id" integer NOT NULL
+  );
+  
+  CREATE TABLE "job_types_rels" (
+  	"id" serial PRIMARY KEY NOT NULL,
+  	"order" integer,
+  	"parent_id" integer NOT NULL,
+  	"path" varchar NOT NULL,
+  	"users_id" integer
+  );
+  
+  CREATE TABLE "job_tags" (
+  	"id" serial PRIMARY KEY NOT NULL,
+  	"tenant_id" integer,
+  	"slug" varchar NOT NULL,
+  	"legacy_id" numeric,
+  	"updated_at" timestamp(3) with time zone DEFAULT now() NOT NULL,
+  	"created_at" timestamp(3) with time zone DEFAULT now() NOT NULL
+  );
+  
+  CREATE TABLE "job_tags_locales" (
+  	"name" varchar NOT NULL,
+  	"id" serial PRIMARY KEY NOT NULL,
+  	"_locale" "_locales" NOT NULL,
+  	"_parent_id" integer NOT NULL
+  );
+  
+  CREATE TABLE "job_tags_rels" (
+  	"id" serial PRIMARY KEY NOT NULL,
+  	"order" integer,
+  	"parent_id" integer NOT NULL,
+  	"path" varchar NOT NULL,
+  	"users_id" integer
+  );
+  
+  CREATE TABLE "salary_bands" (
+  	"id" serial PRIMARY KEY NOT NULL,
+  	"tenant_id" integer,
+  	"slug" varchar NOT NULL,
+  	"legacy_id" numeric,
+  	"updated_at" timestamp(3) with time zone DEFAULT now() NOT NULL,
+  	"created_at" timestamp(3) with time zone DEFAULT now() NOT NULL
+  );
+  
+  CREATE TABLE "salary_bands_locales" (
+  	"name" varchar NOT NULL,
+  	"id" serial PRIMARY KEY NOT NULL,
+  	"_locale" "_locales" NOT NULL,
+  	"_parent_id" integer NOT NULL
+  );
+  
+  CREATE TABLE "salary_bands_rels" (
+  	"id" serial PRIMARY KEY NOT NULL,
+  	"order" integer,
+  	"parent_id" integer NOT NULL,
+  	"path" varchar NOT NULL,
+  	"users_id" integer
+  );
+  
+  CREATE TABLE "areas_of_focus" (
+  	"id" serial PRIMARY KEY NOT NULL,
+  	"tenant_id" integer,
+  	"slug" varchar NOT NULL,
+  	"legacy_id" numeric,
+  	"updated_at" timestamp(3) with time zone DEFAULT now() NOT NULL,
+  	"created_at" timestamp(3) with time zone DEFAULT now() NOT NULL
+  );
+  
+  CREATE TABLE "areas_of_focus_locales" (
+  	"name" varchar NOT NULL,
+  	"id" serial PRIMARY KEY NOT NULL,
+  	"_locale" "_locales" NOT NULL,
+  	"_parent_id" integer NOT NULL
+  );
+  
+  CREATE TABLE "areas_of_focus_rels" (
+  	"id" serial PRIMARY KEY NOT NULL,
+  	"order" integer,
+  	"parent_id" integer NOT NULL,
+  	"path" varchar NOT NULL,
+  	"users_id" integer
+  );
+  
+  ALTER TABLE "payload_locked_documents_rels" ADD COLUMN "job_categories_id" integer;
+  ALTER TABLE "payload_locked_documents_rels" ADD COLUMN "job_types_id" integer;
+  ALTER TABLE "payload_locked_documents_rels" ADD COLUMN "job_tags_id" integer;
+  ALTER TABLE "payload_locked_documents_rels" ADD COLUMN "salary_bands_id" integer;
+  ALTER TABLE "payload_locked_documents_rels" ADD COLUMN "areas_of_focus_id" integer;
+  ALTER TABLE "job_categories" ADD CONSTRAINT "job_categories_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE set null ON UPDATE no action;
+  ALTER TABLE "job_categories_locales" ADD CONSTRAINT "job_categories_locales_parent_id_fk" FOREIGN KEY ("_parent_id") REFERENCES "public"."job_categories"("id") ON DELETE cascade ON UPDATE no action;
+  ALTER TABLE "job_categories_rels" ADD CONSTRAINT "job_categories_rels_parent_fk" FOREIGN KEY ("parent_id") REFERENCES "public"."job_categories"("id") ON DELETE cascade ON UPDATE no action;
+  ALTER TABLE "job_categories_rels" ADD CONSTRAINT "job_categories_rels_users_fk" FOREIGN KEY ("users_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;
+  ALTER TABLE "job_types" ADD CONSTRAINT "job_types_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE set null ON UPDATE no action;
+  ALTER TABLE "job_types_locales" ADD CONSTRAINT "job_types_locales_parent_id_fk" FOREIGN KEY ("_parent_id") REFERENCES "public"."job_types"("id") ON DELETE cascade ON UPDATE no action;
+  ALTER TABLE "job_types_rels" ADD CONSTRAINT "job_types_rels_parent_fk" FOREIGN KEY ("parent_id") REFERENCES "public"."job_types"("id") ON DELETE cascade ON UPDATE no action;
+  ALTER TABLE "job_types_rels" ADD CONSTRAINT "job_types_rels_users_fk" FOREIGN KEY ("users_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;
+  ALTER TABLE "job_tags" ADD CONSTRAINT "job_tags_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE set null ON UPDATE no action;
+  ALTER TABLE "job_tags_locales" ADD CONSTRAINT "job_tags_locales_parent_id_fk" FOREIGN KEY ("_parent_id") REFERENCES "public"."job_tags"("id") ON DELETE cascade ON UPDATE no action;
+  ALTER TABLE "job_tags_rels" ADD CONSTRAINT "job_tags_rels_parent_fk" FOREIGN KEY ("parent_id") REFERENCES "public"."job_tags"("id") ON DELETE cascade ON UPDATE no action;
+  ALTER TABLE "job_tags_rels" ADD CONSTRAINT "job_tags_rels_users_fk" FOREIGN KEY ("users_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;
+  ALTER TABLE "salary_bands" ADD CONSTRAINT "salary_bands_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE set null ON UPDATE no action;
+  ALTER TABLE "salary_bands_locales" ADD CONSTRAINT "salary_bands_locales_parent_id_fk" FOREIGN KEY ("_parent_id") REFERENCES "public"."salary_bands"("id") ON DELETE cascade ON UPDATE no action;
+  ALTER TABLE "salary_bands_rels" ADD CONSTRAINT "salary_bands_rels_parent_fk" FOREIGN KEY ("parent_id") REFERENCES "public"."salary_bands"("id") ON DELETE cascade ON UPDATE no action;
+  ALTER TABLE "salary_bands_rels" ADD CONSTRAINT "salary_bands_rels_users_fk" FOREIGN KEY ("users_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;
+  ALTER TABLE "areas_of_focus" ADD CONSTRAINT "areas_of_focus_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE set null ON UPDATE no action;
+  ALTER TABLE "areas_of_focus_locales" ADD CONSTRAINT "areas_of_focus_locales_parent_id_fk" FOREIGN KEY ("_parent_id") REFERENCES "public"."areas_of_focus"("id") ON DELETE cascade ON UPDATE no action;
+  ALTER TABLE "areas_of_focus_rels" ADD CONSTRAINT "areas_of_focus_rels_parent_fk" FOREIGN KEY ("parent_id") REFERENCES "public"."areas_of_focus"("id") ON DELETE cascade ON UPDATE no action;
+  ALTER TABLE "areas_of_focus_rels" ADD CONSTRAINT "areas_of_focus_rels_users_fk" FOREIGN KEY ("users_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;
+  CREATE INDEX "job_categories_tenant_idx" ON "job_categories" USING btree ("tenant_id");
+  CREATE INDEX "job_categories_legacy_id_idx" ON "job_categories" USING btree ("legacy_id");
+  CREATE INDEX "job_categories_updated_at_idx" ON "job_categories" USING btree ("updated_at");
+  CREATE INDEX "job_categories_created_at_idx" ON "job_categories" USING btree ("created_at");
+  CREATE UNIQUE INDEX "tenant_slug_idx" ON "job_categories" USING btree ("tenant_id","slug");
+  CREATE UNIQUE INDEX "job_categories_locales_parent_id_locale_unique" ON "job_categories_locales" USING btree ("_parent_id","_locale");
+  CREATE INDEX "job_categories_rels_order_idx" ON "job_categories_rels" USING btree ("order");
+  CREATE INDEX "job_categories_rels_parent_idx" ON "job_categories_rels" USING btree ("parent_id");
+  CREATE INDEX "job_categories_rels_path_idx" ON "job_categories_rels" USING btree ("path");
+  CREATE INDEX "job_categories_rels_users_id_idx" ON "job_categories_rels" USING btree ("users_id");
+  CREATE INDEX "job_types_tenant_idx" ON "job_types" USING btree ("tenant_id");
+  CREATE INDEX "job_types_legacy_id_idx" ON "job_types" USING btree ("legacy_id");
+  CREATE INDEX "job_types_updated_at_idx" ON "job_types" USING btree ("updated_at");
+  CREATE INDEX "job_types_created_at_idx" ON "job_types" USING btree ("created_at");
+  CREATE UNIQUE INDEX "tenant_slug_1_idx" ON "job_types" USING btree ("tenant_id","slug");
+  CREATE UNIQUE INDEX "job_types_locales_parent_id_locale_unique" ON "job_types_locales" USING btree ("_parent_id","_locale");
+  CREATE INDEX "job_types_rels_order_idx" ON "job_types_rels" USING btree ("order");
+  CREATE INDEX "job_types_rels_parent_idx" ON "job_types_rels" USING btree ("parent_id");
+  CREATE INDEX "job_types_rels_path_idx" ON "job_types_rels" USING btree ("path");
+  CREATE INDEX "job_types_rels_users_id_idx" ON "job_types_rels" USING btree ("users_id");
+  CREATE INDEX "job_tags_tenant_idx" ON "job_tags" USING btree ("tenant_id");
+  CREATE INDEX "job_tags_legacy_id_idx" ON "job_tags" USING btree ("legacy_id");
+  CREATE INDEX "job_tags_updated_at_idx" ON "job_tags" USING btree ("updated_at");
+  CREATE INDEX "job_tags_created_at_idx" ON "job_tags" USING btree ("created_at");
+  CREATE UNIQUE INDEX "tenant_slug_2_idx" ON "job_tags" USING btree ("tenant_id","slug");
+  CREATE UNIQUE INDEX "job_tags_locales_parent_id_locale_unique" ON "job_tags_locales" USING btree ("_parent_id","_locale");
+  CREATE INDEX "job_tags_rels_order_idx" ON "job_tags_rels" USING btree ("order");
+  CREATE INDEX "job_tags_rels_parent_idx" ON "job_tags_rels" USING btree ("parent_id");
+  CREATE INDEX "job_tags_rels_path_idx" ON "job_tags_rels" USING btree ("path");
+  CREATE INDEX "job_tags_rels_users_id_idx" ON "job_tags_rels" USING btree ("users_id");
+  CREATE INDEX "salary_bands_tenant_idx" ON "salary_bands" USING btree ("tenant_id");
+  CREATE INDEX "salary_bands_legacy_id_idx" ON "salary_bands" USING btree ("legacy_id");
+  CREATE INDEX "salary_bands_updated_at_idx" ON "salary_bands" USING btree ("updated_at");
+  CREATE INDEX "salary_bands_created_at_idx" ON "salary_bands" USING btree ("created_at");
+  CREATE UNIQUE INDEX "tenant_slug_3_idx" ON "salary_bands" USING btree ("tenant_id","slug");
+  CREATE UNIQUE INDEX "salary_bands_locales_parent_id_locale_unique" ON "salary_bands_locales" USING btree ("_parent_id","_locale");
+  CREATE INDEX "salary_bands_rels_order_idx" ON "salary_bands_rels" USING btree ("order");
+  CREATE INDEX "salary_bands_rels_parent_idx" ON "salary_bands_rels" USING btree ("parent_id");
+  CREATE INDEX "salary_bands_rels_path_idx" ON "salary_bands_rels" USING btree ("path");
+  CREATE INDEX "salary_bands_rels_users_id_idx" ON "salary_bands_rels" USING btree ("users_id");
+  CREATE INDEX "areas_of_focus_tenant_idx" ON "areas_of_focus" USING btree ("tenant_id");
+  CREATE INDEX "areas_of_focus_legacy_id_idx" ON "areas_of_focus" USING btree ("legacy_id");
+  CREATE INDEX "areas_of_focus_updated_at_idx" ON "areas_of_focus" USING btree ("updated_at");
+  CREATE INDEX "areas_of_focus_created_at_idx" ON "areas_of_focus" USING btree ("created_at");
+  CREATE UNIQUE INDEX "tenant_slug_4_idx" ON "areas_of_focus" USING btree ("tenant_id","slug");
+  CREATE UNIQUE INDEX "areas_of_focus_locales_parent_id_locale_unique" ON "areas_of_focus_locales" USING btree ("_parent_id","_locale");
+  CREATE INDEX "areas_of_focus_rels_order_idx" ON "areas_of_focus_rels" USING btree ("order");
+  CREATE INDEX "areas_of_focus_rels_parent_idx" ON "areas_of_focus_rels" USING btree ("parent_id");
+  CREATE INDEX "areas_of_focus_rels_path_idx" ON "areas_of_focus_rels" USING btree ("path");
+  CREATE INDEX "areas_of_focus_rels_users_id_idx" ON "areas_of_focus_rels" USING btree ("users_id");
+  ALTER TABLE "payload_locked_documents_rels" ADD CONSTRAINT "payload_locked_documents_rels_job_categories_fk" FOREIGN KEY ("job_categories_id") REFERENCES "public"."job_categories"("id") ON DELETE cascade ON UPDATE no action;
+  ALTER TABLE "payload_locked_documents_rels" ADD CONSTRAINT "payload_locked_documents_rels_job_types_fk" FOREIGN KEY ("job_types_id") REFERENCES "public"."job_types"("id") ON DELETE cascade ON UPDATE no action;
+  ALTER TABLE "payload_locked_documents_rels" ADD CONSTRAINT "payload_locked_documents_rels_job_tags_fk" FOREIGN KEY ("job_tags_id") REFERENCES "public"."job_tags"("id") ON DELETE cascade ON UPDATE no action;
+  ALTER TABLE "payload_locked_documents_rels" ADD CONSTRAINT "payload_locked_documents_rels_salary_bands_fk" FOREIGN KEY ("salary_bands_id") REFERENCES "public"."salary_bands"("id") ON DELETE cascade ON UPDATE no action;
+  ALTER TABLE "payload_locked_documents_rels" ADD CONSTRAINT "payload_locked_documents_rels_areas_of_focus_fk" FOREIGN KEY ("areas_of_focus_id") REFERENCES "public"."areas_of_focus"("id") ON DELETE cascade ON UPDATE no action;
+  CREATE INDEX "payload_locked_documents_rels_job_categories_id_idx" ON "payload_locked_documents_rels" USING btree ("job_categories_id");
+  CREATE INDEX "payload_locked_documents_rels_job_types_id_idx" ON "payload_locked_documents_rels" USING btree ("job_types_id");
+  CREATE INDEX "payload_locked_documents_rels_job_tags_id_idx" ON "payload_locked_documents_rels" USING btree ("job_tags_id");
+  CREATE INDEX "payload_locked_documents_rels_salary_bands_id_idx" ON "payload_locked_documents_rels" USING btree ("salary_bands_id");
+  CREATE INDEX "payload_locked_documents_rels_areas_of_focus_id_idx" ON "payload_locked_documents_rels" USING btree ("areas_of_focus_id");`)
+}
+
+export async function down({ db, payload, req }: MigrateDownArgs): Promise<void> {
+  await db.execute(sql`
+   ALTER TABLE "payload_locked_documents_rels" DROP CONSTRAINT IF EXISTS "payload_locked_documents_rels_job_categories_fk";
+  ALTER TABLE "payload_locked_documents_rels" DROP CONSTRAINT IF EXISTS "payload_locked_documents_rels_job_types_fk";
+  ALTER TABLE "payload_locked_documents_rels" DROP CONSTRAINT IF EXISTS "payload_locked_documents_rels_job_tags_fk";
+  ALTER TABLE "payload_locked_documents_rels" DROP CONSTRAINT IF EXISTS "payload_locked_documents_rels_salary_bands_fk";
+  ALTER TABLE "payload_locked_documents_rels" DROP CONSTRAINT IF EXISTS "payload_locked_documents_rels_areas_of_focus_fk";
+  DROP INDEX IF EXISTS "payload_locked_documents_rels_job_categories_id_idx";
+  DROP INDEX IF EXISTS "payload_locked_documents_rels_job_types_id_idx";
+  DROP INDEX IF EXISTS "payload_locked_documents_rels_job_tags_id_idx";
+  DROP INDEX IF EXISTS "payload_locked_documents_rels_salary_bands_id_idx";
+  DROP INDEX IF EXISTS "payload_locked_documents_rels_areas_of_focus_id_idx";
+  ALTER TABLE "payload_locked_documents_rels" DROP COLUMN IF EXISTS "job_categories_id";
+  ALTER TABLE "payload_locked_documents_rels" DROP COLUMN IF EXISTS "job_types_id";
+  ALTER TABLE "payload_locked_documents_rels" DROP COLUMN IF EXISTS "job_tags_id";
+  ALTER TABLE "payload_locked_documents_rels" DROP COLUMN IF EXISTS "salary_bands_id";
+  ALTER TABLE "payload_locked_documents_rels" DROP COLUMN IF EXISTS "areas_of_focus_id";
+  ALTER TABLE "job_categories" DISABLE ROW LEVEL SECURITY;
+  ALTER TABLE "job_categories_locales" DISABLE ROW LEVEL SECURITY;
+  ALTER TABLE "job_categories_rels" DISABLE ROW LEVEL SECURITY;
+  ALTER TABLE "job_types" DISABLE ROW LEVEL SECURITY;
+  ALTER TABLE "job_types_locales" DISABLE ROW LEVEL SECURITY;
+  ALTER TABLE "job_types_rels" DISABLE ROW LEVEL SECURITY;
+  ALTER TABLE "job_tags" DISABLE ROW LEVEL SECURITY;
+  ALTER TABLE "job_tags_locales" DISABLE ROW LEVEL SECURITY;
+  ALTER TABLE "job_tags_rels" DISABLE ROW LEVEL SECURITY;
+  ALTER TABLE "salary_bands" DISABLE ROW LEVEL SECURITY;
+  ALTER TABLE "salary_bands_locales" DISABLE ROW LEVEL SECURITY;
+  ALTER TABLE "salary_bands_rels" DISABLE ROW LEVEL SECURITY;
+  ALTER TABLE "areas_of_focus" DISABLE ROW LEVEL SECURITY;
+  ALTER TABLE "areas_of_focus_locales" DISABLE ROW LEVEL SECURITY;
+  ALTER TABLE "areas_of_focus_rels" DISABLE ROW LEVEL SECURITY;
+  DROP TABLE "job_categories" CASCADE;
+  DROP TABLE "job_categories_locales" CASCADE;
+  DROP TABLE "job_categories_rels" CASCADE;
+  DROP TABLE "job_types" CASCADE;
+  DROP TABLE "job_types_locales" CASCADE;
+  DROP TABLE "job_types_rels" CASCADE;
+  DROP TABLE "job_tags" CASCADE;
+  DROP TABLE "job_tags_locales" CASCADE;
+  DROP TABLE "job_tags_rels" CASCADE;
+  DROP TABLE "salary_bands" CASCADE;
+  DROP TABLE "salary_bands_locales" CASCADE;
+  DROP TABLE "salary_bands_rels" CASCADE;
+  DROP TABLE "areas_of_focus" CASCADE;
+  DROP TABLE "areas_of_focus_locales" CASCADE;
+  DROP TABLE "areas_of_focus_rels" CASCADE;`)
+}

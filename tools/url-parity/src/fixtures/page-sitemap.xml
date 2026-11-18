@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://legacy.example/about-us/</loc></url>
+  <url><loc>https://legacy.example/jobs/</loc></url>
+  <url><loc><![CDATA[https://legacy.example/search/?a=1&b=2]]></loc></url>
+</urlset>

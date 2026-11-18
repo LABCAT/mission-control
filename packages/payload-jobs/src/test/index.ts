@@ -4,6 +4,7 @@ import {
   buildConfig,
   getPayload,
   type CollectionConfig,
+  type Field,
   type Payload,
 } from 'payload'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -36,7 +37,7 @@ export type TestHarness = {
   tenantB: TestTenant
 }
 
-const Tenants: CollectionConfig = {
+const tenantsCollection = (extraFields: Field[]): CollectionConfig => ({
   slug: 'tenants',
   admin: { useAsTitle: 'name' },
   access: {
@@ -48,9 +49,10 @@ const Tenants: CollectionConfig = {
   fields: [
     { name: 'name', type: 'text', required: true },
     { name: 'slug', type: 'text', required: true, unique: true, index: true },
+    ...extraFields,
   ],
   versions: false,
-}
+})
 
 const Users: CollectionConfig = {
   slug: 'users',
@@ -80,6 +82,12 @@ type BootTestPayloadArgs = {
   collections: CollectionConfig[]
   /** Explicit disposable Postgres database; schema push must not target the CMS database. */
   databaseUrl?: string
+  /** Collections that are not tenant-scoped, e.g. a site-keys stand-in. */
+  globalCollections?: CollectionConfig[]
+  /** Extra data for the seeded tenants, e.g. a currency. Needs matching `tenantFields`. */
+  tenantData?: (which: 'A' | 'B') => Record<string, unknown>
+  /** Extra fields on the tenants collection. */
+  tenantFields?: Field[]
 }
 
 let bootCount = 0
@@ -90,10 +98,16 @@ let bootCount = 0
  *
  * The users are real auth documents: Payload's authorship tracking (`createdBy` /
  * `updatedBy`) foreign-keys every document a user creates back to the users collection.
+ *
+ * Every boot pushes into a schema of its own, so `TEST_DATABASE_URL` must point at a
+ * disposable database.
  */
 export const bootTestPayload = async ({
   collections,
   databaseUrl,
+  globalCollections = [],
+  tenantData = () => ({}),
+  tenantFields = [],
 }: BootTestPayloadArgs): Promise<TestHarness> => {
   const testDatabaseUrl = databaseUrl ?? process.env.TEST_DATABASE_URL
 
@@ -101,11 +115,19 @@ export const bootTestPayload = async ({
     throw new Error('Set TEST_DATABASE_URL to a disposable Postgres database before running integration tests')
   }
 
+  // Each boot gets its own schema. Drizzle's dev push compares the whole schema, so two
+  // boots with different collections in one schema prompt to rename each other's tables.
+  const schemaName = `mc_test_${++bootCount}_${Math.random().toString(36).slice(2, 8)}`
+
+  // Payload skips the push when the config's tables match the previous push in this
+  // process. Every boot here is a fresh schema, so the push must always run.
+  process.env.PAYLOAD_FORCE_DRIZZLE_PUSH = 'true'
+
   const config = await buildConfig({
     admin: { user: 'users' },
     auth: { passwordHashIterations: 100000 },
     secret: 'test-secret',
-    collections: [Users, Tenants, ...collections],
+    collections: [Users, tenantsCollection(tenantFields), ...globalCollections, ...collections],
     db: postgresAdapter({
       pool: {
         connectionString: testDatabaseUrl,
@@ -113,6 +135,7 @@ export const bootTestPayload = async ({
       },
       // CI gets a fresh Postgres; push the schema for this test run instead of migrations.
       push: true,
+      schemaName,
     }),
     plugins: [
       multiTenantPlugin({
@@ -135,7 +158,7 @@ export const bootTestPayload = async ({
   })
 
   // A unique key so concurrent tests never reuse a cached Payload instance.
-  const payload = await getPayload({ config, key: `payload-jobs-test-${++bootCount}` })
+  const payload = await getPayload({ config, key: `payload-jobs-test-${bootCount}` })
 
   const tenantIds: number[] = []
   const userIds: number[] = []
@@ -181,6 +204,18 @@ export const bootTestPayload = async ({
     }
 
     try {
+      // The schema holds every table this boot pushed; leaving it behind would make the
+      // next drizzle push offer its tables as renames. Drop it on the adapter's own pool,
+      // before `destroy()` closes that pool.
+      const { pool } = payload.db as unknown as {
+        pool?: { query: (statement: string) => Promise<unknown> }
+      }
+      await pool?.query(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE`)
+    } catch (error) {
+      cleanupErrors.push(error)
+    }
+
+    try {
       await payload.destroy()
     } catch (error) {
       cleanupErrors.push(error)
@@ -197,14 +232,14 @@ export const bootTestPayload = async ({
 
     const createdA = (await payload.create({
       collection: 'tenants',
-      data: { name: 'Tenant A', slug: `tenant-a-${runId}` },
+      data: { name: 'Tenant A', slug: `tenant-a-${runId}`, ...tenantData('A') },
       overrideAccess: true,
     })) as TestTenant
     tenantIds.push(createdA.id)
 
     const createdB = (await payload.create({
       collection: 'tenants',
-      data: { name: 'Tenant B', slug: `tenant-b-${runId}` },
+      data: { name: 'Tenant B', slug: `tenant-b-${runId}`, ...tenantData('B') },
       overrideAccess: true,
     })) as TestTenant
     tenantIds.push(createdB.id)
@@ -259,16 +294,14 @@ export const bootTestPayload = async ({
 }
 
 type TenantIsolationArgs = {
+  /** Extra harness options, e.g. tenant fields the collection reads. */
+  boot?: Omit<BootTestPayloadArgs, 'collections'>
   /** The collection to exercise; it must be tenant-scoped by the multi-tenant plugin. */
   collection: CollectionConfig
+  /** Other tenant-scoped collections it needs, e.g. the taxonomies plans relate to. */
+  extraCollections?: CollectionConfig[]
   /** Returns the non-tenant fields for a new document; the harness adds `tenant`. */
   createData: (tenant: TestTenant) => Record<string, unknown>
-  /**
-   * Extra collections to include in the same schema push. Drizzle prompts when a table it
-   * knows about is missing from the pushed schema, so a second suite in the same database
-   * must push every table the first one created.
-   */
-  withCollections?: CollectionConfig[]
 }
 
 /**
@@ -278,9 +311,10 @@ type TenantIsolationArgs = {
  * super-admin can see everything. Later tasks call this once per collection.
  */
 export const tenantIsolation = ({
+  boot,
   collection,
   createData,
-  withCollections = [],
+  extraCollections = [],
 }: TenantIsolationArgs): void => {
   const slug = collection.slug
 
@@ -290,7 +324,7 @@ export const tenantIsolation = ({
     let docB: { id: number | string }
 
     beforeAll(async () => {
-      harness = await bootTestPayload({ collections: [collection, ...withCollections] })
+      harness = await bootTestPayload({ ...boot, collections: [collection, ...extraCollections] })
 
       docA = (await harness.payload.create({
         collection: slug,

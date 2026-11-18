@@ -2,6 +2,7 @@ import type { Config } from 'payload'
 import { describe, expect, it } from 'vitest'
 
 import { payloadJobs } from './index'
+import { TAXONOMY_SLUGS } from './taxonomies'
 
 const baseConfig = {
   collections: [{ slug: 'users', fields: [] }],
@@ -13,11 +14,19 @@ describe('payloadJobs', () => {
   it('keeps the existing config and custom keys when it registers itself', async () => {
     const result = await payloadJobs()(baseConfig)
 
-    expect(result.collections?.[0]).toBe(baseConfig.collections?.[0])
+    // mission-control: the users collection is extended (legacy password support, PJ-34), and
+    // the taxonomies (PJ-16), plans (PJ-21) and email templates (PJ-27) are added.
     expect(result.collections?.map((collection) => collection.slug)).toEqual([
       'users',
+      'locations',
+      ...TAXONOMY_SLUGS,
+      'plans',
       'email-templates',
     ])
+    expect(result.collections?.[0]?.fields.map((f) => ('name' in f ? f.name : null))).toContain(
+      'legacyPasswordHash',
+    )
+    expect(result.collections?.[0]?.hooks?.beforeOperation).toHaveLength(1)
     expect(result.globals?.[0]?.slug).toBe('job-board-settings')
     expect(result.custom).toEqual({
       existing: true,
@@ -38,6 +47,9 @@ describe('payloadJobs', () => {
 
     expect(result.collections?.map((collection) => collection.slug)).toEqual([
       'users',
+      'locations',
+      ...TAXONOMY_SLUGS,
+      'plans',
       'tenant-emails',
     ])
   })
@@ -50,8 +62,9 @@ describe('payloadJobs', () => {
       collections: [...(baseConfig.collections ?? []), existing],
     } as unknown as Config)
 
-    expect(result.collections).toHaveLength(2)
-    expect(result.collections?.[1]).toBe(existing)
+    expect(result.collections?.filter((collection) => collection.slug === 'email-templates')).toEqual([
+      existing,
+    ])
   })
 
   it('resolves feature toggles and records them in the config', async () => {

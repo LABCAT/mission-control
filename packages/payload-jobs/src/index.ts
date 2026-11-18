@@ -1,19 +1,46 @@
-import type { Config, GlobalConfig, Plugin } from 'payload'
+import type { CollectionConfig, Config, GlobalConfig, Plugin } from 'payload'
 
+import { accountAuthEndpoints, type AccountAuthOptions } from './account-auth'
+import { locationsCollection, locationsTenantSlugIndex } from './collections/locations'
 import { emailTemplatesCollection } from './email-templates'
+import { withLegacyPasswords } from './legacy-password'
+import { planCollection, PLANS_SLUG, withPlanRestrictionGuards } from './plans'
+import { TAXONOMY_SLUGS, taxonomyCollections } from './taxonomies'
 import { jobBoardSettingsGlobal, jobBoardTenantFields } from './tenancy'
 
 export * from './access'
+export * from './account-auth'
+export * from './collections/locations'
 export * from './email'
 export * from './email-template-defaults'
 export * from './email-template-seed'
 export * from './email-templates'
+export * from './legacy-password'
+export * from './money'
+export * from './plans'
+export * from './plans-seed'
+export * from './pricing'
+export * from './rate-limit'
+export * from './seed/vanuatu'
 export * from './site-keys'
+export * from './taxonomies'
 export * from './tenancy'
 
 export const EMAIL_TEMPLATES_SLUG = 'email-templates'
 
 export type TenancyMode = 'multi' | 'single'
+
+/**
+ * Collections this plugin adds that belong to a tenant. In `multi` mode the host must list
+ * every one of them in the multi-tenant plugin's `collections`, which adds their `tenant`
+ * field; Payload otherwise rejects the config ("Field tenant was not found").
+ */
+export const PAYLOAD_JOBS_TENANT_COLLECTIONS = [
+  EMAIL_TEMPLATES_SLUG,
+  'locations',
+  ...TAXONOMY_SLUGS,
+  PLANS_SLUG,
+] as const
 
 export type PayloadJobsFeatures = {
   /** Job applications. The collection is added by a later task. Defaults to true. */
@@ -27,12 +54,19 @@ export type PayloadJobsFeatures = {
 }
 
 export type PayloadJobsOptions = {
+  /**
+   * Front-end account auth endpoints for the Astro sites (PJ-81), multi-tenant mode only.
+   * The users collection must enable `auth.verify`. Pass `false` to leave them out.
+   */
+  accountAuth?: AccountAuthOptions | false
   /** Turn the plugin off without removing it from the config. Defaults to true. */
   enabled?: boolean
   /** Slug of the email templates collection. Defaults to `email-templates`. */
   emailTemplatesSlug?: string
   /** Which job-board collections to enable. All default to true. */
   features?: PayloadJobsFeatures
+  /** Slug of the auth collection that gets legacy WordPress password support. Defaults to `users`. */
+  usersSlug?: string
   /** Slug of the tenant settings global in single-tenant mode. */
   settingsSlug?: string
   /** `multi` requires a tenants collection; `single` uses a job-board settings global. */
@@ -48,9 +82,14 @@ const resolvedFeatures = (options: PayloadJobsOptions): Required<PayloadJobsFeat
   coupons: options.features?.coupons ?? true,
 })
 
+/** Job-board collections owned by this plugin. Later tasks append to this list. */
+const jobBoardCollections = (tenancy: TenancyMode): CollectionConfig[] => [
+  locationsCollection({ requireTenant: tenancy === 'multi' }),
+]
+
 /**
- * Job board plugin for Mission Control. It owns the job-board tenant settings and the
- * email templates; later tasks (PJ-16 onwards) add the job collections.
+ * Job board plugin for Mission Control. It owns the job-board tenant settings, the
+ * job-board collections and the email templates; later tasks (PJ-16 onwards) add the rest.
  */
 export const payloadJobs =
   (options: PayloadJobsOptions = {}): Plugin =>
@@ -64,6 +103,28 @@ export const payloadJobs =
 
     let config = incoming
 
+    // mission-control: imported WordPress users keep their passwords (PJ-34).
+    const usersSlug = options.usersSlug ?? 'users'
+    config = {
+      ...config,
+      collections: config.collections?.map((collection) =>
+        collection.slug === usersSlug ? withLegacyPasswords(collection) : collection,
+      ),
+    }
+
+    const settingsSlug = options.settingsSlug ?? 'job-board-settings'
+
+    const added = jobBoardCollections(tenancy)
+    const existingSlugs = new Set((config.collections ?? []).map((collection) => collection.slug))
+    const clashes = added.filter((collection) => existingSlugs.has(collection.slug))
+    if (clashes.length > 0) {
+      throw new Error(
+        `payload-jobs: these collections already exist: ${clashes.map((c) => c.slug).join(', ')}`,
+      )
+    }
+
+    config = { ...config, collections: [...(config.collections ?? []), ...added] }
+
     if (tenancy === 'multi') {
       const tenants = config.collections?.find((collection) => collection.slug === tenantsSlug)
 
@@ -74,17 +135,50 @@ export const payloadJobs =
         )
       }
 
+      const accountEndpoints = (() => {
+        if (options.accountAuth === false) return []
+
+        const accountAuth = { tenantsSlug, ...options.accountAuth }
+        const usersSlug = accountAuth.usersSlug ?? 'users'
+        const users = config.collections?.find((collection) => collection.slug === usersSlug)
+        const verify = typeof users?.auth === 'object' ? users.auth.verify : undefined
+
+        if (!users || !verify) {
+          throw new Error(
+            `payload-jobs: account auth needs a "${usersSlug}" auth collection with auth.verify ` +
+              'enabled. Enable it or pass accountAuth: false.',
+          )
+        }
+
+        return accountAuthEndpoints(accountAuth)
+      })()
+
       config = {
         ...config,
-        collections: config.collections?.map((collection) =>
-          collection.slug === tenantsSlug
-            ? { ...collection, fields: [...collection.fields, ...jobBoardTenantFields] }
-            : collection,
-        ),
+        collections: config.collections?.map((collection) => {
+          if (collection.slug === tenantsSlug) {
+            return {
+              ...collection,
+              // Payload routes /api/tenants/* to the collection's endpoints, not the root's.
+              endpoints: [
+                ...(Array.isArray(collection.endpoints) ? collection.endpoints : []),
+                ...accountEndpoints,
+              ],
+              fields: [...collection.fields, ...jobBoardTenantFields],
+            }
+          }
+
+          if (collection.slug === 'locations') {
+            return {
+              ...collection,
+              indexes: [...(collection.indexes ?? []), locationsTenantSlugIndex],
+            }
+          }
+
+          return collection
+        }),
       }
     } else {
-      const settingsSlug = options.settingsSlug ?? 'job-board-settings'
-
       if (config.globals?.some((global) => global.slug === settingsSlug)) {
         throw new Error(`payload-jobs: a "${settingsSlug}" global already exists.`)
       }
@@ -98,18 +192,27 @@ export const payloadJobs =
       }
     }
 
-    if (!config.collections?.some((collection) => collection.slug === emailTemplatesSlug)) {
-      config = {
-        ...config,
-        collections: [
-          ...(config.collections ?? []),
-          emailTemplatesCollection({ slug: emailTemplatesSlug, tenantScoped: tenancy === 'multi' }),
-        ],
-      }
-    }
+    const registeredSlugs = new Set(config.collections?.map((collection) => collection.slug))
+    // Job types and categories that a plan is restricted to can't be deleted (PJ-21).
+    const taxonomies = withPlanRestrictionGuards(
+      taxonomyCollections({ tenantScoped: tenancy === 'multi' }).filter(
+        (collection) => !registeredSlugs.has(collection.slug),
+      ),
+      { tenantScoped: tenancy === 'multi' },
+    )
+    // Plans are always on: every job board sells listings, even if every plan is free.
+    const plans = planCollection({ settingsSlug, tenantScoped: tenancy === 'multi', tenantsSlug })
+
+    // A host may supply its own email templates collection; otherwise the plugin adds one.
+    const emailTemplates = [...(config.collections ?? []), ...taxonomies, plans].some(
+      (collection) => collection.slug === emailTemplatesSlug,
+    )
+      ? []
+      : [emailTemplatesCollection({ slug: emailTemplatesSlug, tenantScoped: tenancy === 'multi' })]
 
     return {
       ...config,
+      collections: [...(config.collections ?? []), ...taxonomies, plans, ...emailTemplates],
       custom: {
         ...config.custom,
         payloadJobs: { enabled: true, tenancy, features },

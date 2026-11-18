@@ -85,6 +85,14 @@ export interface Config {
     tags: Tag;
     tenants: Tenant;
     'site-keys': SiteKey;
+    documents: Document;
+    locations: Location;
+    'job-categories': JobCategory;
+    'job-types': JobType;
+    'job-tags': JobTag;
+    'salary-bands': SalaryBand;
+    'areas-of-focus': AreasOfFocus;
+    plans: Plan;
     'email-templates': EmailTemplate;
     'payload-kv': PayloadKv;
     'payload-jobs': PayloadJob;
@@ -101,6 +109,14 @@ export interface Config {
     tags: TagsSelect<false> | TagsSelect<true>;
     tenants: TenantsSelect<false> | TenantsSelect<true>;
     'site-keys': SiteKeysSelect<false> | SiteKeysSelect<true>;
+    documents: DocumentsSelect<false> | DocumentsSelect<true>;
+    locations: LocationsSelect<false> | LocationsSelect<true>;
+    'job-categories': JobCategoriesSelect<false> | JobCategoriesSelect<true>;
+    'job-types': JobTypesSelect<false> | JobTypesSelect<true>;
+    'job-tags': JobTagsSelect<false> | JobTagsSelect<true>;
+    'salary-bands': SalaryBandsSelect<false> | SalaryBandsSelect<true>;
+    'areas-of-focus': AreasOfFocusSelect<false> | AreasOfFocusSelect<true>;
+    plans: PlansSelect<false> | PlansSelect<true>;
     'email-templates': EmailTemplatesSelect<false> | EmailTemplatesSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-jobs': PayloadJobsSelect<false> | PayloadJobsSelect<true>;
@@ -168,10 +184,11 @@ export interface User {
   role: 'super-admin' | 'user';
   firstName?: string | null;
   lastName?: string | null;
+  legacyPasswordHash?: string | null;
   tenants?:
     | {
         tenant: number | Tenant;
-        role: 'tenant-admin' | 'editor' | 'employer';
+        role: 'tenant-admin' | 'editor' | 'employer' | 'seeker';
         id?: string | null;
       }[]
     | null;
@@ -191,6 +208,8 @@ export interface User {
   salt?: string | null;
   hash?: string | null;
   resetPasswordRequestedAt?: string | null;
+  _verified?: boolean | null;
+  _verificationToken?: string | null;
   loginAttempts?: number | null;
   lockUntil?: string | null;
   sessions?:
@@ -282,6 +301,9 @@ export interface Media {
   alt: string;
   _h_folders?: (number | null) | Folder;
   _h_tags?: (number | Tag)[] | null;
+  legacyId?: number | null;
+  prefix?: string | null;
+  _objectKey?: string | null;
   createdBy?: {
     relationTo: 'users';
     value: number | User;
@@ -311,6 +333,88 @@ export interface Media {
   };
   focalX?: number | null;
   focalY?: number | null;
+  variants?: {
+    'w320-avif'?: {
+      url?: string | null;
+      width?: number | null;
+      height?: number | null;
+      mimeType?: string | null;
+      filesize?: number | null;
+      filename?: string | null;
+      prefix?: string | null;
+      _objectKey?: string | null;
+    };
+    'w320-webp'?: {
+      url?: string | null;
+      width?: number | null;
+      height?: number | null;
+      mimeType?: string | null;
+      filesize?: number | null;
+      filename?: string | null;
+      prefix?: string | null;
+      _objectKey?: string | null;
+    };
+    'w640-avif'?: {
+      url?: string | null;
+      width?: number | null;
+      height?: number | null;
+      mimeType?: string | null;
+      filesize?: number | null;
+      filename?: string | null;
+      prefix?: string | null;
+      _objectKey?: string | null;
+    };
+    'w640-webp'?: {
+      url?: string | null;
+      width?: number | null;
+      height?: number | null;
+      mimeType?: string | null;
+      filesize?: number | null;
+      filename?: string | null;
+      prefix?: string | null;
+      _objectKey?: string | null;
+    };
+    'w960-avif'?: {
+      url?: string | null;
+      width?: number | null;
+      height?: number | null;
+      mimeType?: string | null;
+      filesize?: number | null;
+      filename?: string | null;
+      prefix?: string | null;
+      _objectKey?: string | null;
+    };
+    'w960-webp'?: {
+      url?: string | null;
+      width?: number | null;
+      height?: number | null;
+      mimeType?: string | null;
+      filesize?: number | null;
+      filename?: string | null;
+      prefix?: string | null;
+      _objectKey?: string | null;
+    };
+    'w1280-avif'?: {
+      url?: string | null;
+      width?: number | null;
+      height?: number | null;
+      mimeType?: string | null;
+      filesize?: number | null;
+      filename?: string | null;
+      prefix?: string | null;
+      _objectKey?: string | null;
+    };
+    'w1280-webp'?: {
+      url?: string | null;
+      width?: number | null;
+      height?: number | null;
+      mimeType?: string | null;
+      filesize?: number | null;
+      filename?: string | null;
+      prefix?: string | null;
+      _objectKey?: string | null;
+    };
+  };
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -377,6 +481,286 @@ export interface SiteKey {
    * Copy this now. It is shown once and cannot be retrieved again.
    */
   key?: string | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "documents".
+ */
+export interface Document {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  title: string;
+  legacyId?: number | null;
+  prefix?: string | null;
+  _objectKey?: string | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+  url?: string | null;
+  thumbnailURL?: string | null;
+  filename?: string | null;
+  mimeType?: string | null;
+  filesize?: number | null;
+  width?: number | null;
+  height?: number | null;
+  original?: {
+    filename?: string | null;
+    url?: string | null;
+    mimeType?: string | null;
+    filesize?: number | null;
+    width?: number | null;
+    height?: number | null;
+    prefix?: string | null;
+    _objectKey?: string | null;
+  };
+  focalX?: number | null;
+  focalY?: number | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "locations".
+ */
+export interface Location {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  name: string;
+  slug: string;
+  kind: 'region' | 'island' | 'town';
+  parent?: (number | null) | Location;
+  /**
+   * WordPress id, so the importer can match an existing location.
+   */
+  legacyId?: number | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "job-categories".
+ */
+export interface JobCategory {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  name: string;
+  /**
+   * Used in listing URLs and filters. Unique within the tenant.
+   */
+  slug: string;
+  /**
+   * WordPress term id, for the import.
+   */
+  legacyId?: number | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "job-types".
+ */
+export interface JobType {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  name: string;
+  /**
+   * Used in listing URLs and filters. Unique within the tenant.
+   */
+  slug: string;
+  /**
+   * WordPress term id, for the import.
+   */
+  legacyId?: number | null;
+  /**
+   * Volunteer job types are kept out of the main listing and can be posted for free.
+   */
+  isVolunteer?: boolean | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "job-tags".
+ */
+export interface JobTag {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  name: string;
+  /**
+   * Used in listing URLs and filters. Unique within the tenant.
+   */
+  slug: string;
+  /**
+   * WordPress term id, for the import.
+   */
+  legacyId?: number | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "salary-bands".
+ */
+export interface SalaryBand {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  name: string;
+  /**
+   * Used in listing URLs and filters. Unique within the tenant.
+   */
+  slug: string;
+  /**
+   * WordPress term id, for the import.
+   */
+  legacyId?: number | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "areas-of-focus".
+ */
+export interface AreasOfFocus {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  name: string;
+  /**
+   * Used in listing URLs and filters. Unique within the tenant.
+   */
+  slug: string;
+  /**
+   * WordPress term id, for the import.
+   */
+  legacyId?: number | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * What employers buy. Archive a plan to stop selling it; past orders keep what they bought.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "plans".
+ */
+export interface Plan {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  name: string;
+  /**
+   * Stable identifier used by seeds and imports, e.g. regular-listing. Unique in the tenant.
+   */
+  key: string;
+  description?: string | null;
+  /**
+   * Whole minor units of the tenant currency: 2500 is Vt 2,500, or $25.00 in NZD.
+   */
+  price: number;
+  /**
+   * Copied from the tenant when the plan is saved.
+   */
+  currency?: string | null;
+  /**
+   * How long each listing stays live, in days.
+   */
+  durationDays: number;
+  /**
+   * 1 for a single listing; more for a pack.
+   */
+  jobCredits: number;
+  /**
+   * Days until unused credits from this plan expire. Empty: they never expire.
+   */
+  creditExpiryDays?: number | null;
+  /**
+   * A job credit from a pack can pay for this plan. Only applies to single-listing plans.
+   */
+  acceptsCredits?: boolean | null;
+  /**
+   * Only for voluntary jobs (a job type marked as volunteer).
+   */
+  isVolunteer?: boolean | null;
+  /**
+   * Only jobs of these types. Empty: any type.
+   */
+  allowedJobTypes?: (number | JobType)[] | null;
+  /**
+   * Only jobs whose every category is listed here. Empty: any category.
+   */
+  allowedJobCategories?: (number | JobCategory)[] | null;
+  /**
+   * Archived plans can no longer be bought. Past orders are not affected.
+   */
+  status: 'active' | 'archived';
+  /**
+   * Lower numbers are shown first.
+   */
+  sortOrder?: number | null;
+  /**
+   * WordPress pricing-plan post id, for the import.
+   */
+  legacyId?: number | null;
   createdBy?: {
     relationTo: 'users';
     value: number | User;
@@ -601,6 +985,38 @@ export interface PayloadLockedDocument {
         value: number | SiteKey;
       } | null)
     | ({
+        relationTo: 'documents';
+        value: number | Document;
+      } | null)
+    | ({
+        relationTo: 'locations';
+        value: number | Location;
+      } | null)
+    | ({
+        relationTo: 'job-categories';
+        value: number | JobCategory;
+      } | null)
+    | ({
+        relationTo: 'job-types';
+        value: number | JobType;
+      } | null)
+    | ({
+        relationTo: 'job-tags';
+        value: number | JobTag;
+      } | null)
+    | ({
+        relationTo: 'salary-bands';
+        value: number | SalaryBand;
+      } | null)
+    | ({
+        relationTo: 'areas-of-focus';
+        value: number | AreasOfFocus;
+      } | null)
+    | ({
+        relationTo: 'plans';
+        value: number | Plan;
+      } | null)
+    | ({
         relationTo: 'email-templates';
         value: number | EmailTemplate;
       } | null);
@@ -676,6 +1092,7 @@ export interface UsersSelect<T extends boolean = true> {
   role?: T;
   firstName?: T;
   lastName?: T;
+  legacyPasswordHash?: T;
   tenants?:
     | T
     | {
@@ -693,6 +1110,8 @@ export interface UsersSelect<T extends boolean = true> {
   salt?: T;
   hash?: T;
   resetPasswordRequestedAt?: T;
+  _verified?: T;
+  _verificationToken?: T;
   loginAttempts?: T;
   lockUntil?: T;
   sessions?:
@@ -714,6 +1133,9 @@ export interface MediaSelect<T extends boolean = true> {
   alt?: T;
   _h_folders?: T;
   _h_tags?: T;
+  legacyId?: T;
+  prefix?: T;
+  _objectKey?: T;
   createdBy?: T;
   updatedBy?: T;
   updatedAt?: T;
@@ -739,6 +1161,106 @@ export interface MediaSelect<T extends boolean = true> {
       };
   focalX?: T;
   focalY?: T;
+  variants?:
+    | T
+    | {
+        'w320-avif'?:
+          | T
+          | {
+              url?: T;
+              width?: T;
+              height?: T;
+              mimeType?: T;
+              filesize?: T;
+              filename?: T;
+              prefix?: T;
+              _objectKey?: T;
+            };
+        'w320-webp'?:
+          | T
+          | {
+              url?: T;
+              width?: T;
+              height?: T;
+              mimeType?: T;
+              filesize?: T;
+              filename?: T;
+              prefix?: T;
+              _objectKey?: T;
+            };
+        'w640-avif'?:
+          | T
+          | {
+              url?: T;
+              width?: T;
+              height?: T;
+              mimeType?: T;
+              filesize?: T;
+              filename?: T;
+              prefix?: T;
+              _objectKey?: T;
+            };
+        'w640-webp'?:
+          | T
+          | {
+              url?: T;
+              width?: T;
+              height?: T;
+              mimeType?: T;
+              filesize?: T;
+              filename?: T;
+              prefix?: T;
+              _objectKey?: T;
+            };
+        'w960-avif'?:
+          | T
+          | {
+              url?: T;
+              width?: T;
+              height?: T;
+              mimeType?: T;
+              filesize?: T;
+              filename?: T;
+              prefix?: T;
+              _objectKey?: T;
+            };
+        'w960-webp'?:
+          | T
+          | {
+              url?: T;
+              width?: T;
+              height?: T;
+              mimeType?: T;
+              filesize?: T;
+              filename?: T;
+              prefix?: T;
+              _objectKey?: T;
+            };
+        'w1280-avif'?:
+          | T
+          | {
+              url?: T;
+              width?: T;
+              height?: T;
+              mimeType?: T;
+              filesize?: T;
+              filename?: T;
+              prefix?: T;
+              _objectKey?: T;
+            };
+        'w1280-webp'?:
+          | T
+          | {
+              url?: T;
+              width?: T;
+              height?: T;
+              mimeType?: T;
+              filesize?: T;
+              filename?: T;
+              prefix?: T;
+              _objectKey?: T;
+            };
+      };
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -820,6 +1342,155 @@ export interface SiteKeysSelect<T extends boolean = true> {
   tenant?: T;
   keyHash?: T;
   key?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "documents_select".
+ */
+export interface DocumentsSelect<T extends boolean = true> {
+  tenant?: T;
+  title?: T;
+  legacyId?: T;
+  prefix?: T;
+  _objectKey?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+  url?: T;
+  thumbnailURL?: T;
+  filename?: T;
+  mimeType?: T;
+  filesize?: T;
+  width?: T;
+  height?: T;
+  original?:
+    | T
+    | {
+        filename?: T;
+        url?: T;
+        mimeType?: T;
+        filesize?: T;
+        width?: T;
+        height?: T;
+        prefix?: T;
+        _objectKey?: T;
+      };
+  focalX?: T;
+  focalY?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "locations_select".
+ */
+export interface LocationsSelect<T extends boolean = true> {
+  tenant?: T;
+  name?: T;
+  slug?: T;
+  kind?: T;
+  parent?: T;
+  legacyId?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "job-categories_select".
+ */
+export interface JobCategoriesSelect<T extends boolean = true> {
+  tenant?: T;
+  name?: T;
+  slug?: T;
+  legacyId?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "job-types_select".
+ */
+export interface JobTypesSelect<T extends boolean = true> {
+  tenant?: T;
+  name?: T;
+  slug?: T;
+  legacyId?: T;
+  isVolunteer?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "job-tags_select".
+ */
+export interface JobTagsSelect<T extends boolean = true> {
+  tenant?: T;
+  name?: T;
+  slug?: T;
+  legacyId?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "salary-bands_select".
+ */
+export interface SalaryBandsSelect<T extends boolean = true> {
+  tenant?: T;
+  name?: T;
+  slug?: T;
+  legacyId?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "areas-of-focus_select".
+ */
+export interface AreasOfFocusSelect<T extends boolean = true> {
+  tenant?: T;
+  name?: T;
+  slug?: T;
+  legacyId?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "plans_select".
+ */
+export interface PlansSelect<T extends boolean = true> {
+  tenant?: T;
+  name?: T;
+  key?: T;
+  description?: T;
+  price?: T;
+  currency?: T;
+  durationDays?: T;
+  jobCredits?: T;
+  creditExpiryDays?: T;
+  acceptsCredits?: T;
+  isVolunteer?: T;
+  allowedJobTypes?: T;
+  allowedJobCategories?: T;
+  status?: T;
+  sortOrder?: T;
+  legacyId?: T;
   createdBy?: T;
   updatedBy?: T;
   updatedAt?: T;
@@ -1023,7 +1694,22 @@ export interface CollectionsWidget {
 export interface CollectionQueryWidget {
   data?: {
     title?: string | null;
-    relatedCollection: 'users' | 'media' | 'folders' | 'tags' | 'tenants' | 'site-keys' | 'email-templates';
+    relatedCollection:
+      | 'users'
+      | 'media'
+      | 'folders'
+      | 'tags'
+      | 'tenants'
+      | 'site-keys'
+      | 'documents'
+      | 'locations'
+      | 'job-categories'
+      | 'job-types'
+      | 'job-tags'
+      | 'salary-bands'
+      | 'areas-of-focus'
+      | 'plans'
+      | 'email-templates';
     where?:
       | {
           [k: string]: unknown;
@@ -1046,7 +1732,24 @@ export interface CollectionQueryWidget {
 export interface ActivityWidget {
   data?: {
     excludedCollections?:
-      ('users' | 'media' | 'folders' | 'tags' | 'tenants' | 'site-keys' | 'email-templates')[] | null;
+      | (
+          | 'users'
+          | 'media'
+          | 'folders'
+          | 'tags'
+          | 'tenants'
+          | 'site-keys'
+          | 'documents'
+          | 'locations'
+          | 'job-categories'
+          | 'job-types'
+          | 'job-tags'
+          | 'salary-bands'
+          | 'areas-of-focus'
+          | 'plans'
+          | 'email-templates'
+        )[]
+      | null;
   };
   width: 'small' | 'medium' | 'large' | 'x-large' | 'full';
 }
@@ -1056,7 +1759,7 @@ export interface ActivityWidget {
  */
 export interface UploadDropzoneWidget {
   data?: {
-    excludedCollections?: 'media'[] | null;
+    excludedCollections?: ('media' | 'documents')[] | null;
   };
   width: 'x-small' | 'small' | 'medium' | 'large' | 'x-large' | 'full';
 }
