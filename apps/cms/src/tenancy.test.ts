@@ -538,7 +538,10 @@ describe('first user bootstrap', () => {
   })
 
   it('never promotes a site sign-up, even on an empty database', async () => {
-    const req = { ...requestWithCount(0), context: { [ACCOUNT_SIGNUP_CONTEXT]: true } } as never
+    const req = {
+      context: { [ACCOUNT_SIGNUP_CONTEXT]: true },
+      payload: { count: async () => ({ totalDocs: 0 }) },
+    } as never
 
     await expect(
       ensureFirstUserIsSuperAdmin({ data: { role: 'user' }, operation: 'create', req } as never),
