@@ -93,3 +93,5 @@ Spend at 02:05 UTC: sub-sessions $8.04 (PJ-10 2.19, PJ-81 2.42, RCL-86 1.00, PJ-
 - **Decision (founder, 18 Nov): previews never email the public.** All non-production email is redirected to one inbox (EMAIL_REDIRECT_TO); only ENVIRONMENT=production delivers. PJ-94 is running in the PJ-92 session.
 - **Decision (founder, 18 Nov): Cloudflare Access** only on the vwok site's preview and pre-launch hostnames, not the CMS. PJ-95, done with the founder. PJ-03 runbook = PJ-96.
 - **Open (founder decides later): platform brand + CMS admin domain.** Not a LABCAT domain; possibly a Pacific-wide brand. PJ-97 (assigned to LABCAT, needed before go-live). Meanwhile no hostname is hardcoded and the CMS stays on workers.dev.
+- **Decision (founder, 18 Nov): alerts.** Import all 246 subscribers as confirmed. Silent cutover, no launch email (the project is effectively pro bono, so keep it lean). One-click unsubscribe in every alert; bounce auto-disable is post-MVP.
+- **Founder principle:** this project is done mostly for free, so prefer the simplest option that works and avoid extras.
