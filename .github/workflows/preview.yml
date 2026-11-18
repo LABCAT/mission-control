@@ -29,7 +29,7 @@ on:
         type: boolean
         default: true
       reset_preview:
-        description: Reset one preview from prod (git branch or preview name). Leave empty to sweep instead.
+        description: Reset one preview from prod. Give the git branch (e.g. feature/foo), not the preview name. Leave empty to sweep instead.
         type: string
         default: ''
 
@@ -335,6 +335,8 @@ jobs:
           ALLOW_LIVE: 'true'
         run: |
           set -euo pipefail
+          # Must be a real git branch, checked before anything is deleted (the rebuild needs its runs).
+          .github/scripts/check-reset-branch.sh "$INPUT"
           NAME=$(.github/scripts/preview-name.sh branch "$INPUT")
           # delete-preview.sh refuses anything but preview/<name>, and preview/rc-*.
           .github/scripts/delete-preview.sh "$NAME"

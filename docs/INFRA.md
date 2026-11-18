@@ -33,7 +33,7 @@ Each preview is a Worker Preview plus a Neon branch `preview/<name>`. `<name>` c
 | Push to a branch with an open PR, or a PR is opened/reopened | Preview is published. The Neon branch is created once and kept, so test data survives later pushes. |
 | Push to a branch with no open PR | Nothing. The `gate` job skips the preview. Opening the PR creates it. |
 | Push after a PR re-created a migration | If the kept preview DB has an applied migration that is in neither the branch nor `origin/main`, the Neon branch is deleted and recut from prod before migrating (`preview-migrations.mjs`). Test data in that preview is lost. |
-| Manual run with `reset_preview` | Deletes that one preview (Worker Preview and Neon branch) and re-runs the branch's latest push run to rebuild it. |
+| Manual run with `reset_preview` (a git branch) | Deletes that one preview (Worker Preview and Neon branch) and re-runs the branch's latest push run to rebuild it. |
 | RC tag | `preview/rc-<version>` is recreated from prod. `release.yml` deletes it on release. |
 | PR closed or merged, or git branch deleted | `cleanup` job deletes that branch's Worker Preview and Neon branch, unless another open PR maps to the same preview name (`feature/foo` and `feature-foo` do). |
 | Daily at 03:17 UTC, or manual | `sweep` job deletes every stale `preview/*` Neon branch and its Worker Preview. |
@@ -75,7 +75,7 @@ The Neon branch of a preview is kept across pushes, so its database remembers ev
 
 Before migrating, the Publish job reads `payload_migrations` from the preview database and compares it with `apps/cms/src/migrations` and with `origin/main` (what prod has, so a PR that is behind main does not reset on every push). Any applied name found in neither means the database is stale, so the job resets it. It never does this for `preview/rc-*`, a fresh RC copy, or any branch that is not `preview/<name>`. The decision lives in `.github/scripts/preview-migrations.mjs`, tested in `preview-migrations.test.ts`.
 
-To reset one preview by hand (for example one stuck with bad data), pass its git branch or preview name. This deletes its Worker Preview and Neon branch and re-runs the branch's latest push run, which builds both again:
+To reset one preview by hand (for example one stuck with bad data), pass its **git branch** (`feature/foo`), not the preview name (`feature-foo`). The branch must exist, and this is checked before anything is deleted. This deletes its Worker Preview and Neon branch and re-runs the branch's latest push run, which builds both again:
 
 ```bash
 gh workflow run preview.yml --repo LABCAT/mission-control -f reset_preview=openhands/pj-17-locations-tree
