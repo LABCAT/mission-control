@@ -6,16 +6,17 @@ Orchestrator: session_01H9XNhzozJtHHbbc8KMd38e (replaces session_01H9XNhytrTqfZd
 
 | Ticket | Session | Branch | State | Cost |
 |---|---|---|---|---|
-| PJ-34 WP password verifier | session_01H9XNhy2hU9XoAoarqxAoDP | pj-34-legacy-passwords | PR #41, idle. 27 tests pass, lint clean, **typecheck fails** | $0.42 |
+| PJ-34 WP password verifier | session_01H9XNhy2hU9XoAoarqxAoDP | pj-34-legacy-passwords | PR #41: told to fix typecheck (18 Nov) | $0.42 |
 | PJ-60 WP import framework | session_01H9XNhzHksGv6x3guC2Y9cE | pj-60-wp-import-framework | PR #42, idle. 15 tests pass | $0.63 |
 | PJ-70 URL parity crawler | session_01H9XNhyQDYHaQY97Xektbzw | pj-70-url-parity | Working (tests/lint) | – |
 | RCL-86 Pagination (Astro) | session_01H9XNhxyWEqz3FKnUHMSwGq | rcl-pagination (rocketship) | Working | – |
+| PJ-10 R2 media + documents | session_01H9XNi2ukPLFrf7UXZq26qo | pj-10-r2-media | Dispatched 18 Nov (migration PR) | – |
+| PJ-54 Xero plugin skeleton | session_01H9XNi2enTmhN3JrbmoUZFh | pj-54-xero-skeleton | Dispatched 18 Nov (package only, no migration) | – |
 
 Sub-session spend so far: ~$1.05 (2 sessions not yet reporting).
 
 ## Next candidates (D1: dispatch_status='none', no issue)
 
-- PJ-10 R2 storage for media + documents (blocker PJ-06 done). Only strictly unblocked PJ Agent task.
 - RCL-87 Pagination (Svelte): after RCL-86 merges.
 - PJ-61/62/63 (import mapping): need PJ-60 merged first (no stacking).
 - Most other PJ tasks are blocked by Hisha's tickets in `testing` (PJ-11, 16, 17, 20, 22, 27).
@@ -24,3 +25,8 @@ Sub-session spend so far: ~$1.05 (2 sessions not yet reporting).
 
 - The old session dispatched PJ-34, PJ-60 and PJ-70 although their D1 blockers (PJ-29, PJ-28, PJ-69) are not done. The code is self-contained, so I'm keeping them.
 - LABCAT/daruma isn't attached to this session, so the migration-tickets and orchestrator skills aren't read yet.
+- PJ-10 and PJ-54 were claimed in D1 (status=in_progress) before dispatch.
+- PJ-54 was dispatched ahead of its D1 blocker (PJ-23): it's package-only and not wired into apps/cms, so it adds no migration.
+- PJ-10 assumes the R2 bucket `mission-control-media` exists (PJ-02 done). The proxy token has no R2 scope, so I couldn't verify it.
+- New sub-sessions run in the Orchestrator environment, so the proxy also injects Cloudflare auth for them.
+- Decision CVs (pending founder): recommended default is apply-form CV attachments only (PJ-25/45) and no seeker resumes or resume search in MVP (USAGE.md: no resume-access use recorded).
