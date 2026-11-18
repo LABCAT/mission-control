@@ -32,7 +32,13 @@ import {
   XeroOAuthError,
   type XeroTokenSet,
 } from './oauth'
-import { findSettingsWithTokens, getXeroAccessToken, type XeroSettingsDoc, saveXeroTokens } from './token-store'
+import {
+  assertCanUpdateSettings,
+  findSettingsWithTokens,
+  getXeroAccessToken,
+  saveXeroTokens,
+  type XeroSettingsDoc,
+} from './token-store'
 import { DEFAULT_SETTINGS_SLUG, DEFAULT_TENANT_FIELD, type XeroScope } from './xero-settings'
 
 export const DEFAULT_CONNECT_PATH = '/xero/connect'
@@ -403,6 +409,14 @@ export const xeroCallbackHandler =
         throw new XeroOAuthError('invalid_state', 'This connect link is invalid or has expired.')
       }
 
+      // Reading the row is enough to find it; replacing its connection needs update rights.
+      await assertCanUpdateSettings({
+        collection: options.settingsSlug,
+        payload: req.payload,
+        settings,
+        user,
+      })
+
       const tokens = await exchangeCodeForTokens(options.oauth, { code })
       const xeroTenantId = xeroOrganisationId(
         await fetchXeroConnections(options.oauth, { accessToken: tokens.accessToken }),
@@ -463,6 +477,13 @@ export const xeroRefreshHandler =
       })
 
       if (!withTokens) throw new XeroOAuthError('settings_not_found', 'These Xero settings no longer exist.')
+
+      await assertCanUpdateSettings({
+        collection: options.settingsSlug,
+        payload: req.payload,
+        settings,
+        user,
+      })
 
       const { expiresAt, refreshed } = await getXeroAccessToken({
         collection: options.settingsSlug,

@@ -18,7 +18,7 @@
  * so a request that dies mid-refresh never blocks the next one.
  */
 
-import type { Payload } from 'payload'
+import { createPayloadRequest, docAccessOperation, type Payload } from 'payload'
 
 import { decryptToken, encryptToken, XERO_TOKEN_KEY_ENV } from './crypto'
 import {
@@ -109,6 +109,40 @@ const encryptedTokenColumns = async (
   refreshToken: tokens.refreshToken ? await encryptToken(tokens.refreshToken, key, context) : null,
   scope: tokens.scope,
 })
+
+/**
+ * Refuse a privileged token write when the app says this user may not update the row.
+ *
+ * `saveXeroTokens` writes with `overrideAccess: true`, because the `tokens` group refuses
+ * `update` through the API by design. Without this check a user who may only *read* a row
+ * could still replace its connection, since reading the row is all the endpoints do before
+ * saving. Payload's own document permissions run every access rule for every operation,
+ * including the tenancy layer's `where` constraints, against this exact row.
+ */
+export const assertCanUpdateSettings = async ({
+  collection,
+  payload,
+  settings,
+  user,
+}: {
+  collection: string
+  payload: Payload
+  settings: XeroSettingsDoc
+  user: Record<string, unknown>
+}): Promise<void> => {
+  const config = payload.collections[collection]?.config
+  if (!config) {
+    throw new XeroOAuthError('settings_not_found', 'These Xero settings no longer exist.')
+  }
+
+  const req = await createPayloadRequest({ payload, req: {}, user: user as never })
+  const permissions = await docAccessOperation({ collection: { config } as never, id: settings.id, req })
+
+  // False, or (through the tenancy layer) a `where` that this row does not satisfy.
+  if (!permissions.update) {
+    throw new XeroOAuthError('not_authorised', 'You cannot manage Xero settings for this tenant.')
+  }
+}
 
 /** Encrypt and store a token set on the settings row. Returns the updated row. */
 export const saveXeroTokens = async ({

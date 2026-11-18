@@ -25,6 +25,8 @@ const STATE_SECRET = 'xero-oauth-state-secret'
 /** The nonce a `goodState` carries, and the cookie a matching browser sends. */
 const NONCE = 'browser-nonce-1'
 const ENCRYPTION_KEY = generateEncryptionKey()
+/** Users who may read the settings row but not replace its connection. */
+const readOnlyEmails = new Set<string>()
 const REDIRECT_URI = 'https://cms.example.invalid/api/xero/callback'
 
 type Tenant = { id: number; slug: string }
@@ -324,7 +326,13 @@ describe('Xero OAuth endpoints', () => {
             create: tenantAdminAccess,
             delete: tenantAdminAccess,
             read: tenantAdminAccess,
-            update: tenantAdminAccess,
+            // Read and update deliberately differ, so the suite can prove a caller who may
+            // only read cannot replace an existing connection.
+            update: (args) => {
+              const user = args.req.user as null | { email?: string }
+
+              return user?.email && readOnlyEmails.has(user.email) ? false : tenantAdminAccess(args)
+            },
           },
           oauth,
           scope: 'tenant',
@@ -769,6 +777,71 @@ describe('Xero OAuth endpoints', () => {
       const second = await settingsFor(tenantB)
       expect(second?.id).toBe(first?.id)
       expect(second?.tokens.accessToken).not.toBe(first?.tokens.accessToken)
+    })
+
+    it('refuses to replace a connection when the caller may read but not update', async () => {
+      connections = [{ tenantId: 'org-readonly', tenantName: 'Read Only', tenantType: 'ORGANISATION' }]
+      const reader = await createUser(`reader-${runId}@example.invalid`, [
+        { role: 'tenant-admin', tenant: tenantA.id },
+      ])
+      readOnlyEmails.add(`reader-${runId}@example.invalid`)
+
+      const before = await settingsFor(tenantA)
+      const { cookie, state } = await beginConnect(tenantA.slug, { token: reader.token })
+      const xeroCallsBefore = xeroCalls.length
+
+      const refused = await callback(`?code=good-code&state=${encodeURIComponent(state)}`, { cookie })
+
+      expect(refused.status).toBe(403)
+      expect(refused.body?.error.code).toBe('not_authorised')
+      // The code was never spent: authorisation is checked before Xero is called.
+      expect(xeroCalls.length).toBe(xeroCallsBefore)
+
+      const after = await settingsFor(tenantA)
+      expect(after?.xeroTenantId ?? null).toBe(before?.xeroTenantId ?? null)
+      expect(after?.tokens.accessToken).toBe(before?.tokens.accessToken)
+
+      readOnlyEmails.delete(`reader-${runId}@example.invalid`)
+    })
+
+    it('refuses a refresh for a caller who may read but not update', async () => {
+      // Own tenant, so this cannot disturb the token state other tests share.
+      const tenant = await createTenant(`readonly-${runId}`)
+      const reader = await createUser(`reader-refresh-${runId}@example.invalid`, [
+        { role: 'tenant-admin', tenant: tenant.id },
+      ])
+      readOnlyEmails.add(`reader-refresh-${runId}@example.invalid`)
+
+      const admin = await createUser(`owner-${runId}@example.invalid`, [
+        { role: 'tenant-admin', tenant: tenant.id },
+      ])
+      await beginConnect(tenant.slug, { token: admin.token })
+      const settings = (await settingsFor(tenant))!
+      await saveXeroTokens({
+        collection: 'xero-settings',
+        encryptionKey: ENCRYPTION_KEY,
+        payload,
+        settings: settings as never,
+        tokens: {
+          accessToken: 'access-stale',
+          expiresAt: new Date(Date.now() - 1000).toISOString(),
+          refreshToken: 'refresh-readonly',
+          scope: null,
+        } as never,
+      })
+
+      const before = (await settingsFor(tenant))?.tokens.refreshToken
+      const xeroCallsBefore = xeroCalls.length
+
+      const refused = await call('/refresh', { method: 'POST', tenant: tenant.slug, token: reader.token })
+
+      expect(refused.status).toBe(403)
+      expect(refused.body?.error.code).toBe('not_authorised')
+      expect(xeroCalls.length).toBe(xeroCallsBefore)
+      // The refresh token is not spent on a caller who cannot write the result back.
+      expect((await settingsFor(tenant))?.tokens.refreshToken).toBe(before)
+
+      readOnlyEmails.delete(`reader-refresh-${runId}@example.invalid`)
     })
   })
 

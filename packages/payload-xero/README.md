@@ -75,6 +75,8 @@ export default buildConfig({
 
 Tenant scope needs a tenancy layer that adds the `tenantField` to the collection; the plugin does not add it itself.
 
+**Read and update are checked separately.** Finding the row is a read; saving tokens over an existing connection is an update. The endpoints check `read` to find the row and then ask Payload for that document's permissions, so your `update` rule — and the tenancy layer's constraints — decide whether the connection may be replaced. A caller with `read` but no `update` gets a `403` and never spends the authorisation code or the refresh token. This matters because the token write itself uses `overrideAccess`, since the hidden `tokens` group refuses API writes by design.
+
 ## OAuth2 connect and refresh
 
 The plugin adds three endpoints under the API root:
