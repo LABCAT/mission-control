@@ -27,11 +27,12 @@ Each path is requested with `GET`, redirects off, `User-Agent: url-parity-check`
 - `title-mismatch`: 200 but the title differs from the legacy page
 - `redirect-ok`: 301/308 to the path in `--map`, destination returns 200
 - `redirect-wrong`: 301/308 to anywhere else (or another host), or with no `Location`
+- `redirect-offsite`: any hop in the chain leaves the target's origin (that hop is not requested)
 - `redirect-broken`: the redirect chain does not end in a 200
 - `redirect-unmapped`: 301/308 with no `--map` entry whose destination returns 200 (cannot be proven the *right* place; add it to the map)
 - `not-found`: 404/410
 - `other`: anything that could not be verified (302/307, 5xx, network error, or legacy title unavailable); fails unless `--allow-unverifiable`
 
-Exit code: `1` on any `not-found`, `redirect-wrong`, `redirect-broken`, `title-mismatch` or `other`, `2` on bad arguments, or a sitemap that is unreadable, not `<urlset>`/`<sitemapindex>` (e.g. an HTML page) or empty, else `0`.
+Exit code: `1` on any `not-found`, `redirect-wrong`, `redirect-broken`, `redirect-offsite`, `title-mismatch` or `other`, `2` on bad arguments, or a sitemap that is unreadable, not `<urlset>`/`<sitemapindex>` (e.g. an HTML page) or empty, else `0`.
 
 Tests: `pnpm test`. Type check: `pnpm --filter @mission-control/url-parity typecheck`.

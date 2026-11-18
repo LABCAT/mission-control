@@ -204,6 +204,23 @@ describe('checkTarget', () => {
     const bad = await checkTarget('/a/', T, '/b/', site({ [`${T}/a/`]: redirect('/b/'), [`${T}/b/`]: redirect('') }))
     expect(bad.result).toBe('redirect-broken')
   })
+  it('a hop that leaves the target origin fails and is never fetched', async () => {
+    const fetched: string[] = []
+    const deps = {
+      get: async (url: string) => {
+        fetched.push(url)
+        return url === `${T}/a/` ? redirect('/b/') : url === `${T}/b/` ? redirect('https://legacy.example/b/') : page('x')
+      },
+      legacyTitle: async () => null,
+    }
+    for (const expected of [undefined, '/b/']) {
+      fetched.length = 0
+      const r = await checkTarget('/a/', T, expected, deps)
+      expect(r.result).toBe('redirect-offsite')
+      expect(isFailure(r.result)).toBe(true)
+      expect(fetched).toEqual([`${T}/a/`, `${T}/b/`])
+    }
+  })
   it('redirect loops end as redirect-broken', async () => {
     const r = await checkTarget('/a/', T, '/b/', site({ [`${T}/a/`]: redirect('/b/'), [`${T}/b/`]: redirect('/b/') }))
     expect(r.result).toBe('redirect-broken')
@@ -234,7 +251,7 @@ describe('hasFailure', () => {
     expect(hasFailure([c('ok'), c('other')], { allowUnverifiable: true })).toBe(false)
   })
   it('the flag never excuses real failures', () => {
-    for (const r of ['not-found', 'redirect-wrong', 'redirect-broken', 'title-mismatch'] as const) {
+    for (const r of ['not-found', 'redirect-wrong', 'redirect-broken', 'redirect-offsite', 'title-mismatch'] as const) {
       expect(hasFailure([c(r)], { allowUnverifiable: true })).toBe(true)
     }
   })

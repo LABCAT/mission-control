@@ -3,6 +3,7 @@ export type Result =
   | 'redirect-ok'
   | 'redirect-wrong'
   | 'redirect-broken'
+  | 'redirect-offsite'
   | 'redirect-unmapped'
   | 'title-mismatch'
   | 'not-found'
@@ -135,7 +136,7 @@ export function classify(
 
 /** Failing results. `other` (unverifiable) fails too unless the caller explicitly accepts it. */
 export const isFailure = (r: Result): boolean =>
-  r === 'other' || r === 'not-found' || r === 'redirect-wrong' || r === 'redirect-broken' || r === 'title-mismatch'
+  r === 'other' || r === 'not-found' || r === 'redirect-wrong' || r === 'redirect-broken' || r === 'redirect-offsite' || r === 'title-mismatch'
 
 export function csvEscape(v: string | number): string {
   const s = String(v)
@@ -153,6 +154,7 @@ export function summarize(checks: Check[]): Record<Result, number> {
     'redirect-ok': 0,
     'redirect-wrong': 0,
     'redirect-broken': 0,
+    'redirect-offsite': 0,
     'title-mismatch': 0,
     'redirect-unmapped': 0,
     'not-found': 0,
@@ -232,6 +234,7 @@ export async function checkTarget(
     for (let i = 0; i < MAX_HOPS && (hop.status === 301 || hop.status === 308 || hop.status === 302 || hop.status === 307); i++) {
       if (!hop.location) return out('redirect-broken', hop.status)
       url = new URL(hop.location, url).href
+      if (new URL(url).origin !== new URL(target).origin) return out('redirect-offsite', hop.status)
       hop = await deps.get(url)
     }
     return out(hop.status === 200 ? result : 'redirect-broken', hop.status)
