@@ -31,6 +31,32 @@ describe('payloadXero plugin', () => {
     expect(settings?.access?.update).toBeTypeOf('function')
   })
 
+  it('adds the connect, callback and refresh endpoints on the API root', () => {
+    const config = run({ scope: 'tenant' })
+
+    expect(config.endpoints?.map((endpoint) => `${endpoint.method.toUpperCase()} ${endpoint.path}`)).toEqual([
+      'GET /xero/connect',
+      'GET /xero/callback',
+      'POST /xero/refresh',
+    ])
+    expect(config.custom?.payloadXero).toMatchObject({ oauthEndpoints: true })
+  })
+
+  it('lets the paths be changed and the endpoints be left out', () => {
+    const moved = run({ oauthPaths: { callbackPath: '/oauth/xero', connectPath: '/oauth/start' } })
+
+    expect(moved.endpoints?.map((endpoint) => endpoint.path)).toEqual([
+      '/oauth/start',
+      '/oauth/xero',
+      '/xero/refresh',
+    ])
+
+    const without = run({ oauth: false })
+
+    expect(without.endpoints).toEqual([])
+    expect(without.custom?.payloadXero).toMatchObject({ oauthEndpoints: false })
+  })
+
   it('does nothing when disabled', () => {
     const incoming = { collections: [] } as unknown as Config
 
