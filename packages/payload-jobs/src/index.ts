@@ -3,7 +3,8 @@ import type { CollectionConfig, Config, GlobalConfig, Plugin } from 'payload'
 import { accountAuthEndpoints, type AccountAuthOptions } from './account-auth'
 import { locationsCollection, locationsTenantSlugIndex } from './collections/locations'
 import { withLegacyPasswords } from './legacy-password'
-import { taxonomyCollections } from './taxonomies'
+import { planCollection, PLANS_SLUG, withPlanRestrictionGuards } from './plans'
+import { TAXONOMY_SLUGS, taxonomyCollections } from './taxonomies'
 import { jobBoardSettingsGlobal, jobBoardTenantFields } from './tenancy'
 
 export * from './access'
@@ -11,6 +12,10 @@ export * from './account-auth'
 export * from './collections/locations'
 export * from './email'
 export * from './legacy-password'
+export * from './money'
+export * from './plans'
+export * from './plans-seed'
+export * from './pricing'
 export * from './rate-limit'
 export * from './seed/vanuatu'
 export * from './site-keys'
@@ -18,6 +23,13 @@ export * from './taxonomies'
 export * from './tenancy'
 
 export type TenancyMode = 'multi' | 'single'
+
+/**
+ * Collections this plugin adds that belong to a tenant. In `multi` mode the host must list
+ * every one of them in the multi-tenant plugin's `collections`, which adds their `tenant`
+ * field; Payload otherwise rejects the config ("Field tenant was not found").
+ */
+export const PAYLOAD_JOBS_TENANT_COLLECTIONS = ['locations', ...TAXONOMY_SLUGS, PLANS_SLUG] as const
 
 export type PayloadJobsFeatures = {
   /** Job applications. The collection is added by a later task. Defaults to true. */
@@ -86,6 +98,8 @@ export const payloadJobs =
       ),
     }
 
+    const settingsSlug = options.settingsSlug ?? 'job-board-settings'
+
     const added = jobBoardCollections(tenancy)
     const existingSlugs = new Set((config.collections ?? []).map((collection) => collection.slug))
     const clashes = added.filter((collection) => existingSlugs.has(collection.slug))
@@ -151,8 +165,6 @@ export const payloadJobs =
         }),
       }
     } else {
-      const settingsSlug = options.settingsSlug ?? 'job-board-settings'
-
       if (config.globals?.some((global) => global.slug === settingsSlug)) {
         throw new Error(`payload-jobs: a "${settingsSlug}" global already exists.`)
       }
@@ -167,13 +179,19 @@ export const payloadJobs =
     }
 
     const registeredSlugs = new Set(config.collections?.map((collection) => collection.slug))
-    const taxonomies = taxonomyCollections({ tenantScoped: tenancy === 'multi' }).filter(
-      (collection) => !registeredSlugs.has(collection.slug),
+    // Job types and categories that a plan is restricted to can't be deleted (PJ-21).
+    const taxonomies = withPlanRestrictionGuards(
+      taxonomyCollections({ tenantScoped: tenancy === 'multi' }).filter(
+        (collection) => !registeredSlugs.has(collection.slug),
+      ),
+      { tenantScoped: tenancy === 'multi' },
     )
+    // Plans are always on: every job board sells listings, even if every plan is free.
+    const plans = planCollection({ settingsSlug, tenantScoped: tenancy === 'multi', tenantsSlug })
 
     return {
       ...config,
-      collections: [...(config.collections ?? []), ...taxonomies],
+      collections: [...(config.collections ?? []), ...taxonomies, plans],
       custom: {
         ...config.custom,
         payloadJobs: { enabled: true, tenancy, features },

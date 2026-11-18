@@ -92,6 +92,7 @@ export interface Config {
     'job-tags': JobTag;
     'salary-bands': SalaryBand;
     'areas-of-focus': AreasOfFocus;
+    plans: Plan;
     'payload-kv': PayloadKv;
     'payload-jobs': PayloadJob;
     'payload-locked-documents': PayloadLockedDocument;
@@ -114,6 +115,7 @@ export interface Config {
     'job-tags': JobTagsSelect<false> | JobTagsSelect<true>;
     'salary-bands': SalaryBandsSelect<false> | SalaryBandsSelect<true>;
     'areas-of-focus': AreasOfFocusSelect<false> | AreasOfFocusSelect<true>;
+    plans: PlansSelect<false> | PlansSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-jobs': PayloadJobsSelect<false> | PayloadJobsSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
@@ -695,6 +697,80 @@ export interface AreasOfFocus {
   createdAt: string;
 }
 /**
+ * What employers buy. Archive a plan to stop selling it; past orders keep what they bought.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "plans".
+ */
+export interface Plan {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  name: string;
+  /**
+   * Stable identifier used by seeds and imports, e.g. regular-listing. Unique in the tenant.
+   */
+  key: string;
+  description?: string | null;
+  /**
+   * Whole minor units of the tenant currency: 2500 is Vt 2,500, or $25.00 in NZD.
+   */
+  price: number;
+  /**
+   * Copied from the tenant when the plan is saved.
+   */
+  currency?: string | null;
+  /**
+   * How long each listing stays live, in days.
+   */
+  durationDays: number;
+  /**
+   * 1 for a single listing; more for a pack.
+   */
+  jobCredits: number;
+  /**
+   * Days until unused credits from this plan expire. Empty: they never expire.
+   */
+  creditExpiryDays?: number | null;
+  /**
+   * A job credit from a pack can pay for this plan. Only applies to single-listing plans.
+   */
+  acceptsCredits?: boolean | null;
+  /**
+   * Only for voluntary jobs (a job type marked as volunteer).
+   */
+  isVolunteer?: boolean | null;
+  /**
+   * Only jobs of these types. Empty: any type.
+   */
+  allowedJobTypes?: (number | JobType)[] | null;
+  /**
+   * Only jobs whose every category is listed here. Empty: any category.
+   */
+  allowedJobCategories?: (number | JobCategory)[] | null;
+  /**
+   * Archived plans can no longer be bought. Past orders are not affected.
+   */
+  status: 'active' | 'archived';
+  /**
+   * Lower numbers are shown first.
+   */
+  sortOrder?: number | null;
+  /**
+   * WordPress pricing-plan post id, for the import.
+   */
+  legacyId?: number | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv".
  */
@@ -879,6 +955,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'areas-of-focus';
         value: number | AreasOfFocus;
+      } | null)
+    | ({
+        relationTo: 'plans';
+        value: number | Plan;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -1332,6 +1412,32 @@ export interface AreasOfFocusSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "plans_select".
+ */
+export interface PlansSelect<T extends boolean = true> {
+  tenant?: T;
+  name?: T;
+  key?: T;
+  description?: T;
+  price?: T;
+  currency?: T;
+  durationDays?: T;
+  jobCredits?: T;
+  creditExpiryDays?: T;
+  acceptsCredits?: T;
+  isVolunteer?: T;
+  allowedJobTypes?: T;
+  allowedJobCategories?: T;
+  status?: T;
+  sortOrder?: T;
+  legacyId?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv_select".
  */
 export interface PayloadKvSelect<T extends boolean = true> {
@@ -1526,7 +1632,8 @@ export interface CollectionQueryWidget {
       | 'job-types'
       | 'job-tags'
       | 'salary-bands'
-      | 'areas-of-focus';
+      | 'areas-of-focus'
+      | 'plans';
     where?:
       | {
           [k: string]: unknown;
@@ -1563,6 +1670,7 @@ export interface ActivityWidget {
           | 'job-tags'
           | 'salary-bands'
           | 'areas-of-focus'
+          | 'plans'
         )[]
       | null;
   };

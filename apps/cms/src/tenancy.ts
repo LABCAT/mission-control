@@ -29,6 +29,9 @@ export const multiTenantOptions = {
     'job-tags': { accessResultOverride: tenantContentOverride },
     'job-types': { accessResultOverride: tenantContentOverride },
     'salary-bands': { accessResultOverride: tenantContentOverride },
+    // mission-control: plans read site keys themselves (active plans only), so they skip the
+    // generic site key override; seekers are denied (PJ-21).
+    plans: { accessResultOverride: denySeekerOnly(({ accessResult }) => accessResult) },
   },
   tenantsArrayField: {
     rowFields: [
