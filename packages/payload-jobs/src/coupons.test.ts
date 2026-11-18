@@ -192,6 +192,14 @@ describe('coupon access control', () => {
     expect(await update(argsFor(null))).toBe(false)
   })
 
+  it('makes a super-admin name a tenant when creating, so no coupon is orphaned', async () => {
+    const superAdmin = userWith([], 'super-admin')
+
+    expect(await create(argsFor(superAdmin))).toBe(false)
+    expect(await create(argsFor(superAdmin, { tenant: null }))).toBe(false)
+    expect(await create(argsFor(superAdmin, { code: 'LINKPS' }))).toBe(false)
+  })
+
   it('drops the tenant filter but keeps the role check in single-tenant mode', async () => {
     const single = couponCollection({ tenantScoped: false })
     const singleCreate = single.access?.create
@@ -480,6 +488,20 @@ describe('coupons in Postgres', () => {
           tenant: harness.tenantB.id,
         } as never,
         user: harness.tenantAdminA as never,
+      }),
+    ).rejects.toThrow(/not allowed/i)
+  })
+
+  it('refuses a super-admin coupon created without a tenant over the API', async () => {
+    await expect(
+      harness.payload.create({
+        collection: COUPONS_SLUG,
+        data: {
+          amount: 500,
+          code: 'SUPERORPHAN',
+          discountType: 'flat',
+        } as never,
+        user: harness.superAdmin as never,
       }),
     ).rejects.toThrow(/not allowed/i)
   })

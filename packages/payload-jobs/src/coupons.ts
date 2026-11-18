@@ -76,7 +76,8 @@ export const couponWriteAccess =
 
 /**
  * Create needs the tenant in the submitted data: a `where` result does not filter create
- * data, so a create with no tenant would store a coupon that belongs to no tenant.
+ * data, so a create with no tenant would store a coupon that belongs to no tenant. That
+ * includes super admins, who bypass the tenant list but not the tenant requirement.
  * Single-tenant mode has no `tenant` field, so it falls back to the role check alone.
  */
 export const couponCreateAccess =
@@ -86,15 +87,12 @@ export const couponCreateAccess =
 
     if (!user) return false
     if (!tenantScoped) return canEditCoupons(user)
-    if (isSuperAdmin(user)) return true
-
-    const tenantIDs = editorTenantIDs(user)
-    if (tenantIDs.length === 0) return false
 
     const submitted = tenantIDOf((data as { tenant?: unknown } | undefined)?.tenant)
     if (submitted === null) return false
+    if (isSuperAdmin(user)) return true
 
-    return tenantIDs.some((id) => String(id) === String(submitted))
+    return editorTenantIDs(user).some((id) => String(id) === String(submitted))
   }
 
 /** Uppercase the code before validation so `linkps` and `LINKPS` are the same coupon. */
