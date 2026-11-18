@@ -6,15 +6,20 @@ Orchestrator: session_01H9XNhzozJtHHbbc8KMd38e (replaces session_01H9XNhytrTqfZd
 
 | Ticket | Session | Branch | State | Cost |
 |---|---|---|---|---|
-| PJ-34 WP password verifier | session_01H9XNhy2hU9XoAoarqxAoDP | pj-34-legacy-passwords | PR #41: told to fix typecheck (18 Nov) | $0.42 |
-| PJ-60 WP import framework | session_01H9XNhzHksGv6x3guC2Y9cE | pj-60-wp-import-framework | PR #42, idle. 15 tests pass | $0.63 |
-| PJ-70 URL parity crawler | session_01H9XNhyQDYHaQY97Xektbzw | pj-70-url-parity | Working (tests/lint) | – |
-| RCL-86 Pagination (Astro) | session_01H9XNhxyWEqz3FKnUHMSwGq | rcl-pagination (rocketship) | Working | – |
-| PJ-10 R2 media + documents | session_01H9XNi2ukPLFrf7UXZq26qo | pj-10-r2-media | Dispatched 18 Nov (migration PR) | – |
-| PJ-81 Front-end account auth API | session_01H9XNhyACB3KEWtUM95Dxix | pj-81-account-auth | Dispatched 18 Nov | – |
-| PJ-54 Xero plugin skeleton | session_01H9XNi2enTmhN3JrbmoUZFh | pj-54-xero-skeleton | Dispatched 18 Nov (package only, no migration) | – |
+| PJ-34 WP password verifier | session_01H9XNhy2hU9XoAoarqxAoDP | pj-34-legacy-passwords | PR #41: CI green; Kinsho blocked (hook not wired, PHP trim) → fixing | $0.42 |
+| PJ-60 WP import framework | session_01H9XNhzHksGv6x3guC2Y9cE | pj-60-wp-import-framework | PR #42: CI green | $0.63 |
+| PJ-70 URL parity crawler | session_01H9XNhyQDYHaQY97Xektbzw | pj-70-url-parity | PR #43: CI green; Kinsho blocked (follow redirects, title check) → fixing | – |
+| RCL-86 Pagination (Astro) | session_01H9XNhxyWEqz3FKnUHMSwGq | rcl-pagination (rocketship) | rocketship PR #117 open, checks pass; not merged | – |
+| PJ-10 R2 media + documents | session_01H9XNi2ukPLFrf7UXZq26qo | pj-10-r2-media | PR #45 (migration): CI green; Kinsho blocked: no variants in Worker → waiting on founder (Cloudflare Images spend) | – |
+| PJ-81 Front-end account auth API | session_01H9XNhyACB3KEWtUM95Dxix | pj-81-account-auth | PR #46 (migration): CI green; Kinsho blocked (stale JWT membership) → fixing | – |
+| PJ-54 Xero plugin skeleton | session_01H9XNi2enTmhN3JrbmoUZFh | pj-54-xero-skeleton | PR #44: CI green; Kinsho blocked (non-atomic one-row check) → fixing | – |
 
 Sub-session spend so far: ~$1.05 (2 sessions not yet reporting).
+
+## Blockers (founder)
+
+- **Neon preview branch limit:** every PR's Publish preview fails with `branches limit exceeded`, so Admin smoke is skipped and Kinsho blocks for missing runtime evidence. Old preview branches need deleting (Neon + delete = founder).
+- **Merges:** nothing in the sprint can merge until the founder merges. Migration PRs open: #36, #37, #38, #40, #45, #46. They will conflict on `migrations/index.ts`, so merge one at a time and rebase the rest.
 
 ## Next candidates (D1: dispatch_status='none', no issue)
 
