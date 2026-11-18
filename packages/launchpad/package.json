@@ -7,6 +7,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./components/*": "./src/components/*.astro",
+    "./cms": "./src/cms/index.ts",
     "./tenant/*": "./src/tenant/*.ts"
   },
   "scripts": {
