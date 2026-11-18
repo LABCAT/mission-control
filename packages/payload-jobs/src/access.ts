@@ -3,7 +3,7 @@ import type { Access, FieldAccess } from 'payload'
 export const GLOBAL_ROLES = ['super-admin', 'user'] as const
 export type GlobalRole = (typeof GLOBAL_ROLES)[number]
 
-export const TENANT_ROLES = ['tenant-admin', 'editor', 'employer'] as const
+export const TENANT_ROLES = ['tenant-admin', 'editor', 'employer', 'seeker'] as const
 export type TenantRole = (typeof TENANT_ROLES)[number]
 
 type TenantReference = null | number | string | { id: number | string }
@@ -24,8 +24,15 @@ export const globalRoleOptions = GLOBAL_ROLES.map((value) => ({
   value,
 }))
 
+const tenantRoleLabels: Record<TenantRole, string> = {
+  'tenant-admin': 'Tenant admin',
+  editor: 'Editor',
+  employer: 'Employer',
+  seeker: 'Job seeker',
+}
+
 export const tenantRoleOptions = TENANT_ROLES.map((value) => ({
-  label: value === 'tenant-admin' ? 'Tenant admin' : value === 'editor' ? 'Editor' : 'Employer',
+  label: tenantRoleLabels[value],
   value,
 }))
 
@@ -128,3 +135,32 @@ export const contentWriteAccess =
 
     return allowAnyAuthenticated && (user.tenants ?? []).length === 0
   }
+
+/**
+ * A user who is a member of at least one tenant and holds only the `seeker` role everywhere.
+ * Seekers use the dashboards on the Astro sites. They never use the admin and never touch
+ * tenant content, so admin access and tenant-scoped collection access exclude them.
+ */
+export const isSeekerOnly = (user: MissionControlUser | null | undefined): boolean => {
+  if (!user || isSuperAdmin(user)) return false
+
+  const memberships = user.tenants ?? []
+
+  return memberships.length > 0 && memberships.every((membership) => membership?.role === 'seeker')
+}
+
+/** Admin panel access: everyone who can sign in, except seeker-only users. */
+export const adminPanelAccess = ({ req }: { req: { user?: unknown } }): boolean =>
+  Boolean(req.user) && !isSeekerOnly(req.user as MissionControlUser)
+
+type AccessOverrideArgs = { req: { user?: unknown } }
+
+/**
+ * Wrap a multi-tenant `accessResultOverride` so seeker-only users get no access to the
+ * collection. The multi-tenant plugin grants every member of a tenant access to that tenant's
+ * documents whatever their role, so without this a seeker could write media, tags and folders.
+ */
+export const denySeekerOnly =
+  <Args extends AccessOverrideArgs, Result>(next: (args: Args) => Promise<Result> | Result) =>
+  async (args: Args): Promise<false | Result> =>
+    isSeekerOnly(args.req.user as MissionControlUser | null | undefined) ? false : next(args)

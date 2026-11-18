@@ -14,6 +14,8 @@ const baseConfig = {
   globals: [],
 } as unknown as Config
 
+const users: CollectionConfig = { slug: 'users', auth: { verify: true }, fields: [] }
+
 const pagesOf = (config: Config) => config.collections?.find((c) => c.slug === 'pages')
 
 const fieldNamed = (name: string): Field => {
@@ -30,7 +32,7 @@ const validate = (name: string, value: unknown, siblingData: Record<string, unkn
 
 describe('payloadJobs tenancy modes', () => {
   it('adds the job-board settings to the tenants collection in multi mode', async () => {
-    const result = await payloadJobs({ tenancy: 'multi' })(baseConfig)
+    const result = await payloadJobs({ accountAuth: false, tenancy: 'multi' })(baseConfig)
     const fields = result.collections
       ?.find((collection) => collection.slug === 'tenants')
       ?.fields.map((field) => ('name' in field ? field.name : ''))
@@ -55,6 +57,45 @@ describe('payloadJobs tenancy modes', () => {
     })
   })
 
+  it('adds the account auth endpoints to the tenants collection in multi mode', async () => {
+    const result = await payloadJobs({ tenancy: 'multi' })({
+      collections: [tenants, users],
+    } as unknown as Config)
+    const endpoints = result.collections?.find((collection) => collection.slug === 'tenants')
+      ?.endpoints
+
+    expect(Array.isArray(endpoints)).toBe(true)
+    expect(
+      (endpoints as { method: string; path: string }[]).map(({ method, path }) => `${method} ${path}`),
+    ).toEqual([
+      'post /:slug/account/login',
+      'post /:slug/account/logout',
+      'get /:slug/account/me',
+      'post /:slug/account/forgot-password',
+      'post /:slug/account/reset-password',
+      'post /:slug/account/register',
+      'post /:slug/account/verify-email',
+    ])
+    // Payload routes /api/tenants/* to the collection's endpoints, so nothing goes at the root.
+    expect(result.endpoints).toBeUndefined()
+  })
+
+  it('leaves the account auth endpoints out when asked', async () => {
+    const result = await payloadJobs({ accountAuth: false, tenancy: 'multi' })({
+      collections: [tenants],
+    } as unknown as Config)
+
+    expect(result.collections?.[0]?.endpoints).toEqual([])
+  })
+
+  it('refuses account auth when the users collection does not verify email', () => {
+    expect(() =>
+      payloadJobs({ tenancy: 'multi' })({
+        collections: [tenants, { slug: 'users', auth: true, fields: [] }],
+      } as unknown as Config),
+    ).toThrow('auth.verify')
+  })
+
   it('adds a job-board-settings global in single mode', async () => {
     const result = await payloadJobs()(baseConfig)
 
@@ -76,7 +117,7 @@ describe('payloadJobs tenancy modes', () => {
   })
 
   it('adds the pages and site settings collections in multi mode', async () => {
-    const result = await payloadJobs({ tenancy: 'multi' })(baseConfig)
+    const result = await payloadJobs({ accountAuth: false, tenancy: 'multi' })(baseConfig)
     const slugs = result.collections?.map((collection) => collection.slug)
 
     expect(slugs).toEqual(['tenants', 'pages', 'site-settings'])
@@ -94,7 +135,7 @@ describe('payloadJobs tenancy modes', () => {
   })
 
   it('indexes page slugs per tenant in multi mode and globally in single mode', async () => {
-    const multi = await payloadJobs({ tenancy: 'multi' })(baseConfig)
+    const multi = await payloadJobs({ accountAuth: false, tenancy: 'multi' })(baseConfig)
     const single = await payloadJobs()(baseConfig)
 
     expect(pagesOf(multi)?.indexes).toEqual([{ fields: ['tenant', 'slug'], unique: true }])
@@ -103,6 +144,7 @@ describe('payloadJobs tenancy modes', () => {
 
   it('honours custom content slugs and a custom media collection', async () => {
     const result = await payloadJobs({
+      accountAuth: false,
       mediaSlug: 'uploads',
       pagesSlug: 'content-pages',
       siteSettingsSlug: 'home',
@@ -120,6 +162,7 @@ describe('payloadJobs tenancy modes', () => {
 
   it('can turn the content features off', async () => {
     const result = await payloadJobs({
+      accountAuth: false,
       features: { pages: false, siteSettings: false },
       tenancy: 'multi',
     })(baseConfig)
@@ -132,7 +175,9 @@ describe('payloadJobs tenancy modes', () => {
       collections: [tenants, { slug: 'pages', fields: [] }],
     } as unknown as Config
 
-    await expect(async () => payloadJobs({ tenancy: 'multi' })(withPages)).rejects.toThrow(
+    await expect(async () =>
+      payloadJobs({ accountAuth: false, tenancy: 'multi' })(withPages),
+    ).rejects.toThrow(
       /already exists/,
     )
   })

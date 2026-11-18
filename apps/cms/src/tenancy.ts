@@ -1,12 +1,17 @@
 import type { MultiTenantPluginConfig } from '@payloadcms/plugin-multi-tenant/types'
 
 import {
+  denySeekerOnly,
   isSuperAdmin,
   siteSettingsMultiTenantOptions,
   tenantRoleOptions,
 } from '@mission-control/payload-jobs'
 
 import { siteKeyAccessOverride } from './site-keys'
+
+// mission-control: the plugin gives every tenant member access to the tenant's documents, so
+// seekers (site accounts, PJ-81) are denied here. Staff roles are unchanged.
+const tenantContentOverride = denySeekerOnly(siteKeyAccessOverride)
 
 /**
  * Every content collection that belongs to a tenant goes here. The plugin adds the
@@ -16,16 +21,18 @@ import { siteKeyAccessOverride } from './site-keys'
  */
 export const multiTenantOptions = {
   collections: {
-    documents: {}, // mission-control: private to tenant members; not exposed to site keys
-    folders: { accessResultOverride: siteKeyAccessOverride },
-    media: { accessResultOverride: siteKeyAccessOverride },
+    // mission-control: documents are private to tenant members and not exposed to site keys;
+    // seekers (site accounts, PJ-81) are denied.
+    documents: { accessResultOverride: denySeekerOnly(({ accessResult }) => accessResult) },
+    folders: { accessResultOverride: tenantContentOverride },
+    media: { accessResultOverride: tenantContentOverride },
     // mission-control: PJ-20 CMS content, read by the Astro sites through a site key.
-    pages: { accessResultOverride: siteKeyAccessOverride },
+    pages: { accessResultOverride: tenantContentOverride },
     'site-settings': {
       ...siteSettingsMultiTenantOptions()['site-settings'],
-      accessResultOverride: siteKeyAccessOverride,
+      accessResultOverride: tenantContentOverride,
     },
-    tags: { accessResultOverride: siteKeyAccessOverride },
+    tags: { accessResultOverride: tenantContentOverride },
   },
   tenantsArrayField: {
     rowFields: [
