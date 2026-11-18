@@ -22,6 +22,9 @@ importers:
 
   apps/cms:
     dependencies:
+      '@mission-control/payload-email-cloudflare':
+        specifier: workspace:*
+        version: link:../../packages/payload-email-cloudflare
       '@mission-control/payload-jobs':
         specifier: workspace:*
         version: link:../../packages/payload-jobs
@@ -110,6 +113,15 @@ importers:
       wrangler:
         specifier: 4.157.0
         version: 4.157.0(@types/node@24.12.3)
+
+  packages/payload-email-cloudflare:
+    devDependencies:
+      payload:
+        specifier: 4.0.0-beta.7
+        version: 4.0.0-beta.7(graphql@16.15.0)(typescript@6.0.3)
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
 
   packages/payload-jobs:
     dependencies:
