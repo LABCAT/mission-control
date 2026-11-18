@@ -1,0 +1,134 @@
+---
+/**
+ * TEMPORARY: Rocketship 0.3.0 has no Pagination component.
+ *
+ * Per the project rules a generic component belongs in `LABCAT/rocketship` (an RCL task) and
+ * launchpad then consumes it. This local version exists only until that release; when it
+ * lands, delete this file and import the Rocketship one. It is marked for removal on purpose,
+ * and it only uses `--rs-*` tokens so the swap changes nothing visually.
+ */
+import { paginationModel } from '../tenant/pagination'
+
+type Props = {
+  page: number
+  totalPages: number
+  /** Builds the href for a page. Page 1 should be the bare listing URL. */
+  href: (page: number) => string
+  /** Accessible name for the navigation landmark. */
+  label?: string
+  previousLabel?: string
+  nextLabel?: string
+}
+
+const {
+  page,
+  totalPages,
+  href,
+  label = 'Pagination',
+  previousLabel = 'Previous',
+  nextLabel = 'Next',
+} = Astro.props as Props
+
+const model = paginationModel({ href, page, totalPages })
+---
+
+{
+  model.totalPages > 1 && (
+    <nav class="lp-pagination" aria-label={label}>
+      <ul class="lp-pagination__list">
+        <li>
+          {model.previous ? (
+            <a class="lp-pagination__link" href={model.previous.href} rel="prev">
+              {previousLabel}
+            </a>
+          ) : (
+            <span class="lp-pagination__link lp-pagination__link--disabled" aria-disabled="true">
+              {previousLabel}
+            </span>
+          )}
+        </li>
+        {model.items.map((item) =>
+          item.kind === 'gap' ? (
+            <li class="lp-pagination__gap" aria-hidden="true">
+              …
+            </li>
+          ) : (
+            <li>
+              {item.current ? (
+                <span class="lp-pagination__link lp-pagination__link--current" aria-current="page">
+                  {item.label}
+                </span>
+              ) : (
+                <a class="lp-pagination__link" href={href(item.page)} aria-label={`Page ${item.label}`}>
+                  {item.label}
+                </a>
+              )}
+            </li>
+          ),
+        )}
+        <li>
+          {model.next ? (
+            <a class="lp-pagination__link" href={model.next.href} rel="next">
+              {nextLabel}
+            </a>
+          ) : (
+            <span class="lp-pagination__link lp-pagination__link--disabled" aria-disabled="true">
+              {nextLabel}
+            </span>
+          )}
+        </li>
+      </ul>
+    </nav>
+  )
+}
+
+<style>
+  .lp-pagination__list {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--rs-space-2);
+    justify-content: center;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .lp-pagination__link {
+    align-items: center;
+    border: 1px solid var(--rs-color-border);
+    border-radius: var(--rs-radius-sm);
+    color: var(--rs-color-fg);
+    display: inline-flex;
+    justify-content: center;
+    min-block-size: 40px;
+    min-inline-size: 40px;
+    padding-inline: var(--rs-space-3);
+    text-decoration: none;
+  }
+
+  .lp-pagination__link:hover {
+    border-color: var(--rs-color-accent);
+  }
+
+  .lp-pagination__link:focus-visible {
+    outline: 2px solid var(--rs-color-focus-ring);
+    outline-offset: 2px;
+  }
+
+  .lp-pagination__link--current {
+    background: var(--rs-color-accent);
+    border-color: var(--rs-color-accent);
+    color: var(--rs-color-accent-contrast);
+    font-weight: var(--rs-font-weight-semibold);
+  }
+
+  .lp-pagination__link--disabled {
+    color: var(--rs-color-muted);
+    opacity: 0.55;
+  }
+
+  .lp-pagination__gap {
+    color: var(--rs-color-muted);
+  }
+</style>

@@ -1,0 +1,46 @@
+---
+import Card from '@labcat2020/rocketship/components/Card'
+
+import type { OrgSummary } from '../types'
+
+type Props = {
+  org: OrgSummary
+  /** Label for the job count, e.g. `open jobs`. */
+  jobsLabel?: string
+}
+
+const { org, jobsLabel = 'open jobs' } = Astro.props as Props
+const hasJobs = typeof org.jobCount === 'number'
+---
+
+<Card as="article">
+  {org.logo?.url && <img slot="media" class="rs-card__media" src={org.logo.url} alt="" />}
+  <h3 class="rs-card__title">
+    <a class="rs-card__link" href={org.url}>{org.name}</a>
+  </h3>
+  {org.description && <p class="rs-card__description">{org.description}</p>}
+  {
+    (org.location || hasJobs) && (
+      <ul class="lp-org__facts">
+        {org.location && <li>{org.location}</li>}
+        {hasJobs && (
+          <li>
+            {org.jobCount} {jobsLabel}
+          </li>
+        )}
+      </ul>
+    )
+  }
+</Card>
+
+<style>
+  .lp-org__facts {
+    color: var(--rs-color-muted);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--rs-space-3);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+</style>
