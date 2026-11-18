@@ -196,6 +196,51 @@ describe('locations tenant requirements', () => {
     },
   )
 
+  it('rechecks the tree on an update that does not submit the parent field', async () => {
+    const hook = tenantlessCollection.hooks?.beforeChange?.[0] as (
+      args: unknown,
+    ) => Promise<unknown>
+
+    const messageFor = async (args: unknown) => {
+      const error = await Promise.resolve()
+        .then(() => hook(args))
+        .then(
+          () => null,
+          (reason: unknown) =>
+            reason as { data?: { errors?: { message: string }[] } },
+        )
+
+      return error?.data?.errors?.map((fieldError) => fieldError.message)
+    }
+
+    // `kind` alone moves from island to region: the stored parent would then be invalid, so the
+    // hook must refuse it even though the request never mentions `parent`.
+    await expect(
+      messageFor({
+        data: { kind: 'region' },
+        id: 10,
+        operation: 'update',
+        originalDoc: { kind: 'island', parent: 3, tenant: 2 },
+        req: validatingReq(),
+      }),
+    ).resolves.toEqual(['A region cannot have a parent'])
+
+    // Clearing the parent in the same write is fine.
+    await expect(
+      Promise.resolve()
+        .then(() =>
+          hook({
+            data: { kind: 'region', parent: null },
+            id: 10,
+            operation: 'update',
+            originalDoc: { kind: 'island', parent: 3, tenant: 2 },
+            req: validatingReq(),
+          }),
+        )
+        .then((result) => result as unknown),
+    ).resolves.toEqual({ kind: 'region', parent: null })
+  })
+
   it.each(scenarios)(
     'only accepts a parent from the same tenant in $label mode',
     async ({ collection }) => {

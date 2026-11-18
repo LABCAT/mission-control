@@ -1,4 +1,5 @@
-import { ValidationError, type CollectionConfig, type CompoundIndex, type Field, type Validate } from 'payload'
+import type { CollectionConfig, CompoundIndex, Field, PayloadRequest, Validate } from 'payload'
+import { ValidationError } from 'payload'
 
 import { tenantContentWriteAccess } from '../access'
 
@@ -94,17 +95,26 @@ const validateSlug: Validate = async (value, { data, id, req }) => {
   return true
 }
 
+type TreeCheckArgs = {
+  /** The document as it will be stored: submitted data merged over the stored document. */
+  data: LocationData
+  id?: number | string
+  req: PayloadRequest
+}
+
 /**
  * A parent must exist in the same tenant and be a broader kind. A region takes no parent.
  * The check reads the parent with `overrideAccess`, otherwise a tenant admin could not
  * resolve locations outside their own read filter, and compares tenants explicitly.
  */
-const validateParent: Validate = async (value, { data, id, req }) => {
-  const parentID = idOf(value as LocationRef)
+const checkParent = async (
+  value: LocationRef,
+  { data, id, req }: TreeCheckArgs,
+): Promise<string | true> => {
+  const parentID = idOf(value)
   if (parentID === null) return true
 
-  const sibling = (data ?? {}) as LocationData
-  const kind = sibling.kind
+  const kind = data.kind
 
   if (!kind) return true
 
@@ -130,7 +140,7 @@ const validateParent: Validate = async (value, { data, id, req }) => {
     return `A ${kind}’s parent must be a ${ALLOWED_PARENT_KINDS[kind].join(' or ')}`
   }
 
-  const tenantID = idOf(sibling.tenant)
+  const tenantID = idOf(data.tenant)
   // A tenantless child never reaches here in multi-tenant mode: the beforeChange hook
   // refuses it. In single-tenant mode there is no tenant field at all.
   if (tenantID === null) return true
@@ -143,6 +153,15 @@ const validateParent: Validate = async (value, { data, id, req }) => {
     ? true
     : 'The parent location belongs to another tenant'
 }
+
+/**
+ * Field validators only run for fields the request submits, so an update that changes `kind`
+ * without sending `parent` would skip this check and could leave a region with a parent. The
+ * collection-level `beforeChange` hook below therefore runs the same check against the merged
+ * document on every write, and this validator only covers the field-level error message.
+ */
+const validateParent: Validate = async (value, { data, id, req }) =>
+  checkParent(value as LocationRef, { data: (data ?? {}) as LocationData, id, req })
 
 const fields: Field[] = [
   {
@@ -204,21 +223,33 @@ export const locationsCollection = (options: LocationsOptions = {}): CollectionC
     fields,
     hooks: requireTenant
       ? {
-          // A field validator is skipped when its field is not submitted, so a write that never
-          // mentions `tenant` would slip past `validateSlug` and `validateParent`. Check the
-          // tenant itself here, where every create and update passes. (`beforeChange`, not
+          // Field validators are skipped when their field is not submitted, so a write that never
+          // mentions `tenant` or `parent` would slip past `validateSlug` and `validateParent`.
+          // Check both here, against the document as it will be stored. (`beforeChange`, not
           // `beforeValidate`: the plugin's membership hook is the first entry there, and the
           // tenancy test reaches for it by that position.)
           beforeChange: [
-            ({ data, originalDoc }) => {
-              const tenant = idOf(
-                ((data as LocationData | undefined)?.tenant ??
-                  (originalDoc as LocationData | undefined)?.tenant) as LocationRef,
-              )
-              if (tenant === null) {
+            async ({ data, originalDoc, req }) => {
+              const submitted = (data ?? {}) as LocationData
+              const stored = (originalDoc ?? {}) as LocationData
+              const merged: LocationData = { ...stored, ...submitted }
+
+              if (idOf(merged.tenant) === null) {
                 throw new ValidationError({
                   collection: 'locations',
                   errors: [{ message: 'A location must belong to a tenant', path: 'tenant' }],
+                })
+              }
+
+              const parentError = await checkParent(merged.parent, {
+                data: merged,
+                id: merged.id ?? stored.id,
+                req,
+              })
+              if (parentError !== true) {
+                throw new ValidationError({
+                  collection: 'locations',
+                  errors: [{ message: parentError, path: 'parent' }],
                 })
               }
 

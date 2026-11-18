@@ -188,8 +188,9 @@ All Agent tasks except PJ-28. Each one is collection config, access control and 
 - A parent must be broader than its child (region ← island ← town), which keeps the tree
   acyclic; a parent in another tenant is rejected.
 - The seed mirrors the legacy picker (`island → town`, no province level) and adds the
-  `Overseas` and `Other` catch-alls. Run it with `SEED_LOCATIONS_CONFIRM=1 pnpm seed:locations`
-  in `apps/cms`; it is idempotent, and skips the aggregate tenant.
+  `Overseas` and `Other` catch-alls. Run it with `SEED_LOCATIONS_CONFIRM=1 pnpm seed:locations <tenant-slug>`
+  in `apps/cms`; it names one tenant on purpose (the tree is Vanuatu data, not tenant
+  configuration), refuses an aggregate tenant, and is idempotent.
 
 **PJ-18**
 - `organisations`:

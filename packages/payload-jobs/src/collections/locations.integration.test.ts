@@ -185,6 +185,33 @@ describe('locations tree', () => {
     expect(fieldMessages(error)).toBe('A location must belong to a tenant')
   })
 
+  it('rejects an update whose new kind leaves the stored parent invalid', async () => {
+    const region = await create(
+      { kind: 'region', name: 'Tafea', slug: 'tafea-update' },
+      harness.tenantA.id,
+    )
+    const island = await create(
+      { kind: 'island', name: 'Erromango', parent: region.id, slug: 'erromango' },
+      harness.tenantA.id,
+    )
+
+    // The request never mentions `parent`, so only the collection hook can catch the region
+    // that is about to keep an island's parent.
+    const error = await harness.payload
+      .update({
+        collection: 'locations',
+        data: { kind: 'region' } as never,
+        id: island.id,
+        user: harness.tenantAdminA as never,
+      })
+      .then(
+        () => null,
+        (reason: unknown) => reason,
+      )
+
+    expect(fieldMessages(error)).toBe('A region cannot have a parent')
+  })
+
   it('rejects a slug that is not already a slug', async () => {
     const error = await create(
       { kind: 'region', name: 'Port Vila', slug: 'Port Vila' },
