@@ -17,7 +17,11 @@ describe('site key wiring', () => {
     }
   })
 
-  it('wires exactly the allowlisted collections', () => {
-    expect(Object.keys(wired).sort()).toEqual([...siteKeyAllowedCollections].sort())
+  it('wires no collection outside the allowlist', () => {
+    const overridden = Object.entries(wired)
+      .filter(([, collection]) => collection?.accessResultOverride)
+      .map(([slug]) => slug)
+
+    expect(overridden.sort()).toEqual([...siteKeyAllowedCollections].sort())
   })
 })

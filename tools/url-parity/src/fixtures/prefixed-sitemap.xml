@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ns:urlset xmlns:ns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
+  <ns:url>
+    <ns:loc>https://legacy.example/prefixed/</ns:loc>
+    <image:image><image:loc>https://legacy.example/uploads/photo.jpg</image:loc></image:image>
+  </ns:url>
+  <ns:url><ns:loc><![CDATA[https://legacy.example/prefixed/two/?a=1&b=2]]></ns:loc></ns:url>
+</ns:urlset>
