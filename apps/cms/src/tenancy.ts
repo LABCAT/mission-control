@@ -12,6 +12,7 @@ import { siteKeyAccessOverride } from './site-keys'
  */
 export const multiTenantOptions = {
   collections: {
+    documents: {}, // mission-control: private to tenant members; not exposed to site keys
     folders: { accessResultOverride: siteKeyAccessOverride },
     locations: { accessResultOverride: siteKeyAccessOverride },
     media: { accessResultOverride: siteKeyAccessOverride },

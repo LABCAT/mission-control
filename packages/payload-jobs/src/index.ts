@@ -1,11 +1,13 @@
 import type { CollectionConfig, Config, GlobalConfig, Plugin } from 'payload'
 
 import { Locations, locationsTenantSlugIndex } from './collections/locations'
+import { withLegacyPasswords } from './legacy-password'
 import { jobBoardSettingsGlobal, jobBoardTenantFields } from './tenancy'
 
 export * from './access'
 export * from './collections/locations'
 export * from './email'
+export * from './legacy-password'
 export * from './seed/vanuatu'
 export * from './site-keys'
 export * from './tenancy'
@@ -28,6 +30,8 @@ export type PayloadJobsOptions = {
   enabled?: boolean
   /** Which job-board collections to enable. All default to true. */
   features?: PayloadJobsFeatures
+  /** Slug of the auth collection that gets legacy WordPress password support. Defaults to `users`. */
+  usersSlug?: string
   /** Slug of the tenant settings global in single-tenant mode. */
   settingsSlug?: string
   /** `multi` requires a tenants collection; `single` uses a job-board settings global. */
@@ -60,6 +64,15 @@ export const payloadJobs =
     const features = resolvedFeatures(options)
 
     let config = incoming
+
+    // mission-control: imported WordPress users keep their passwords (PJ-34).
+    const usersSlug = options.usersSlug ?? 'users'
+    config = {
+      ...config,
+      collections: config.collections?.map((collection) =>
+        collection.slug === usersSlug ? withLegacyPasswords(collection) : collection,
+      ),
+    }
 
     const added = jobBoardCollections()
     const existingSlugs = new Set((config.collections ?? []).map((collection) => collection.slug))

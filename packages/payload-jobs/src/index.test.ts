@@ -17,7 +17,9 @@ describe('payloadJobs', () => {
       'users',
       'locations',
     ])
-    expect(result.collections?.[0]).toBe(baseConfig.collections?.[0])
+    expect(result.collections?.[0]?.fields.map((field) => ('name' in field ? field.name : null))).toContain(
+      'legacyPasswordHash',
+    )
     expect(result.globals?.[0]?.slug).toBe('job-board-settings')
     expect(result.custom).toEqual({
       existing: true,

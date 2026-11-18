@@ -12,15 +12,19 @@
     "seed:tenants": "cross-env NODE_OPTIONS=--no-deprecation payload run src/seed/tenants.ts",
     "seed:locations": "cross-env NODE_OPTIONS=--no-deprecation payload run src/seed/locations.ts",
     "start": "cross-env NODE_OPTIONS=--no-deprecation srvx --prod --dir=. --static=dist/client --entry=dist/server/server.js",
+    "wp-import": "cross-env NODE_OPTIONS=--no-deprecation payload run src/wp-import.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@mission-control/payload-jobs": "workspace:*",
+    "@mission-control/payload-wp-import": "workspace:*",
     "@payloadcms/db-postgres": "4.0.0-beta.7",
     "@payloadcms/graphql": "4.0.0-beta.7",
     "@payloadcms/plugin-multi-tenant": "4.0.0-beta.7",
     "@payloadcms/richtext-lexical": "4.0.0-beta.7",
+    "@payloadcms/storage-r2": "4.0.0-beta.7",
     "@payloadcms/tanstack-start": "4.0.0-beta.7",
+    "@payloadcms/transformer-sharp": "4.0.0-beta.7",
     "@payloadcms/ui": "4.0.0-beta.7",
     "@tanstack/react-router": "^1.170.44",
     "@tanstack/react-start": "^1.169.1",
@@ -30,6 +34,7 @@
     "payload": "4.0.0-beta.7",
     "react": "19.3.1",
     "react-dom": "19.3.1",
+    "sharp": "0.35.5",
     "srvx": "0.11.21",
     "vite": "8.3.0"
   },
