@@ -2,7 +2,7 @@ import type { Config, GlobalConfig, Plugin } from 'payload'
 
 import { accountAuthEndpoints, type AccountAuthOptions } from './account-auth'
 import { withLegacyPasswords } from './legacy-password'
-import { planCollection, PLANS_SLUG } from './plans'
+import { planCollection, PLANS_SLUG, withPlanRestrictionGuards } from './plans'
 import { TAXONOMY_SLUGS, taxonomyCollections } from './taxonomies'
 import { jobBoardSettingsGlobal, jobBoardTenantFields } from './tenancy'
 
@@ -151,8 +151,12 @@ export const payloadJobs =
     }
 
     const existingSlugs = new Set(config.collections?.map((collection) => collection.slug))
-    const taxonomies = taxonomyCollections({ tenantScoped: tenancy === 'multi' }).filter(
-      (collection) => !existingSlugs.has(collection.slug),
+    // Job types and categories that a plan is restricted to can't be deleted (PJ-21).
+    const taxonomies = withPlanRestrictionGuards(
+      taxonomyCollections({ tenantScoped: tenancy === 'multi' }).filter(
+        (collection) => !existingSlugs.has(collection.slug),
+      ),
+      { tenantScoped: tenancy === 'multi' },
     )
     // Plans are always on: every job board sells listings, even if every plan is free.
     const plans = planCollection({ settingsSlug, tenantScoped: tenancy === 'multi', tenantsSlug })

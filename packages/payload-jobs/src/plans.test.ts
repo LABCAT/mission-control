@@ -1,9 +1,10 @@
 import type { CollectionConfig, Field, PayloadRequest } from 'payload'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
-import { planCollection, PLANS_SLUG } from './plans'
+import { planCollection, PLANS_SLUG, withPlanRestrictionGuards } from './plans'
 import { PlanSeedError, planSeedProblems, seedPlans, type PlanSeed } from './plans-seed'
 import { quote, snapshotQuote, type QuotablePlan } from './pricing'
+import { taxonomyCollections } from './taxonomies'
 import { hashSiteKey } from './site-keys'
 import { bootTestPayload, tenantIsolation, type TestHarness, type TestTenant } from './test'
 
@@ -33,10 +34,15 @@ const planData = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 })
 
+/** Plans relate to job types and categories, so every boot includes the taxonomies. */
+const taxonomies = (): CollectionConfig[] =>
+  withPlanRestrictionGuards(taxonomyCollections({ tenantScoped: true }))
+
 tenantIsolation({
   boot: { tenantData, tenantFields },
   collection: planCollection(),
   createData: () => planData(),
+  extraCollections: taxonomies(),
 })
 
 /** The local API fills in the rest of a partial request, keeping these headers. */
@@ -57,6 +63,7 @@ describe('plans', () => {
   const extraTenantIDs: number[] = []
   const users: Record<'editorA' | 'employerA' | 'mixed' | 'seekerA', User> = {} as never
   const plans: Record<'activeA' | 'archivedA' | 'activeB', { id: number }> = {} as never
+  const tax: Record<'fullTimeA' | 'fullTimeB' | 'healthA' | 'ngoA' | 'voluntaryA', number> = {} as never
   const keys: Record<'tenantA' | 'hub' | 'unknown', string> = {
     hub: 'sk_test_hub',
     tenantA: 'sk_test_tenant_a',
@@ -118,7 +125,7 @@ describe('plans', () => {
 
   beforeAll(async () => {
     harness = await bootTestPayload({
-      collections: [planCollection()],
+      collections: [planCollection(), ...taxonomies()],
       globalCollections: [SiteKeys],
       tenantData,
       tenantFields,
@@ -148,6 +155,20 @@ describe('plans', () => {
     plans.archivedA = await create(tenantA.id, { key: 'old-listing', status: 'archived' })
     plans.activeB = await create(tenantB.id, { price: 2500 })
     await create(tenantB.id, { key: 'old-listing', status: 'archived' })
+
+    const term = async (collection: string, tenant: number, slug: string, extra = {}) =>
+      (
+        (await harness.payload.create({
+          collection,
+          data: { name: slug, slug, tenant, ...extra },
+          overrideAccess: true,
+        })) as { id: number }
+      ).id
+    tax.voluntaryA = await term('job-types', tenantA.id, 'voluntary', { isVolunteer: true })
+    tax.fullTimeA = await term('job-types', tenantA.id, 'full-time')
+    tax.fullTimeB = await term('job-types', tenantB.id, 'full-time')
+    tax.healthA = await term('job-categories', tenantA.id, 'health')
+    tax.ngoA = await term('job-categories', tenantA.id, 'ngo')
 
     for (const [key, tenant] of [
       [keys.tenantA, tenantA.id],
@@ -350,13 +371,13 @@ describe('plans', () => {
   })
 
   describe('restrictions', () => {
-    it('stores volunteer and taxonomy restrictions as configured', async () => {
-      const doc = (await harness.payload.create({
+    it('stores volunteer, job type and category restrictions, and quote() enforces them', async () => {
+      const created = (await harness.payload.create({
         collection: PLANS_SLUG,
         data: {
           ...planData({
-            allowedJobCategories: ['health', 'ngo'],
-            allowedJobTypes: ['voluntary'],
+            allowedJobCategories: [tax.healthA, tax.ngoA],
+            allowedJobTypes: [tax.voluntaryA],
             isVolunteer: true,
             key: 'restricted',
             price: 0,
@@ -364,32 +385,103 @@ describe('plans', () => {
           tenant: harness.tenantA.id,
         },
         overrideAccess: true,
-      })) as unknown as QuotablePlan
+      })) as { id: number }
 
-      expect(doc).toMatchObject({
-        allowedJobCategories: ['health', 'ngo'],
-        allowedJobTypes: ['voluntary'],
-        isVolunteer: true,
-      })
-      // The stored document is what checkout quotes, and its restrictions hold.
-      expect(() => quote({ job: { isVolunteer: false, type: 'voluntary' }, plan: doc })).toThrow(
-        /voluntary/,
-      )
-      expect(
-        quote({ job: { categories: ['ngo'], isVolunteer: true, type: 'voluntary' }, plan: doc }).total,
-      ).toBe(0)
+      // What checkout reads: ids at depth 0, documents at depth 1. Both quote the same.
+      for (const depth of [0, 1]) {
+        const plan = (await harness.payload.findByID({
+          collection: PLANS_SLUG,
+          depth,
+          id: created.id,
+          overrideAccess: true,
+        })) as unknown as QuotablePlan
+
+        expect(plan.isVolunteer).toBe(true)
+        expect(
+          quote({ job: { categories: [tax.ngoA], isVolunteer: true, type: tax.voluntaryA }, plan }).total,
+        ).toBe(0)
+        expect(() => quote({ job: { categories: [tax.ngoA], type: tax.fullTimeA }, plan })).toThrow(
+          /voluntary/,
+        )
+        expect(() =>
+          quote({ job: { categories: [tax.ngoA], isVolunteer: true, type: tax.fullTimeA }, plan }),
+        ).toThrow(/job type/)
+      }
     })
 
-    it('rejects restriction values that are not slugs', async () => {
-      for (const bad of [{ allowedJobTypes: ['Full Time'] }, { allowedJobCategories: ['ngo', 'ngo'] }]) {
+    it('refuses to delete a job type or category a plan is restricted to', async () => {
+      const type = (await harness.payload.create({
+        collection: 'job-types',
+        data: { name: 'Internship', slug: 'internship', tenant: harness.tenantA.id },
+        overrideAccess: true,
+      })) as { id: number }
+      const plan = (await harness.payload.create({
+        collection: PLANS_SLUG,
+        data: {
+          ...planData({ allowedJobTypes: [type.id], key: 'internships', status: 'archived' }),
+          tenant: harness.tenantA.id,
+        },
+        overrideAccess: true,
+      })) as { id: number }
+
+      await expect(
+        harness.payload.delete({ collection: 'job-types', id: type.id, overrideAccess: true }),
+      ).rejects.toThrow(/Remove it from those plans first/)
+
+      // Once no plan uses it, it can go.
+      await harness.payload.update({
+        collection: PLANS_SLUG,
+        data: { allowedJobTypes: [] },
+        id: plan.id,
+        overrideAccess: true,
+      })
+      await harness.payload.delete({ collection: 'job-types', id: type.id, overrideAccess: true })
+    })
+
+    it('does not block deleting a tenant, or clearing up what it leaves behind', async () => {
+      const tenant = await makeTenant({ currency: 'VUV', name: 'Leaving' })
+      const type = (await harness.payload.create({
+        collection: 'job-types',
+        data: { name: 'Leaving type', slug: 'leaving', tenant: tenant.id },
+        overrideAccess: true,
+      })) as { id: number }
+      await harness.payload.create({
+        collection: PLANS_SLUG,
+        data: { ...planData({ allowedJobTypes: [type.id], key: 'leaving' }), tenant: tenant.id },
+        overrideAccess: true,
+      })
+
+      await harness.payload.delete({ collection: 'tenants', id: tenant.id, overrideAccess: true })
+
+      // The plan's tenant is now null, so it no longer protects the job type.
+      await harness.payload.delete({ collection: 'job-types', id: type.id, overrideAccess: true })
+      const { totalDocs } = await harness.payload.count({
+        collection: 'job-types',
+        overrideAccess: true,
+        where: { id: { equals: type.id } },
+      })
+      expect(totalDocs).toBe(0)
+    })
+
+    it('rejects job types or categories from another tenant', async () => {
+      for (const bad of [{ allowedJobTypes: [tax.fullTimeB] }, { allowedJobTypes: [tax.fullTimeA, tax.fullTimeB] }]) {
         await expect(
           harness.payload.create({
             collection: PLANS_SLUG,
-            data: { ...planData({ key: 'bad-restriction', ...bad }), tenant: harness.tenantA.id },
+            data: { ...planData({ key: 'cross-tenant', ...bad }), tenant: harness.tenantA.id },
             overrideAccess: true,
           }),
         ).rejects.toThrow()
       }
+      await expect(
+        harness.payload.update({
+          collection: PLANS_SLUG,
+          data: { allowedJobTypes: [tax.fullTimeB] },
+          id: plans.activeA.id,
+          overrideAccess: false,
+          user: users.editorA as never,
+        }),
+      ).rejects.toThrow()
     })
   })
 
@@ -576,6 +668,55 @@ describe('plans', () => {
       await expect(
         seedPlans({ payload: harness.payload, plans: malformed, tenantID: tenant.id }),
       ).rejects.toThrow(PlanSeedError)
+
+      const { totalDocs } = await harness.payload.count({
+        collection: PLANS_SLUG,
+        overrideAccess: true,
+        where: { tenant: { equals: tenant.id } },
+      })
+      expect(totalDocs).toBe(0)
+    })
+
+    it('resolves allowed job type and category slugs to the tenant’s ids', async () => {
+      const result = await seedPlans({
+        payload: harness.payload,
+        plans: [
+          {
+            ...seed[0],
+            allowedJobCategories: ['health'],
+            allowedJobTypes: ['voluntary', 'full-time'],
+            key: 'seeded-restricted',
+          },
+        ],
+        tenantID: harness.tenantA.id,
+      })
+      expect(result.created).toEqual(['seeded-restricted'])
+
+      const { docs } = await harness.payload.find({
+        collection: PLANS_SLUG,
+        depth: 0,
+        overrideAccess: true,
+        where: { key: { equals: 'seeded-restricted' } },
+      })
+      expect(docs[0]).toMatchObject({
+        allowedJobCategories: [tax.healthA],
+        allowedJobTypes: [tax.voluntaryA, tax.fullTimeA],
+      })
+    })
+
+    it('refuses the whole seed when a slug has no taxonomy in the tenant', async () => {
+      const tenant = await makeTenant({ currency: 'VUV', name: 'No taxonomies' })
+
+      await expect(
+        seedPlans({
+          payload: harness.payload,
+          plans: [
+            { ...seed[0], key: 'fine' },
+            { ...seed[0], allowedJobTypes: ['voluntary'], key: 'needs-type' },
+          ],
+          tenantID: tenant.id,
+        }),
+      ).rejects.toThrow(/no job type "voluntary"/)
 
       const { totalDocs } = await harness.payload.count({
         collection: PLANS_SLUG,

@@ -1,6 +1,13 @@
-import type { Payload, PayloadRequest, Where } from 'payload'
+import type { CollectionSlug, Payload, PayloadRequest, Where } from 'payload'
 
-import { planFieldValidators, PLAN_KEY_PATTERN, PLANS_SLUG } from './plans'
+import {
+  planFieldValidators,
+  PLAN_JOB_CATEGORIES_SLUG,
+  PLAN_JOB_TYPES_SLUG,
+  PLAN_KEY_PATTERN,
+  PLANS_SLUG,
+  validateTaxonomySlugs,
+} from './plans'
 
 /** An add-on the plan includes, referenced by the add-on's `key` (add-ons arrive in PJ-87). */
 export type PlanSeedIncludedAddOn = {
@@ -16,9 +23,9 @@ export type PlanSeedIncludedAddOn = {
  */
 export type PlanSeed = {
   acceptsCredits?: boolean
-  /** Job category slugs (see the plans collection). Empty or omitted: any category. */
+  /** Slugs of the tenant's job categories; resolved to ids when seeding. Empty: any category. */
   allowedJobCategories?: string[]
-  /** Job type slugs. Empty or omitted: any type. */
+  /** Slugs of the tenant's job types; resolved to ids when seeding. Empty: any type. */
   allowedJobTypes?: string[]
   creditExpiryDays?: null | number
   description?: string
@@ -120,6 +127,14 @@ export const planSeedProblems = (plans: readonly PlanSeed[]): string[] => {
       if (result !== true) report(result)
     }
 
+    for (const [field, fieldLabel] of [
+      ['allowedJobTypes', 'Allowed job types'],
+      ['allowedJobCategories', 'Allowed job categories'],
+    ] as const) {
+      const result = validateTaxonomySlugs(fieldLabel)(plan[field])
+      if (result !== true) report(result)
+    }
+
     if (plan.description !== undefined && typeof plan.description !== 'string') {
       report('description must be text')
     }
@@ -182,6 +197,43 @@ export const seedPlans = async ({
     throw new PlanSeedError(`Plan seed is not ready:\n- ${problems.join('\n- ')}`)
   }
 
+  // Resolve every taxonomy slug before writing, so a missing one can't leave a partial seed.
+  const resolve = async (relationTo: string, slugs: readonly string[]) => {
+    const wanted = [...new Set(slugs)]
+    if (wanted.length === 0) return new Map<string, number | string>()
+
+    const { docs } = await payload.find({
+      collection: relationTo as CollectionSlug,
+      depth: 0,
+      limit: wanted.length,
+      overrideAccess: true,
+      pagination: false,
+      req,
+      where: { and: [{ tenant: { equals: tenantID } }, { slug: { in: wanted } }] },
+    })
+    return new Map(docs.map((doc) => [String((doc as { slug?: unknown }).slug), doc.id]))
+  }
+
+  const typeIDs = await resolve(
+    PLAN_JOB_TYPES_SLUG,
+    plans.flatMap((plan) => plan.allowedJobTypes ?? []),
+  )
+  const categoryIDs = await resolve(
+    PLAN_JOB_CATEGORIES_SLUG,
+    plans.flatMap((plan) => plan.allowedJobCategories ?? []),
+  )
+  const missing = plans.flatMap((plan) => [
+    ...(plan.allowedJobTypes ?? [])
+      .filter((slug) => !typeIDs.has(slug))
+      .map((slug) => `"${plan.key}": no job type "${slug}" in this tenant`),
+    ...(plan.allowedJobCategories ?? [])
+      .filter((slug) => !categoryIDs.has(slug))
+      .map((slug) => `"${plan.key}": no job category "${slug}" in this tenant`),
+  ])
+  if (missing.length > 0) {
+    throw new PlanSeedError(`Plan seed is not ready:\n- ${missing.join('\n- ')}`)
+  }
+
   const result: SeedPlansResult = { created: [], deferred: [], existing: [] }
 
   for (const plan of plans) {
@@ -214,8 +266,8 @@ export const seedPlans = async ({
       collection: PLANS_SLUG,
       data: {
         acceptsCredits: plan.acceptsCredits ?? true,
-        allowedJobCategories: plan.allowedJobCategories ?? [],
-        allowedJobTypes: plan.allowedJobTypes ?? [],
+        allowedJobCategories: (plan.allowedJobCategories ?? []).map((slug) => categoryIDs.get(slug)),
+        allowedJobTypes: (plan.allowedJobTypes ?? []).map((slug) => typeIDs.get(slug)),
         creditExpiryDays: plan.creditExpiryDays ?? null,
         description: plan.description,
         durationDays: plan.durationDays,

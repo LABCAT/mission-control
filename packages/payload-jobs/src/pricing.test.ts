@@ -570,6 +570,30 @@ describe('plan restrictions (examples)', () => {
     expect(codeOf(() => quote({ job: { categories: [] }, plan: health }))).toBe('job-not-allowed')
   })
 
+  it('compares ids, whether the plan and job hold ids or populated documents', () => {
+    const plan = vatu({ allowedJobCategories: [{ id: 3 }], allowedJobTypes: [7, { id: 8 }] })
+
+    expect(quote({ job: { categories: [3], type: { id: 8 } }, plan }).job).toEqual({
+      categories: [3],
+      isVolunteer: false,
+      type: 8,
+    })
+    expect(quote({ job: { categories: [{ id: '3' }], type: '7' }, plan }).total).toBe(5000)
+    expect(codeOf(() => quote({ job: { categories: [3], type: 9 }, plan }))).toBe('job-not-allowed')
+  })
+
+  it('takes isVolunteer from a populated job type, and refuses a contradiction', () => {
+    const voluntaryType = { id: 5, isVolunteer: true }
+
+    expect(quote({ job: { type: voluntaryType }, plan: volunteer }).job?.isVolunteer).toBe(true)
+    expect(
+      codeOf(() => quote({ job: { isVolunteer: false, type: voluntaryType }, plan: volunteer })),
+    ).toBe('invalid-job')
+    expect(codeOf(() => quote({ job: { type: { id: 6, isVolunteer: false } }, plan: volunteer }))).toBe(
+      'job-not-allowed',
+    )
+  })
+
   it('lets an unrestricted pack be quoted without a job', () => {
     expect(quote({ plan: vatu({ jobCredits: 10, price: 40000 }) }).job).toBeNull()
   })
@@ -587,6 +611,7 @@ describe('plan restrictions (examples)', () => {
     expect(codeOf(() => quote({ plan: vatu({ allowedJobTypes: [''] }) }))).toBe('invalid-plan')
     expect(codeOf(() => quote({ plan: vatu({ isVolunteer: 'yes' as never }) }))).toBe('invalid-plan')
     expect(codeOf(() => quote({ job: { categories: 'ngo' as never }, plan: vatu() }))).toBe('invalid-job')
-    expect(codeOf(() => quote({ job: { type: 7 as never }, plan: vatu() }))).toBe('invalid-job')
+    expect(codeOf(() => quote({ job: { type: {} as never }, plan: vatu() }))).toBe('invalid-job')
+    expect(codeOf(() => quote({ job: { type: 1.5 }, plan: vatu() }))).toBe('invalid-job')
   })
 })

@@ -295,6 +295,8 @@ type TenantIsolationArgs = {
   boot?: Omit<BootTestPayloadArgs, 'collections'>
   /** The collection to exercise; it must be tenant-scoped by the multi-tenant plugin. */
   collection: CollectionConfig
+  /** Other tenant-scoped collections it needs, e.g. the taxonomies plans relate to. */
+  extraCollections?: CollectionConfig[]
   /** Returns the non-tenant fields for a new document; the harness adds `tenant`. */
   createData: (tenant: TestTenant) => Record<string, unknown>
 }
@@ -305,7 +307,12 @@ type TenantIsolationArgs = {
  * neither read, write nor delete tenant B's documents (and vice versa), while a
  * super-admin can see everything. Later tasks call this once per collection.
  */
-export const tenantIsolation = ({ boot, collection, createData }: TenantIsolationArgs): void => {
+export const tenantIsolation = ({
+  boot,
+  collection,
+  createData,
+  extraCollections = [],
+}: TenantIsolationArgs): void => {
   const slug = collection.slug
 
   describe(`tenant isolation: ${slug}`, () => {
@@ -314,7 +321,7 @@ export const tenantIsolation = ({ boot, collection, createData }: TenantIsolatio
     let docB: { id: number | string }
 
     beforeAll(async () => {
-      harness = await bootTestPayload({ ...boot, collections: [collection] })
+      harness = await bootTestPayload({ ...boot, collections: [collection, ...extraCollections] })
 
       docA = (await harness.payload.create({
         collection: slug,

@@ -1,6 +1,8 @@
 import {
+  APIError,
   ValidationError,
   type Access,
+  type CollectionBeforeDeleteHook,
   type CollectionBeforeChangeHook,
   type CollectionBeforeValidateHook,
   type CollectionConfig,
@@ -23,6 +25,10 @@ import { PLAN_STATUSES, type PlanStatus } from './pricing'
 import { getSiteKeyHeader, resolveSiteKey } from './site-keys'
 import { TAXONOMY_SLUG_PATTERN } from './taxonomies'
 
+/** The taxonomies a plan's restrictions point at (PJ-16). */
+export const PLAN_JOB_TYPES_SLUG = 'job-types'
+export const PLAN_JOB_CATEGORIES_SLUG = 'job-categories'
+
 /**
  * Plans are what employers buy: a single listing, a pack of listings, a free volunteer
  * listing. They are data, not code: an admin adds or changes a plan in the admin, and the
@@ -33,14 +39,9 @@ import { TAXONOMY_SLUG_PATTERN } from './taxonomies'
  * - `price` is whole minor units of the tenant currency. `currency` is copied from the tenant
  *   on every save, so a price is never read in the wrong currency.
  *
- * - Restrictions are data too: `isVolunteer` limits a plan to voluntary jobs, and
- *   `allowedJobTypes` / `allowedJobCategories` limit it to those taxonomy slugs (empty = any).
- *   `quote()` rejects a job the plan doesn't allow.
- *
- * TODO(PJ-16 follow-up): the allowed types and categories are stored as taxonomy slugs because
- * the taxonomies (PR #35) aren't on main yet. Once they are, turn them into relationships to
- * `job-types` / `job-categories` with a migration that maps each slug to its id in the same
- * tenant, and resolve the job's slugs from those relationships at checkout.
+ * - Restrictions are data too: `isVolunteer` limits a plan to voluntary jobs (job types
+ *   flagged `isVolunteer`), and `allowedJobTypes` / `allowedJobCategories` relate it to the
+ *   tenant's taxonomies (PJ-16); empty means any. `quote()` rejects a job the plan doesn't allow.
  * TODO(PJ-87): `includedAddOns` (add-on + duration) once the add-ons collection exists.
  * `quote()` already prices included add-ons.
  */
@@ -272,6 +273,109 @@ export const uniquePlanKeyPerTenant =
 
 type Validator<T> = (value: T) => string | true
 
+const idsOf = (value: unknown): (number | string)[] =>
+  (Array.isArray(value) ? value : [])
+    .map((entry) => tenantIDOf(entry))
+    .filter((id): id is number | string => id !== null)
+
+/**
+ * The allowed job types and categories must belong to the plan's tenant. The multi-tenant
+ * plugin filters the admin pickers, but a REST or local API write could still name another
+ * tenant's taxonomy, so the server checks.
+ */
+export const planRestrictionsInTenant =
+  (tenantScoped: boolean): CollectionBeforeChangeHook =>
+  async ({ collection, data, originalDoc, req }) => {
+    if (!tenantScoped) return data
+
+    const tenantID = tenantIDOf(submitsTenant(data) ? data.tenant : originalDoc?.tenant)
+    if (tenantID === null) return data // planCurrencyFromTenant rejects this.
+
+    const errors: { message: string; path: string }[] = []
+
+    for (const [path, relationTo] of [
+      ['allowedJobTypes', PLAN_JOB_TYPES_SLUG],
+      ['allowedJobCategories', PLAN_JOB_CATEGORIES_SLUG],
+    ] as const) {
+      const ids = idsOf(data?.[path] ?? originalDoc?.[path])
+      if (ids.length === 0) continue
+
+      const { totalDocs } = await req.payload.count({
+        collection: relationTo as CollectionSlug,
+        overrideAccess: true,
+        req,
+        where: { and: [{ id: { in: ids } }, { tenant: { equals: tenantID } }] },
+      })
+      if (totalDocs !== new Set(ids.map(String)).size) {
+        errors.push({ message: 'Pick only taxonomies from this plan’s tenant', path })
+      }
+    }
+
+    if (errors.length > 0) throw new ValidationError({ collection: collection.slug, errors, req })
+    return data
+  }
+
+/**
+ * Refuse to delete a job type or category that a plan is restricted to. The relationship rows
+ * cascade on delete, so without this a plan limited to that type would quietly become a plan for
+ * any job. Archived plans count too: an admin may restore them.
+ *
+ * Deleting a whole tenant still works: the multi-tenant plugin deletes the tenant's documents
+ * after the tenant row is gone, when the plans' `tenant` is already null, so those plans don't
+ * count and both the plans and the taxonomies are cleaned up.
+ */
+export const preventDeletingPlanRestriction =
+  (
+    field: 'allowedJobCategories' | 'allowedJobTypes',
+    { tenantScoped = true }: { tenantScoped?: boolean } = {},
+  ): CollectionBeforeDeleteHook =>
+  async ({ id, req }) => {
+    const uses: Where = { [field]: { in: [id] } }
+    const { docs, totalDocs } = await req.payload.find({
+      collection: PLANS_SLUG as CollectionSlug,
+      depth: 0,
+      limit: 5,
+      overrideAccess: true,
+      req,
+      where: tenantScoped ? { and: [uses, { tenant: { exists: true } }] } : uses,
+    })
+    if (totalDocs === 0) return
+
+    const names = docs.map((doc) => `"${String((doc as { name?: unknown }).name ?? doc.id)}"`)
+    throw new APIError(
+      `Plans are restricted to this ${field === 'allowedJobTypes' ? 'job type' : 'job category'}: ` +
+        `${names.join(', ')}${totalDocs > names.length ? ' and more' : ''}. ` +
+        'Remove it from those plans first.',
+      409,
+    )
+  }
+
+/** Add the delete guard to the taxonomies plans point at. Other collections pass through. */
+export const withPlanRestrictionGuards = (
+  collections: CollectionConfig[],
+  { tenantScoped = true }: { tenantScoped?: boolean } = {},
+): CollectionConfig[] =>
+  collections.map((collection) => {
+    const field =
+      collection.slug === PLAN_JOB_TYPES_SLUG
+        ? 'allowedJobTypes'
+        : collection.slug === PLAN_JOB_CATEGORIES_SLUG
+          ? 'allowedJobCategories'
+          : null
+    if (!field) return collection
+
+    return {
+      ...collection,
+      hooks: {
+        ...collection.hooks,
+        beforeDelete: [
+          ...(collection.hooks?.beforeDelete ?? []),
+          preventDeletingPlanRestriction(field, { tenantScoped }),
+        ],
+      },
+    }
+  })
+
 const wholeNumber =
   (
     label: string,
@@ -296,7 +400,8 @@ export const validatePlanKey: Validator<null | string | undefined> = (value) =>
 const validatePlanName: Validator<null | string | undefined> = (value) =>
   typeof value === 'string' && value.trim() ? true : 'Name is required'
 
-const validateTaxonomySlugs =
+/** Taxonomy slugs, as plan seeds name the allowed types and categories. */
+export const validateTaxonomySlugs =
   (label: string): Validator<null | readonly string[] | undefined> =>
   (value) => {
     if (value === null || value === undefined) return true
@@ -317,8 +422,6 @@ const optionalBoolean =
  */
 export const planFieldValidators = {
   acceptsCredits: optionalBoolean('Accepts credits'),
-  allowedJobCategories: validateTaxonomySlugs('Allowed job categories'),
-  allowedJobTypes: validateTaxonomySlugs('Allowed job types'),
   creditExpiryDays: wholeNumber('Credit expiry', { min: 1, optional: true }),
   durationDays: wholeNumber('Listing duration', { min: 1 }),
   isVolunteer: optionalBoolean('Volunteer only'),
@@ -461,22 +564,18 @@ export const planCollection = ({
         },
         {
           name: 'allowedJobTypes',
-          type: 'text',
+          type: 'relationship',
+          relationTo: PLAN_JOB_TYPES_SLUG,
           hasMany: true,
-          validate: planFieldValidators.allowedJobTypes as never,
-          admin: {
-            description:
-              'Job type slugs, e.g. full-time. Empty: any type. Becomes a relationship once job types exist (PJ-16).',
-          },
+          admin: { description: 'Only jobs of these types. Empty: any type.' },
         },
         {
           name: 'allowedJobCategories',
-          type: 'text',
+          type: 'relationship',
+          relationTo: PLAN_JOB_CATEGORIES_SLUG,
           hasMany: true,
-          validate: planFieldValidators.allowedJobCategories as never,
           admin: {
-            description:
-              'Job category slugs. Every category on the job must be listed. Empty: any category.',
+            description: 'Only jobs whose every category is listed here. Empty: any category.',
           },
         },
       ],
@@ -512,7 +611,10 @@ export const planCollection = ({
     },
   ],
   hooks: {
-    beforeChange: [planCurrencyFromTenant({ settingsSlug, tenantScoped, tenantsSlug })],
+    beforeChange: [
+      planCurrencyFromTenant({ settingsSlug, tenantScoped, tenantsSlug }),
+      planRestrictionsInTenant(tenantScoped),
+    ],
     beforeValidate: [uniquePlanKeyPerTenant(tenantScoped)],
   },
   indexes: tenantScoped ? [{ fields: ['tenant', 'key'], unique: true }] : [],

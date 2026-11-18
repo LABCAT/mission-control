@@ -51,10 +51,10 @@ export type IncludedAddOn = {
 export type QuotablePlan = PricedRef & {
   /** Whether one of the organisation's job credits can pay for this plan. Defaults to true. */
   acceptsCredits?: boolean | null
-  /** Category slugs the plan is limited to; every category on the job must be listed. Empty: any. */
-  allowedJobCategories?: null | readonly string[]
-  /** Job type slugs the plan is limited to. Empty: any. */
-  allowedJobTypes?: null | readonly string[]
+  /** Job categories the plan is limited to; every category on the job must be listed. Empty: any. */
+  allowedJobCategories?: null | readonly TaxonomyRef[]
+  /** Job types the plan is limited to. Empty: any. */
+  allowedJobTypes?: null | readonly TaxonomyRef[]
   /** Days until unused credits from this plan expire; empty means they never expire. */
   creditExpiryDays?: null | number
   /** ISO 4217 code of `price`, copied from the tenant. */
@@ -95,14 +95,17 @@ export type QuoteCouponRejection =
   | 'unsupported-discount-type'
   | 'used-up'
 
+/** A job type or category: its id, or the document itself (depth 1 or more). */
+export type TaxonomyRef = DocumentID | { id: DocumentID; isVolunteer?: boolean | null }
+
 /**
- * The job a plan is bought for, as taxonomy slugs. Checkout resolves these from the job's
- * relationships (PJ-16/PJ-19); `isVolunteer` comes from the job type's own flag.
+ * The job a plan is bought for (PJ-19's type and categories). `isVolunteer` defaults to the job
+ * type's own flag when the type is a populated document.
  */
 export type QuoteJob = {
-  categories?: null | readonly string[]
+  categories?: null | readonly TaxonomyRef[]
   isVolunteer?: boolean | null
-  type?: null | string
+  type?: null | TaxonomyRef
 }
 
 export type QuoteArgs = {
@@ -184,14 +187,14 @@ export type Quote = {
   entitlements: QuoteEntitlements
   /** The job as quoted, or `null` when none was given. */
   job: null | {
-    categories: string[]
+    categories: DocumentID[]
     isVolunteer: boolean
-    type: null | string
+    type: DocumentID | null
   }
   lines: QuoteLine[]
   plan: PricedRef & {
-    allowedJobCategories: string[]
-    allowedJobTypes: string[]
+    allowedJobCategories: DocumentID[]
+    allowedJobTypes: DocumentID[]
     creditExpiryDays: null | number
     durationDays: number
     isVolunteer: boolean
@@ -259,6 +262,17 @@ const refOf = ({ id, key, legacyId }: PricedRef): PricedRef => ({
 
 const sameID = (a: DocumentID, b: DocumentID): boolean => String(a) === String(b)
 
+/** The id of a taxonomy reference, or null when it isn't one. */
+const taxonomyID = (ref: unknown): DocumentID | null => {
+  const id = typeof ref === 'object' && ref !== null ? (ref as { id?: unknown }).id : ref
+  if (typeof id === 'number' && Number.isSafeInteger(id)) return id
+  if (typeof id === 'string' && id !== '') return id
+  return null
+}
+
+const taxonomyIDs = (refs: null | readonly TaxonomyRef[] | undefined): DocumentID[] =>
+  (refs ?? []).map((ref) => taxonomyID(ref) as DocumentID)
+
 const validatePlan = (plan: QuotablePlan, currency: string | undefined): void => {
   const fail = (message: string): never => {
     throw new PricingError('invalid-plan', `Plan "${plan?.name ?? '?'}": ${message}`)
@@ -276,10 +290,10 @@ const validatePlan = (plan: QuotablePlan, currency: string | undefined): void =>
     }
   }
   for (const name of ['allowedJobTypes', 'allowedJobCategories'] as const) {
-    const slugs = plan[name]
-    if (slugs !== null && slugs !== undefined) {
-      if (!Array.isArray(slugs) || slugs.some((slug) => typeof slug !== 'string' || !slug)) {
-        fail(`${name} must be a list of slugs`)
+    const refs = plan[name]
+    if (refs !== null && refs !== undefined) {
+      if (!Array.isArray(refs) || refs.some((ref) => taxonomyID(ref) === null)) {
+        fail(`${name} must be a list of job ${name === 'allowedJobTypes' ? 'types' : 'categories'}`)
       }
     }
   }
@@ -323,18 +337,29 @@ const failJob = (message: string): never => {
 
 const normalizeJob = (job: QuoteJob): NonNullable<Quote['job']> => {
   if (typeof job !== 'object' || job === null) failJob('a job must be an object')
-  if (job.type !== null && job.type !== undefined && (typeof job.type !== 'string' || !job.type)) {
-    failJob('type must be a slug')
-  }
+
+  const type = job.type === null || job.type === undefined ? null : taxonomyID(job.type)
+  if (job.type !== null && job.type !== undefined && type === null) failJob('type must be a job type')
+
   const categories = job.categories ?? []
-  if (!Array.isArray(categories) || categories.some((slug) => typeof slug !== 'string' || !slug)) {
-    failJob('categories must be a list of slugs')
+  if (!Array.isArray(categories) || categories.some((ref) => taxonomyID(ref) === null)) {
+    failJob('categories must be a list of job categories')
   }
   if (job.isVolunteer !== null && job.isVolunteer !== undefined && typeof job.isVolunteer !== 'boolean') {
     failJob('isVolunteer must be true or false')
   }
 
-  return { categories: [...categories], isVolunteer: job.isVolunteer === true, type: job.type ?? null }
+  const typeFlag =
+    typeof job.type === 'object' && job.type !== null ? job.type.isVolunteer : undefined
+  if (typeof job.isVolunteer === 'boolean' && typeof typeFlag === 'boolean' && job.isVolunteer !== typeFlag) {
+    failJob("isVolunteer doesn't match the job type")
+  }
+
+  return {
+    categories: taxonomyIDs(categories),
+    isVolunteer: (job.isVolunteer ?? typeFlag) === true,
+    type,
+  }
 }
 
 /**
@@ -346,8 +371,8 @@ const normalizeJob = (job: QuoteJob): NonNullable<Quote['job']> => {
  *   so a cheaper category plan can't be stretched over a listing in other categories.
  */
 const assertJobAllowed = (plan: QuotablePlan, job: Quote['job']): void => {
-  const types = plan.allowedJobTypes ?? []
-  const categories = plan.allowedJobCategories ?? []
+  const types = taxonomyIDs(plan.allowedJobTypes).map(String)
+  const categories = taxonomyIDs(plan.allowedJobCategories).map(String)
   const volunteerOnly = plan.isVolunteer === true
 
   if (!volunteerOnly && types.length === 0 && categories.length === 0) return
@@ -361,13 +386,13 @@ const assertJobAllowed = (plan: QuotablePlan, job: Quote['job']): void => {
   }
 
   if (volunteerOnly && !job.isVolunteer) refuse('is only for voluntary jobs')
-  if (types.length > 0 && (job.type === null || !types.includes(job.type))) {
-    refuse(`is not for ${job.type ? `"${job.type}" jobs` : 'jobs without a type'}`)
+  if (types.length > 0 && (job.type === null || !types.includes(String(job.type)))) {
+    refuse(job.type === null ? 'needs a job type' : `is not for job type ${job.type}`)
   }
   if (categories.length > 0) {
     if (job.categories.length === 0) refuse('needs a job category')
-    const outside = job.categories.find((slug) => !categories.includes(slug))
-    if (outside !== undefined) refuse(`is not for the "${outside}" category`)
+    const outside = job.categories.find((id) => !categories.includes(String(id)))
+    if (outside !== undefined) refuse(`is not for job category ${outside}`)
   }
 }
 
@@ -563,8 +588,8 @@ export const quote = ({
     lines,
     plan: {
       ...refOf(plan),
-      allowedJobCategories: [...(plan.allowedJobCategories ?? [])],
-      allowedJobTypes: [...(plan.allowedJobTypes ?? [])],
+      allowedJobCategories: taxonomyIDs(plan.allowedJobCategories),
+      allowedJobTypes: taxonomyIDs(plan.allowedJobTypes),
       creditExpiryDays,
       durationDays: plan.durationDays,
       isVolunteer: plan.isVolunteer === true,

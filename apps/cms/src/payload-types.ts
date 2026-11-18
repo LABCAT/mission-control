@@ -712,13 +712,13 @@ export interface Plan {
    */
   isVolunteer?: boolean | null;
   /**
-   * Job type slugs, e.g. full-time. Empty: any type. Becomes a relationship once job types exist (PJ-16).
+   * Only jobs of these types. Empty: any type.
    */
-  allowedJobTypes?: string[] | null;
+  allowedJobTypes?: (number | JobType)[] | null;
   /**
-   * Job category slugs. Every category on the job must be listed. Empty: any category.
+   * Only jobs whose every category is listed here. Empty: any category.
    */
-  allowedJobCategories?: string[] | null;
+  allowedJobCategories?: (number | JobCategory)[] | null;
   /**
    * Archived plans can no longer be bought. Past orders are not affected.
    */
