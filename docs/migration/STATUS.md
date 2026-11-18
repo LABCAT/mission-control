@@ -87,3 +87,4 @@ Spend at 02:05 UTC: sub-sessions $8.04 (PJ-10 2.19, PJ-81 2.42, RCL-86 1.00, PJ-
 - **Decision (founder, 18 Nov): tax.** vwok works exactly like the old site, but tax is fully configurable per tenant (label, rates, inclusive/exclusive prices, rounding, exemptions, Xero tax types). New ticket PJ-91, claimed for Opus after PJ-21.
 - LINKPS coupon: default is to keep it if used in the last 12 months (query 5 in QUERIES-19NOV.sql).
 - **Decision (founder, 18 Nov): moderation.** Keep the legacy rule, configurable per tenant (PJ-32 updated). PJ-90 #49 merged: previews reset themselves after a PR renames a migration.
+- **Decision 19 (founder, 18 Nov): tenant deletion** is super-admin only and blocked while the tenant has data. Offboarding clean-up (job data goes, user accounts stay) needs design. PJ-93 (post-MVP, low priority, assigned to LABCAT so Hisha won't pick it up).
