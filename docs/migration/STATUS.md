@@ -52,3 +52,11 @@ Spend at 02:05 UTC: sub-sessions $8.04 (PJ-10 2.19, PJ-81 2.42, RCL-86 1.00, PJ-
 - **Decision 6 (founder, 18 Nov):** one account across the platform. Registering an existing email on another tenant means logging in with the existing password, which adds that tenant's membership. Not needed until a second site exists.
 - **Decision 7 (founder, 18 Nov): the hub site is not in the MVP (2.x/3.x).** PJ-12 and PJ-43 are marked 2.x/low. PJ-13 (vwok) now depends on PJ-11 directly and takes the Lighthouse budget. PJ-14 deploys cms + vwok only. The MVP is the vwok tenant only.
 - **Decision 8 (founder, 18 Nov): Xero invoicing is in the MVP** (PJ-54 to PJ-59 are now high priority). payload-xero must be a generic plugin that could be published to npm: no payload-jobs dependency; access, tenancy and slugs set by options; an invoice adapter. PJ-54 (#44) is being reworked to that shape.
+
+## 18 Nov 04:45 UTC: resumed after usage reset
+
+- Every sub-session hit the 5-hour limit at 02:32 (reset 04:40). All 6 have been resumed: PJ-34 #41, PJ-54 #44, PJ-60 #42, PJ-70 #43, PJ-81 #46 and PJ-86 #47. Each is fixing its latest Kinsho finding or merge conflict.
+- PJ-81 was stuck waiting on a force-push approval. Default from now on: sub-sessions update branches with `git merge origin/main` and a normal push, never a force-push, because nobody is there to approve one.
+- 6 sessions are running, which also satisfies the WIP rule: no new tickets until PRs merge.
+- **Merge policy (default while decision 9 is open):** I merge non-migration PRs myself once CI is green and Kinsho's only block is the missing preview/Admin smoke evidence. PJ-86 #47 goes first, because it unblocks the previews. Migration PRs wait for the founder's answer on decision 9.
+- After #47 merges, the Neon backlog sweep is `gh workflow run preview.yml -f dry_run=true`, then `dry_run=false`. Deleting Neon branches is data deletion, so I run only the dry run and the founder runs the real one.
