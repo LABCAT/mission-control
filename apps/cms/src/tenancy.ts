@@ -1,8 +1,12 @@
 import type { MultiTenantPluginConfig } from '@payloadcms/plugin-multi-tenant/types'
 
-import { isSuperAdmin, tenantRoleOptions } from '@mission-control/payload-jobs'
+import { denySeekerOnly, isSuperAdmin, tenantRoleOptions } from '@mission-control/payload-jobs'
 
 import { siteKeyAccessOverride } from './site-keys'
+
+// mission-control: the plugin gives every tenant member access to the tenant's documents, so
+// seekers (site accounts, PJ-81) are denied here. Staff roles are unchanged.
+const tenantContentOverride = denySeekerOnly(siteKeyAccessOverride)
 
 /**
  * Every content collection that belongs to a tenant goes here. The plugin adds the
@@ -12,16 +16,18 @@ import { siteKeyAccessOverride } from './site-keys'
  */
 export const multiTenantOptions = {
   collections: {
-    documents: {}, // mission-control: private to tenant members; not exposed to site keys
-    folders: { accessResultOverride: siteKeyAccessOverride },
-    media: { accessResultOverride: siteKeyAccessOverride },
-    tags: { accessResultOverride: siteKeyAccessOverride },
+    // mission-control: documents are private to tenant members and not exposed to site keys;
+    // seekers (site accounts, PJ-81) are denied.
+    documents: { accessResultOverride: denySeekerOnly(({ accessResult }) => accessResult) },
+    folders: { accessResultOverride: tenantContentOverride },
+    media: { accessResultOverride: tenantContentOverride },
+    tags: { accessResultOverride: tenantContentOverride },
     // mission-control: job-board taxonomies (PJ-16).
-    'areas-of-focus': { accessResultOverride: siteKeyAccessOverride },
-    'job-categories': { accessResultOverride: siteKeyAccessOverride },
-    'job-tags': { accessResultOverride: siteKeyAccessOverride },
-    'job-types': { accessResultOverride: siteKeyAccessOverride },
-    'salary-bands': { accessResultOverride: siteKeyAccessOverride },
+    'areas-of-focus': { accessResultOverride: tenantContentOverride },
+    'job-categories': { accessResultOverride: tenantContentOverride },
+    'job-tags': { accessResultOverride: tenantContentOverride },
+    'job-types': { accessResultOverride: tenantContentOverride },
+    'salary-bands': { accessResultOverride: tenantContentOverride },
   },
   tenantsArrayField: {
     rowFields: [

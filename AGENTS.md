@@ -26,6 +26,12 @@ Each `bootTestPayload` call pushes into its own throwaway schema (`mc_test_*`) a
 
 CI is `.github/workflows/mc-checks.yml`. Don't edit orbit's `ci.yml` or `release.yml`.
 
+The `Migration round-trip` job runs `.github/scripts/migration-round-trip.sh`, which migrates a disposable Postgres up, rolls every batch back down, and migrates up again, then compares the schema. Run it locally against the dev database with:
+
+```bash
+DATABASE_URL=postgres://orbit:orbit@localhost:8900/orbit PAYLOAD_SECRET=dev .github/scripts/migration-round-trip.sh
+```
+
 ## Schema changes and migrations
 
 Dev schema push is **off** (drizzle-kit can't run in workerd), so every collection, field or global change needs a migration.
@@ -52,6 +58,7 @@ Dev schema push is **off** (drizzle-kit can't run in workerd), so every collecti
 - **Password hashing:** Workers rejects PBKDF2 above 100k iterations. Keep `auth.passwordHashIterations: 100000`.
 - **Hyperdrive:** read it through the getter in `payload.config.ts`, and never at module scope. Keep `maxUses: 1`.
 - **Workspace packages are TS source** (`exports: ./src/index.ts`). This works for both the Vite build and the `payload` CLI, with no build step.
+- **`migrate:reset` is broken.** In 4.0.0-beta.7 it walks the applied migrations oldest-first, so the first `down()` runs against a schema its `up()` has already had removed (an early "relation does not exist"). Roll back batch by batch with `migrate:down` instead.
 - **Types:** after changing the config, regenerate `payload-types.ts` before typechecking.
 
 ## Testing a Worker cron locally
