@@ -121,6 +121,11 @@ describe('cli', () => {
     expect(run('live', 'other', prs).code).toBe(1)
     expect(run('live', 'x', write('p5.json', {})).code).toBe(2)
   })
+  it('deletable: 0 for a normal preview, 3 for RC, 1 for anything else', () => {
+    expect(run('deletable', 'preview/pj-1').code).toBe(0)
+    expect(run('deletable', 'preview/rc-0-2-0').code).toBe(3)
+    expect(run('deletable', 'main').code).toBe(1)
+  })
   it('capacity exits 1 with the list', () => {
     const r = run('capacity', write('b3.json', [b('main'), b('preview/x')]), '2', 'preview/new')
     expect(r.code).toBe(1)

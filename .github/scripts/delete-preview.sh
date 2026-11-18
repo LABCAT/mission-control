@@ -11,7 +11,15 @@
 set -euo pipefail
 NAME=$1
 BRANCH=preview/$NAME
-"$(dirname "$0")/preview-neon.mjs" valid "$BRANCH"
+# RC previews (preview/rc-*, e.g. from a branch named rc/0.2.0) belong to release.yml: never delete them here.
+rc=0
+"$(dirname "$0")/preview-neon.mjs" deletable "$BRANCH" || rc=$?
+if [ "$rc" = 3 ]; then
+  echo "::notice::$BRANCH is reserved for release.yml; not deleting it."
+  exit 0
+elif [ "$rc" != 0 ]; then
+  exit 1
+fi
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 

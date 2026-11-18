@@ -63,6 +63,20 @@ describe('delete-preview.sh re-check before deleting', () => {
     expect(r.code).not.toBe(0)
     expect(r.deleted).toBe(false)
   })
+  it.each(['rc-0-2-0', 'rc-foo'])('refuses RC preview %s before any delete or even listing PRs', (name) => {
+    const r = setup()(name, { PRS: '[]' })
+    expect(r.code).toBe(0)
+    expect(r.deleted).toBe(false)
+    expect(r.touchedWorker).toBe(false)
+    expect(r.calls).toBe('')
+  })
+  it('refuses the preview name of git branch rc/0.2.0', () => {
+    const name = execFileSync(join(import.meta.dirname, 'preview-name.sh'), ['branch', 'rc/0.2.0'], { encoding: 'utf8' }).trim()
+    expect(name).toBe('rc-0-2-0')
+    const r = setup()(name, { PRS: '[]' })
+    expect(r.deleted).toBe(false)
+    expect(r.touchedWorker).toBe(false)
+  })
   it('refuses a name that is not a preview branch', () => {
     const r = setup()('main/x', { PRS: '[]' })
     expect(r.code).not.toBe(0)

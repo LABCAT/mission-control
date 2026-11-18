@@ -6,6 +6,9 @@
 //       Prints, one per line, the `preview/*` Neon branches with no open PR.
 //   preview-neon.mjs live <git-branch> <open-prs.json>
 //       Exits 0 if an open same-repo PR still uses that branch's preview name, 1 if not.
+//   preview-neon.mjs deletable <neon-branch>
+//       Like `valid`, but also refuses `preview/rc-*` (reserved for release.yml). Exit 0 = may
+//       delete, 3 = reserved RC preview, 1 = not a preview branch.
 //   preview-neon.mjs valid <neon-branch>
 //       Exits 0 only if the name is a well-formed `preview/<name>`; use it before any delete.
 //   preview-neon.mjs capacity <neon-branches.json> <limit> <target-branch>
@@ -97,6 +100,15 @@ function main(argv) {
     if (out.length) console.log(out.join('\n'))
   } else if (cmd === 'live' && args.length === 2) {
     process.exit(previewStillUsed(args[0], readJson(args[1])) ? 0 : 1)
+  } else if (cmd === 'deletable' && args.length === 1) {
+    if (!isPreviewBranch(args[0])) {
+      console.error(`Refusing: "${args[0]}" is not a preview/<name> branch`)
+      process.exit(1)
+    }
+    if (isRcPreview(args[0])) {
+      console.error(`Refusing: ${args[0]} is an RC preview, owned by release.yml`)
+      process.exit(3)
+    }
   } else if (cmd === 'valid' && args.length === 1) {
     if (!isPreviewBranch(args[0])) {
       console.error(`Refusing: "${args[0]}" is not a preview/<name> branch`)
@@ -111,7 +123,7 @@ function main(argv) {
       process.exit(1)
     }
   } else {
-    console.error('usage: preview-neon.mjs stale <branches.json> <prs.json> | live <branch> <prs.json> | valid <branch> | capacity <branches.json> <limit> <target>')
+    console.error('usage: preview-neon.mjs stale <branches.json> <prs.json> | live <branch> <prs.json> | deletable <branch> | valid <branch> | capacity <branches.json> <limit> <target>')
     process.exit(2)
   }
 }
