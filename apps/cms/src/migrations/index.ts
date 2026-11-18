@@ -8,7 +8,7 @@ import * as migration_20261118_013433_media_documents_r2 from './20261118_013433
 import * as migration_20261118_021548_legacy_password_hash from './20261118_021548_legacy_password_hash';
 import * as migration_20261118_044335_account_auth from './20261118_044335_account_auth';
 import * as migration_20261118_053124_job_taxonomies from './20261118_053124_job_taxonomies';
-import * as migration_20261118_064410_locations from './20261118_064410_locations';
+import * as migration_20261118_095105_locations from './20261118_095105_locations';
 
 export const migrations = [
   {
@@ -62,8 +62,8 @@ export const migrations = [
     name: '20261118_053124_job_taxonomies',
   },
   {
-    up: migration_20261118_064410_locations.up,
-    down: migration_20261118_064410_locations.down,
-    name: '20261118_064410_locations',
+    up: migration_20261118_095105_locations.up,
+    down: migration_20261118_095105_locations.down,
+    name: '20261118_095105_locations'
   },
 ];

@@ -23,6 +23,11 @@ export async function up({ db, payload, req }: MigrateUpArgs): Promise<void> {
   	"users_id" integer
   );
   
+  DROP INDEX "tenant_slug_idx";
+  DROP INDEX "tenant_slug_1_idx";
+  DROP INDEX "tenant_slug_2_idx";
+  DROP INDEX "tenant_slug_3_idx";
+  DROP INDEX "tenant_slug_4_idx";
   ALTER TABLE "payload_locked_documents_rels" ADD COLUMN "locations_id" integer;
   ALTER TABLE "locations" ADD CONSTRAINT "locations_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE set null ON UPDATE no action;
   ALTER TABLE "locations" ADD CONSTRAINT "locations_parent_id_locations_id_fk" FOREIGN KEY ("parent_id") REFERENCES "public"."locations"("id") ON DELETE set null ON UPDATE no action;
@@ -40,12 +45,17 @@ export async function up({ db, payload, req }: MigrateUpArgs): Promise<void> {
   CREATE INDEX "locations_rels_path_idx" ON "locations_rels" USING btree ("path");
   CREATE INDEX "locations_rels_users_id_idx" ON "locations_rels" USING btree ("users_id");
   ALTER TABLE "payload_locked_documents_rels" ADD CONSTRAINT "payload_locked_documents_rels_locations_fk" FOREIGN KEY ("locations_id") REFERENCES "public"."locations"("id") ON DELETE cascade ON UPDATE no action;
+  CREATE UNIQUE INDEX "tenant_slug_1_idx" ON "job_categories" USING btree ("tenant_id","slug");
+  CREATE UNIQUE INDEX "tenant_slug_2_idx" ON "job_types" USING btree ("tenant_id","slug");
+  CREATE UNIQUE INDEX "tenant_slug_3_idx" ON "job_tags" USING btree ("tenant_id","slug");
+  CREATE UNIQUE INDEX "tenant_slug_4_idx" ON "salary_bands" USING btree ("tenant_id","slug");
+  CREATE UNIQUE INDEX "tenant_slug_5_idx" ON "areas_of_focus" USING btree ("tenant_id","slug");
   CREATE INDEX "payload_locked_documents_rels_locations_id_idx" ON "payload_locked_documents_rels" USING btree ("locations_id");`)
 }
 
 export async function down({ db, payload, req }: MigrateDownArgs): Promise<void> {
-  // Drop the foreign key, index and column before the tables: "DROP TABLE ... CASCADE" takes
-  // the constraint with it, and dropping it again afterwards fails.
+  // The foreign key, index and column go before the tables. "DROP TABLE ... CASCADE" takes
+  // the constraint and the index with them, so dropping them again afterwards fails.
   await db.execute(sql`
    ALTER TABLE "locations" DISABLE ROW LEVEL SECURITY;
   ALTER TABLE "locations_rels" DISABLE ROW LEVEL SECURITY;
@@ -54,5 +64,16 @@ export async function down({ db, payload, req }: MigrateDownArgs): Promise<void>
   ALTER TABLE "payload_locked_documents_rels" DROP COLUMN IF EXISTS "locations_id";
   DROP TABLE "locations" CASCADE;
   DROP TABLE "locations_rels" CASCADE;
+
+  DROP INDEX "tenant_slug_1_idx";
+  DROP INDEX "tenant_slug_2_idx";
+  DROP INDEX "tenant_slug_3_idx";
+  DROP INDEX "tenant_slug_4_idx";
+  DROP INDEX "tenant_slug_5_idx";
+  CREATE UNIQUE INDEX "tenant_slug_idx" ON "job_categories" USING btree ("tenant_id","slug");
+  CREATE UNIQUE INDEX "tenant_slug_1_idx" ON "job_types" USING btree ("tenant_id","slug");
+  CREATE UNIQUE INDEX "tenant_slug_2_idx" ON "job_tags" USING btree ("tenant_id","slug");
+  CREATE UNIQUE INDEX "tenant_slug_3_idx" ON "salary_bands" USING btree ("tenant_id","slug");
+  CREATE UNIQUE INDEX "tenant_slug_4_idx" ON "areas_of_focus" USING btree ("tenant_id","slug");
   DROP TYPE "public"."enum_locations_kind";`)
 }
