@@ -4,6 +4,7 @@ import {
   checkTarget,
   collectUrls,
   extractTitle,
+  hasFailure,
   isFailure,
   parseRedirectMap,
   summarize,
@@ -19,7 +20,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 const USAGE = `Usage: node --experimental-strip-types tools/url-parity/src/cli.ts \\
   --sitemap <legacy sitemap url> --target <new site base url> \\
-  [--map redirects.json] [--out report.csv] [--concurrency 4] [--delay 250] [--strict]`
+  [--map redirects.json] [--out report.csv] [--concurrency 4] [--delay 250] [--strict] [--allow-unverifiable]`
 
 /** GET/HEAD with a UA, retrying on 429/503 (Cloudflare throttling) up to 3 times. */
 async function request(url: string, method: 'GET' | 'HEAD', redirect: RequestRedirect): Promise<Response> {
@@ -85,6 +86,7 @@ async function main(): Promise<number> {
       concurrency: { type: 'string', default: '4' },
       delay: { type: 'string', default: '250' },
       strict: { type: 'boolean', default: false },
+      'allow-unverifiable': { type: 'boolean', default: false },
     },
   })
   if (!values.sitemap || !values.target) {
@@ -116,11 +118,11 @@ async function main(): Promise<number> {
   await writeFile(values.out!, toCsv(checks))
   const counts = summarize(checks)
   console.table(counts)
-  for (const c of checks.filter((x) => isFailure(x.result))) {
+  for (const c of checks.filter((x) => isFailure(x.result) || x.result === 'redirect-unmapped')) {
     console.log(`${c.result}\t${c.status}\t${c.path}${c.location ? ` -> ${c.location}` : ''}`)
   }
   console.log(`Report: ${values.out}`)
-  const failed = checks.some((x) => isFailure(x.result) || (values.strict && x.result !== 'ok' && x.result !== 'redirect-ok'))
+  const failed = hasFailure(checks, { allowUnverifiable: values['allow-unverifiable'], strict: values.strict })
   return failed ? 1 : 0
 }
 

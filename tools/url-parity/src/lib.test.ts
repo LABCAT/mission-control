@@ -1,8 +1,11 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
+  type Check,
+  type Result,
   checkTarget,
   extractTitle,
+  hasFailure,
   titlesMatch,
   classify,
   collectUrls,
@@ -50,9 +53,27 @@ describe('sitemap parsing', () => {
     expect(urls).toHaveLength(5)
   })
 
-  it('does not loop on self-referencing indexes', async () => {
+  it('rejects HTML and other non-sitemap documents', () => {
+    expect(() => parseSitemap('<!DOCTYPE html><html><body>Error 503</body></html>')).toThrow(/not a sitemap/)
+    expect(() => parseSitemap('')).toThrow(/not a sitemap/)
+    expect(() => parseSitemap('<rss><channel><loc>x</loc></channel></rss>')).toThrow(/not a sitemap/)
+    expect(() => parseSitemap('<urlset><url><loc>https://a.example/</loc></url>')).not.toThrow()
+  })
+  it('accepts a BOM, comments, a declaration and a namespace prefix', () => {
+    const xml = '\uFEFF<?xml version="1.0"?>\n<!-- c -->\n<ns:urlset xmlns:ns="x"><url><loc>https://a.example/</loc></url></ns:urlset>'
+    expect(parseSitemap(xml).locs).toEqual(['https://a.example/'])
+  })
+  it('rejects empty sitemaps and indexes with a clear error', () => {
+    expect(() => parseSitemap('<urlset xmlns="x"></urlset>')).toThrow(/empty sitemap/)
+    expect(() => parseSitemap('<sitemapindex><sitemap><loc> </loc></sitemap></sitemapindex>')).toThrow(/empty sitemap/)
+  })
+  it('names the failing sitemap URL when walking', async () => {
+    const fetchBad = async (u: string) => (u.endsWith('index.xml') ? files['https://legacy.example/sitemap_index.xml']! : '<html></html>')
+    await expect(collectUrls('https://legacy.example/index.xml', fetchBad)).rejects.toThrow(/page-sitemap\.xml: not a sitemap/)
+  })
+  it('terminates on self-referencing indexes (then reports no pages)', async () => {
     const self = '<sitemapindex><sitemap><loc>https://x.example/i.xml</loc></sitemap></sitemapindex>'
-    await expect(collectUrls('https://x.example/i.xml', async () => self)).resolves.toEqual([])
+    await expect(collectUrls('https://x.example/i.xml', async () => self)).rejects.toThrow(/no page URLs/)
   })
 })
 
@@ -94,7 +115,7 @@ describe('classify', () => {
   it('only not-found and redirect-wrong fail the run', () => {
     expect(isFailure('not-found')).toBe(true)
     expect(isFailure('redirect-wrong')).toBe(true)
-    expect(isFailure('other')).toBe(false)
+    expect(isFailure('other')).toBe(true)
   })
 })
 
@@ -203,5 +224,22 @@ describe('checkTarget', () => {
   it('404 and wrong-target redirects keep their classification', async () => {
     expect((await checkTarget('/x/', T, undefined, site({}))).result).toBe('not-found')
     expect((await checkTarget('/old/', T, '/new/', site({ [`${T}/old/`]: redirect('/elsewhere/') }))).result).toBe('redirect-wrong')
+  })
+})
+
+describe('hasFailure', () => {
+  const c = (result: Result): Check => ({ path: '/', status: 0, location: '', expected: '', result, finalStatus: '' })
+  it('unverifiable results fail by default and only an explicit flag accepts them', () => {
+    expect(hasFailure([c('ok'), c('other')], {})).toBe(true)
+    expect(hasFailure([c('ok'), c('other')], { allowUnverifiable: true })).toBe(false)
+  })
+  it('the flag never excuses real failures', () => {
+    for (const r of ['not-found', 'redirect-wrong', 'redirect-broken', 'title-mismatch'] as const) {
+      expect(hasFailure([c(r)], { allowUnverifiable: true })).toBe(true)
+    }
+  })
+  it('unmapped redirects fail only with strict', () => {
+    expect(hasFailure([c('redirect-unmapped')], {})).toBe(false)
+    expect(hasFailure([c('redirect-unmapped')], { strict: true })).toBe(true)
   })
 })

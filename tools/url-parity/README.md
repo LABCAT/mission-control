@@ -18,7 +18,8 @@ node --experimental-strip-types tools/url-parity/src/cli.ts \
 | `--out` | `url-parity-report.csv` | CSV report |
 | `--concurrency` | `4` | Parallel requests |
 | `--delay` | `250` | ms each worker waits after a request |
-| `--strict` | off | Also exit 1 on `other` and `redirect-unmapped` |
+| `--strict` | off | Also exit 1 on `redirect-unmapped` |
+| `--allow-unverifiable` | off | Accept `other` results (network errors, 302/307, 5xx, legacy title unavailable) instead of failing on them |
 
 Each path is requested with `GET`, redirects off, `User-Agent: url-parity-check` (429/503 are retried honouring `Retry-After`). 301/308 redirects are then followed (up to 5 hops) and must end in a 200. A 200 must have the same `<title>` as the legacy page (compared case/space-insensitively, ignoring a trailing ` » Site name` or ` | Site name`). Results:
 
@@ -29,8 +30,8 @@ Each path is requested with `GET`, redirects off, `User-Agent: url-parity-check`
 - `redirect-broken`: the redirect chain does not end in a 200
 - `redirect-unmapped`: 301/308 with no `--map` entry whose destination returns 200 (cannot be proven the *right* place; add it to the map)
 - `not-found`: 404/410
-- `other`: anything else (302/307, 5xx, network error, or legacy title unavailable)
+- `other`: anything that could not be verified (302/307, 5xx, network error, or legacy title unavailable); fails unless `--allow-unverifiable`
 
-Exit code: `1` on any `not-found`, `redirect-wrong`, `redirect-broken` or `title-mismatch`, `2` on bad arguments or an unreadable sitemap, else `0`.
+Exit code: `1` on any `not-found`, `redirect-wrong`, `redirect-broken`, `title-mismatch` or `other`, `2` on bad arguments, or a sitemap that is unreadable, not `<urlset>`/`<sitemapindex>` (e.g. an HTML page) or empty, else `0`.
 
 Tests: `pnpm test`. Type check: `pnpm --filter @mission-control/url-parity typecheck`.

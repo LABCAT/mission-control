@@ -28,14 +28,29 @@ const decodeEntities = (s: string): string =>
     .replace(/&apos;/g, "'")
     .replace(/&amp;/g, '&')
 
-/** Parse a sitemap or sitemap index. Child sitemaps are `<sitemap>` entries, pages are `<url>` entries. */
+/**
+ * Parse a sitemap or sitemap index. Throws a clear error if the document's root element is not
+ * `<urlset>` or `<sitemapindex>` (e.g. an HTML error page) or if it lists no `<loc>` at all.
+ * Child sitemaps are `<sitemap>` entries, pages are `<url>` entries.
+ */
 export function parseSitemap(xml: string): { kind: 'index' | 'urlset'; locs: string[] } {
-  const kind = /<sitemapindex[\s>]/i.test(xml) ? 'index' : 'urlset'
+  const body = xml
+    .replace(/^\uFEFF/, '')
+    .replace(/<\?[\s\S]*?\?>/g, '')
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .trimStart()
+  const root = /^<(?:[\w.-]+:)?(urlset|sitemapindex)(?=[\s>/])/i.exec(body)
+  if (!root) {
+    const seen = body.slice(0, 60).replace(/\s+/g, ' ')
+    throw new Error(`not a sitemap: root element must be <urlset> or <sitemapindex> (document starts "${seen}")`)
+  }
+  const kind = root[1]!.toLowerCase() === 'sitemapindex' ? 'index' : 'urlset'
   const locs: string[] = []
-  for (const m of xml.matchAll(/<loc>\s*(?:<!\[CDATA\[([\s\S]*?)\]\]>|([\s\S]*?))\s*<\/loc>/gi)) {
+  for (const m of body.matchAll(/<loc>\s*(?:<!\[CDATA\[([\s\S]*?)\]\]>|([\s\S]*?))\s*<\/loc>/gi)) {
     const loc = (m[1] ?? decodeEntities(m[2] ?? '')).trim()
     if (loc) locs.push(loc)
   }
+  if (locs.length === 0) throw new Error(`empty sitemap: <${root[1]}> contains no <loc> entries`)
   return { kind, locs }
 }
 
@@ -49,7 +64,13 @@ export async function collectUrls(
   const walk = async (url: string): Promise<void> => {
     if (seenSitemaps.has(url)) return
     seenSitemaps.add(url)
-    const { kind, locs } = parseSitemap(await fetchText(url))
+    let parsed: ReturnType<typeof parseSitemap>
+    try {
+      parsed = parseSitemap(await fetchText(url))
+    } catch (e) {
+      throw new Error(`${url}: ${e instanceof Error ? e.message : String(e)}`, { cause: e })
+    }
+    const { kind, locs } = parsed
     if (kind === 'index') {
       for (const child of locs) await walk(child)
     } else {
@@ -57,6 +78,7 @@ export async function collectUrls(
     }
   }
   await walk(sitemapUrl)
+  if (pages.size === 0) throw new Error(`${sitemapUrl}: no page URLs found in the sitemap(s)`)
   return [...pages]
 }
 
@@ -111,8 +133,9 @@ export function classify(
   return 'other'
 }
 
+/** Failing results. `other` (unverifiable) fails too unless the caller explicitly accepts it. */
 export const isFailure = (r: Result): boolean =>
-  r === 'not-found' || r === 'redirect-wrong' || r === 'redirect-broken' || r === 'title-mismatch'
+  r === 'other' || r === 'not-found' || r === 'redirect-wrong' || r === 'redirect-broken' || r === 'title-mismatch'
 
 export function csvEscape(v: string | number): string {
   const s = String(v)
@@ -214,4 +237,13 @@ export async function checkTarget(
     return out(hop.status === 200 ? result : 'redirect-broken', hop.status)
   }
   return out(result, '')
+}
+
+/** Whether a run should exit 1. */
+export function hasFailure(checks: Check[], opts: { allowUnverifiable?: boolean; strict?: boolean }): boolean {
+  return checks.some(
+    (c) =>
+      (isFailure(c.result) && !(opts.allowUnverifiable && c.result === 'other')) ||
+      (opts.strict === true && c.result === 'redirect-unmapped'),
+  )
 }
