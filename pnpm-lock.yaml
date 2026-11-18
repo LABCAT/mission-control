@@ -123,13 +123,6 @@ importers:
         specifier: 6.0.3
         version: 6.0.3
 
-<<<<<<< HEAD
-  tools/url-parity:
-    devDependencies:
-      '@types/node':
-        specifier: 24.12.3
-        version: 24.12.3
-=======
   packages/payload-xero:
     devDependencies:
       '@payloadcms/db-postgres':
@@ -141,7 +134,15 @@ importers:
       payload:
         specifier: 4.0.0-beta.7
         version: 4.0.0-beta.7(graphql@16.15.0)(typescript@6.0.3)
->>>>>>> origin/main
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+
+  tools/url-parity:
+    devDependencies:
+      '@types/node':
+        specifier: 24.12.3
+        version: 24.12.3
       typescript:
         specifier: 6.0.3
         version: 6.0.3
