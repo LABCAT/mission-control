@@ -14,6 +14,8 @@ const baseConfig = {
   globals: [],
 } as unknown as Config
 
+const users: CollectionConfig = { slug: 'users', auth: { verify: true }, fields: [] }
+
 const fieldNamed = (name: string): Field => {
   const field = jobBoardTenantFields.find((candidate) => 'name' in candidate && candidate.name === name)
   if (!field) throw new Error(`Missing ${name}`)
@@ -28,7 +30,7 @@ const validate = (name: string, value: unknown, siblingData: Record<string, unkn
 
 describe('payloadJobs tenancy modes', () => {
   it('adds the job-board settings to the tenants collection in multi mode', async () => {
-    const result = await payloadJobs({ tenancy: 'multi' })(baseConfig)
+    const result = await payloadJobs({ accountAuth: false, tenancy: 'multi' })(baseConfig)
     const fields = result.collections
       ?.find((collection) => collection.slug === 'tenants')
       ?.fields.map((field) => ('name' in field ? field.name : ''))
@@ -54,7 +56,7 @@ describe('payloadJobs tenancy modes', () => {
   })
 
   it('adds the per-tenant slug index in multi mode only', async () => {
-    const multi = await payloadJobs({ tenancy: 'multi' })(baseConfig)
+    const multi = await payloadJobs({ accountAuth: false, tenancy: 'multi' })(baseConfig)
     const multiIndexes = multi.collections?.find(
       (collection) => collection.slug === 'locations',
     )?.indexes
@@ -65,6 +67,45 @@ describe('payloadJobs tenancy modes', () => {
     expect(
       single.collections?.find((collection) => collection.slug === 'locations')?.indexes,
     ).toBeUndefined()
+  })
+
+  it('adds the account auth endpoints to the tenants collection in multi mode', async () => {
+    const result = await payloadJobs({ tenancy: 'multi' })({
+      collections: [tenants, users],
+    } as unknown as Config)
+    const endpoints = result.collections?.find((collection) => collection.slug === 'tenants')
+      ?.endpoints
+
+    expect(Array.isArray(endpoints)).toBe(true)
+    expect(
+      (endpoints as { method: string; path: string }[]).map(({ method, path }) => `${method} ${path}`),
+    ).toEqual([
+      'post /:slug/account/login',
+      'post /:slug/account/logout',
+      'get /:slug/account/me',
+      'post /:slug/account/forgot-password',
+      'post /:slug/account/reset-password',
+      'post /:slug/account/register',
+      'post /:slug/account/verify-email',
+    ])
+    // Payload routes /api/tenants/* to the collection's endpoints, so nothing goes at the root.
+    expect(result.endpoints).toBeUndefined()
+  })
+
+  it('leaves the account auth endpoints out when asked', async () => {
+    const result = await payloadJobs({ accountAuth: false, tenancy: 'multi' })({
+      collections: [tenants],
+    } as unknown as Config)
+
+    expect(result.collections?.[0]?.endpoints).toEqual([])
+  })
+
+  it('refuses account auth when the users collection does not verify email', () => {
+    expect(() =>
+      payloadJobs({ tenancy: 'multi' })({
+        collections: [tenants, { slug: 'users', auth: true, fields: [] }],
+      } as unknown as Config),
+    ).toThrow('auth.verify')
   })
 
   it('adds a job-board-settings global in single mode', async () => {

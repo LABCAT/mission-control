@@ -1,13 +1,16 @@
 import type { CollectionConfig, Config, GlobalConfig, Plugin } from 'payload'
 
+import { accountAuthEndpoints, type AccountAuthOptions } from './account-auth'
 import { locationsCollection, locationsTenantSlugIndex } from './collections/locations'
 import { withLegacyPasswords } from './legacy-password'
 import { jobBoardSettingsGlobal, jobBoardTenantFields } from './tenancy'
 
 export * from './access'
+export * from './account-auth'
 export * from './collections/locations'
 export * from './email'
 export * from './legacy-password'
+export * from './rate-limit'
 export * from './seed/vanuatu'
 export * from './site-keys'
 export * from './tenancy'
@@ -26,6 +29,11 @@ export type PayloadJobsFeatures = {
 }
 
 export type PayloadJobsOptions = {
+  /**
+   * Front-end account auth endpoints for the Astro sites (PJ-81), multi-tenant mode only.
+   * The users collection must enable `auth.verify`. Pass `false` to leave them out.
+   */
+  accountAuth?: AccountAuthOptions | false
   /** Turn the plugin off without removing it from the config. Defaults to true. */
   enabled?: boolean
   /** Which job-board collections to enable. All default to true. */
@@ -97,11 +105,37 @@ export const payloadJobs =
         )
       }
 
+      const accountEndpoints = (() => {
+        if (options.accountAuth === false) return []
+
+        const accountAuth = { tenantsSlug, ...options.accountAuth }
+        const usersSlug = accountAuth.usersSlug ?? 'users'
+        const users = config.collections?.find((collection) => collection.slug === usersSlug)
+        const verify = typeof users?.auth === 'object' ? users.auth.verify : undefined
+
+        if (!users || !verify) {
+          throw new Error(
+            `payload-jobs: account auth needs a "${usersSlug}" auth collection with auth.verify ` +
+              'enabled. Enable it or pass accountAuth: false.',
+          )
+        }
+
+        return accountAuthEndpoints(accountAuth)
+      })()
+
       config = {
         ...config,
         collections: config.collections?.map((collection) => {
           if (collection.slug === tenantsSlug) {
-            return { ...collection, fields: [...collection.fields, ...jobBoardTenantFields] }
+            return {
+              ...collection,
+              // Payload routes /api/tenants/* to the collection's endpoints, not the root's.
+              endpoints: [
+                ...(Array.isArray(collection.endpoints) ? collection.endpoints : []),
+                ...accountEndpoints,
+              ],
+              fields: [...collection.fields, ...jobBoardTenantFields],
+            }
           }
 
           if (collection.slug === 'locations') {

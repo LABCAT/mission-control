@@ -2,11 +2,14 @@ import type { AccessArgs } from 'payload'
 import { describe, expect, it } from 'vitest'
 
 import {
+  adminPanelAccess,
+  denySeekerOnly,
   getTenantRole,
   getUserTenantIDs,
   getUserTenantIDsByRole,
   hasAnyTenantRole,
   hasTenantRole,
+  isSeekerOnly,
   isSuperAdmin,
   type MissionControlUser,
   superAdminAccess,
@@ -57,5 +60,48 @@ describe('superAdminAccess', () => {
     expect(await superAdminAccess(argsFor({ role: 'super-admin' }))).toBe(true)
     expect(await superAdminAccess(argsFor(tenantAdminA))).toBe(false)
     expect(await superAdminAccess(argsFor(null))).toBe(false)
+  })
+})
+
+const next = async () => ({ tenant: { equals: 10 } })
+
+describe('seekers', () => {
+  const seeker = {
+    id: 5,
+    role: 'user',
+    tenants: [{ role: 'seeker', tenant: 10 }],
+  } satisfies MissionControlUser
+  const seekerAndEmployer = {
+    id: 6,
+    role: 'user',
+    tenants: [
+      { role: 'seeker', tenant: 10 },
+      { role: 'employer', tenant: 20 },
+    ],
+  } satisfies MissionControlUser
+
+  it('treats only users whose every membership is a seeker as seeker-only', () => {
+    expect(isSeekerOnly(seeker)).toBe(true)
+    expect(isSeekerOnly(seekerAndEmployer)).toBe(false)
+    expect(isSeekerOnly(tenantAdminA)).toBe(false)
+    expect(isSeekerOnly({ id: 7, role: 'super-admin', tenants: [] })).toBe(false)
+    expect(isSeekerOnly({ id: 8, role: 'user', tenants: [] })).toBe(false)
+    expect(isSeekerOnly(null)).toBe(false)
+  })
+
+  it('keeps seekers out of the admin panel', () => {
+    expect(adminPanelAccess({ req: { user: seeker } })).toBe(false)
+    expect(adminPanelAccess({ req: { user: seekerAndEmployer } })).toBe(true)
+    expect(adminPanelAccess({ req: { user: tenantAdminA } })).toBe(true)
+    expect(adminPanelAccess({ req: { user: null } })).toBe(false)
+  })
+
+  it('denies seekers tenant content and passes everyone else through', async () => {
+    const guarded = denySeekerOnly(next)
+
+    expect(await guarded({ req: { user: seeker } })).toBe(false)
+    expect(await guarded({ req: { user: tenantAdminA } })).toEqual({ tenant: { equals: 10 } })
+    // An anonymous request (a site key) still reaches the site key override.
+    expect(await guarded({ req: { user: null } })).toEqual({ tenant: { equals: 10 } })
   })
 })
