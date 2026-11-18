@@ -3971,6 +3971,106 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.tenants_tax_rates": {
+      "name": "tenants_tax_rates",
+      "schema": "",
+      "columns": {
+        "_order": {
+          "name": "_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "_parent_id": {
+          "name": "_parent_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "id": {
+          "name": "id",
+          "type": "varchar",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "key": {
+          "name": "key",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rate": {
+          "name": "rate",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "xero_tax_type": {
+          "name": "xero_tax_type",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "tenants_tax_rates_order_idx": {
+          "name": "tenants_tax_rates_order_idx",
+          "columns": [
+            {
+              "expression": "_order",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "tenants_tax_rates_parent_id_idx": {
+          "name": "tenants_tax_rates_parent_id_idx",
+          "columns": [
+            {
+              "expression": "_parent_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "tenants_tax_rates_parent_id_fk": {
+          "name": "tenants_tax_rates_parent_id_fk",
+          "tableFrom": "tenants_tax_rates",
+          "tableTo": "tenants",
+          "columnsFrom": [
+            "_parent_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.tenants": {
       "name": "tenants",
       "schema": "",
@@ -4050,6 +4150,40 @@
         },
         "tax_label": {
           "name": "tax_label",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tax_enabled": {
+          "name": "tax_enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": false
+        },
+        "tax_prices_include_tax": {
+          "name": "tax_prices_include_tax",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": false
+        },
+        "tax_rounding": {
+          "name": "tax_rounding",
+          "type": "enum_tenants_tax_rounding",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'invoice'"
+        },
+        "tax_default_rate_key": {
+          "name": "tax_default_rate_key",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tax_exempt_xero_tax_type": {
+          "name": "tax_exempt_xero_tax_type",
           "type": "varchar",
           "primaryKey": false,
           "notNull": false
@@ -8251,6 +8385,19 @@
           "notNull": false,
           "default": true
         },
+        "tax_exempt": {
+          "name": "tax_exempt",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": false
+        },
+        "tax_rate_key": {
+          "name": "tax_rate_key",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
         "is_volunteer": {
           "name": "is_volunteer",
           "type": "boolean",
@@ -8862,6 +9009,19 @@
           "type": "numeric",
           "primaryKey": false,
           "notNull": true
+        },
+        "tax_exempt": {
+          "name": "tax_exempt",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": false
+        },
+        "tax_rate_key": {
+          "name": "tax_rate_key",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
         },
         "placement": {
           "name": "placement",
@@ -11242,6 +11402,14 @@
         "user"
       ]
     },
+    "public.enum_tenants_tax_rounding": {
+      "name": "enum_tenants_tax_rounding",
+      "schema": "public",
+      "values": [
+        "invoice",
+        "line"
+      ]
+    },
     "public.enum_locations_kind": {
       "name": "enum_locations_kind",
       "schema": "public",
@@ -11341,6 +11509,6 @@
     "tables": {},
     "columns": {}
   },
-  "id": "e0693cb5-b540-41fd-8ff8-662d25b61f4d",
+  "id": "e7f7409a-d0ac-4cbe-a541-93e2a524f451",
   "prevId": "00000000-0000-0000-0000-000000000000"
 }

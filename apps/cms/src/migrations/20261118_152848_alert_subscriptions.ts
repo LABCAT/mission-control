@@ -58,8 +58,8 @@ export async function down({ db, payload, req }: MigrateDownArgs): Promise<void>
    ALTER TABLE "alert_subscriptions" DISABLE ROW LEVEL SECURITY;
   ALTER TABLE "alert_subscriptions_rels" DISABLE ROW LEVEL SECURITY;
   ALTER TABLE "payload_locked_documents_rels" DROP CONSTRAINT IF EXISTS "payload_locked_documents_rels_alert_subscriptions_fk";
-  DROP TABLE "alert_subscriptions" CASCADE;
-  DROP TABLE "alert_subscriptions_rels" CASCADE;
+  DROP TABLE IF EXISTS "alert_subscriptions" CASCADE;
+  DROP TABLE IF EXISTS "alert_subscriptions_rels" CASCADE;
   DROP INDEX IF EXISTS "payload_locked_documents_rels_alert_subscriptions_id_idx";
   ALTER TABLE "payload_locked_documents_rels" DROP COLUMN IF EXISTS "alert_subscriptions_id";`)
 }
