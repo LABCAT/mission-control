@@ -339,6 +339,65 @@ describe('account auth endpoints', () => {
       expect(me.body.user).toMatchObject({ email, role: 'seeker' })
     })
 
+    describe('WordPress legacy passwords (PJ-34)', () => {
+      // A known phpass hash of this password, from the PJ-34 fixtures.
+      const PHPASS = '$P$9IQRaTwmfeRo7ud9Fh4E2PdI0S3r.L0'
+      const WP_PASSWORD = 'test12345'
+
+      const withLegacyHash = async (tenant: Tenant) => {
+        const email = await createUser({ tenant })
+        const id = (
+          await payload.find({
+            collection: 'users',
+            overrideAccess: true,
+            where: { email: { equals: email } },
+          })
+        ).docs[0]!.id
+
+        await payload.db.updateOne({
+          collection: 'users',
+          // An imported WordPress user: a legacy hash and no Payload password yet.
+          data: { hash: null, legacyPasswordHash: PHPASS, salt: null },
+          returning: false,
+          where: { id: { equals: id } },
+        })
+
+        const legacyHashOf = async () =>
+          (
+            (await payload.find({
+              collection: 'users',
+              overrideAccess: true,
+              showHiddenFields: true,
+              where: { id: { equals: id } },
+            })) as { docs: { legacyPasswordHash?: null | string }[] }
+          ).docs[0]!.legacyPasswordHash
+
+        return { email, legacyHashOf }
+      }
+
+      it('signs in with the WordPress password through the endpoint and upgrades the hash', async () => {
+        const { email, legacyHashOf } = await withLegacyHash(tenantA)
+
+        expect(await legacyHashOf()).toBe(PHPASS)
+
+        const first = await login(tenantA, email, WP_PASSWORD)
+        expect(first.status).toBe(200)
+        expect(first.body.token).toEqual(expect.any(String))
+        expect(await legacyHashOf()).toBeNull()
+
+        // Now an ordinary Payload user, and the old password still works.
+        expect((await login(tenantA, email, WP_PASSWORD)).status).toBe(200)
+        expect((await login(tenantA, email, 'wrong password')).status).toBe(401)
+      })
+
+      it('does not touch a legacy hash when the user signs in on the wrong tenant', async () => {
+        const { email, legacyHashOf } = await withLegacyHash(tenantA)
+
+        expect((await login(tenantB, email, WP_PASSWORD)).status).toBe(401)
+        expect(await legacyHashOf()).toBe(PHPASS)
+      })
+    })
+
     it('rejects me without a token or with a bad one', async () => {
       expect((await call('GET', tenantA.slug, 'me', { key: tenantA.key })).status).toBe(401)
       expect(
