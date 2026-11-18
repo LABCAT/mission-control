@@ -32,9 +32,14 @@ import { getSiteKeyHeader, resolveSiteKey } from './site-keys'
  * - `price` is whole minor units of the tenant currency. `currency` is copied from the tenant
  *   on every save, so a price is never read in the wrong currency.
  *
- * TODO(PJ-16 follow-up): restrict a plan to job types/categories (`allowedTypes`,
- * `allowedCategories`), so "Volunteer listing" only applies to Voluntary jobs. The taxonomies
- * aren't on main yet (PR #35), so the restriction is enforced at checkout until then.
+ * - Restrictions are data too: `isVolunteer` limits a plan to voluntary jobs, and
+ *   `allowedJobTypes` / `allowedJobCategories` limit it to those taxonomy slugs (empty = any).
+ *   `quote()` rejects a job the plan doesn't allow.
+ *
+ * TODO(PJ-16 follow-up): the allowed types and categories are stored as taxonomy slugs because
+ * the taxonomies (PR #35) aren't on main yet. Once they are, turn them into relationships to
+ * `job-types` / `job-categories` with a migration that maps each slug to its id in the same
+ * tenant, and resolve the job's slugs from those relationships at checkout.
  * TODO(PJ-87): `includedAddOns` (add-on + duration) once the add-ons collection exists.
  * `quote()` already prices included add-ons.
  */
@@ -49,6 +54,9 @@ export const PLAN_BUYER_ROLES = ['employer'] as const satisfies readonly TenantR
 
 export const PLAN_KEY_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 
+/** Taxonomy slugs use the same kebab-case shape as plan keys. */
+export const TAXONOMY_SLUG_PATTERN = PLAN_KEY_PATTERN
+
 const ACTIVE_ONLY: Where = { status: { equals: 'active' satisfies PlanStatus } }
 
 const tenantIDOf = (tenant: unknown): null | number | string => {
@@ -56,6 +64,10 @@ const tenantIDOf = (tenant: unknown): null | number | string => {
   if (typeof tenant === 'object') return (tenant as { id?: number | string }).id ?? null
   return tenant as number | string
 }
+
+/** True when the write data carries a `tenant` key at all, even `null` or `undefined`. */
+const submitsTenant = (data: unknown): boolean =>
+  typeof data === 'object' && data !== null && Object.prototype.hasOwnProperty.call(data, 'tenant')
 
 const userOf = (req: PayloadRequest): MissionControlUser | null =>
   (req.user as MissionControlUser | null | undefined) ?? null
@@ -141,9 +153,13 @@ export const planUpdateAccess =
     const tenantIDs = getUserTenantIDsByRole(user, PLAN_EDITOR_ROLES)
     if (tenantIDs.length === 0) return false
 
-    const submitted = tenantIDOf((data as { tenant?: unknown } | undefined)?.tenant)
-    if (submitted !== null && !tenantIDs.some((id) => String(id) === String(submitted))) {
-      return false
+    // An omitted tenant keeps the stored one. A submitted one, including an explicit null that
+    // would orphan the plan, must be a tenant the user edits.
+    if (submitsTenant(data)) {
+      const submitted = tenantIDOf((data as { tenant?: unknown }).tenant)
+      if (submitted === null || !tenantIDs.some((id) => String(id) === String(submitted))) {
+        return false
+      }
     }
 
     return { tenant: { in: tenantIDs } }
@@ -163,7 +179,9 @@ type TenantCurrencySource = {
 
 /**
  * Copy the currency from the tenant (or the single-tenant settings global) on every save.
- * A plan in a tenant with no currency, such as the aggregate hub, is rejected.
+ * A plan with no tenant after the save, or in a tenant with no currency such as the aggregate
+ * hub, is rejected. This also stops a super admin, whom access lets through, from orphaning a
+ * plan with `tenant: null`.
  */
 export const planCurrencyFromTenant =
   ({ settingsSlug, tenantScoped, tenantsSlug }: TenantCurrencySource): CollectionBeforeChangeHook =>
@@ -171,20 +189,28 @@ export const planCurrencyFromTenant =
     let currency: unknown
 
     if (tenantScoped) {
-      const tenantID = tenantIDOf(data?.tenant ?? originalDoc?.tenant)
+      // The resulting tenant: the submitted value when the key is present (null included),
+      // otherwise the stored one.
+      const tenantID = tenantIDOf(submitsTenant(data) ? data.tenant : originalDoc?.tenant)
 
-      if (tenantID !== null) {
-        const tenant = await req.payload.findByID({
-          collection: tenantsSlug as CollectionSlug,
-          depth: 0,
-          disableErrors: true,
-          id: tenantID,
-          overrideAccess: true,
+      if (tenantID === null) {
+        throw new ValidationError({
+          collection: collection.slug,
+          errors: [{ message: 'A plan must belong to a tenant', path: 'tenant' }],
           req,
-          select: { currency: true },
         })
-        currency = (tenant as null | { currency?: unknown })?.currency
       }
+
+      const tenant = await req.payload.findByID({
+        collection: tenantsSlug as CollectionSlug,
+        depth: 0,
+        disableErrors: true,
+        id: tenantID,
+        overrideAccess: true,
+        req,
+        select: { currency: true },
+      })
+      currency = (tenant as null | { currency?: unknown })?.currency
     } else {
       const settings = await req.payload.findGlobal({
         depth: 0,
@@ -246,24 +272,65 @@ export const uniquePlanKeyPerTenant =
     return data
   }
 
+type Validator<T> = (value: T) => string | true
+
 const wholeNumber =
-  (label: string, { min, optional = false }: { min: number; optional?: boolean }) =>
-  (value: null | number | undefined): string | true => {
+  (
+    label: string,
+    { min, optional = false }: { min?: number; optional?: boolean },
+  ): Validator<null | number | undefined> =>
+  (value) => {
     if (value === null || value === undefined) return optional ? true : `${label} is required`
-    return Number.isSafeInteger(value) && value >= min
-      ? true
-      : `${label} must be a whole number, ${min} or more`
+    if (!Number.isSafeInteger(value)) return `${label} must be a whole number`
+    return min === undefined || value >= min ? true : `${label} must be a whole number, ${min} or more`
   }
 
-export const validatePlanPrice = (value: null | number | undefined): string | true =>
+export const validatePlanPrice: Validator<null | number | undefined> = (value) =>
   isMinorUnits(value)
     ? true
     : 'Price must be a whole number of minor units, 0 or more (VUV has none, so 2500 is Vt 2,500)'
 
-export const validatePlanKey = (value: null | string | undefined): string | true =>
+export const validatePlanKey: Validator<null | string | undefined> = (value) =>
   value && PLAN_KEY_PATTERN.test(value)
     ? true
     : 'Use lowercase letters, numbers and single hyphens, for example regular-listing'
+
+const validatePlanName: Validator<null | string | undefined> = (value) =>
+  typeof value === 'string' && value.trim() ? true : 'Name is required'
+
+const validateTaxonomySlugs =
+  (label: string): Validator<null | readonly string[] | undefined> =>
+  (value) => {
+    if (value === null || value === undefined) return true
+    if (!Array.isArray(value)) return `${label} must be a list of slugs`
+    const bad = value.find((slug) => typeof slug !== 'string' || !TAXONOMY_SLUG_PATTERN.test(slug))
+    if (bad !== undefined) return `${label}: "${String(bad)}" is not a slug, e.g. full-time`
+    return new Set(value).size === value.length ? true : `${label} lists a slug twice`
+  }
+
+const optionalBoolean =
+  (label: string): Validator<unknown> =>
+  (value) =>
+    value === null || value === undefined || typeof value === 'boolean' ? true : `${label} must be true or false`
+
+/**
+ * One validator per plan field. The collection fields and the seed (`planSeedProblems`) both use
+ * these, so seed data is checked by exactly the rules a save would apply.
+ */
+export const planFieldValidators = {
+  acceptsCredits: optionalBoolean('Accepts credits'),
+  allowedJobCategories: validateTaxonomySlugs('Allowed job categories'),
+  allowedJobTypes: validateTaxonomySlugs('Allowed job types'),
+  creditExpiryDays: wholeNumber('Credit expiry', { min: 1, optional: true }),
+  durationDays: wholeNumber('Listing duration', { min: 1 }),
+  isVolunteer: optionalBoolean('Volunteer only'),
+  jobCredits: wholeNumber('Job credits', { min: 1 }),
+  key: validatePlanKey,
+  legacyId: wholeNumber('Legacy id', { min: 1, optional: true }),
+  name: validatePlanName,
+  price: validatePlanPrice,
+  sortOrder: wholeNumber('Sort order', { optional: true }),
+} as const
 
 export type PlanCollectionOptions = {
   /** Single-tenant settings global that holds the currency. */
@@ -306,7 +373,7 @@ export const planCollection = ({
       index: true,
       required: true,
       unique: !tenantScoped,
-      validate: validatePlanKey,
+      validate: planFieldValidators.key,
       admin: {
         description: 'Stable identifier used by seeds and imports, e.g. regular-listing. Unique in the tenant.',
       },
@@ -324,7 +391,7 @@ export const planCollection = ({
           type: 'number',
           required: true,
           min: 0,
-          validate: validatePlanPrice,
+          validate: planFieldValidators.price,
           admin: {
             description: 'Whole minor units of the tenant currency: 2500 is Vt 2,500, or $25.00 in NZD.',
             step: 1,
@@ -348,7 +415,7 @@ export const planCollection = ({
           type: 'number',
           required: true,
           min: 1,
-          validate: wholeNumber('Listing duration', { min: 1 }),
+          validate: planFieldValidators.durationDays,
           admin: { description: 'How long each listing stays live, in days.', step: 1 },
         },
         {
@@ -357,14 +424,14 @@ export const planCollection = ({
           defaultValue: 1,
           required: true,
           min: 1,
-          validate: wholeNumber('Job credits', { min: 1 }),
+          validate: planFieldValidators.jobCredits,
           admin: { description: '1 for a single listing; more for a pack.', step: 1 },
         },
         {
           name: 'creditExpiryDays',
           type: 'number',
           min: 1,
-          validate: wholeNumber('Credit expiry', { min: 1, optional: true }),
+          validate: planFieldValidators.creditExpiryDays,
           admin: {
             description: 'Days until unused credits from this plan expire. Empty: they never expire.',
             step: 1,
@@ -380,6 +447,41 @@ export const planCollection = ({
         description:
           'A job credit from a pack can pay for this plan. Only applies to single-listing plans.',
       },
+    },
+    {
+      type: 'collapsible',
+      label: 'Restrictions',
+      admin: {
+        description: 'Which jobs this plan can be used for. Leave everything empty for any job.',
+      },
+      fields: [
+        {
+          name: 'isVolunteer',
+          type: 'checkbox',
+          defaultValue: false,
+          admin: { description: 'Only for voluntary jobs (a job type marked as volunteer).' },
+        },
+        {
+          name: 'allowedJobTypes',
+          type: 'text',
+          hasMany: true,
+          validate: planFieldValidators.allowedJobTypes as never,
+          admin: {
+            description:
+              'Job type slugs, e.g. full-time. Empty: any type. Becomes a relationship once job types exist (PJ-16).',
+          },
+        },
+        {
+          name: 'allowedJobCategories',
+          type: 'text',
+          hasMany: true,
+          validate: planFieldValidators.allowedJobCategories as never,
+          admin: {
+            description:
+              'Job category slugs. Every category on the job must be listed. Empty: any category.',
+          },
+        },
+      ],
     },
     {
       name: 'status',
@@ -400,16 +502,14 @@ export const planCollection = ({
       name: 'sortOrder',
       type: 'number',
       defaultValue: 0,
-      validate: (value: null | number | undefined) =>
-        value === null || value === undefined || Number.isSafeInteger(value)
-          ? true
-          : 'Sort order must be a whole number',
+      validate: planFieldValidators.sortOrder,
       admin: { description: 'Lower numbers are shown first.', position: 'sidebar', step: 1 },
     },
     {
       name: 'legacyId',
       type: 'number',
       index: true,
+      validate: planFieldValidators.legacyId,
       admin: { description: 'WordPress pricing-plan post id, for the import.', position: 'sidebar' },
     },
   ],

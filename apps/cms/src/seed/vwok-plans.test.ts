@@ -10,16 +10,30 @@ describe('vwok plan seed', () => {
       'regular-listing',
       'job-pack',
       '10-job-pack',
+      'enhanced-listing',
       'volunteer-listing',
     ])
   })
 
-  it('keeps volunteer listings free and never paid for with a credit', () => {
+  it('keeps Enhanced listing as a plan that includes the Enhanced add-on', () => {
+    expect(vwokPlans.find((plan) => plan.key === 'enhanced-listing')?.includedAddOns).toEqual([
+      { addOnKey: 'enhanced', durationDays: null },
+    ])
+  })
+
+  it('keeps volunteer listings free, for voluntary jobs only, and never paid with a credit', () => {
     expect(vwokPlans.find((plan) => plan.key === 'volunteer-listing')).toMatchObject({
       acceptsCredits: false,
+      isVolunteer: true,
       jobCredits: 1,
       price: 0,
     })
+  })
+
+  it('restricts no other plan to volunteer jobs', () => {
+    expect(vwokPlans.filter((plan) => plan.isVolunteer).map((plan) => plan.key)).toEqual([
+      'volunteer-listing',
+    ])
   })
 
   it('only fails on values that are not confirmed yet, never on malformed ones', () => {

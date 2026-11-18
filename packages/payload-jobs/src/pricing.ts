@@ -51,6 +51,10 @@ export type IncludedAddOn = {
 export type QuotablePlan = PricedRef & {
   /** Whether one of the organisation's job credits can pay for this plan. Defaults to true. */
   acceptsCredits?: boolean | null
+  /** Category slugs the plan is limited to; every category on the job must be listed. Empty: any. */
+  allowedJobCategories?: null | readonly string[]
+  /** Job type slugs the plan is limited to. Empty: any. */
+  allowedJobTypes?: null | readonly string[]
   /** Days until unused credits from this plan expire; empty means they never expire. */
   creditExpiryDays?: null | number
   /** ISO 4217 code of `price`, copied from the tenant. */
@@ -58,6 +62,8 @@ export type QuotablePlan = PricedRef & {
   /** How long each listing bought with this plan stays live. */
   durationDays: number
   includedAddOns?: null | readonly IncludedAddOn[]
+  /** Only for voluntary jobs. */
+  isVolunteer?: boolean | null
   /** Listings this plan buys: 1 for a single listing, N for a pack. */
   jobCredits: number
   name: string
@@ -89,6 +95,16 @@ export type QuoteCouponRejection =
   | 'unsupported-discount-type'
   | 'used-up'
 
+/**
+ * The job a plan is bought for, as taxonomy slugs. Checkout resolves these from the job's
+ * relationships (PJ-16/PJ-19); `isVolunteer` comes from the job type's own flag.
+ */
+export type QuoteJob = {
+  categories?: null | readonly string[]
+  isVolunteer?: boolean | null
+  type?: null | string
+}
+
 export type QuoteArgs = {
   /** Add-ons bought on top of the plan. Each one may appear once. */
   addOns?: readonly QuotableAddOn[]
@@ -97,6 +113,11 @@ export type QuoteArgs = {
   coupon?: null | QuoteCouponTerms
   /** The tenant's currency. When given, the plan and every add-on must match it. */
   currency?: string
+  /**
+   * The job the plan is for. Required when the plan has restrictions; a plan with none (a pack
+   * bought up front, say) can be quoted without one.
+   */
+  job?: null | QuoteJob
   plan: QuotablePlan
 }
 
@@ -161,10 +182,19 @@ export type Quote = {
   /** Credits plus coupon, never more than the subtotal. */
   discount: number
   entitlements: QuoteEntitlements
+  /** The job as quoted, or `null` when none was given. */
+  job: null | {
+    categories: string[]
+    isVolunteer: boolean
+    type: null | string
+  }
   lines: QuoteLine[]
   plan: PricedRef & {
+    allowedJobCategories: string[]
+    allowedJobTypes: string[]
     creditExpiryDays: null | number
     durationDays: number
+    isVolunteer: boolean
     jobCredits: number
     name: string
     price: number
@@ -197,7 +227,10 @@ export const PRICING_ERROR_CODES = [
   'invalid-add-on',
   'invalid-coupon',
   'invalid-credits',
+  'invalid-job',
   'invalid-plan',
+  'job-not-allowed',
+  'job-required',
   'plan-archived',
 ] as const
 export type PricingErrorCode = (typeof PRICING_ERROR_CODES)[number]
@@ -242,6 +275,17 @@ const validatePlan = (plan: QuotablePlan, currency: string | undefined): void =>
       fail('credit expiry must be a whole number of days, 1 or more, or empty')
     }
   }
+  for (const name of ['allowedJobTypes', 'allowedJobCategories'] as const) {
+    const slugs = plan[name]
+    if (slugs !== null && slugs !== undefined) {
+      if (!Array.isArray(slugs) || slugs.some((slug) => typeof slug !== 'string' || !slug)) {
+        fail(`${name} must be a list of slugs`)
+      }
+    }
+  }
+  if (plan.isVolunteer !== null && plan.isVolunteer !== undefined && typeof plan.isVolunteer !== 'boolean') {
+    fail('isVolunteer must be true or false')
+  }
   if (plan.status === 'archived') {
     throw new PricingError('plan-archived', `Plan "${plan.name}" is archived and can't be bought`)
   }
@@ -270,6 +314,60 @@ const validateAddOn = (addOn: QuotableAddOn, currency: string): void => {
       'currency-mismatch',
       `Add-on "${addOn.name}" is priced in ${addOn.currency}, not ${currency}`,
     )
+  }
+}
+
+const failJob = (message: string): never => {
+  throw new PricingError('invalid-job', `Job: ${message}`)
+}
+
+const normalizeJob = (job: QuoteJob): NonNullable<Quote['job']> => {
+  if (typeof job !== 'object' || job === null) failJob('a job must be an object')
+  if (job.type !== null && job.type !== undefined && (typeof job.type !== 'string' || !job.type)) {
+    failJob('type must be a slug')
+  }
+  const categories = job.categories ?? []
+  if (!Array.isArray(categories) || categories.some((slug) => typeof slug !== 'string' || !slug)) {
+    failJob('categories must be a list of slugs')
+  }
+  if (job.isVolunteer !== null && job.isVolunteer !== undefined && typeof job.isVolunteer !== 'boolean') {
+    failJob('isVolunteer must be true or false')
+  }
+
+  return { categories: [...categories], isVolunteer: job.isVolunteer === true, type: job.type ?? null }
+}
+
+/**
+ * Throw unless the plan may be used for this job. A plan with no restrictions allows any job,
+ * or no job. A restricted plan needs the job:
+ * - `isVolunteer`: the job must be voluntary.
+ * - `allowedJobTypes`: the job's type must be listed.
+ * - `allowedJobCategories`: the job needs at least one category, and every one must be listed,
+ *   so a cheaper category plan can't be stretched over a listing in other categories.
+ */
+const assertJobAllowed = (plan: QuotablePlan, job: Quote['job']): void => {
+  const types = plan.allowedJobTypes ?? []
+  const categories = plan.allowedJobCategories ?? []
+  const volunteerOnly = plan.isVolunteer === true
+
+  if (!volunteerOnly && types.length === 0 && categories.length === 0) return
+
+  if (!job) {
+    throw new PricingError('job-required', `Plan "${plan.name}" is only for some jobs; say which job`)
+  }
+
+  const refuse = (why: string): never => {
+    throw new PricingError('job-not-allowed', `Plan "${plan.name}" ${why}`)
+  }
+
+  if (volunteerOnly && !job.isVolunteer) refuse('is only for voluntary jobs')
+  if (types.length > 0 && (job.type === null || !types.includes(job.type))) {
+    refuse(`is not for ${job.type ? `"${job.type}" jobs` : 'jobs without a type'}`)
+  }
+  if (categories.length > 0) {
+    if (job.categories.length === 0) refuse('needs a job category')
+    const outside = job.categories.find((slug) => !categories.includes(slug))
+    if (outside !== undefined) refuse(`is not for the "${outside}" category`)
   }
 }
 
@@ -313,8 +411,8 @@ const deepFreeze = <T>(value: T): T => {
 }
 
 /**
- * Price a purchase. Throws `PricingError` for input that can't be sold (an archived plan, an
- * inactive or duplicate add-on, mixed currencies, malformed amounts). A coupon that doesn't
+ * Price a purchase. Throws `PricingError` for input that can't be sold (an archived plan, a job
+ * the plan doesn't allow, an inactive or duplicate add-on, mixed currencies, malformed amounts). A coupon that doesn't
  * apply is not an error: the quote says why in `coupon.reason` and charges full price.
  *
  * Order of operations:
@@ -328,6 +426,7 @@ export const quote = ({
   availableCredits = 0,
   coupon = null,
   currency,
+  job = null,
   plan,
 }: QuoteArgs): Quote => {
   validatePlan(plan, currency)
@@ -335,6 +434,9 @@ export const quote = ({
   if (!Number.isSafeInteger(availableCredits) || availableCredits < 0) {
     throw new PricingError('invalid-credits', 'Available credits must be a whole number, 0 or more')
   }
+
+  const quotedJob = job ? normalizeJob(job) : null
+  assertJobAllowed(plan, quotedJob)
 
   const lines: QuoteLine[] = [
     {
@@ -457,11 +559,15 @@ export const quote = ({
       jobCreditsGranted: creditsUsed === 1 ? 0 : plan.jobCredits,
       listingDays: plan.durationDays,
     },
+    job: quotedJob,
     lines,
     plan: {
       ...refOf(plan),
+      allowedJobCategories: [...(plan.allowedJobCategories ?? [])],
+      allowedJobTypes: [...(plan.allowedJobTypes ?? [])],
       creditExpiryDays,
       durationDays: plan.durationDays,
+      isVolunteer: plan.isVolunteer === true,
       jobCredits: plan.jobCredits,
       name: plan.name,
       price: plan.price,

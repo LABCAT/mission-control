@@ -106,6 +106,16 @@ describe('plans', () => {
     }
   }
 
+  const storedTenant = async (id: number) =>
+    (
+      (await harness.payload.findByID({
+        collection: PLANS_SLUG,
+        depth: 0,
+        id,
+        overrideAccess: true,
+      })) as unknown as { tenant: number | null }
+    ).tenant
+
   beforeAll(async () => {
     harness = await bootTestPayload({
       collections: [planCollection()],
@@ -279,6 +289,110 @@ describe('plans', () => {
     })
   })
 
+  describe('tenant cannot be cleared', () => {
+    it('rejects an editor update that sets tenant to null', async () => {
+      await expect(
+        harness.payload.update({
+          collection: PLANS_SLUG,
+          data: { tenant: null },
+          id: plans.activeA.id,
+          overrideAccess: false,
+          user: users.editorA as never,
+        }),
+      ).rejects.toThrow()
+      expect(await storedTenant(plans.activeA.id)).toBe(harness.tenantA.id)
+    })
+
+    it('rejects a tenant-admin update that sets tenant to null alongside other changes', async () => {
+      await expect(
+        harness.payload.update({
+          collection: PLANS_SLUG,
+          data: { price: 1, tenant: null },
+          id: plans.activeA.id,
+          overrideAccess: false,
+          user: harness.tenantAdminA as never,
+        }),
+      ).rejects.toThrow()
+      expect(await storedTenant(plans.activeA.id)).toBe(harness.tenantA.id)
+    })
+
+    it('rejects clearing the tenant even where access lets the write through', async () => {
+      for (const args of [
+        { overrideAccess: false, user: harness.superAdmin as never },
+        { overrideAccess: true },
+      ]) {
+        await expect(
+          harness.payload.update({
+            collection: PLANS_SLUG,
+            data: { tenant: null },
+            id: plans.activeA.id,
+            ...args,
+          }),
+        ).rejects.toThrow(/tenant/i)
+      }
+      expect(await storedTenant(plans.activeA.id)).toBe(harness.tenantA.id)
+    })
+
+    it('still lets an editor update a plan without sending the tenant', async () => {
+      const updated = (await harness.payload.update({
+        collection: PLANS_SLUG,
+        data: { sortOrder: 5 },
+        id: plans.activeA.id,
+        overrideAccess: false,
+        user: users.editorA as never,
+      })) as unknown as { sortOrder: number; tenant: number | { id: number } }
+
+      expect(updated.sortOrder).toBe(5)
+      expect(typeof updated.tenant === 'object' ? updated.tenant.id : updated.tenant).toBe(
+        harness.tenantA.id,
+      )
+    })
+  })
+
+  describe('restrictions', () => {
+    it('stores volunteer and taxonomy restrictions as configured', async () => {
+      const doc = (await harness.payload.create({
+        collection: PLANS_SLUG,
+        data: {
+          ...planData({
+            allowedJobCategories: ['health', 'ngo'],
+            allowedJobTypes: ['voluntary'],
+            isVolunteer: true,
+            key: 'restricted',
+            price: 0,
+          }),
+          tenant: harness.tenantA.id,
+        },
+        overrideAccess: true,
+      })) as unknown as QuotablePlan
+
+      expect(doc).toMatchObject({
+        allowedJobCategories: ['health', 'ngo'],
+        allowedJobTypes: ['voluntary'],
+        isVolunteer: true,
+      })
+      // The stored document is what checkout quotes, and its restrictions hold.
+      expect(() => quote({ job: { isVolunteer: false, type: 'voluntary' }, plan: doc })).toThrow(
+        /voluntary/,
+      )
+      expect(
+        quote({ job: { categories: ['ngo'], isVolunteer: true, type: 'voluntary' }, plan: doc }).total,
+      ).toBe(0)
+    })
+
+    it('rejects restriction values that are not slugs', async () => {
+      for (const bad of [{ allowedJobTypes: ['Full Time'] }, { allowedJobCategories: ['ngo', 'ngo'] }]) {
+        await expect(
+          harness.payload.create({
+            collection: PLANS_SLUG,
+            data: { ...planData({ key: 'bad-restriction', ...bad }), tenant: harness.tenantA.id },
+            overrideAccess: true,
+          }),
+        ).rejects.toThrow()
+      }
+    })
+  })
+
   describe('data rules', () => {
     it('copies the currency from the tenant and ignores a submitted one', async () => {
       const doc = (await harness.payload.create({
@@ -381,7 +495,7 @@ describe('plans', () => {
       const tenant = await makeTenant({ currency: 'VUV', name: 'Seeded' })
 
       const first = await seedPlans({ payload: harness.payload, plans: seed, tenantID: tenant.id })
-      expect(first).toEqual({ created: ['single', 'pack'], existing: [] })
+      expect(first).toEqual({ created: ['single', 'pack'], deferred: [], existing: [] })
 
       const { docs } = await harness.payload.find({
         collection: PLANS_SLUG,
@@ -396,7 +510,7 @@ describe('plans', () => {
       })
 
       const second = await seedPlans({ payload: harness.payload, plans: seed, tenantID: tenant.id })
-      expect(second).toEqual({ created: [], existing: ['single', 'pack'] })
+      expect(second).toEqual({ created: [], deferred: [], existing: ['single', 'pack'] })
 
       const after = await harness.payload.find({
         collection: PLANS_SLUG,
@@ -419,7 +533,80 @@ describe('plans', () => {
       })
 
       const result = await seedPlans({ payload: harness.payload, plans: seed, tenantID: tenant.id })
-      expect(result).toEqual({ created: ['single'], existing: ['pack'] })
+      expect(result).toEqual({ created: ['single'], deferred: [], existing: ['pack'] })
+    })
+
+    it('defers plans with included add-ons until add-ons exist (PJ-87)', async () => {
+      const tenant = await makeTenant({ currency: 'VUV', name: 'Deferred' })
+      const withAddOn: PlanSeed = {
+        ...seed[0],
+        includedAddOns: [{ addOnKey: 'enhanced', durationDays: 30 }],
+        key: 'enhanced-listing',
+      }
+
+      const result = await seedPlans({
+        payload: harness.payload,
+        plans: [seed[0], withAddOn],
+        tenantID: tenant.id,
+      })
+      expect(result).toEqual({ created: ['single'], deferred: ['enhanced-listing'], existing: [] })
+    })
+
+    it('checks every field before writing, so a bad entry never leaves a partial seed', async () => {
+      const tenant = await makeTenant({ currency: 'VUV', name: 'Malformed' })
+      const malformed: PlanSeed[] = [
+        { ...seed[0], key: 'fine-1' },
+        { ...seed[0], creditExpiryDays: -30, key: 'bad-expiry' },
+        { ...seed[0], key: 'bad-sort', sortOrder: 1.5 },
+        { ...seed[0], key: 'bad-legacy', legacyId: 0 },
+        { ...seed[0], key: 'bad-type', allowedJobTypes: ['Full Time'] },
+        { ...seed[0], isVolunteer: 'yes' as never, key: 'bad-volunteer' },
+        { ...seed[0], key: 'bad-field', ...({ creditExpiry: 30 } as object) },
+        { ...seed[0], key: 'fine-2' },
+      ]
+
+      expect(planSeedProblems(malformed)).toEqual([
+        '"bad-expiry": Credit expiry must be a whole number, 1 or more',
+        '"bad-sort": Sort order must be a whole number',
+        '"bad-legacy": Legacy id must be a whole number, 1 or more',
+        '"bad-type": Allowed job types: "Full Time" is not a slug, e.g. full-time',
+        '"bad-volunteer": Volunteer only must be true or false',
+        '"bad-field": unknown field "creditExpiry"',
+      ])
+      await expect(
+        seedPlans({ payload: harness.payload, plans: malformed, tenantID: tenant.id }),
+      ).rejects.toThrow(PlanSeedError)
+
+      const { totalDocs } = await harness.payload.count({
+        collection: PLANS_SLUG,
+        overrideAccess: true,
+        where: { tenant: { equals: tenant.id } },
+      })
+      expect(totalDocs).toBe(0)
+    })
+
+    it('accepts exactly the seeds the collection would save', async () => {
+      const tenant = await makeTenant({ currency: 'VUV', name: 'Restricted seed' })
+      const volunteer: PlanSeed = {
+        ...seed[0],
+        acceptsCredits: false,
+        isVolunteer: true,
+        key: 'volunteer',
+        price: 0,
+      }
+
+      expect(planSeedProblems([volunteer])).toEqual([])
+      expect(await seedPlans({ payload: harness.payload, plans: [volunteer], tenantID: tenant.id })).toEqual({
+        created: ['volunteer'],
+        deferred: [],
+        existing: [],
+      })
+      const { docs } = await harness.payload.find({
+        collection: PLANS_SLUG,
+        overrideAccess: true,
+        where: { tenant: { equals: tenant.id } },
+      })
+      expect(docs[0]).toMatchObject({ acceptsCredits: false, isVolunteer: true, price: 0 })
     })
 
     it('refuses to write anything while a value is unconfirmed', async () => {

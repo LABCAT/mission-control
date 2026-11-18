@@ -465,3 +465,128 @@ describe('quote rejects what cannot be sold', () => {
     ).toBe('invalid-coupon')
   })
 })
+
+/** Independent statement of the rules: null means allowed, otherwise the expected code. */
+const expectedRefusal = (
+  plan: { allowedJobCategories: string[]; allowedJobTypes: string[]; isVolunteer: boolean },
+  job: null | { categories: string[]; isVolunteer: boolean; type: null | string },
+): null | string => {
+  const restricted =
+    plan.isVolunteer || plan.allowedJobTypes.length > 0 || plan.allowedJobCategories.length > 0
+  if (!restricted) return null
+  if (!job) return 'job-required'
+  if (plan.isVolunteer && !job.isVolunteer) return 'job-not-allowed'
+  if (plan.allowedJobTypes.length > 0 && !plan.allowedJobTypes.includes(job.type ?? '')) {
+    return 'job-not-allowed'
+  }
+  if (plan.allowedJobCategories.length > 0) {
+    if (job.categories.length === 0) return 'job-not-allowed'
+    if (!job.categories.every((c) => plan.allowedJobCategories.includes(c))) return 'job-not-allowed'
+  }
+  return null
+}
+
+describe('plan restrictions (property-based)', () => {
+  const slug = fc.constantFrom('full-time', 'contract', 'voluntary', 'health', 'education', 'ngo')
+  const slugs = fc.uniqueArray(slug, { maxLength: 3 })
+
+  const restrictedArb = fc.record({
+    allowedJobCategories: slugs,
+    allowedJobTypes: slugs,
+    isVolunteer: fc.boolean(),
+  })
+  const jobArb = fc.option(
+    fc.record({
+      categories: slugs,
+      isVolunteer: fc.boolean(),
+      type: fc.option(slug, { nil: null }),
+    }),
+    { nil: null },
+  )
+
+  it('sells a plan for a job exactly when every restriction allows it', () => {
+    fc.assert(
+      fc.property(argsArb, restrictedArb, jobArb, (args, restrictions, job) => {
+        const plan = { ...args.plan, ...restrictions }
+        const expected = expectedRefusal(restrictions, job)
+        const code = codeOf(() => quote({ ...args, job, plan }))
+
+        expect(code).toBe(expected ?? undefined)
+      }),
+    )
+  })
+
+  it('does not change the price when a job is allowed, and records the job on the quote', () => {
+    fc.assert(
+      fc.property(argsArb, jobArb, (args, job) => {
+        // An unrestricted plan allows any job, so the job only adds context to the quote.
+        const withJob = quote({ ...args, job })
+        const without = quote(args)
+
+        expect(withJob.total).toBe(without.total)
+        expect(withJob.lines).toEqual(without.lines)
+        expect(withJob.job).toEqual(
+          job ? { categories: job.categories, isVolunteer: job.isVolunteer, type: job.type } : null,
+        )
+      }),
+    )
+  })
+})
+
+describe('plan restrictions (examples)', () => {
+  const volunteer = vatu({ acceptsCredits: false, isVolunteer: true, key: 'volunteer-listing', price: 0 })
+
+  it('lets a voluntary job use the free volunteer plan', () => {
+    const result = quote({ job: { isVolunteer: true, type: 'voluntary' }, plan: volunteer })
+
+    expect(result.total).toBe(0)
+    expect(result.plan).toMatchObject({ isVolunteer: true })
+    expect(result.job).toEqual({ categories: [], isVolunteer: true, type: 'voluntary' })
+  })
+
+  it('refuses the volunteer plan for a paid job, or with no job at all', () => {
+    expect(codeOf(() => quote({ job: { isVolunteer: false, type: 'full-time' }, plan: volunteer }))).toBe(
+      'job-not-allowed',
+    )
+    expect(codeOf(() => quote({ job: { type: 'full-time' }, plan: volunteer }))).toBe('job-not-allowed')
+    expect(codeOf(() => quote({ plan: volunteer }))).toBe('job-required')
+  })
+
+  it('limits a plan to its job types', () => {
+    const contractOnly = vatu({ allowedJobTypes: ['contract'] })
+
+    expect(quote({ job: { type: 'contract' }, plan: contractOnly }).total).toBe(5000)
+    expect(codeOf(() => quote({ job: { type: 'full-time' }, plan: contractOnly }))).toBe('job-not-allowed')
+    expect(codeOf(() => quote({ job: {}, plan: contractOnly }))).toBe('job-not-allowed')
+  })
+
+  it('needs every category on the job to be allowed', () => {
+    const health = vatu({ allowedJobCategories: ['health', 'ngo'] })
+
+    expect(quote({ job: { categories: ['health', 'ngo'] }, plan: health }).total).toBe(5000)
+    expect(codeOf(() => quote({ job: { categories: ['health', 'education'] }, plan: health }))).toBe(
+      'job-not-allowed',
+    )
+    expect(codeOf(() => quote({ job: { categories: [] }, plan: health }))).toBe('job-not-allowed')
+  })
+
+  it('lets an unrestricted pack be quoted without a job', () => {
+    expect(quote({ plan: vatu({ jobCredits: 10, price: 40000 }) }).job).toBeNull()
+  })
+
+  it('snapshots the restrictions and the job, so the order shows what was allowed', () => {
+    const plan = vatu({ allowedJobTypes: ['contract'] })
+    const snapshot = snapshotQuote(quote({ job: { categories: ['ngo'], type: 'contract' }, plan }))
+    ;(plan.allowedJobTypes as string[]).push('full-time')
+
+    expect(snapshot.plan.allowedJobTypes).toEqual(['contract'])
+    expect(snapshot.job).toEqual({ categories: ['ngo'], isVolunteer: false, type: 'contract' })
+  })
+
+  it('rejects malformed restrictions and jobs', () => {
+    expect(codeOf(() => quote({ plan: vatu({ allowedJobTypes: [''] }) }))).toBe('invalid-plan')
+    expect(codeOf(() => quote({ plan: vatu({ isVolunteer: 'yes' as never }) }))).toBe('invalid-plan')
+    expect(codeOf(() => quote({ job: { categories: 'ngo' as never }, plan: vatu() }))).toBe('invalid-job')
+    expect(codeOf(() => quote({ job: { type: 7 as never }, plan: vatu() }))).toBe('invalid-job')
+  })
+})

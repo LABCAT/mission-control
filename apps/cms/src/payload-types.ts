@@ -559,6 +559,18 @@ export interface Plan {
    */
   acceptsCredits?: boolean | null;
   /**
+   * Only for voluntary jobs (a job type marked as volunteer).
+   */
+  isVolunteer?: boolean | null;
+  /**
+   * Job type slugs, e.g. full-time. Empty: any type. Becomes a relationship once job types exist (PJ-16).
+   */
+  allowedJobTypes?: string[] | null;
+  /**
+   * Job category slugs. Every category on the job must be listed. Empty: any category.
+   */
+  allowedJobCategories?: string[] | null;
+  /**
    * Archived plans can no longer be bought. Past orders are not affected.
    */
   status: 'active' | 'archived';
@@ -1125,6 +1137,9 @@ export interface PlansSelect<T extends boolean = true> {
   jobCredits?: T;
   creditExpiryDays?: T;
   acceptsCredits?: T;
+  isVolunteer?: T;
+  allowedJobTypes?: T;
+  allowedJobCategories?: T;
   status?: T;
   sortOrder?: T;
   legacyId?: T;
