@@ -115,10 +115,6 @@ importers:
         version: 6.0.3
 
   packages/payload-xero:
-    dependencies:
-      '@mission-control/payload-jobs':
-        specifier: workspace:*
-        version: link:../payload-jobs
     devDependencies:
       '@payloadcms/db-postgres':
         specifier: 4.0.0-beta.7

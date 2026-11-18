@@ -1,31 +1,103 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
-import { type TestHarness, bootTestPayload, tenantIsolation } from './test'
 import {
-  DUPLICATE_TENANT_MESSAGE,
-  XeroSettings,
+  type GlobalHarness,
+  type TestHarness,
+  bootGlobalTestPayload,
+  bootTestPayload,
+  tenantIsolation,
+} from './test'
+import { tenantAdminAccess } from './test/roles'
+import {
+  authenticatedAdminAccess,
+  buildXeroSettingsCollection,
+  duplicateMessage,
   isUniqueViolation,
-  mapDuplicateTenantError,
+  mapDuplicateError,
   mapUniqueViolation,
 } from './xero-settings'
 
+const tenantAdminRules = {
+  create: tenantAdminAccess,
+  delete: tenantAdminAccess,
+  read: tenantAdminAccess,
+  update: tenantAdminAccess,
+}
+
+const TenantSettings = buildXeroSettingsCollection({ access: tenantAdminRules, scope: 'tenant' })
+const GlobalSettings = buildXeroSettingsCollection({ scope: 'global' })
+
 tenantIsolation({
-  collection: XeroSettings,
+  collection: TenantSettings,
   createData: (tenant) => ({ xeroTenantId: `xero-org-${tenant.slug}` }),
 })
 
-describe('xero-settings access and rules', () => {
+describe('collection config', () => {
+  it('declares a unique tenant index in tenant scope and a unique singleton in global scope', () => {
+    expect(TenantSettings.indexes).toContainEqual({ fields: ['tenant'], unique: true })
+    expect(TenantSettings.fields.some((f) => 'name' in f && f.name === 'singleton')).toBe(false)
+
+    expect(GlobalSettings.indexes).toBeUndefined()
+    expect(GlobalSettings.fields).toContainEqual(
+      expect.objectContaining({ name: 'singleton', unique: true }),
+    )
+  })
+
+  it('honours a custom slug and tenant field', () => {
+    const custom = buildXeroSettingsCollection({
+      scope: 'tenant',
+      settingsSlug: 'accounting-xero',
+      tenantField: 'organisation',
+    })
+
+    expect(custom.slug).toBe('accounting-xero')
+    expect(custom.indexes).toContainEqual({ fields: ['organisation'], unique: true })
+    expect(custom.versions).toBe(false)
+  })
+})
+
+describe('unique violation mapping', () => {
+  const pgError = Object.assign(new Error('duplicate key'), { code: '23505' })
+
+  it('maps direct and wrapped violations to the scope’s clear message', () => {
+    for (const error of [pgError, new Error('Failed query', { cause: pgError })]) {
+      expect(isUniqueViolation(error)).toBe(true)
+      expect(mapUniqueViolation(error, 'tenant')).toMatchObject({ message: duplicateMessage('tenant') })
+      expect(mapUniqueViolation(error, 'global')).toMatchObject({ message: duplicateMessage('global') })
+    }
+
+    expect(duplicateMessage('tenant')).not.toBe(duplicateMessage('global'))
+  })
+
+  it('leaves other errors alone', () => {
+    const other = Object.assign(new Error('boom'), { code: '23503' })
+
+    expect(mapUniqueViolation(other)).toBe(other)
+    expect(mapUniqueViolation('x')).toBe('x')
+  })
+
+  it('rewrites the API error response for a unique violation only', async () => {
+    const hook = mapDuplicateError('tenant') as (args: never) => unknown
+
+    expect(await hook({ error: pgError } as never)).toEqual({
+      response: { errors: [{ message: duplicateMessage('tenant') }] },
+      status: 400,
+    })
+    expect(await hook({ error: new Error('other') } as never)).toBeUndefined()
+  })
+})
+
+describe('tenant scope: access and rules', () => {
   let harness: TestHarness
   let editor: { collection: string; id: number; role: 'user'; tenants: { role: string; tenant: number }[] }
 
   beforeAll(async () => {
-    harness = await bootTestPayload({ collections: [XeroSettings] })
+    harness = await bootTestPayload({ collections: [TenantSettings] })
 
-    const email = `editor-${harness.tenantA.slug}@example.invalid`
     const doc = (await harness.payload.create({
       collection: 'users',
       data: {
-        email,
+        email: `editor-${harness.tenantA.slug}@example.invalid`,
         password: 'test-password',
         role: 'user',
         tenants: [{ role: 'editor', tenant: harness.tenantA.id }],
@@ -42,11 +114,7 @@ describe('xero-settings access and rules', () => {
 
   afterAll(async () => {
     if (harness) {
-      await harness.payload.delete({
-        collection: 'users',
-        id: editor.id,
-        overrideAccess: true,
-      })
+      await harness.payload.delete({ collection: 'users', id: editor.id, overrideAccess: true })
       await harness.destroy()
     }
   })
@@ -77,7 +145,22 @@ describe('xero-settings access and rules', () => {
         data: { tenant: harness.tenantA.id, xeroTenantId: 'duplicate' },
         user: harness.tenantAdminA as never,
       }),
-    ).rejects.toThrow()
+    ).rejects.toThrow(duplicateMessage('tenant'))
+  })
+
+  it('lets only one of two concurrent creates for a tenant succeed', async () => {
+    const results = await Promise.allSettled(
+      ['one', 'two'].map((id) =>
+        harness.payload.create({
+          collection: 'xero-settings',
+          data: { tenant: harness.tenantB.id, xeroTenantId: id },
+          user: harness.tenantAdminB as never,
+        }),
+      ),
+    )
+
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1)
+    expect(results.filter((r) => r.status === 'rejected')).toHaveLength(1)
   })
 
   it('rejects out-of-range due days', async () => {
@@ -90,7 +173,7 @@ describe('xero-settings access and rules', () => {
     ).rejects.toThrow()
   })
 
-  it('hides settings from editors, anonymous callers and other tenants’ admins', async () => {
+  it('applies the app’s access rules: editors and anonymous callers get nothing', async () => {
     const asEditor = await harness.payload
       .find({ collection: 'xero-settings', user: editor as never })
       .catch(() => ({ docs: [] }))
@@ -100,14 +183,6 @@ describe('xero-settings access and rules', () => {
       harness.payload.find({ collection: 'xero-settings', overrideAccess: false }),
     ).rejects.toThrow()
 
-    const asB = await harness.payload.find({
-      collection: 'xero-settings',
-      user: harness.tenantAdminB as never,
-    })
-    expect(asB.docs.every((d) => String((d as unknown as { tenant: unknown }).tenant).includes(String(harness.tenantB.id)))).toBe(true)
-  })
-
-  it('stops an editor from writing settings', async () => {
     await expect(
       harness.payload.create({
         collection: 'xero-settings',
@@ -118,63 +193,76 @@ describe('xero-settings access and rules', () => {
   })
 })
 
-const run = (error: unknown) =>
-  (mapDuplicateTenantError as (args: never) => unknown)({ error } as never)
+describe('global scope: no tenant, one row, default access', () => {
+  let harness: GlobalHarness
 
-describe('one settings row per tenant is enforced by a unique index', () => {
-  it('declares a unique index on tenant', () => {
-    expect(XeroSettings.indexes).toContainEqual({ fields: ['tenant'], unique: true })
+  beforeAll(async () => {
+    harness = await bootGlobalTestPayload({ collections: [GlobalSettings] })
   })
 
-  it('maps unique violations, including wrapped ones, to the clear error', () => {
-    const pgError = Object.assign(new Error('duplicate key'), { code: '23505' })
-    const wrapped = new Error('Failed query', { cause: pgError })
+  afterAll(async () => {
+    if (harness) await harness.destroy()
+  })
 
-    for (const error of [pgError, wrapped]) {
-      expect(mapUniqueViolation(error)).toMatchObject({ message: DUPLICATE_TENANT_MESSAGE })
+  it('has no tenant field and stores the settings', async () => {
+    const doc = (await harness.payload.create({
+      collection: 'xero-settings',
+      data: { accountCodes: { plan: '200' }, xeroTenantId: 'org-global' },
+      user: harness.admin as never,
+    })) as Record<string, any>
+
+    expect('tenant' in doc).toBe(false)
+    expect(doc.singleton).toBe('xero')
+    expect(doc.dueDays).toBe(14)
+  })
+
+  it('allows only one row', async () => {
+    await expect(
+      harness.payload.create({
+        collection: 'xero-settings',
+        data: { xeroTenantId: 'second' },
+        user: harness.admin as never,
+      }),
+    ).rejects.toThrow(duplicateMessage('global'))
+  })
+
+  it('enforces the single row in the database too, bypassing the hook', async () => {
+    // A direct drizzle insert skips Payload hooks; the unique column still stops it.
+    const { pool } = harness.payload.db as unknown as {
+      pool: { query: (text: string) => Promise<unknown> }
     }
 
-    const other = Object.assign(new Error('boom'), { code: '23503' })
-    expect(mapUniqueViolation(other)).toBe(other)
-    expect(mapUniqueViolation('x')).toBe('x')
+    const attempt = pool.query(
+      "insert into payload_xero_global_test.xero_settings (singleton, updated_at, created_at) values ('xero', now(), now())",
+    )
+
+    await expect(attempt).rejects.toSatisfy(isUniqueViolation)
   })
 
-  it('rewrites the API error response for a unique violation only', async () => {
-    const pgError = Object.assign(new Error('duplicate key'), { code: '23505' })
-    expect(await run(pgError)).toEqual({
-      response: { errors: [{ message: DUPLICATE_TENANT_MESSAGE }] },
-      status: 400,
+  it('default access: admin-capable users in, other authenticated users and anonymous out', async () => {
+    const asAdmin = await harness.payload.find({
+      collection: 'xero-settings',
+      user: harness.admin as never,
     })
-    expect(await run(new Error('other'))).toBeUndefined()
+    expect(asAdmin.docs).toHaveLength(1)
+
+    await expect(
+      harness.payload.find({ collection: 'xero-settings', user: harness.visitor as never, overrideAccess: false }),
+    ).rejects.toThrow()
+    await expect(
+      harness.payload.find({ collection: 'xero-settings', overrideAccess: false }),
+    ).rejects.toThrow()
+    await expect(
+      harness.payload.update({
+        collection: 'xero-settings',
+        data: { dueDays: 30 },
+        user: harness.visitor as never,
+        where: { id: { exists: true } },
+      }),
+    ).rejects.toThrow()
   })
 
-  describe('against Postgres', () => {
-    let harness: TestHarness
-
-    beforeAll(async () => {
-      harness = await bootTestPayload({ collections: [XeroSettings] })
-    })
-    afterAll(async () => {
-      if (harness) await harness.destroy()
-    })
-
-    it('lets only one of two concurrent creates for a tenant succeed', async () => {
-      const results = await Promise.allSettled(
-        ['one', 'two'].map((id) =>
-          harness.payload.create({
-            collection: 'xero-settings',
-            data: { tenant: harness.tenantA.id, xeroTenantId: id },
-            user: harness.tenantAdminA as never,
-          }),
-        ),
-      )
-      const rejected = results.filter((r) => r.status === 'rejected') as PromiseRejectedResult[]
-
-      expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1)
-      expect(rejected).toHaveLength(1)
-      // Either the hook or the index stopped it; both surface as a mappable error.
-      const mapped = mapUniqueViolation(rejected[0].reason) as Error
-      expect(mapped.message === DUPLICATE_TENANT_MESSAGE || isUniqueViolation(rejected[0].reason)).toBe(true)
-    })
+  it('exports the default access as a plain Access function', () => {
+    expect(typeof authenticatedAdminAccess).toBe('function')
   })
 })

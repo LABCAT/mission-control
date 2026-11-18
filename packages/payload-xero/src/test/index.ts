@@ -14,7 +14,7 @@ import {
   isSuperAdmin,
   superAdminAccess,
   tenantRoleOptions,
-} from '@mission-control/payload-jobs'
+} from './roles'
 
 export type TestTenant = { id: number; name: string; slug: string }
 
@@ -352,4 +352,81 @@ export const tenantIsolation = ({ collection, createData }: TenantIsolationArgs)
       expect(ids).toHaveLength(2)
     })
   })
+}
+
+export type GlobalHarness = {
+  /** A user the users collection lets into the admin panel. */
+  admin: { collection: string; id: number; kind: string }
+  destroy: () => Promise<void>
+  payload: Payload
+  /** An authenticated user the users collection keeps out of the admin panel. */
+  visitor: { collection: string; id: number; kind: string }
+}
+
+/**
+ * Boot Payload with no tenancy at all, for the plugin's `global` scope. Users have an
+ * `access.admin` rule, so the default access (authenticated and admin-capable) can be tested.
+ */
+export const bootGlobalTestPayload = async ({
+  collections,
+}: {
+  collections: CollectionConfig[]
+}): Promise<GlobalHarness> => {
+  const testDatabaseUrl = process.env.TEST_DATABASE_URL
+
+  if (!testDatabaseUrl) {
+    throw new Error('Set TEST_DATABASE_URL to a disposable Postgres database before running integration tests')
+  }
+
+  const config = await buildConfig({
+    admin: { user: 'users' },
+    auth: { passwordHashIterations: 100000 },
+    secret: 'test-secret',
+    collections: [
+      {
+        slug: 'users',
+        auth: true,
+        access: { admin: ({ req }) => (req.user as { kind?: string } | null)?.kind === 'admin' },
+        fields: [{ name: 'kind', type: 'select', defaultValue: 'visitor', options: ['admin', 'visitor'] }],
+        versions: false,
+      },
+      ...collections,
+    ],
+    db: postgresAdapter({
+      pool: { connectionString: testDatabaseUrl, max: 10 },
+      push: true,
+      schemaName: 'payload_xero_global_test',
+    }),
+  })
+
+  const payload = await getPayload({ config, key: `payload-xero-global-test-${++bootCount}` })
+  const runId = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
+  const userIds: number[] = []
+
+  const createUser = async (kind: 'admin' | 'visitor') => {
+    const doc = (await payload.create({
+      collection: 'users',
+      data: { email: `${kind}-${runId}@example.invalid`, kind, password: 'test-password' },
+      overrideAccess: true,
+    })) as { id: number }
+    userIds.push(doc.id)
+
+    return { collection: 'users', id: doc.id, kind }
+  }
+
+  const admin = await createUser('admin')
+  const visitor = await createUser('visitor')
+
+  return {
+    admin,
+    destroy: async () => {
+      for (const { slug } of collections) {
+        await payload.delete({ collection: slug, overrideAccess: true, where: { id: { exists: true } } })
+      }
+      await payload.delete({ collection: 'users', overrideAccess: true, where: { id: { in: userIds } } })
+      await payload.destroy()
+    },
+    payload,
+    visitor,
+  }
 }

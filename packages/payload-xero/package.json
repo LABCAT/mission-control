@@ -4,13 +4,11 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
-  },
-  "dependencies": {
-    "@mission-control/payload-jobs": "workspace:*"
   },
   "peerDependencies": {
     "payload": "4.0.0-beta.7"
@@ -20,5 +18,12 @@
     "@payloadcms/plugin-multi-tenant": "4.0.0-beta.7",
     "payload": "4.0.0-beta.7",
     "typescript": "6.0.3"
-  }
+  },
+  "description": "Xero invoicing plugin for Payload: settings collection and AES-GCM token helpers.",
+  "keywords": [
+    "payload",
+    "payload-plugin",
+    "xero"
+  ],
+  "sideEffects": false
 }
