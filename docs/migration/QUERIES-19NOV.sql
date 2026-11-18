@@ -7,12 +7,7 @@ FROM wp_posts p JOIN wp_postmeta pm ON pm.post_id = p.ID
 WHERE p.post_type = 'pricing-plan' AND p.post_status = 'publish'
 ORDER BY p.ID, pm.meta_key;
 
--- 2. Organisation count (decision 16: show all on one page?)
-SELECT COUNT(DISTINCT p.post_author) AS employers_with_jobs_24mo
-FROM wp_posts p
-WHERE p.post_type = 'job_listing' AND p.post_date >= NOW() - INTERVAL 24 MONTH;
-
--- 3. Privacy policy / terms pages (PJ-89)
+-- 2. Privacy policy / terms pages (PJ-89)
 SELECT ID, post_title, post_name, post_status, post_modified
 FROM wp_posts
 WHERE post_type = 'page'
@@ -20,6 +15,6 @@ WHERE post_type = 'page'
        OR post_name LIKE '%privacy%' OR post_name LIKE '%terms%');
 SELECT option_name, option_value FROM wp_options WHERE option_name = 'wp_page_for_privacy_policy';
 
--- 4. Expired jobs: shown with a notice, or hidden? (decision 17 context)
+-- 3. Expired jobs: shown with a notice, or hidden? (decision 17 context)
 SELECT option_name, LEFT(option_value, 300) AS value FROM wp_options
 WHERE option_name LIKE '%jr_options%' OR option_name LIKE '%expired%' LIMIT 20;
