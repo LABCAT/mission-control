@@ -33,6 +33,8 @@ export * from './pricing'
 export * from './rate-limit'
 export * from './seed/vanuatu'
 export * from './site-keys'
+export * from './tax'
+export * from './tax-settings'
 export * from './taxonomies'
 export * from './tenancy'
 

@@ -12,6 +12,7 @@ import * as migration_20261118_095105_locations from './20261118_095105_location
 import * as migration_20261118_103105_plans from './20261118_103105_plans';
 import * as migration_20261118_112249_organisations from './20261118_112249_organisations';
 import * as migration_20261118_144548_add_ons from './20261118_144548_add_ons';
+import * as migration_20261118_150954_tax from './20261118_150954_tax';
 import * as migration_20261118_151009_alert_subscriptions from './20261118_151009_alert_subscriptions';
 
 export const migrations = [
@@ -84,6 +85,11 @@ export const migrations = [
     up: migration_20261118_144548_add_ons.up,
     down: migration_20261118_144548_add_ons.down,
     name: '20261118_144548_add_ons',
+  },
+  {
+    up: migration_20261118_150954_tax.up,
+    down: migration_20261118_150954_tax.down,
+    name: '20261118_150954_tax'
   },
   {
     up: migration_20261118_151009_alert_subscriptions.up,

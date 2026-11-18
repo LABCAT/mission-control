@@ -363,6 +363,40 @@ export interface Tenant {
    * Shown on prices and invoices, for example VAT.
    */
   taxLabel?: string | null;
+  /**
+   * Tax on plans and add-ons. Off until turned on; the label above is shown on prices and invoices.
+   */
+  tax?: {
+    enabled?: boolean | null;
+    /**
+     * On: prices include tax. Off: tax is added on top of prices.
+     */
+    pricesIncludeTax?: boolean | null;
+    rounding: 'invoice' | 'line';
+    rates?:
+      | {
+          key: string;
+          name: string;
+          /**
+           * Basis points: 1500 is 15%.
+           */
+          rate: number;
+          /**
+           * Xero tax type, e.g. OUTPUT.
+           */
+          xeroTaxType?: string | null;
+          id?: string | null;
+        }[]
+      | null;
+    /**
+     * The rate for plans and add-ons that name none.
+     */
+    defaultRateKey?: string | null;
+    /**
+     * Xero tax type for tax-exempt lines, e.g. EXEMPTOUTPUT.
+     */
+    exemptXeroTaxType?: string | null;
+  };
   emailFromName?: string | null;
   emailFromAddress?: string | null;
   /**
@@ -881,6 +915,14 @@ export interface Plan {
    */
   acceptsCredits?: boolean | null;
   /**
+   * Never taxed, whatever the tenant’s rates.
+   */
+  taxExempt?: boolean | null;
+  /**
+   * One of the tenant’s tax rate keys. Empty: the tenant’s default rate.
+   */
+  taxRateKey?: string | null;
+  /**
    * Add-ons that come with this plan at no extra charge.
    */
   includedAddOns?:
@@ -955,6 +997,14 @@ export interface AddOn {
    * How long the add-on lasts on a job, in days.
    */
   durationDays: number;
+  /**
+   * Never taxed, whatever the tenant’s rates.
+   */
+  taxExempt?: boolean | null;
+  /**
+   * One of the tenant’s tax rate keys. Empty: the tenant’s default rate.
+   */
+  taxRateKey?: string | null;
   /**
    * Where the add-on shows the job.
    */
@@ -1504,6 +1554,24 @@ export interface TenantsSelect<T extends boolean = true> {
       };
   defaultLocale?: T;
   taxLabel?: T;
+  tax?:
+    | T
+    | {
+        enabled?: T;
+        pricesIncludeTax?: T;
+        rounding?: T;
+        rates?:
+          | T
+          | {
+              key?: T;
+              name?: T;
+              rate?: T;
+              xeroTaxType?: T;
+              id?: T;
+            };
+        defaultRateKey?: T;
+        exemptXeroTaxType?: T;
+      };
   emailFromName?: T;
   emailFromAddress?: T;
   adminEmail?: T;
@@ -1723,6 +1791,8 @@ export interface PlansSelect<T extends boolean = true> {
   jobCredits?: T;
   creditExpiryDays?: T;
   acceptsCredits?: T;
+  taxExempt?: T;
+  taxRateKey?: T;
   includedAddOns?:
     | T
     | {
@@ -1753,6 +1823,8 @@ export interface AddOnsSelect<T extends boolean = true> {
   price?: T;
   currency?: T;
   durationDays?: T;
+  taxExempt?: T;
+  taxRateKey?: T;
   placement?: T;
   grants?:
     | T

@@ -17,15 +17,18 @@ import {
   catalogCreateAccess,
   catalogDeleteAccess,
   catalogReadAccess,
+  catalogTaxFields,
   catalogUpdateAccess,
   currencyFromTenant,
   idsOf,
   optionalBoolean,
   resultingTenantID,
+  taxRateKeyInTenant,
   uniqueKeyPerTenant,
   validateCatalogKey,
   validateName,
   validatePrice,
+  validateTaxRateKey,
   wholeNumber,
   type Validator,
 } from './catalog'
@@ -246,6 +249,8 @@ export const planFieldValidators = {
   name: validateName,
   price: validatePlanPrice,
   sortOrder: wholeNumber('Sort order', { optional: true }),
+  taxExempt: optionalBoolean('Tax exempt'),
+  taxRateKey: validateTaxRateKey,
 } as const
 
 export type PlanCollectionOptions = {
@@ -364,6 +369,7 @@ export const planCollection = ({
           'A job credit from a pack can pay for this plan. Only applies to single-listing plans.',
       },
     },
+    ...catalogTaxFields(),
     {
       name: 'includedAddOns',
       type: 'array',
@@ -448,6 +454,7 @@ export const planCollection = ({
   hooks: {
     beforeChange: [
       planCurrencyFromTenant({ settingsSlug, tenantScoped, tenantsSlug }),
+      taxRateKeyInTenant({ settingsSlug, tenantScoped, tenantsSlug }),
       planRestrictionsInTenant(tenantScoped),
     ],
     beforeValidate: [uniquePlanKeyPerTenant(tenantScoped)],
