@@ -22,9 +22,15 @@ const keys = [
 ]
 
 const docs = [
-  { name: publishedDoc('a'), slug: TENANT_A },
-  { name: publishedDoc('b'), slug: TENANT_B },
+  { name: publishedDoc('a'), slug: TENANT_A, status: 'published' },
+  { name: publishedDoc('b'), slug: TENANT_B, status: 'published' },
+  { name: draftDoc('a'), slug: TENANT_A, status: 'draft' },
+  { name: draftDoc('b'), slug: TENANT_B, status: 'draft' },
 ]
+
+const seeded = { drafts: 2, published: 2 }
+
+const q = (value) => `'${value}'`
 
 const responses = (overrides = {}) => ({
   aggregate: { names: [publishedDoc('a'), publishedDoc('b')], status: 200 },
@@ -63,7 +69,7 @@ describe('psqlEnv', () => {
 
 describe('buildSeedSql', () => {
   it('upserts every tenant by slug so a re-run is safe', () => {
-    const sql = buildSeedSql({ docs, drafts: false, keys })
+    const sql = buildSeedSql({ docs, keys })
 
     expect(sql).toContain('insert into "tenants" ("name", "slug", "is_aggregate")')
     expect(sql).toContain('on conflict ("slug") do update set')
@@ -73,43 +79,44 @@ describe('buildSeedSql', () => {
   })
 
   it('clears only the rows this smoke owns before inserting', () => {
-    const sql = buildSeedSql({ docs, drafts: false, keys })
+    const sql = buildSeedSql({ docs, keys })
 
     expect(sql).toContain(`delete from "tags" where "name" like 'site-key-smoke%';`)
     expect(sql).toContain(`delete from "site_keys" where "label" like 'site-key-smoke%';`)
   })
 
   it('stores only digests against the owning tenant', () => {
-    const sql = buildSeedSql({ docs, drafts: false, keys })
+    const sql = buildSeedSql({ docs, keys })
 
     expect(sql).toContain('insert into "site_keys" ("label", "tenant_id", "key_hash")')
     expect(sql).toContain('join "tenants" t on t."slug" = v."slug"')
     expect(sql).toContain(`'${'c'.repeat(64)}'`)
   })
 
-  it('omits _status when the collection has no drafts', () => {
-    const sql = buildSeedSql({ docs, drafts: false, keys })
+  it('writes the status of every document, published and draft', () => {
+    const sql = buildSeedSql({ docs, keys })
 
-    expect(sql).toContain('insert into "tags" ("name", "tenant_id")')
-    expect(sql).not.toContain('_status')
+    expect(sql).toContain('update "tags" set "_status" = \'published\' where "name" in (')
+    expect(sql).toContain(
+      `update "tags" set "_status" = 'draft' where "name" in (${q(draftDoc('a'))}, ${q(draftDoc('b'))});`,
+    )
+    expect(sql).toContain(
+      `update "tags" set "_status" = 'published' where "name" in (${q(publishedDoc('a'))}, ${q(publishedDoc('b'))});`,
+    )
   })
 
-  it('writes _status when the collection has drafts', () => {
-    const sql = buildSeedSql({
-      docs: [...docs, { name: draftDoc('a'), slug: TENANT_A, status: 'draft' }],
-      drafts: true,
-      keys,
-    })
+  it('defaults a document without a status to published', () => {
+    const sql = buildSeedSql({ docs: [{ name: publishedDoc('a'), slug: TENANT_A }], keys })
 
-    expect(sql).toContain('insert into "tags" ("name", "tenant_id", "_status")')
-    expect(sql).toContain(`'${draftDoc('a')}', '${TENANT_A}', 'draft'`)
-    expect(sql).toContain(`'${publishedDoc('a')}', '${TENANT_A}', 'published'`)
+    expect(sql).toContain(
+      `update "tags" set "_status" = 'published' where "name" in (${q(publishedDoc('a'))});`,
+    )
+    expect(sql).not.toContain(`'_status' = 'draft'`)
   })
 
   it('escapes quotes in seeded values', () => {
     const sql = buildSeedSql({
       docs: [{ name: "o'brien", slug: TENANT_A, status: 'published' }],
-      drafts: true,
       keys,
     })
 
@@ -138,53 +145,74 @@ describe('smokeDocNames', () => {
 })
 
 describe('checkSiteKeyReads', () => {
-  it('passes when every key reads exactly its own tenant', () => {
-    expect(checkSiteKeyReads({ drafts: false, responses: responses() }).failures).toEqual([])
+  it('passes when every key reads exactly its tenant’s published documents', () => {
+    const result = checkSiteKeyReads({ responses: responses(), seeded })
+
+    expect(result.failures).toEqual([])
+    expect(result.notes.join()).toContain('2 published and 2 draft')
   })
 
   it('fails when a tenant key reads another tenant', () => {
     const result = checkSiteKeyReads({
-      drafts: false,
       responses: responses({
         tenantA: { names: [publishedDoc('a'), publishedDoc('b')], status: 200 },
       }),
+      seeded,
     })
 
     expect(result.failures.join()).toContain('tenantA: read')
   })
 
+  it('fails when a key reads a draft', () => {
+    const tenant = checkSiteKeyReads({
+      responses: responses({ tenantA: { names: [publishedDoc('a'), draftDoc('a')], status: 200 } }),
+      seeded,
+    })
+    const aggregate = checkSiteKeyReads({
+      responses: responses({
+        aggregate: {
+          names: [publishedDoc('a'), publishedDoc('b'), draftDoc('b')],
+          status: 200,
+        },
+      }),
+      seeded,
+    })
+
+    expect(tenant.failures.join()).toContain('tenantA: read draft')
+    expect(aggregate.failures.join()).toContain('aggregate: read draft')
+  })
+
+  it('fails when no draft was seeded, so the draft filter is unproven', () => {
+    const result = checkSiteKeyReads({
+      responses: responses(),
+      seeded: { drafts: 0, published: 2 },
+    })
+
+    expect(result.failures.join()).toContain('the draft filter is unproven')
+  })
+
   it('fails when the spare key on tenant B cannot see B, so tenant scoping is unproven', () => {
     const result = checkSiteKeyReads({
-      drafts: false,
       responses: responses({ spare: { names: [], status: 200 } }),
+      seeded,
     })
 
     expect(result.failures).toEqual([`spare: read no documents, expected ${publishedDoc('b')}`])
   })
 
-  it('fails when the aggregate key sees drafts or misses a tenant', () => {
-    const withDraft = checkSiteKeyReads({
-      drafts: true,
-      responses: responses({
-        aggregate: {
-          names: [publishedDoc('a'), publishedDoc('b'), draftDoc('a')],
-          status: 200,
-        },
-      }),
-    })
-    const missing = checkSiteKeyReads({
-      drafts: false,
+  it('fails when the aggregate key misses a tenant', () => {
+    const result = checkSiteKeyReads({
       responses: responses({ aggregate: { names: [publishedDoc('a')], status: 200 } }),
+      seeded,
     })
 
-    expect(withDraft.failures.join()).toContain('aggregate: read')
-    expect(missing.failures.join()).toContain('aggregate: read')
+    expect(result.failures.join()).toContain('aggregate: read')
   })
 
   it('fails when the preview refuses a key it should accept', () => {
     const result = checkSiteKeyReads({
-      drafts: false,
       responses: responses({ tenantA: { names: [], status: 403 } }),
+      seeded,
     })
 
     expect(result.failures).toEqual([
@@ -194,21 +222,21 @@ describe('checkSiteKeyReads', () => {
 
   it.each(['anonymous', 'badKey'] as const)('fails when %s reads a tenant document', (label) => {
     const result = checkSiteKeyReads({
-      drafts: false,
       responses: responses({ [label]: { names: [publishedDoc('a')], status: 200 } }),
+      seeded,
     })
 
     expect(result.failures.join()).toContain(`${label}: read`)
   })
 
   it('accepts a refusal or an empty list for anonymous and bad keys', () => {
-    const refused = checkSiteKeyReads({ drafts: false, responses: responses() })
+    const refused = checkSiteKeyReads({ responses: responses(), seeded })
     const empty = checkSiteKeyReads({
-      drafts: false,
       responses: responses({
         anonymous: { names: [], status: 200 },
         badKey: { names: [], status: 200 },
       }),
+      seeded,
     })
 
     expect(refused.failures).toEqual([])
@@ -217,20 +245,11 @@ describe('checkSiteKeyReads', () => {
 
   it('reports a server error instead of a mismatch', () => {
     const result = checkSiteKeyReads({
-      drafts: false,
       responses: responses({ aggregate: { names: [], status: 502 } }),
+      seeded,
     })
 
     expect(result.failures).toEqual(['aggregate: the preview answered HTTP 502'])
-  })
-
-  it('notes that no draft was seeded when the collection has drafts disabled', () => {
-    const result = checkSiteKeyReads({ drafts: false, responses: responses() })
-
-    expect(result.notes.join()).toContain('drafts disabled')
-    expect(checkSiteKeyReads({ drafts: true, responses: responses() }).notes.join()).not.toContain(
-      'drafts disabled',
-    )
   })
 })
 

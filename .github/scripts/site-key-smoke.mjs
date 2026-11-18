@@ -1,9 +1,12 @@
 #!/usr/bin/env node
 // Runtime evidence that site keys scope reads on a deployed preview (PJ-76).
 //
-// Seeds a preview's Neon branch with two normal tenants, the aggregate tenant, published
-// documents and site keys. Then it asks that preview's REST API what each key can read and
-// fails on any mismatch.
+// Seeds a preview's Neon branch with two normal tenants, the aggregate tenant, a published
+// and a draft document per tenant, and site keys. Then it asks that preview's REST API what
+// each key can read and fails on any mismatch.
+//
+// `tags` has drafts, so the smoke proves both halves of the site-key rule: a key reads its
+// tenant's published documents, and never a draft.
 //
 // Keys are generated with the CMS's own `generateSiteKey`, so the database only ever
 // receives their SHA-256 digest — exactly what `hashSiteKey` computes. The raw keys live in
@@ -17,7 +20,11 @@ import { fileURLToPath } from 'node:url'
 
 import { generateSiteKey, SITE_KEY_PREFIX } from '../../packages/payload-jobs/src/site-keys.ts'
 
-/** A collection with the site-key access override; see `apps/cms/src/site-keys.ts`. */
+/**
+ * A collection with the site-key access override; see `apps/cms/src/site-keys.ts`. `tags` is
+ * the only allowlisted collection with drafts, which is what makes the published-only half of
+ * the rule testable here.
+ */
 export const COLLECTION = 'tags'
 
 /** Every row this script owns carries this prefix, so a re-run replaces only its own data. */
@@ -69,25 +76,27 @@ const quote = (value) => `'${String(value).replaceAll("'", "''")}'`
  * Idempotent seed SQL: tenants are upserted by slug, and the documents and keys this script
  * owns are deleted and recreated, so a re-run never doubles them up.
  *
- * `_status` is only written when the collection has drafts. Without drafts Payload has no
- * published state and every document is live, so the column does not exist.
+ * `tags` has drafts, so each document carries a `_status`. Documents are inserted without it
+ * and then marked with a literal `update`: an assignment coerces the literal to the status
+ * enum, while a `values` list of text would need the collection's generated enum type by
+ * name.
  */
-export const buildSeedSql = ({ docs, drafts, keys }) => {
+export const buildSeedSql = ({ docs, keys }) => {
   const tenantRows = TENANTS.map(
     ({ aggregate, name, slug }) => `  (${quote(name)}, ${quote(slug)}, ${aggregate})`,
   ).join(',\n')
 
-  const docColumns = drafts ? '"name", "tenant_id", "_status"' : '"name", "tenant_id"'
-  const docAlias = drafts ? '"name", "slug", "_status"' : '"name", "slug"'
-  const docSelect = drafts ? 'v."name", t."id", v."_status"' : 'v."name", t."id"'
   const docRows = docs
-    .map(({ name, slug, status }) => {
-      // Every row of a `values` list needs the same arity; without drafts there is no status.
-      const values = drafts ? [name, slug, status ?? 'published'] : [name, slug]
-
-      return `  (${values.map(quote).join(', ')})`
-    })
+    .map(({ name, slug }) => `  (${quote(name)}, ${quote(slug)})`)
     .join(',\n')
+
+  const statusUpdates = [...Map.groupBy(docs, ({ status }) => status ?? 'published')]
+    .map(
+      ([status, group]) =>
+        `update "${COLLECTION}" set "_status" = ${quote(status)} where "name" in (` +
+        `${group.map(({ name }) => quote(name)).join(', ')});`,
+    )
+    .join('\n')
 
   const keyRows = keys
     .map(({ hash, label, slug }) => `  (${quote(label)}, ${quote(slug)}, ${quote(hash)})`)
@@ -103,12 +112,14 @@ on conflict ("slug") do update set
 
 delete from "${COLLECTION}" where "name" like ${quote(`${SMOKE_PREFIX}%`)};
 
-insert into "${COLLECTION}" (${docColumns})
-select ${docSelect}
+insert into "${COLLECTION}" ("name", "tenant_id")
+select v."name", t."id"
   from (values
 ${docRows}
-  ) as v(${docAlias})
+  ) as v("name", "slug")
   join "tenants" t on t."slug" = v."slug";
+
+${statusUpdates}
 
 delete from "site_keys" where "label" like ${quote(`${SMOKE_PREFIX}%`)};
 
@@ -145,20 +156,34 @@ const sameNames = (actual, expected) =>
  * hidden from A's key by the tenant scope, so the tenant-A assertion cannot pass merely
  * because B's document was never seeded.
  *
+ * `tags` carries drafts, so a draft document exists for A and for B. Neither the tenant keys
+ * nor the aggregate key may read them: the expected sets below hold published documents only,
+ * and `seeded` proves the drafts really are in the database, so a filter regression fails here
+ * instead of passing on an empty seed.
+ *
  * A missing or unknown key may be refused or simply return nothing, as long as it never
  * returns a tenant document.
  */
-export const checkSiteKeyReads = ({ drafts, responses }) => {
+export const checkSiteKeyReads = ({ responses, seeded }) => {
   const failures = []
   const notes = []
 
-  const expected = {
+  const expectedDocs = {
     aggregate: [publishedDoc('a'), publishedDoc('b')],
     tenantA: [publishedDoc('a')],
     spare: [publishedDoc('b')],
   }
 
-  for (const [label, names] of Object.entries(expected)) {
+  const expectedDraftCount = 2
+
+  if (seeded.drafts !== expectedDraftCount) {
+    failures.push(
+      `seeded ${seeded.drafts} draft document(s), expected ${expectedDraftCount}: ` +
+        'the draft filter is unproven without them',
+    )
+  }
+
+  for (const [label, names] of Object.entries(expectedDocs)) {
     const { names: actual, status } = responses[label]
 
     if (status >= 500) {
@@ -168,6 +193,9 @@ export const checkSiteKeyReads = ({ drafts, responses }) => {
     } else if (!sameNames(actual, names)) {
       failures.push(`${label}: read ${describe(actual)}, expected ${describe(names)}`)
     }
+
+    const leaked = [draftDoc('a'), draftDoc('b')].filter((name) => actual.includes(name))
+    if (leaked.length > 0) failures.push(`${label}: read draft ${describe(leaked)}`)
   }
 
   for (const label of ['anonymous', 'badKey']) {
@@ -178,10 +206,9 @@ export const checkSiteKeyReads = ({ drafts, responses }) => {
     else notes.push(`${label}: nothing readable (HTTP ${status})`)
   }
 
-  if (!drafts) {
+  if (seeded.drafts === expectedDraftCount) {
     notes.push(
-      `${COLLECTION} has drafts disabled, so no draft was seeded and every document is published. ` +
-        'The published-only filter is a no-op here; tenant scoping is what is under test.',
+      `seeded ${seeded.published} published and ${seeded.drafts} draft \`${COLLECTION}\` documents`,
     )
   }
 
@@ -213,19 +240,6 @@ const runPsql = (env, sql) => {
   return result.stdout.trim()
 }
 
-/** Whether the collection has drafts, i.e. carries a `_status` column. */
-const hasDrafts = (env) => {
-  const count = runPsql(
-    env,
-    `select count(*) from "information_schema"."columns"
-      where "table_schema" = 'public'
-        and "table_name" = '${COLLECTION}'
-        and "column_name" = '_status';`,
-  )
-
-  return count === '1'
-}
-
 const readDocuments = async (previewUrl, key) => {
   const target = new URL(`/api/${COLLECTION}`, previewUrl)
   target.searchParams.set('depth', '0')
@@ -254,23 +268,18 @@ const waitForPreview = async (previewUrl) => {
   }
 }
 
-const seed = (env, drafts, keys) => {
+const seed = (env, keys) => {
   const docs = [
     { name: publishedDoc('a'), slug: TENANT_A, status: 'published' },
     { name: publishedDoc('b'), slug: TENANT_B, status: 'published' },
-    ...(drafts
-      ? [
-          { name: draftDoc('a'), slug: TENANT_A, status: 'draft' },
-          { name: draftDoc('b'), slug: TENANT_B, status: 'draft' },
-        ]
-      : []),
+    { name: draftDoc('a'), slug: TENANT_A, status: 'draft' },
+    { name: draftDoc('b'), slug: TENANT_B, status: 'draft' },
   ]
 
   runPsql(
     env,
     buildSeedSql({
-      docs: drafts ? docs : docs.map(({ name, slug }) => ({ name, slug })),
-      drafts,
+      docs,
       keys: [
         { hash: keys.tenantA.keyHash, label: `${SMOKE_PREFIX}-a`, slug: TENANT_A },
         { hash: keys.spare.keyHash, label: `${SMOKE_PREFIX}-b`, slug: TENANT_B },
@@ -278,9 +287,14 @@ const seed = (env, drafts, keys) => {
       ],
     }),
   )
+
+  return {
+    drafts: docs.filter(({ status }) => status === 'draft').length,
+    published: docs.filter(({ status }) => status === 'published').length,
+  }
 }
 
-const writeSummary = ({ drafts, failures, notes, responses }) => {
+const writeSummary = ({ failures, notes, responses, seeded }) => {
   const table = Object.entries(responses)
     .map(([label, { names, status }]) => `| ${label} | ${status} | ${describe(names)} |`)
     .join('\n')
@@ -291,7 +305,7 @@ const writeSummary = ({ drafts, failures, notes, responses }) => {
 | --- | --- | --- |
 ${table}
 
-Drafts enabled on \`${COLLECTION}\`: ${drafts ? 'yes' : 'no'}
+\`${COLLECTION}\`: ${seeded.published} published and ${seeded.drafts} draft documents seeded
 
 ${notes.map((note) => `- ${note}`).join('\n')}
 ${failures.map((failure) => `- **FAILED**: ${failure}`).join('\n')}
@@ -313,7 +327,6 @@ const main = async () => {
   }
 
   const env = psqlEnv(databaseUrl)
-  const drafts = hasDrafts(env)
   // `bad` is never stored. It has the same shape as a real key, so only the digest lookup
   // can reject it.
   const keys = {
@@ -323,7 +336,7 @@ const main = async () => {
     tenantA: await generateSiteKey(),
   }
 
-  seed(env, drafts, keys)
+  const seeded = seed(env, keys)
 
   // A Worker that has not started yet answers 500, which would look like a mismatch on the
   // aggregate and tenant reads. Confirm it is up first, and reuse that call as the
@@ -337,9 +350,9 @@ const main = async () => {
     spare: await readDocuments(previewUrl, keys.spare.key),
   }
 
-  const { failures, notes } = checkSiteKeyReads({ drafts, responses })
+  const { failures, notes } = checkSiteKeyReads({ responses, seeded })
 
-  writeSummary({ drafts, failures, notes, responses })
+  writeSummary({ failures, notes, responses, seeded })
 
   if (failures.length > 0) {
     for (const failure of failures) console.log(`::error::site-key smoke: ${failure}`)
