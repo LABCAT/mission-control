@@ -66,3 +66,9 @@ Spend at 02:05 UTC: sub-sessions $8.04 (PJ-10 2.19, PJ-81 2.42, RCL-86 1.00, PJ-
 - Hisha's stalled PRs (#21, #31–#38, #40): left for now. On 19 Nov, if they're still stuck, Sonnet sessions take them over (founder).
 - **Decision 11 (founder, 18 Nov): plans.** If a plan is still live and someone buys it, keep it. So: Regular, Job pack, 10 Job pack and Volunteer listing are kept, and the Enhanced/Premium featured add-ons are KEPT (new ticket PJ-87, blocked by PJ-21; PLAN.md updated). "Unlimited 6 month" is pending, not sold, and not built.
 - **Decision 12 (founder, 18 Nov): plans and add-ons are flexible, data-driven and rock solid.** PJ-21 (plans + quote()) and PJ-87 (add-ons as data, placements) were rewritten in D1 and are reserved for an **Opus** session (not Hisha/OpenHands). Dispatch them together when the open-PR count is under 10 and PJ-16 (#35) has merged.
+
+## 18 Nov 05:20 UTC
+- Merged: #47 PJ-86, #44 PJ-54, #41 PJ-34 (migration, deploy OK), #42 PJ-60, #43 PJ-70 (merged on the last-round cap; Kinsho's remaining nit, decoding numeric entities in <loc>, isn't fixed: follow-up if needed). Earlier: #45 PJ-10. All marked done in D1.
+- Sprint PRs open: #46 PJ-81 (being merged with main after #41). Total open: 11.
+- Hisha's PRs aren't stuck in OpenHands; most are waiting to be merged. Kinsho PASS: #31, #33, #35, #36. Needs-evidence only: #32, #34, #40. Blocked with real findings: #21, #37, #38. I tagged @openhands on those three with the findings (founder's suggestion).
+- Hisha's 03:23 run hit the shared 5-hour limit. Its next run is 10:47 UTC, and it sends up to 8 new OpenHands tasks, which would break the 10-PR rule.
