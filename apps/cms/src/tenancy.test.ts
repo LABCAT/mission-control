@@ -554,8 +554,13 @@ describe('organisations (PJ-18)', () => {
     expect(await collectionAccess(config, 'read', 'organisations', tenantAdminA)).toEqual({
       and: [{ tenant: { in: [tenantA.id] } }, { tenant: { in: [tenantA.id] } }],
     })
+    // The employer clause carries its own tenant check: the plugin's filter includes every
+    // membership, seeker included, so the link alone must not open a profile.
     expect(await collectionAccess(config, 'read', 'organisations', employerA)).toEqual({
-      and: [{ id: { equals: 5 } }, { tenant: { in: [tenantA.id] } }],
+      and: [
+        { and: [{ id: { equals: 5 } }, { tenant: { in: [tenantA.id] } }] },
+        { tenant: { in: [tenantA.id] } },
+      ],
     })
     expect(await collectionAccess(config, 'read', 'organisations', seekerA)).toBe(false)
     expect(await collectionAccess(config, 'read', 'organisations', null)).toBe(false)
@@ -580,7 +585,10 @@ describe('organisations (PJ-18)', () => {
     const config = await buildConfig()
 
     expect(await collectionAccess(config, 'update', 'organisations', employerA)).toEqual({
-      and: [{ id: { equals: 5 } }, { tenant: { in: [tenantA.id] } }],
+      and: [
+        { and: [{ id: { equals: 5 } }, { tenant: { in: [tenantA.id] } }] },
+        { tenant: { in: [tenantA.id] } },
+      ],
     })
     expect(await collectionAccess(config, 'delete', 'organisations', employerA)).toBe(false)
     expect(await collectionAccess(config, 'delete', 'organisations', tenantAdminA)).toEqual({

@@ -301,14 +301,34 @@ describe('organisation read access', () => {
   it('gives an employer only their own organisation', async () => {
     const employer = userWith([{ role: 'employer', tenant: 10 }], { organisation: 7 })
 
-    expect(await read(argsFor(employer))).toEqual({ id: { equals: 7 } })
+    expect(await read(argsFor(employer))).toEqual({
+      and: [{ id: { equals: 7 } }, { tenant: { in: [10] } }],
+    })
+  })
+
+  it('drops the linked organisation once the user only seeks in its tenant', async () => {
+    // Staff in tenant 20 demoted the user to seeker in tenant 10 but left the link behind.
+    const stale = userWith(
+      [
+        { role: 'employer', tenant: 20 },
+        { role: 'seeker', tenant: 10 },
+      ],
+      { organisation: 7 },
+    )
+
+    expect(await read(argsFor(stale))).toEqual({
+      and: [{ id: { equals: 7 } }, { tenant: { in: [20] } }],
+    })
+
+    const onlySeeker = userWith([{ role: 'seeker', tenant: 10 }], { organisation: 7 })
+    expect(await read(argsFor(onlySeeker))).toBe(false)
   })
 
   it('lets staff who also run an organisation see both sets', async () => {
     const owner = userWith([{ role: 'tenant-admin', tenant: 10 }], { organisation: 7 })
 
     expect(await read(argsFor(owner))).toEqual({
-      or: [{ tenant: { in: [10] } }, { id: { equals: 7 } }],
+      or: [{ tenant: { in: [10] } }, { and: [{ id: { equals: 7 } }, { tenant: { in: [10] } }] }],
     })
   })
 
@@ -412,7 +432,15 @@ describe('organisation write access', () => {
   it('lets an employer update their own organisation and nobody else’s', async () => {
     const employer = userWith([{ role: 'employer', tenant: 10 }], { organisation: 7 })
 
-    expect(await update(argsFor(employer))).toEqual({ id: { equals: 7 } })
+    expect(await update(argsFor(employer))).toEqual({
+      and: [{ id: { equals: 7 } }, { tenant: { in: [10] } }],
+    })
+  })
+
+  it('stops an update once the user only seeks in the organisation’s tenant', async () => {
+    const onlySeeker = userWith([{ role: 'seeker', tenant: 10 }], { organisation: 7 })
+
+    expect(await update(argsFor(onlySeeker))).toBe(false)
   })
 
   it('scopes staff updates to their tenants', async () => {

@@ -90,6 +90,16 @@ export const ORGANISATION_EDITOR_ROLES = [
 export const ORGANISATION_ADMIN_ROLES = ['tenant-admin'] as const satisfies readonly TenantRole[]
 
 /**
+ * Roles that may hold an organisation. Seeking is not one: a seeker membership in an
+ * organisation's tenant must never widen what a user can read or edit there.
+ */
+export const ORGANISATION_HOLDER_ROLES = [
+  'tenant-admin',
+  'editor',
+  'employer',
+] as const satisfies readonly TenantRole[]
+
+/**
  * What a public site may see: an organisation is only published once an admin has approved it
  * and enabled its page (the legacy "listing request" flow, AUDIT.md).
  */
@@ -115,7 +125,9 @@ const hasCollection = (req: PayloadRequest, slug: string): boolean =>
 
 /**
  * The organisations a user sees in multi-tenant mode: their staff tenants, plus the one their
- * user points at. `false` when neither applies.
+ * user points at — but only while they still hold a role that can own it there. A link left
+ * behind after a membership drops to seeker must not keep the profile open. `false` when
+ * neither applies.
  */
 const organisationScopes = (
   user: MissionControlUser,
@@ -123,9 +135,13 @@ const organisationScopes = (
 ): AccessResult => {
   const scopes: Where[] = []
   const staffTenants = getUserTenantIDsByRole(user, ORGANISATION_EDITOR_ROLES)
+  const holderTenants = getUserTenantIDsByRole(user, ORGANISATION_HOLDER_ROLES)
 
   if (staffTenants.length > 0) scopes.push({ tenant: { in: staffTenants } })
-  if (ownOrganisation !== null) scopes.push({ id: { equals: ownOrganisation } })
+
+  if (ownOrganisation !== null && holderTenants.length > 0) {
+    scopes.push({ and: [{ id: { equals: ownOrganisation } }, { tenant: { in: holderTenants } }] })
+  }
 
   if (scopes.length === 0) return false
   return scopes.length === 1 ? scopes[0] : { or: scopes }
@@ -594,25 +610,13 @@ export const organisationsCollection = ({
   versions: false,
 })
 
-/**
- * Tenants where the user may hold an organisation. Seeking is not enough: a seeker membership in
- * the organisation's tenant would otherwise let staff hand them a profile to edit there.
- */
-const organisationHoldersTenantsOf = (user: Record<string, unknown> | undefined): Set<string> => {
-  const tenants = new Set<string>()
-
-  for (const entry of (user?.tenants as { role?: TenantRole | null; tenant?: unknown }[] | undefined) ??
-    []) {
-    if (entry?.role !== 'employer' && !ORGANISATION_EDITOR_ROLES.includes(entry?.role as never)) {
-      continue
-    }
-
-    const id = tenantIDOf(entry?.tenant)
-    if (id !== null) tenants.add(String(id))
-  }
-
-  return tenants
-}
+/** Tenants where the user holds a role that can own an organisation, as strings for comparison. */
+const organisationHoldersTenantsOf = (user: Record<string, unknown> | undefined): Set<string> =>
+  new Set(
+    getUserTenantIDsByRole(user as MissionControlUser | undefined, ORGANISATION_HOLDER_ROLES).map(
+      String,
+    ),
+  )
 
 /**
  * An employer's organisation must belong to a tenant where that user may hold one — an employer

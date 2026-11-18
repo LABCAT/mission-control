@@ -397,6 +397,40 @@ describe('organisations integration', () => {
     ).resolves.toMatchObject({ id: employer.id })
   })
 
+  it('refuses to demote a linked employer to seeker in their organisation’s tenant', async () => {
+    // Otherwise users.organisation would outlive the role that justifies it, and the employer
+    // scope would keep the profile open. The scope itself also re-checks the role (unit tests).
+    await expect(
+      harness.payload.update({
+        collection: 'users',
+        data: {
+          tenants: [
+            { role: 'seeker', tenant: harness.tenantA.id },
+            { role: 'employer', tenant: harness.tenantB.id },
+          ],
+        } as never,
+        id: employer.id,
+        overrideAccess: true,
+      }),
+    ).rejects.toThrow(/Organisation/)
+
+    // Unlink first, then the demotion is fine.
+    await harness.payload.update({
+      collection: 'users',
+      data: { organisation: null } as never,
+      id: employer.id,
+      overrideAccess: true,
+    })
+    await expect(
+      harness.payload.update({
+        collection: 'users',
+        data: { tenants: [{ role: 'seeker', tenant: harness.tenantA.id }] } as never,
+        id: employer.id,
+        overrideAccess: true,
+      }),
+    ).resolves.toMatchObject({ id: employer.id })
+  })
+
   it('rejects a relation from another tenant', async () => {
     const otherArea = await harness.payload.create({
       collection: 'areas-of-focus',
