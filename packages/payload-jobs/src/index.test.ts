@@ -16,6 +16,7 @@ describe('payloadJobs', () => {
 
     expect(result.collections?.map((collection) => collection.slug)).toEqual([
       'users',
+      'locations',
       ...TAXONOMY_SLUGS,
     ])
     // mission-control: the users collection is extended (legacy password support, PJ-34).

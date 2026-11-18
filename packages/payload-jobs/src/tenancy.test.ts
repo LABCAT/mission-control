@@ -55,6 +55,20 @@ describe('payloadJobs tenancy modes', () => {
     })
   })
 
+  it('adds the per-tenant slug index in multi mode only', async () => {
+    const multi = await payloadJobs({ accountAuth: false, tenancy: 'multi' })(baseConfig)
+    const multiIndexes = multi.collections?.find(
+      (collection) => collection.slug === 'locations',
+    )?.indexes
+
+    expect(multiIndexes).toEqual([{ fields: ['tenant', 'slug'], unique: true }])
+
+    const single = await payloadJobs()(baseConfig)
+    expect(
+      single.collections?.find((collection) => collection.slug === 'locations')?.indexes,
+    ).toBeUndefined()
+  })
+
   it('adds the account auth endpoints to the tenants collection in multi mode', async () => {
     const result = await payloadJobs({ tenancy: 'multi' })({
       collections: [tenants, users],

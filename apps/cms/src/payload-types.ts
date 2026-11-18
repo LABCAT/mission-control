@@ -86,6 +86,7 @@ export interface Config {
     tenants: Tenant;
     'site-keys': SiteKey;
     documents: Document;
+    locations: Location;
     'job-categories': JobCategory;
     'job-types': JobType;
     'job-tags': JobTag;
@@ -107,6 +108,7 @@ export interface Config {
     tenants: TenantsSelect<false> | TenantsSelect<true>;
     'site-keys': SiteKeysSelect<false> | SiteKeysSelect<true>;
     documents: DocumentsSelect<false> | DocumentsSelect<true>;
+    locations: LocationsSelect<false> | LocationsSelect<true>;
     'job-categories': JobCategoriesSelect<false> | JobCategoriesSelect<true>;
     'job-types': JobTypesSelect<false> | JobTypesSelect<true>;
     'job-tags': JobTagsSelect<false> | JobTagsSelect<true>;
@@ -530,6 +532,32 @@ export interface Document {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "locations".
+ */
+export interface Location {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  name: string;
+  slug: string;
+  kind: 'region' | 'island' | 'town';
+  parent?: (number | null) | Location;
+  /**
+   * WordPress id, so the importer can match an existing location.
+   */
+  legacyId?: number | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "job-categories".
  */
 export interface JobCategory {
@@ -828,6 +856,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'documents';
         value: number | Document;
+      } | null)
+    | ({
+        relationTo: 'locations';
+        value: number | Location;
       } | null)
     | ({
         relationTo: 'job-categories';
@@ -1215,6 +1247,22 @@ export interface DocumentsSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "locations_select".
+ */
+export interface LocationsSelect<T extends boolean = true> {
+  tenant?: T;
+  name?: T;
+  slug?: T;
+  kind?: T;
+  parent?: T;
+  legacyId?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "job-categories_select".
  */
 export interface JobCategoriesSelect<T extends boolean = true> {
@@ -1475,6 +1523,7 @@ export interface CollectionQueryWidget {
       | 'tenants'
       | 'site-keys'
       | 'documents'
+      | 'locations'
       | 'job-categories'
       | 'job-types'
       | 'job-tags'
@@ -1510,6 +1559,7 @@ export interface ActivityWidget {
           | 'tenants'
           | 'site-keys'
           | 'documents'
+          | 'locations'
           | 'job-categories'
           | 'job-types'
           | 'job-tags'
