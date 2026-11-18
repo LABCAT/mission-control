@@ -51,3 +51,4 @@ Spend at 02:05 UTC: sub-sessions $8.04 (PJ-10 2.19, PJ-81 2.42, RCL-86 1.00, PJ-
 - Founder usage: 76% of the 5-hour window at ~$11 estimated (18 Nov 02:10 UTC), so 1% ≈ $0.15.
 - **Decision 6 (founder, 18 Nov):** one account across the platform. Registering an existing email on another tenant means logging in with the existing password, which adds that tenant's membership. Not needed until a second site exists.
 - **Decision 7 (founder, 18 Nov): the hub site is not in the MVP (2.x/3.x).** PJ-12 and PJ-43 are marked 2.x/low. PJ-13 (vwok) now depends on PJ-11 directly and takes the Lighthouse budget. PJ-14 deploys cms + vwok only. The MVP is the vwok tenant only.
+- **Decision 8 (founder, 18 Nov): Xero invoicing is in the MVP** (PJ-54 to PJ-59 are now high priority). payload-xero must be a generic plugin that could be published to npm: no payload-jobs dependency; access, tenancy and slugs set by options; an invoice adapter. PJ-54 (#44) is being reworked to that shape.
