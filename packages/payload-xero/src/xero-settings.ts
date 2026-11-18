@@ -1,4 +1,9 @@
-import type { Access, CollectionBeforeValidateHook, CollectionConfig } from 'payload'
+import type {
+  Access,
+  CollectionAfterErrorHook,
+  CollectionBeforeValidateHook,
+  CollectionConfig,
+} from 'payload'
 
 import {
   getUserTenantIDsByRole,
@@ -25,6 +30,28 @@ type TenantRef = null | number | string | { id: number | string } | undefined
 const tenantIDOf = (tenant: TenantRef): null | number | string =>
   tenant === null || tenant === undefined ? null : typeof tenant === 'object' ? tenant.id : tenant
 
+export const DUPLICATE_TENANT_MESSAGE = 'This tenant already has Xero settings. Edit the existing row.'
+
+const PG_UNIQUE_VIOLATION = '23505'
+
+/** True for a Postgres unique violation, however deep the driver error is wrapped. */
+export const isUniqueViolation = (error: unknown): boolean => {
+  for (let current: unknown = error, depth = 0; current && depth < 5; depth++) {
+    if (typeof current !== 'object') return false
+    if ((current as { code?: unknown }).code === PG_UNIQUE_VIOLATION) return true
+    current = (current as { cause?: unknown }).cause
+  }
+
+  return false
+}
+
+/** Turn a unique-index violation (two concurrent creates) into the same clear error. */
+export const mapUniqueViolation = (error: unknown): unknown =>
+  isUniqueViolation(error) ? new Error(DUPLICATE_TENANT_MESSAGE, { cause: error }) : error
+
+export const mapDuplicateTenantError: CollectionAfterErrorHook = ({ error }) =>
+  isUniqueViolation(error) ? { response: { errors: [{ message: DUPLICATE_TENANT_MESSAGE }] }, status: 400 } : undefined
+
 /** One settings row per tenant. A second create for the same tenant is rejected. */
 export const onePerTenant: CollectionBeforeValidateHook = async ({ data, operation, req }) => {
   if (operation !== 'create') return data
@@ -40,7 +67,7 @@ export const onePerTenant: CollectionBeforeValidateHook = async ({ data, operati
   })
 
   if (existing.totalDocs > 0) {
-    throw new Error('This tenant already has Xero settings. Edit the existing row.')
+    throw new Error(DUPLICATE_TENANT_MESSAGE)
   }
 
   return data
@@ -60,7 +87,11 @@ export const XeroSettings: CollectionConfig = {
     read: xeroSettingsAccess,
     update: xeroSettingsAccess,
   },
-  hooks: { beforeValidate: [onePerTenant] },
+  // The hook gives a clear error for sequential duplicates. The unique index is what makes
+  // it atomic: concurrent creates cannot both pass the hook's count. The `tenant` field is
+  // added by the multi-tenant plugin; the wiring task's migration creates the index.
+  hooks: { afterError: [mapDuplicateTenantError], beforeValidate: [onePerTenant] },
+  indexes: [{ fields: ['tenant'], unique: true }],
   fields: [
     {
       name: 'xeroTenantId',

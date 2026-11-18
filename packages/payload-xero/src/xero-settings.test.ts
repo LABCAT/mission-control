@@ -1,7 +1,13 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { type TestHarness, bootTestPayload, tenantIsolation } from './test'
-import { XeroSettings } from './xero-settings'
+import {
+  DUPLICATE_TENANT_MESSAGE,
+  XeroSettings,
+  isUniqueViolation,
+  mapDuplicateTenantError,
+  mapUniqueViolation,
+} from './xero-settings'
 
 tenantIsolation({
   collection: XeroSettings,
@@ -109,5 +115,66 @@ describe('xero-settings access and rules', () => {
         user: editor as never,
       }),
     ).rejects.toThrow()
+  })
+})
+
+const run = (error: unknown) =>
+  (mapDuplicateTenantError as (args: never) => unknown)({ error } as never)
+
+describe('one settings row per tenant is enforced by a unique index', () => {
+  it('declares a unique index on tenant', () => {
+    expect(XeroSettings.indexes).toContainEqual({ fields: ['tenant'], unique: true })
+  })
+
+  it('maps unique violations, including wrapped ones, to the clear error', () => {
+    const pgError = Object.assign(new Error('duplicate key'), { code: '23505' })
+    const wrapped = new Error('Failed query', { cause: pgError })
+
+    for (const error of [pgError, wrapped]) {
+      expect(mapUniqueViolation(error)).toMatchObject({ message: DUPLICATE_TENANT_MESSAGE })
+    }
+
+    const other = Object.assign(new Error('boom'), { code: '23503' })
+    expect(mapUniqueViolation(other)).toBe(other)
+    expect(mapUniqueViolation('x')).toBe('x')
+  })
+
+  it('rewrites the API error response for a unique violation only', async () => {
+    const pgError = Object.assign(new Error('duplicate key'), { code: '23505' })
+    expect(await run(pgError)).toEqual({
+      response: { errors: [{ message: DUPLICATE_TENANT_MESSAGE }] },
+      status: 400,
+    })
+    expect(await run(new Error('other'))).toBeUndefined()
+  })
+
+  describe('against Postgres', () => {
+    let harness: TestHarness
+
+    beforeAll(async () => {
+      harness = await bootTestPayload({ collections: [XeroSettings] })
+    })
+    afterAll(async () => {
+      if (harness) await harness.destroy()
+    })
+
+    it('lets only one of two concurrent creates for a tenant succeed', async () => {
+      const results = await Promise.allSettled(
+        ['one', 'two'].map((id) =>
+          harness.payload.create({
+            collection: 'xero-settings',
+            data: { tenant: harness.tenantA.id, xeroTenantId: id },
+            user: harness.tenantAdminA as never,
+          }),
+        ),
+      )
+      const rejected = results.filter((r) => r.status === 'rejected') as PromiseRejectedResult[]
+
+      expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1)
+      expect(rejected).toHaveLength(1)
+      // Either the hook or the index stopped it; both surface as a mappable error.
+      const mapped = mapUniqueViolation(rejected[0].reason) as Error
+      expect(mapped.message === DUPLICATE_TENANT_MESSAGE || isUniqueViolation(rejected[0].reason)).toBe(true)
+    })
   })
 })
