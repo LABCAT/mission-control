@@ -2,17 +2,29 @@ import type { Config, GlobalConfig, Plugin } from 'payload'
 
 import { accountAuthEndpoints, type AccountAuthOptions } from './account-auth'
 import { withLegacyPasswords } from './legacy-password'
+import { planCollection, PLANS_SLUG } from './plans'
 import { jobBoardSettingsGlobal, jobBoardTenantFields } from './tenancy'
 
 export * from './access'
 export * from './account-auth'
 export * from './email'
 export * from './legacy-password'
+export * from './money'
+export * from './plans'
+export * from './plans-seed'
+export * from './pricing'
 export * from './rate-limit'
 export * from './site-keys'
 export * from './tenancy'
 
 export type TenancyMode = 'multi' | 'single'
+
+/**
+ * Collections this plugin adds that belong to a tenant. In `multi` mode the host must list
+ * every one of them in the multi-tenant plugin's `collections`, which adds their `tenant`
+ * field; Payload otherwise rejects the config ("Field tenant was not found").
+ */
+export const PAYLOAD_JOBS_TENANT_COLLECTIONS = [PLANS_SLUG] as const
 
 export type PayloadJobsFeatures = {
   /** Job applications. The collection is added by a later task. Defaults to true. */
@@ -76,6 +88,8 @@ export const payloadJobs =
       ),
     }
 
+    const settingsSlug = options.settingsSlug ?? 'job-board-settings'
+
     if (tenancy === 'multi') {
       const tenants = config.collections?.find((collection) => collection.slug === tenantsSlug)
 
@@ -121,8 +135,6 @@ export const payloadJobs =
         ),
       }
     } else {
-      const settingsSlug = options.settingsSlug ?? 'job-board-settings'
-
       if (config.globals?.some((global) => global.slug === settingsSlug)) {
         throw new Error(`payload-jobs: a "${settingsSlug}" global already exists.`)
       }
@@ -136,8 +148,12 @@ export const payloadJobs =
       }
     }
 
+    // Plans are always on: every job board sells listings, even if every plan is free.
+    const plans = planCollection({ settingsSlug, tenantScoped: tenancy === 'multi', tenantsSlug })
+
     return {
       ...config,
+      collections: [...(config.collections ?? []), plans],
       custom: {
         ...config.custom,
         payloadJobs: { enabled: true, tenancy, features },

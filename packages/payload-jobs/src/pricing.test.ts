@@ -1,0 +1,467 @@
+import fc from 'fast-check'
+import { describe, expect, it } from 'vitest'
+
+import { MoneyError, percentOf, sumMinorUnits } from './money'
+import {
+  PricingError,
+  quote,
+  snapshotQuote,
+  type QuotableAddOn,
+  type QuotablePlan,
+  type QuoteArgs,
+  type QuoteCouponTerms,
+} from './pricing'
+
+// Amounts up to 10^12 minor units: far beyond any real price, still well inside safe integers
+// even when several are summed.
+const money = fc.integer({ min: 0, max: 1_000_000_000_000 })
+const days = fc.integer({ min: 1, max: 3650 })
+const currency = fc.constantFrom('VUV', 'NZD', 'USD')
+
+const planArb = (cur: string): fc.Arbitrary<QuotablePlan> =>
+  fc.record({
+    acceptsCredits: fc.option(fc.boolean(), { nil: undefined }),
+    creditExpiryDays: fc.option(days, { nil: null }),
+    currency: fc.constant(cur),
+    durationDays: days,
+    id: fc.integer({ min: 1, max: 1000 }),
+    jobCredits: fc.oneof(fc.constant(1), fc.integer({ min: 1, max: 50 })),
+    name: fc.string({ minLength: 1, maxLength: 20 }),
+    price: money,
+    status: fc.constant('active' as const),
+  })
+
+const addOnArb = (cur: string, id: number): fc.Arbitrary<QuotableAddOn> =>
+  fc.record({
+    active: fc.constant(true),
+    currency: fc.constant(cur),
+    durationDays: days,
+    id: fc.constant(id),
+    name: fc.string({ minLength: 1, maxLength: 20 }),
+    placement: fc.constantFrom(null, 'featured-in-listings', 'featured-in-category'),
+    price: money,
+  })
+
+const couponArb: fc.Arbitrary<QuoteCouponTerms> = fc.oneof(
+  fc.record({
+    active: fc.option(fc.boolean(), { nil: undefined }),
+    amount: fc.integer({ min: 1, max: 100 }),
+    discountType: fc.constant('percent'),
+    maxUses: fc.option(fc.integer({ min: 1, max: 5 }), { nil: null }),
+    useCount: fc.integer({ min: 0, max: 6 }),
+  }),
+  fc.record({
+    active: fc.option(fc.boolean(), { nil: undefined }),
+    amount: fc.integer({ min: 1, max: 2_000_000_000_000 }),
+    discountType: fc.constant('flat'),
+    maxUses: fc.option(fc.integer({ min: 1, max: 5 }), { nil: null }),
+    useCount: fc.integer({ min: 0, max: 6 }),
+  }),
+  // Bad data that skipped validation must never produce a discount.
+  fc.record({
+    amount: fc.oneof(fc.constant(null), fc.constant(0), fc.constant(-5), fc.constant(2.5)),
+    discountType: fc.constantFrom('flat', 'percent', 'bogus'),
+  }),
+)
+
+const argsArb: fc.Arbitrary<QuoteArgs> = currency.chain((cur) =>
+  fc.record({
+    addOns: fc
+      .uniqueArray(fc.integer({ min: 1001, max: 2000 }), { maxLength: 3 })
+      .chain((ids) => fc.tuple(...ids.map((id) => addOnArb(cur, id)))),
+    availableCredits: fc.integer({ min: 0, max: 20 }),
+    coupon: fc.option(couponArb, { nil: null }),
+    plan: planArb(cur).chain((plan) =>
+      fc
+        .uniqueArray(fc.integer({ min: 2001, max: 3000 }), { maxLength: 2 })
+        .chain((ids) => fc.tuple(...ids.map((id) => addOnArb(cur, id))))
+        .chain((included) =>
+          fc.record({
+            durations: fc.tuple(...included.map(() => fc.option(days, { nil: null }))),
+            included: fc.constant(included),
+          }),
+        )
+        .map(({ durations, included }) => ({
+          ...plan,
+          includedAddOns: included.map((addOn, index) => ({
+            addOn,
+            durationDays: durations[index],
+          })),
+        })),
+    ),
+  }),
+)
+
+const deepFreeze = <T>(value: T): T => {
+  if (value && typeof value === 'object') {
+    Object.freeze(value)
+    for (const child of Object.values(value)) deepFreeze(child)
+  }
+  return value
+}
+
+/** Independent reference for half-up percentage rounding. */
+const referencePercent = (amount: number, percent: number): number => {
+  const scaled = BigInt(amount) * BigInt(percent)
+  const quotient = scaled / 100n
+  return Number(scaled % 100n >= 50n ? quotient + 1n : quotient)
+}
+
+describe('percentOf (shared with applyCoupon)', () => {
+  it('rounds half up, exactly, for every safe amount', () => {
+    fc.assert(
+      fc.property(fc.maxSafeNat(), fc.integer({ min: 0, max: 100 }), (amount, percent) => {
+        const result = percentOf(amount, percent)
+        expect(result).toBe(referencePercent(amount, percent))
+        expect(Number.isSafeInteger(result)).toBe(true)
+        expect(result).toBeGreaterThanOrEqual(0)
+        expect(result).toBeLessThanOrEqual(amount)
+      }),
+    )
+  })
+
+  it('agrees with applyCoupon’s Math.round wherever that float maths is exact', () => {
+    fc.assert(
+      fc.property(fc.integer({ min: 0, max: 10_000_000_000 }), fc.integer({ min: 0, max: 100 }), (a, p) => {
+        expect(percentOf(a, p)).toBe(Math.round((a * p) / 100))
+      }),
+    )
+  })
+
+  it('handles the tie cases in both 0- and 2-decimal currencies', () => {
+    expect(percentOf(25, 10)).toBe(3) // Vt 2.5 → Vt 3
+    expect(percentOf(5, 50)).toBe(3) // $0.025 → $0.03
+    expect(percentOf(149, 1)).toBe(1) // 1.49 → 1
+    expect(percentOf(150, 1)).toBe(2) // 1.5 → 2
+    expect(percentOf(999, 100)).toBe(999)
+    expect(percentOf(999, 0)).toBe(0)
+  })
+
+  it('rejects fractional, negative and out-of-range input', () => {
+    expect(() => percentOf(1.5, 10)).toThrow(MoneyError)
+    expect(() => percentOf(-1, 10)).toThrow(MoneyError)
+    expect(() => percentOf(Number.MAX_SAFE_INTEGER + 1, 10)).toThrow(MoneyError)
+    expect(() => percentOf(100, 101)).toThrow(MoneyError)
+    expect(() => percentOf(100, 12.5)).toThrow(MoneyError)
+  })
+
+  it('refuses sums that would lose precision', () => {
+    expect(() => sumMinorUnits([Number.MAX_SAFE_INTEGER, 1])).toThrow(MoneyError)
+  })
+})
+
+describe('quote invariants (property-based)', () => {
+  it('only ever returns whole, non-negative money that adds up', () => {
+    fc.assert(
+      fc.property(argsArb, (args) => {
+        const result = quote(args)
+        const amounts = [
+          result.subtotal,
+          result.discount,
+          result.total,
+          result.credits.discount,
+          result.coupon?.discount ?? 0,
+          ...result.lines.flatMap((line) => [line.amount, line.unitPrice]),
+        ]
+
+        for (const amount of amounts) {
+          expect(Number.isSafeInteger(amount)).toBe(true)
+          expect(amount).toBeGreaterThanOrEqual(0)
+        }
+
+        expect(result.subtotal).toBe(result.lines.reduce((sum, line) => sum + line.amount, 0))
+        expect(result.discount).toBe(result.credits.discount + (result.coupon?.discount ?? 0))
+        expect(result.discount).toBeLessThanOrEqual(result.subtotal)
+        expect(result.total).toBe(result.subtotal - result.discount)
+        expect(result.currency).toBe(args.plan.currency)
+      }),
+    )
+  })
+
+  it('is deterministic and never mutates its input', () => {
+    fc.assert(
+      fc.property(argsArb, (args) => {
+        const before = structuredClone(args)
+        const first = quote(deepFreeze(structuredClone(args)))
+        const second = quote(args)
+
+        expect(second).toEqual(first)
+        expect(args).toEqual(before)
+      }),
+    )
+  })
+
+  it('charges included add-ons nothing and paid add-ons their price', () => {
+    fc.assert(
+      fc.property(argsArb, (args) => {
+        const result = quote(args)
+        const included = result.lines.filter((line) => line.included)
+        const paid = result.lines.filter((line) => line.kind === 'add-on' && !line.included)
+
+        expect(included.every((line) => line.amount === 0)).toBe(true)
+        expect(included).toHaveLength(args.plan.includedAddOns?.length ?? 0)
+        expect(paid.map((line) => line.amount)).toEqual((args.addOns ?? []).map((a) => a.price))
+        expect(result.lines[0]).toMatchObject({ amount: args.plan.price, kind: 'plan' })
+        expect(result.entitlements.addOns).toHaveLength(included.length + paid.length)
+      }),
+    )
+  })
+
+  it('uses at most one credit, only for a priced single listing that accepts credits', () => {
+    fc.assert(
+      fc.property(argsArb, ({ plan, ...rest }) => {
+        const result = quote({ plan, ...rest })
+        const eligible = plan.jobCredits === 1 && plan.acceptsCredits !== false && plan.price > 0
+        const expectUsed = eligible && (rest.availableCredits ?? 0) >= 1 ? 1 : 0
+
+        expect(result.credits.used).toBe(expectUsed)
+        expect(result.credits.discount).toBe(expectUsed ? plan.price : 0)
+        expect(result.entitlements.jobCreditsGranted).toBe(expectUsed ? 0 : plan.jobCredits)
+      }),
+    )
+  })
+
+  it('applies a coupon to what is left after credits, with the shared rounding', () => {
+    fc.assert(
+      fc.property(argsArb, (args) => {
+        const result = quote(args)
+        const base = result.subtotal - result.credits.discount
+        const coupon = args.coupon
+
+        if (!coupon) {
+          expect(result.coupon).toBeNull()
+          expect(result.total).toBe(base)
+          return
+        }
+
+        const usable =
+          coupon.active !== false &&
+          !(coupon.maxUses != null && (coupon.useCount ?? 0) >= coupon.maxUses) &&
+          Number.isSafeInteger(coupon.amount) &&
+          (coupon.amount ?? 0) >= 1 &&
+          (coupon.discountType === 'flat' ||
+            (coupon.discountType === 'percent' && (coupon.amount ?? 0) <= 100))
+
+        if (!usable) {
+          expect(result.coupon?.applied).toBe(false)
+          expect(result.coupon?.discount).toBe(0)
+          expect(result.total).toBe(base)
+          return
+        }
+
+        const expected =
+          coupon.discountType === 'flat'
+            ? Math.min(coupon.amount ?? 0, base)
+            : referencePercent(base, coupon.amount ?? 0)
+
+        expect(result.coupon).toMatchObject({ applied: true, discount: expected, reason: null })
+        expect(result.total).toBe(base - expected)
+      }),
+    )
+  })
+
+  it('never lets more credits or a bigger coupon make the total go up', () => {
+    fc.assert(
+      fc.property(argsArb, fc.integer({ min: 0, max: 5 }), (args, extra) => {
+        const withoutCoupon = quote({ ...args, coupon: null })
+        const withMoreCredits = quote({ ...args, availableCredits: (args.availableCredits ?? 0) + extra })
+
+        expect(quote(args).total).toBeLessThanOrEqual(withoutCoupon.total)
+        expect(withMoreCredits.total).toBeLessThanOrEqual(quote(args).total)
+      }),
+    )
+  })
+
+  it('snapshots to plain JSON that later changes to the inputs cannot reach', () => {
+    fc.assert(
+      fc.property(argsArb, (args) => {
+        const live = structuredClone(args)
+        const snapshot = snapshotQuote(quote(live))
+        const copy = JSON.parse(JSON.stringify(snapshot))
+
+        // An admin edits and archives the plan, and the add-ons change price.
+        live.plan.price += 1
+        live.plan.name = 'Renamed'
+        live.plan.status = 'archived'
+        for (const addOn of live.addOns ?? []) (addOn as { price: number }).price += 1
+
+        expect(snapshot).toEqual(copy)
+        expect(snapshot.version).toBe(1)
+        expect(Object.isFrozen(snapshot)).toBe(true)
+        expect(Object.isFrozen(snapshot.lines[0])).toBe(true)
+        expect(snapshot.plan.price).toBe(args.plan.price)
+      }),
+    )
+  })
+})
+
+const vatu = (overrides: Partial<QuotablePlan> = {}): QuotablePlan => ({
+  currency: 'VUV',
+  durationDays: 30,
+  id: 1,
+  jobCredits: 1,
+  key: 'regular-listing',
+  name: 'Regular listing',
+  price: 5000,
+  status: 'active',
+  ...overrides,
+})
+
+const enhanced: QuotableAddOn = {
+  active: true,
+  currency: 'VUV',
+  durationDays: 30,
+  id: 'enhanced',
+  name: 'Enhanced',
+  placement: 'featured-in-listings',
+  price: 2000,
+}
+
+describe('quote examples', () => {
+  it('prices a Vatu listing with an add-on and a 10% coupon', () => {
+    const result = quote({
+      addOns: [enhanced],
+      coupon: { amount: 10, code: 'LINKPS', discountType: 'percent', id: 7 },
+      currency: 'VUV',
+      plan: vatu({ price: 4995 }),
+    })
+
+    expect(result.subtotal).toBe(6995)
+    expect(result.coupon).toMatchObject({ applied: true, code: 'LINKPS', discount: 700, id: 7 })
+    expect(result.total).toBe(6295)
+    expect(result.entitlements).toEqual({
+      addOns: [
+        {
+          durationDays: 30,
+          name: 'Enhanced',
+          placement: 'featured-in-listings',
+          ref: { id: 'enhanced', key: null, legacyId: null },
+          source: 'purchase',
+        },
+      ],
+      creditExpiryDays: null,
+      jobCreditsGranted: 1,
+      listingDays: 30,
+    })
+  })
+
+  it('prices a 2-decimal currency in cents', () => {
+    const result = quote({
+      coupon: { amount: 15, discountType: 'percent' },
+      plan: vatu({ currency: 'NZD', price: 1999 }),
+    })
+
+    // 15% of $19.99 is $2.9985, which rounds to $3.00.
+    expect(result.coupon?.discount).toBe(300)
+    expect(result.total).toBe(1699)
+  })
+
+  it('pays a single listing with a credit but still charges the add-on', () => {
+    const result = quote({ addOns: [enhanced], availableCredits: 3, plan: vatu() })
+
+    expect(result.credits).toEqual({ available: 3, discount: 5000, used: 1 })
+    expect(result.total).toBe(2000)
+    expect(result.entitlements.jobCreditsGranted).toBe(0)
+  })
+
+  it('does not spend a credit on a free plan, a pack, or a plan that refuses credits', () => {
+    expect(quote({ availableCredits: 1, plan: vatu({ price: 0 }) }).credits.used).toBe(0)
+    expect(quote({ availableCredits: 1, plan: vatu({ jobCredits: 10 }) }).credits.used).toBe(0)
+    expect(quote({ availableCredits: 1, plan: vatu({ acceptsCredits: false }) }).credits.used).toBe(0)
+  })
+
+  it('grants a pack’s credits with their expiry', () => {
+    const result = quote({ plan: vatu({ creditExpiryDays: 365, jobCredits: 10, price: 40000 }) })
+
+    expect(result.entitlements).toMatchObject({ creditExpiryDays: 365, jobCreditsGranted: 10 })
+    expect(result.total).toBe(40000)
+  })
+
+  it('caps a flat coupon at the amount due', () => {
+    const result = quote({ coupon: { amount: 999_999, discountType: 'flat' }, plan: vatu() })
+
+    expect(result.coupon?.discount).toBe(5000)
+    expect(result.total).toBe(0)
+  })
+
+  it('explains a coupon that does not apply instead of throwing', () => {
+    const plan = vatu()
+
+    expect(quote({ coupon: { active: false, amount: 10, discountType: 'flat' }, plan }).coupon?.reason).toBe(
+      'inactive',
+    )
+    expect(
+      quote({ coupon: { amount: 10, discountType: 'flat', maxUses: 2, useCount: 2 }, plan }).coupon?.reason,
+    ).toBe('used-up')
+    expect(quote({ coupon: { amount: 0, discountType: 'flat' }, plan }).coupon?.reason).toBe(
+      'invalid-amount',
+    )
+    expect(quote({ coupon: { amount: 101, discountType: 'percent' }, plan }).coupon?.reason).toBe(
+      'invalid-amount',
+    )
+    expect(quote({ coupon: { amount: 10, discountType: 'bogof' }, plan }).coupon?.reason).toBe(
+      'unsupported-discount-type',
+    )
+  })
+
+  it('charges included add-ons nothing and uses the plan’s duration for them', () => {
+    const result = quote({
+      plan: vatu({ includedAddOns: [{ addOn: { ...enhanced, active: false }, durationDays: 14 }] }),
+    })
+
+    expect(result.lines[1]).toMatchObject({ amount: 0, durationDays: 14, included: true, unitPrice: 2000 })
+    expect(result.total).toBe(5000)
+    expect(result.entitlements.addOns[0]).toMatchObject({ durationDays: 14, source: 'plan' })
+  })
+})
+
+const codeOf = (fn: () => unknown): string | undefined => {
+  try {
+    fn()
+  } catch (error) {
+    expect(error).toBeInstanceOf(PricingError)
+    return (error as PricingError).code
+  }
+  return undefined
+}
+
+describe('quote rejects what cannot be sold', () => {
+  it('refuses an archived plan', () => {
+    expect(codeOf(() => quote({ plan: vatu({ status: 'archived' }) }))).toBe('plan-archived')
+  })
+
+  it('refuses mixed currencies', () => {
+    expect(codeOf(() => quote({ currency: 'NZD', plan: vatu() }))).toBe('currency-mismatch')
+    expect(codeOf(() => quote({ addOns: [{ ...enhanced, currency: 'NZD' }], plan: vatu() }))).toBe(
+      'currency-mismatch',
+    )
+  })
+
+  it('refuses inactive, duplicate and already-included add-ons', () => {
+    expect(codeOf(() => quote({ addOns: [{ ...enhanced, active: false }], plan: vatu() }))).toBe(
+      'add-on-inactive',
+    )
+    expect(codeOf(() => quote({ addOns: [enhanced, { ...enhanced }], plan: vatu() }))).toBe(
+      'duplicate-add-on',
+    )
+    expect(
+      codeOf(() => quote({ addOns: [enhanced], plan: vatu({ includedAddOns: [{ addOn: enhanced }] }) })),
+    ).toBe('add-on-included')
+  })
+
+  it('refuses malformed money and counts', () => {
+    expect(codeOf(() => quote({ plan: vatu({ price: 49.5 }) }))).toBe('invalid-plan')
+    expect(codeOf(() => quote({ plan: vatu({ price: -1 }) }))).toBe('invalid-plan')
+    expect(codeOf(() => quote({ plan: vatu({ durationDays: 0 }) }))).toBe('invalid-plan')
+    expect(codeOf(() => quote({ plan: vatu({ jobCredits: 0 }) }))).toBe('invalid-plan')
+    expect(codeOf(() => quote({ plan: vatu({ currency: 'vt' }) }))).toBe('invalid-plan')
+    expect(codeOf(() => quote({ addOns: [{ ...enhanced, price: 1.5 }], plan: vatu() }))).toBe(
+      'invalid-add-on',
+    )
+    expect(codeOf(() => quote({ availableCredits: -1, plan: vatu() }))).toBe('invalid-credits')
+    expect(codeOf(() => quote({ availableCredits: 0.5, plan: vatu() }))).toBe('invalid-credits')
+    expect(
+      codeOf(() => quote({ coupon: { amount: 5, discountType: 'flat', useCount: -1 }, plan: vatu() })),
+    ).toBe('invalid-coupon')
+  })
+})

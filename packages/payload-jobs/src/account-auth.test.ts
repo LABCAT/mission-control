@@ -16,6 +16,7 @@ import {
   generateSiteKey,
   globalRoleOptions,
   isSuperAdmin,
+  PAYLOAD_JOBS_TENANT_COLLECTIONS,
   payloadJobs,
   superAdminAccess,
   tenantRoleOptions,
@@ -230,7 +231,7 @@ describe('account auth endpoints', () => {
       plugins: [
         payloadJobs({ accountAuth: { rateLimiter: () => limiter }, tenancy: 'multi' }),
         multiTenantPlugin({
-          collections: {},
+          collections: Object.fromEntries(PAYLOAD_JOBS_TENANT_COLLECTIONS.map((slug) => [slug, {}])),
           tenantsArrayField: {
             rowFields: [
               {
