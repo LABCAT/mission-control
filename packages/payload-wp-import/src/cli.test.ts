@@ -34,7 +34,7 @@ describe('selectImporters', () => {
   }
 
   it('selects an entity with its dependencies only', () => {
-    expect(selectImporters(registry, 'jobs').map((i) => i.name).sort()) // oxlint-disable-line unicorn/no-array-sort.toEqual(['jobs', 'terms'])
+    expect(selectImporters(registry, 'jobs').map((i) => i.name).toSorted()).toEqual(['jobs', 'terms'])
   })
 
   it('selects everything for "all"', () => {
