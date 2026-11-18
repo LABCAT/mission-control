@@ -105,3 +105,4 @@ Spend at 02:05 UTC: sub-sessions $8.04 (PJ-10 2.19, PJ-81 2.42, RCL-86 1.00, PJ-
 - Paused: sessions told to push their work and stop (Opus #62 jobs privacy fix, PJ-38, PJ-94). No new dispatches or merges until the founder resumes.
 - On hold: #63 (deletes alert subscribers on tenant delete; conflicts with PJ-93). Recommend closing it.
 - Waiting on founder: QUERIES-19NOV.sql output; #63; cutover plan; PJ-96/95/97.
+- On resume, #62: Kinsho found (1) down() fails once expire-job-placements has run. Default: delete only the queued payload_jobs rows for that task, and make down() fail loudly with a clear message if log rows exist (job history is never deleted). (2) `order` is deferred to PJ-23: note it on the PR and in TASKS.md, and accept PJ-19 without it. Then merge.
