@@ -10,7 +10,7 @@ export const createFakePayload = (seed: Record<string, Doc[]> = {}) => {
   let nextId = 1000
 
   const matches = (doc: Doc, where: any): boolean =>
-    (where.and as Record<string, { equals: unknown }>[]).every((clause) =>
+    ((where.and ?? [where]) as Record<string, { equals: unknown }>[]).every((clause) =>
       Object.entries(clause).every(([field, { equals }]) => doc[field] === equals),
     )
 

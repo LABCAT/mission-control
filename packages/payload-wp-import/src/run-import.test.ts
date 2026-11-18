@@ -43,6 +43,17 @@ describe('sortImporters', () => {
 })
 
 describe('runImport', () => {
+  it('does not need a MySQL connection when there is nothing to run', async () => {
+    const previous = process.env.WP_IMPORT_MYSQL_URL
+    delete process.env.WP_IMPORT_MYSQL_URL
+    try {
+      const summary = await runImport({ importers: [], payload: createFakePayload().payload, tenant: 1 })
+      expect(summary).toMatchObject({ errors: [], importers: {}, order: [] })
+    } finally {
+      if (previous !== undefined) process.env.WP_IMPORT_MYSQL_URL = previous
+    }
+  })
+
   it('is idempotent: a second run creates nothing and does not duplicate', async () => {
     const { payload, store } = createFakePayload()
     const importers = [rowsImporter('terms', [{ id: 1 }, { id: 2 }])]

@@ -11,10 +11,12 @@
     "payload": "cross-env NODE_OPTIONS=--no-deprecation payload",
     "seed:tenants": "cross-env NODE_OPTIONS=--no-deprecation payload run src/seed/tenants.ts",
     "start": "cross-env NODE_OPTIONS=--no-deprecation srvx --prod --dir=. --static=dist/client --entry=dist/server/server.js",
+    "wp-import": "cross-env NODE_OPTIONS=--no-deprecation payload run src/wp-import.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@mission-control/payload-jobs": "workspace:*",
+    "@mission-control/payload-wp-import": "workspace:*",
     "@payloadcms/db-postgres": "4.0.0-beta.7",
     "@payloadcms/graphql": "4.0.0-beta.7",
     "@payloadcms/plugin-multi-tenant": "4.0.0-beta.7",

@@ -37,6 +37,20 @@ const summary = await runImport({ payload, tenant: tenantId, importers: [terms],
   importer and `legacyId`. Row errors never stop the run. If an importer cannot read, it is
   marked `aborted` and its dependents are not run.
 
+## CLI
+
+```bash
+pnpm wp-import <entity|all> --tenant <slug> [--dry-run] [--limit N]
+```
+
+Boots Payload from `apps/cms` (`DATABASE_URL`, `PAYLOAD_SECRET` as for any CMS script), finds the
+tenant by slug, runs the entity's importer plus the importers it depends on (or every importer
+for `all`), and prints per-importer counts and errors. `--limit` caps rows read per importer.
+Exit codes: `0` ok, `1` some rows or importers failed, `2` bad usage (unknown entity or tenant).
+
+Add an importer to `src/registry.ts` to make it available. The entry script is
+`apps/cms/src/wp-import.ts`.
+
 ## Requirements for target collections
 
 Each imported collection needs an indexed optional `legacyId` number field and a tenant field
@@ -45,6 +59,6 @@ All writes use `overrideAccess: true`.
 
 ## Not covered yet
 
-- The `pnpm wp-import` CLI and registering the importers in `apps/cms` come in later tasks.
+- No importers are registered yet; each entity task adds its own to `src/registry.ts`.
 - In a dry run, documents created by an earlier importer do not exist, so a mapper that resolves
   relations by `legacyId` sees them as missing.

@@ -72,6 +72,9 @@ export const runImport = async (options: RunImportOptions): Promise<ImportSummar
     order: ordered.map((importer) => importer.name),
   }
 
+  // Nothing to run means nothing to read: don't demand a MySQL connection.
+  if (ordered.length === 0) return summary
+
   const ownReader = options.reader ? undefined : new MysqlReader()
   const reader = (options.reader ?? ownReader)!
 
