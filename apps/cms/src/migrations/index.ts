@@ -4,6 +4,7 @@ import * as migration_20261105_065255_add_user_names from './20261105_065255_add
 import * as migration_20261105_223955_multi_tenancy from './20261105_223955_multi_tenancy';
 import * as migration_20261107_120535_tenancy_modes from './20261107_120535_tenancy_modes';
 import * as migration_20261109_171926_site_keys from './20261109_171926_site_keys';
+import * as migration_20261118_015005_account_auth from './20261118_015005_account_auth';
 
 export const migrations = [
   {
@@ -35,5 +36,10 @@ export const migrations = [
     up: migration_20261109_171926_site_keys.up,
     down: migration_20261109_171926_site_keys.down,
     name: '20261109_171926_site_keys',
+  },
+  {
+    up: migration_20261118_015005_account_auth.up,
+    down: migration_20261118_015005_account_auth.down,
+    name: '20261118_015005_account_auth'
   },
 ];
