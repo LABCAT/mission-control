@@ -1,2 +1,5 @@
 DATABASE_URL=postgres://orbit:orbit@localhost:8900/orbit
 PAYLOAD_SECRET=change-me-to-a-long-random-string
+
+# Bindings (not variables): `MEDIA` is an R2 bucket declared in wrangler.jsonc. `pnpm dev` and the
+# tests use wrangler's local R2 automatically, so there is nothing to set here.
