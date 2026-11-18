@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { parseVanuatuLocations, seedVanuatuLocations } from '../seed/vanuatu'
 import { bootTestPayload, type TestHarness } from '../test'
-import { Locations } from './locations'
+import { locationsCollection } from './locations'
 
 type Stored = {
   id: number | string
@@ -40,7 +40,9 @@ describe('locations tree', () => {
     })) as unknown as Stored
 
   beforeAll(async () => {
-    harness = await bootTestPayload({ collections: [Locations] })
+    harness = await bootTestPayload({
+      collections: [locationsCollection({ requireTenant: true })],
+    })
   })
 
   afterAll(async () => {
@@ -146,6 +148,41 @@ describe('locations tree', () => {
         harness.tenantAdminB,
       ),
     ).resolves.toMatchObject({ slug: 'luganville' })
+  })
+
+  it('rejects a location with no tenant, so the tree stays tenant-scoped', async () => {
+    const error = await harness.payload
+      .create({
+        collection: 'locations',
+        data: { kind: 'region', name: 'No tenant', slug: 'no-tenant' } as never,
+        overrideAccess: true,
+      })
+      .then(
+        () => null,
+        (reason: unknown) => reason,
+      )
+
+    expect(fieldMessages(error)).toBe('A location must belong to a tenant')
+  })
+
+  it('rejects a tenantless child even below a real parent', async () => {
+    const parent = await create(
+      { kind: 'region', name: 'Penama', slug: 'penama' },
+      harness.tenantA.id,
+    )
+
+    const error = await harness.payload
+      .create({
+        collection: 'locations',
+        data: { kind: 'island', name: 'Ambae', parent: parent.id, slug: 'ambae' } as never,
+        overrideAccess: true,
+      })
+      .then(
+        () => null,
+        (reason: unknown) => reason,
+      )
+
+    expect(fieldMessages(error)).toBe('A location must belong to a tenant')
   })
 
   it('rejects a slug that is not already a slug', async () => {

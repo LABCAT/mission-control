@@ -1,11 +1,11 @@
-import type { Config } from 'payload'
+import type { CollectionConfig, Config } from 'payload'
 import { describe, expect, it } from 'vitest'
 
 import { payloadJobs } from '../index'
 import {
   ALLOWED_PARENT_KINDS,
   LOCATION_KINDS,
-  Locations,
+  locationsCollection,
   slugifyLocationName,
 } from './locations'
 
@@ -13,6 +13,8 @@ const baseConfig = {
   collections: [{ slug: 'users', fields: [] }],
   secret: 'test',
 } as unknown as Config
+
+const Locations = locationsCollection()
 
 const fieldNamed = (name: string) =>
   Locations.fields.find((field) => 'name' in field && field.name === name)
@@ -83,4 +85,163 @@ describe('locations collection', () => {
     expect(slugifyLocationName('Anywhere/Work From Home')).toBe('anywhere-work-from-home')
     expect(slugifyLocationName('Sulphur Bay')).toBe('sulphur-bay')
   })
+})
+
+type FieldValidate = (
+  value: unknown,
+  options: {
+    data: Record<string, unknown>
+    id?: number | string
+    req: ReturnType<typeof validatingReq>
+  },
+) => Promise<string | true>
+
+const validateOf = (collection: CollectionConfig, name: string): FieldValidate => {
+  const field = collection.fields.find((candidate) => 'name' in candidate && candidate.name === name)
+  const validate = (field as { validate?: FieldValidate } | undefined)?.validate
+  if (!validate) throw new Error(`Missing validate on ${name}`)
+
+  return validate
+}
+
+/** A `req` whose `find`/`findByID` return the documents the test passes in. */
+const validatingReq = (docs: Record<string, unknown>[] = []) => ({
+  payload: {
+    find: async () => ({ docs }),
+    findByID: async ({ id }: { id: number | string }) =>
+      docs.find((doc) => String(doc.id) === String(id)) ?? null,
+  },
+})
+
+const tenantlessCollection = locationsCollection({ requireTenant: true })
+const singleTenantCollection = locationsCollection()
+
+describe('locations tenant requirements', () => {
+  const scenarios = [
+    { label: 'multi-tenant', collection: tenantlessCollection, tenantlessValid: false },
+    { label: 'single-tenant', collection: singleTenantCollection, tenantlessValid: true },
+  ]
+
+  it.each(scenarios)(
+    'checks the slug only against its own tenant in $label mode',
+    async ({ collection }) => {
+      const validateSlug = validateOf(collection, 'slug')
+      const taken = { id: 5, slug: 'port-vila', tenant: 2 }
+
+      expect(
+        await validateSlug('port-vila', {
+          data: { kind: 'region', tenant: 2 },
+          id: 6,
+          req: validatingReq([taken]),
+        }),
+      ).toBe('The slug "port-vila" is already used by another location in this tenant')
+
+      // Nothing in tenant 3, so the same slug there is free.
+      expect(
+        await validateSlug('port-vila', {
+          data: { kind: 'region', tenant: 3 },
+          id: 7,
+          req: validatingReq(),
+        }),
+      ).toBe(true)
+
+      // The same document keeping its slug is not a clash with itself.
+      expect(
+        await validateSlug('port-vila', {
+          data: { kind: 'region', tenant: 2 },
+          id: 5,
+          req: validatingReq([taken]),
+        }),
+      ).toBe(true)
+    },
+  )
+
+  it.each(scenarios)(
+    'rejects a tenantless write in $label mode only when a tenant is required',
+    async ({ collection, tenantlessValid }) => {
+      const hook = collection.hooks?.beforeChange?.[0] as
+        | ((args: unknown) => Promise<unknown>)
+        | undefined
+      const run = (args: unknown) =>
+        hook ? Promise.resolve().then(() => hook(args)) : Promise.resolve((args as { data: unknown }).data)
+
+      const tenantError = async (args: unknown) => {
+        const error = await run(args).then(
+          () => null,
+          (reason: unknown) => reason as { data?: { errors?: { message: string }[] } },
+        )
+
+        return error?.data?.errors?.map((fieldError) => fieldError.message)
+      }
+
+      if (tenantlessValid) {
+        expect(hook).toBeUndefined()
+        await expect(run({ data: { name: 'Port Vila' }, operation: 'create' })).resolves.toEqual({
+          name: 'Port Vila',
+        })
+        return
+      }
+
+      await expect(tenantError({ data: { name: 'Port Vila' }, operation: 'create' })).resolves.toEqual(
+        ['A location must belong to a tenant'],
+      )
+      // An update that clears the tenant is refused, and one that keeps the stored tenant passes
+      // even though the request does not carry it.
+      await expect(
+        tenantError({ data: { name: 'Port Vila', tenant: null }, operation: 'update' }),
+      ).resolves.toEqual(['A location must belong to a tenant'])
+      await expect(
+        run({ data: { name: 'Port Vila' }, operation: 'update', originalDoc: { tenant: 2 } }),
+      ).resolves.toEqual({ name: 'Port Vila' })
+    },
+  )
+
+  it.each(scenarios)(
+    'only accepts a parent from the same tenant in $label mode',
+    async ({ collection }) => {
+      const validateParent = validateOf(collection, 'parent')
+      const parent = { id: 7, kind: 'region', tenant: 2 }
+
+      expect(
+        await validateParent(
+          { id: 7 },
+          { data: { kind: 'island', tenant: 2 }, id: 8, req: validatingReq([parent]) },
+        ),
+      ).toBe(true)
+
+      expect(
+        await validateParent(
+          { id: 7 },
+          { data: { kind: 'island', tenant: 3 }, id: 9, req: validatingReq([parent]) },
+        ),
+      ).toBe('The parent location belongs to another tenant')
+
+      // A parent with no tenant cannot be in the same tenant as a child that has one.
+      expect(
+        await validateParent(
+          { id: 7 },
+          {
+            data: { kind: 'island', tenant: 2 },
+            id: 10,
+            req: validatingReq([{ ...parent, tenant: null }]),
+          },
+        ),
+      ).toBe('The parent location belongs to no tenant')
+
+      // A tenantless child never reaches a comparison: the beforeChange hook refuses it in
+      // multi-tenant mode, and in single mode there is no tenant field to compare.
+      expect(
+        await validateParent(
+          { id: 7 },
+          { data: { kind: 'island' }, id: 11, req: validatingReq([parent]) },
+        ),
+      ).toBe(true)
+      expect(
+        await validateParent(
+          { id: 7 },
+          { data: { kind: 'island' }, id: 12, req: validatingReq([{ ...parent, tenant: null }]) },
+        ),
+      ).toBe(true)
+    },
+  )
 })

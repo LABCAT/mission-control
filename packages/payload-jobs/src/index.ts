@@ -1,6 +1,6 @@
 import type { CollectionConfig, Config, GlobalConfig, Plugin } from 'payload'
 
-import { Locations, locationsTenantSlugIndex } from './collections/locations'
+import { locationsCollection, locationsTenantSlugIndex } from './collections/locations'
 import { withLegacyPasswords } from './legacy-password'
 import { jobBoardSettingsGlobal, jobBoardTenantFields } from './tenancy'
 
@@ -48,7 +48,9 @@ const resolvedFeatures = (options: PayloadJobsOptions): Required<PayloadJobsFeat
 })
 
 /** Job-board collections owned by this plugin. Later tasks append to this list. */
-const jobBoardCollections = (): CollectionConfig[] => [Locations]
+const jobBoardCollections = (tenancy: TenancyMode): CollectionConfig[] => [
+  locationsCollection({ requireTenant: tenancy === 'multi' }),
+]
 
 /**
  * Job board plugin for Mission Control. It owns the job-board tenant settings and the
@@ -74,7 +76,7 @@ export const payloadJobs =
       ),
     }
 
-    const added = jobBoardCollections()
+    const added = jobBoardCollections(tenancy)
     const existingSlugs = new Set((config.collections ?? []).map((collection) => collection.slug))
     const clashes = added.filter((collection) => existingSlugs.has(collection.slug))
     if (clashes.length > 0) {
@@ -102,7 +104,7 @@ export const payloadJobs =
             return { ...collection, fields: [...collection.fields, ...jobBoardTenantFields] }
           }
 
-          if (collection.slug === Locations.slug) {
+          if (collection.slug === 'locations') {
             return {
               ...collection,
               indexes: [...(collection.indexes ?? []), locationsTenantSlugIndex],

@@ -1,4 +1,4 @@
-import type { CollectionConfig, CompoundIndex, Field, Validate } from 'payload'
+import { ValidationError, type CollectionConfig, type CompoundIndex, type Field, type Validate } from 'payload'
 
 import { tenantContentWriteAccess } from '../access'
 
@@ -49,6 +49,16 @@ const idOf = (value: LocationRef): null | number | string => {
   return value
 }
 
+export type LocationsOptions = {
+  /**
+   * In multi-tenant mode every location must name a tenant. The tenant is what scopes the
+   * slug and the parent comparison, so a tenantless row would sit outside the tenant tree
+   * (and its parent could belong to any tenant). Single-tenant mode has no tenant field at
+   * all, so there the check is off.
+   */
+  requireTenant?: boolean
+}
+
 /**
  * Slugs are unique per tenant, not globally: two tenants may both have `port-vila`. The
  * tenant is taken from the document being validated, so the check also works for a create
@@ -61,6 +71,7 @@ const validateSlug: Validate = async (value, { data, id, req }) => {
 
   const sibling = (data ?? {}) as LocationData
   const tenant = idOf(sibling.tenant)
+  // The beforeChange hook has already refused a tenantless document in multi-tenant mode.
   if (tenant === null) return true
 
   const { docs } = await req.payload.find({
@@ -120,12 +131,17 @@ const validateParent: Validate = async (value, { data, id, req }) => {
   }
 
   const tenantID = idOf(sibling.tenant)
-  const parentTenantID = idOf(parent.tenant)
-  if (tenantID !== null && parentTenantID !== null && String(tenantID) !== String(parentTenantID)) {
-    return 'The parent location belongs to another tenant'
-  }
+  // A tenantless child never reaches here in multi-tenant mode: the beforeChange hook
+  // refuses it. In single-tenant mode there is no tenant field at all.
+  if (tenantID === null) return true
 
-  return true
+  const parentTenantID = idOf(parent.tenant)
+
+  if (parentTenantID === null) return 'The parent location belongs to no tenant'
+
+  return String(tenantID) === String(parentTenantID)
+    ? true
+    : 'The parent location belongs to another tenant'
 }
 
 const fields: Field[] = [
@@ -169,21 +185,50 @@ const fields: Field[] = [
  * alerts can build filters without a session. Only tenant admins and editors write, and the
  * multi-tenant plugin scopes every operation to the caller's tenant.
  */
-export const Locations: CollectionConfig = {
-  slug: 'locations',
-  access: {
-    create: tenantContentWriteAccess,
-    delete: tenantContentWriteAccess,
-    read: () => true,
-    update: tenantContentWriteAccess,
-  },
-  admin: {
-    defaultColumns: ['name', 'kind', 'slug', 'parent'],
-    group: 'Jobs',
-    useAsTitle: 'name',
-  },
-  fields,
-  versions: false,
+export const locationsCollection = (options: LocationsOptions = {}): CollectionConfig => {
+  const { requireTenant = false } = options
+
+  return {
+    slug: 'locations',
+    access: {
+      create: tenantContentWriteAccess,
+      delete: tenantContentWriteAccess,
+      read: () => true,
+      update: tenantContentWriteAccess,
+    },
+    admin: {
+      defaultColumns: ['name', 'kind', 'slug', 'parent'],
+      group: 'Jobs',
+      useAsTitle: 'name',
+    },
+    fields,
+    hooks: requireTenant
+      ? {
+          // A field validator is skipped when its field is not submitted, so a write that never
+          // mentions `tenant` would slip past `validateSlug` and `validateParent`. Check the
+          // tenant itself here, where every create and update passes. (`beforeChange`, not
+          // `beforeValidate`: the plugin's membership hook is the first entry there, and the
+          // tenancy test reaches for it by that position.)
+          beforeChange: [
+            ({ data, originalDoc }) => {
+              const tenant = idOf(
+                ((data as LocationData | undefined)?.tenant ??
+                  (originalDoc as LocationData | undefined)?.tenant) as LocationRef,
+              )
+              if (tenant === null) {
+                throw new ValidationError({
+                  collection: 'locations',
+                  errors: [{ message: 'A location must belong to a tenant', path: 'tenant' }],
+                })
+              }
+
+              return data
+            },
+          ],
+        }
+      : {},
+    versions: false,
+  }
 }
 
 /**
