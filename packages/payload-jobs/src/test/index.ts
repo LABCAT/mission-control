@@ -90,6 +90,9 @@ let bootCount = 0
  *
  * The users are real auth documents: Payload's authorship tracking (`createdBy` /
  * `updatedBy`) foreign-keys every document a user creates back to the users collection.
+ *
+ * Every boot pushes into a schema of its own, so `TEST_DATABASE_URL` must point at a
+ * disposable database.
  */
 export const bootTestPayload = async ({
   collections,

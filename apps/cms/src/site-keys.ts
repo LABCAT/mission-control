@@ -6,6 +6,7 @@ import { createSiteKeyAccessOverride } from '@mission-control/payload-jobs'
  */
 export const siteKeyAllowedCollections = [
   'folders',
+  'locations',
   'media',
   'tags',
   // mission-control: job-board taxonomies (PJ-16).

@@ -231,8 +231,11 @@ describe('account auth endpoints', () => {
       plugins: [
         payloadJobs({ accountAuth: { rateLimiter: () => limiter }, tenancy: 'multi' }),
         multiTenantPlugin({
-          // payloadJobs adds the taxonomies in tenancy "multi"; the plugin must scope them.
-          collections: Object.fromEntries(TAXONOMY_SLUGS.map((slug) => [slug, {}])),
+          // payloadJobs adds these in tenancy "multi"; the plugin must scope them.
+          collections: {
+            locations: {},
+            ...Object.fromEntries(TAXONOMY_SLUGS.map((slug) => [slug, {}])),
+          },
           tenantsArrayField: {
             rowFields: [
               {
