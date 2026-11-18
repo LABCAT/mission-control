@@ -5,7 +5,8 @@
 #      plus GH_TOKEN and GH_REPO for `gh`.
 # Right before deleting, it fetches the open PRs again and skips the delete if an open same-repo PR
 # maps to this preview name (feature/foo and feature-foo share one), so a PR opened after the caller
-# decided cannot lose its preview. An unreadable PR list fails the script.
+# decided cannot lose its preview. An unreadable PR list fails the script. ALLOW_LIVE=true skips that
+# one check (manual reset only).
 # Only a confirmed "not found" is tolerated. Any other failure stops the script, and the Neon
 # branch is only deleted after the Worker Preview delete succeeded or was confirmed absent.
 set -euo pipefail
@@ -23,15 +24,20 @@ fi
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 
-gh pr list --state open --limit 1000 --json headRefName,isCrossRepository > "$TMP/prs.json"
-[ "$(jq length "$TMP/prs.json")" -lt 1000 ] || { echo "::error::1000+ open PRs; the list may be truncated"; exit 1; }
-rc=0
-"$(dirname "$0")/preview-neon.mjs" live "$NAME" "$TMP/prs.json" || rc=$?
-if [ "$rc" = 0 ]; then
-  echo "An open PR now uses preview $NAME; not deleting it."
-  exit 0
-elif [ "$rc" != 1 ]; then
-  echo "::error::Could not decide whether preview $NAME is in use"; exit 1
+if [ "${ALLOW_LIVE:-}" = true ]; then
+  # Only the manual reset job sets this: the PR is open on purpose. Name and RC guards above still apply.
+  echo "ALLOW_LIVE: skipping the open-PR check for $NAME"
+else
+  gh pr list --state open --limit 1000 --json headRefName,isCrossRepository > "$TMP/prs.json"
+  [ "$(jq length "$TMP/prs.json")" -lt 1000 ] || { echo "::error::1000+ open PRs; the list may be truncated"; exit 1; }
+  rc=0
+  "$(dirname "$0")/preview-neon.mjs" live "$NAME" "$TMP/prs.json" || rc=$?
+  if [ "$rc" = 0 ]; then
+    echo "An open PR now uses preview $NAME; not deleting it."
+    exit 0
+  elif [ "$rc" != 1 ]; then
+    echo "::error::Could not decide whether preview $NAME is in use"; exit 1
+  fi
 fi
 
 if ! npx -y "$WRANGLER" preview delete --name "$NAME" --worker-name "$WORKER_NAME" --skip-confirmation </dev/null > "$TMP/wrangler.log" 2>&1; then

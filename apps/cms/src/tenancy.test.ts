@@ -67,7 +67,7 @@ const requestFor = (user: MissionControlUser | null) => ({
 
 const baseAccess = async (
   config: Config,
-  operation: 'delete' | 'read' | 'update',
+  operation: 'create' | 'delete' | 'read' | 'update',
   slug: string,
   user: MissionControlUser | null,
 ) => {
@@ -86,7 +86,7 @@ const baseAccess = async (
  */
 const collectionAccess = async (
   config: Config,
-  operation: 'delete' | 'read' | 'update',
+  operation: 'create' | 'delete' | 'read' | 'update',
   slug: string,
   user: MissionControlUser | null,
 ) => {
@@ -163,7 +163,7 @@ const runBeforeChange = (hook: CollectionBeforeChangeHook, args: Record<string, 
   Promise.resolve().then(() => hook(args as never))
 
 describe('tenant isolation', () => {
-  it.each(['folders', 'media', 'tags'])(
+  it.each(['folders', 'locations', 'media', 'tags'])(
     'scopes %s reads, updates and deletes to the tenant on the user',
     async (slug) => {
       const config = await buildConfig()
@@ -188,7 +188,7 @@ describe('tenant isolation', () => {
     },
   )
 
-  it.each(['folders', 'media', 'tags'])(
+  it.each(['folders', 'locations', 'media', 'tags'])(
     'rejects a %s create for another tenant in beforeValidate',
     async (slug) => {
       const config = await buildConfig()
@@ -390,6 +390,15 @@ describe('site key reads', () => {
     expect(await collectionAccessWithReq(config, 'read', 'media', req)).toBe(false)
   })
 
+  it('exposes the public location tree to a site key, scoped to its tenant', async () => {
+    const config = await buildConfig()
+    const req = await siteKeyRequest({ key: 'sk_tenant', tenant: tenantA.id })
+
+    expect(await collectionAccessWithReq(config, 'read', 'locations', req)).toEqual({
+      tenant: { equals: tenantA.id },
+    })
+  })
+
   it('still scopes a collection whose own read access denies anonymous requests', async () => {
     const config = await buildConfig()
     const req = await siteKeyRequest({ key: 'sk_tenant', tenant: tenantA.id })
@@ -397,6 +406,47 @@ describe('site key reads', () => {
     expect(await collectionAccessWithReq(config, 'read', 'tags', req)).toEqual({
       tenant: { equals: tenantA.id },
     })
+  })
+})
+
+describe('job-board taxonomies', () => {
+  const taxonomySlugs = [
+    'job-categories',
+    'job-types',
+    'job-tags',
+    'salary-bands',
+    'areas-of-focus',
+  ]
+
+  it.each(taxonomySlugs)('registers %s and scopes its reads to the user’s tenants', async (slug) => {
+    const config = await buildConfig()
+
+    expect(config.collections?.some((collection) => collection.slug === slug)).toBe(true)
+    expect(await collectionAccess(config, 'read', slug, tenantAdminA)).toEqual({
+      tenant: { in: [tenantA.id] },
+    })
+  })
+
+  it.each(taxonomySlugs)('lets a site key read %s for one tenant only', async (slug) => {
+    const config = await buildConfig()
+    const req = await siteKeyRequest({ key: 'sk_tenant', tenant: tenantA.id })
+
+    expect(await collectionAccessWithReq(config, 'read', slug, req)).toEqual({
+      tenant: { equals: tenantA.id },
+    })
+  })
+
+  it('lets a tenant-admin create a taxonomy but not an employer', async () => {
+    const config = await buildConfig()
+    const employer: TestUser = {
+      id: 12,
+      collection: 'users',
+      role: 'user',
+      tenants: [{ role: 'employer', tenant: tenantA }],
+    }
+
+    expect(await collectionAccess(config, 'create', 'job-tags', tenantAdminA)).toBeTruthy()
+    expect(await collectionAccess(config, 'create', 'job-tags', employer)).toBe(false)
   })
 })
 

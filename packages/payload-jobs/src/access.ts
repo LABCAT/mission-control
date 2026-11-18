@@ -115,6 +115,19 @@ export const hasAnyTenantRole = (
   )
 
 /**
+ * Who may write job-board content (locations, taxonomies, jobs): super admins and the
+ * tenant-admin/editor memberships of at least one tenant. The multi-tenant plugin adds the
+ * tenant constraint on top, so this only decides the role — employers are excluded.
+ */
+export const tenantContentWriteAccess: Access = ({ req }) => {
+  const user = req.user as MissionControlUser | null | undefined
+  if (!user) return false
+  if (isSuperAdmin(user)) return true
+
+  return hasAnyTenantRole(user, ['tenant-admin', 'editor'])
+}
+
+/**
  * A user who is a member of at least one tenant and holds only the `seeker` role everywhere.
  * Seekers use the dashboards on the Astro sites. They never use the admin and never touch
  * tenant content, so admin access and tenant-scoped collection access exclude them.
