@@ -46,8 +46,12 @@ const argsFor = (user: MissionControlUser | null, data?: Record<string, unknown>
 const adminOf = (...tenants: number[]): MissionControlUser =>
   userWith(tenants.map((tenant) => ({ role: 'tenant-admin' as const, tenant })))
 
-const fieldArgsFor = (user: MissionControlUser | null) =>
-  ({ req: { user } }) as unknown as Parameters<typeof organisationAdminFieldAccess>[0]
+const fieldArgsFor = (user: MissionControlUser | null, doc?: Record<string, unknown>) =>
+  ({ doc, req: { user } }) as unknown as Parameters<
+    ReturnType<typeof organisationAdminFieldAccess>
+  >[0]
+
+const adminFieldsAccess = organisationAdminFieldAccess()
 
 /** An anonymous request with a site key, resolved against a stub `site-keys` collection. */
 const siteKeyRequest = async ({
@@ -210,9 +214,16 @@ describe('organisation field access', () => {
       'xeroContactCode',
       'legacyId',
     ]) {
-      const field = fieldNamed(name) as { access?: { update?: unknown; create?: unknown } }
-      expect(field.access?.update, name).toBe(organisationAdminFieldAccess)
-      expect(field.access?.create, name).toBe(organisationAdminFieldAccess)
+      const field = fieldNamed(name) as {
+        access?: { update?: unknown; create?: unknown }
+      }
+
+      expect(field.access?.update, name).toBeTypeOf('function')
+      expect(field.access?.create, name).toBe(field.access?.update)
+      // The wired access is the tenant-scoped one: an admin elsewhere is refused.
+      const wired = field.access?.update as ReturnType<typeof organisationAdminFieldAccess>
+      expect(wired(fieldArgsFor(adminOf(2), { tenant: 1 }))).toBe(false)
+      expect(wired(fieldArgsFor(adminOf(1), { tenant: 1 }))).toBe(true)
     }
   })
 
@@ -225,12 +236,36 @@ describe('organisation field access', () => {
     expect(fieldNamed('listingRequested')).toMatchObject({ defaultValue: false })
   })
 
-  it('lets tenant admins and super admins set the admin-only fields but nobody else', () => {
-    expect(organisationAdminFieldAccess(fieldArgsFor(userWith([{ role: 'tenant-admin', tenant: 1 }])))).toBe(true)
-    expect(organisationAdminFieldAccess(fieldArgsFor(userWith([], { role: 'super-admin' })))).toBe(true)
-    expect(organisationAdminFieldAccess(fieldArgsFor(userWith([{ role: 'editor', tenant: 1 }])))).toBe(false)
-    expect(organisationAdminFieldAccess(fieldArgsFor(userWith([{ role: 'employer', tenant: 1 }], { organisation: 5 })))).toBe(false)
-    expect(organisationAdminFieldAccess(fieldArgsFor(null))).toBe(false)
+  it('lets the admin of the organisation’s tenant set the admin-only fields', () => {
+    const inTenantA = { tenant: 1 }
+
+    expect(adminFieldsAccess(fieldArgsFor(adminOf(1), inTenantA))).toBe(true)
+    expect(adminFieldsAccess(fieldArgsFor(userWith([], { role: 'super-admin' })))).toBe(true)
+    expect(adminFieldsAccess(fieldArgsFor(userWith([{ role: 'editor', tenant: 1 }]), inTenantA))).toBe(false)
+    expect(adminFieldsAccess(fieldArgsFor(adminOf(2), inTenantA))).toBe(false)
+    expect(adminFieldsAccess(fieldArgsFor(null, inTenantA))).toBe(false)
+  })
+
+  it('keeps an employer out even when they administer another tenant', () => {
+    // The review case: employer in tenant 1 with their own organisation there, admin in tenant 2.
+    const employerAdminElsewhere = userWith(
+      [
+        { role: 'employer', tenant: 1 },
+        { role: 'tenant-admin', tenant: 2 },
+      ],
+      { organisation: 5 },
+    )
+
+    expect(adminFieldsAccess(fieldArgsFor(employerAdminElsewhere, { tenant: 1 }))).toBe(
+      false,
+    )
+    expect(adminFieldsAccess(fieldArgsFor(employerAdminElsewhere, { tenant: 2 }))).toBe(
+      true,
+    )
+  })
+
+  it('rejects an admin-only write with no tenant to check against', () => {
+    expect(adminFieldsAccess(fieldArgsFor(adminOf(1)))).toBe(false)
   })
 
   it('uses tenant-admin for the admin-only fields and includes editors in the staff roles', () => {
@@ -315,6 +350,16 @@ describe('single-tenant mode', () => {
     )
     expect(await read(argsFor(userWith([{ role: 'employer', tenant: 1 }])))).toBe(false)
     expect(await read(argsFor(null))).toBe(false)
+  })
+
+  it('grants the admin-only fields on the bare role, with no tenant to compare', () => {
+    const access = organisationAdminFieldAccess(false)
+
+    expect(access(fieldArgsFor(adminOf(1)))).toBe(true)
+    expect(access(fieldArgsFor(userWith([{ role: 'editor', tenant: 1 }])))).toBe(false)
+    expect(access(fieldArgsFor(userWith([{ role: 'employer', tenant: 1 }], { organisation: 5 })))).toBe(
+      false,
+    )
   })
 
   it('takes no tenant in create data and scopes updates and deletes by role', async () => {

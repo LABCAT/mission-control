@@ -236,14 +236,30 @@ export const organisationDeleteAccess =
     return tenantScoped ? { tenant: { in: adminTenants } } : true
   }
 
-/** Approval, page visibility and billing terms are tenant-admin fields. */
-export const organisationAdminFieldAccess: FieldAccess = ({ req }) => {
-  const user = userOf(req)
-  if (!user) return false
-  if (isSuperAdmin(user)) return true
+/**
+ * Approval, page visibility and billing terms are tenant-admin fields, checked against the
+ * organisation's own tenant: an employer in tenant A who happens to administer an unrelated
+ * tenant B can still edit their own organisation, so "admin somewhere" is not enough.
+ *
+ * Unscoped, the check falls back to the bare role. Single-tenant mode has no tenant to compare,
+ * and the `users.organisation` field has no tenant of its own.
+ */
+export const organisationAdminFieldAccess =
+  (tenantScoped = true): FieldAccess =>
+  ({ data, doc, req }) => {
+    const user = userOf(req)
+    if (!user) return false
+    if (isSuperAdmin(user)) return true
 
-  return hasAnyTenantRole(user, ORGANISATION_ADMIN_ROLES)
-}
+    const adminTenants = getUserTenantIDsByRole(user, ORGANISATION_ADMIN_ROLES)
+    if (adminTenants.length === 0) return false
+    if (!tenantScoped) return true
+
+    const target = tenantIDOf(doc?.tenant ?? (data as { tenant?: unknown } | undefined)?.tenant)
+    if (target === null) return false
+
+    return adminTenants.some((tenantID) => String(tenantID) === String(target))
+  }
 
 const URL_PATTERN = /^https?:\/\/[^\s/]+\.[^\s]+$/i
 
@@ -347,9 +363,9 @@ export const organisationTenantIsStable =
     })
   }
 
-const adminOnly = {
-  create: organisationAdminFieldAccess,
-  update: organisationAdminFieldAccess,
+const adminOnlyFor = (tenantScoped: boolean) => {
+  const access = organisationAdminFieldAccess(tenantScoped)
+  return { create: access, update: access }
 }
 
 const imageFields = (mediaSlug: string): Field[] => [
@@ -367,7 +383,10 @@ const imageFields = (mediaSlug: string): Field[] => [
   },
 ]
 
-const profileFields = (mediaSlug: null | string): Field[] => [
+const profileFields = (mediaSlug: null | string, tenantScoped: boolean): Field[] => {
+  const adminOnly = adminOnlyFor(tenantScoped)
+
+  return [
   {
     name: 'name',
     type: 'text',
@@ -517,7 +536,8 @@ const profileFields = (mediaSlug: null | string): Field[] => [
       position: 'sidebar',
     },
   },
-]
+  ]
+}
 
 export type OrganisationsOptions = {
   /**
@@ -551,7 +571,7 @@ export const organisationsCollection = ({
     group: 'Job board',
     useAsTitle: 'name',
   },
-  fields: profileFields(mediaSlug),
+  fields: profileFields(mediaSlug, tenantScoped),
   hooks: {
     beforeChange: [
       organisationRelationsInTenant(tenantScoped, mediaSlug),
@@ -576,8 +596,8 @@ export const organisationField = (): Field => ({
   relationTo: ORGANISATIONS_SLUG,
   index: true,
   access: {
-    create: organisationAdminFieldAccess,
-    update: organisationAdminFieldAccess,
+    create: organisationAdminFieldAccess(false),
+    update: organisationAdminFieldAccess(false),
   },
   admin: {
     description: 'The organisation this employer belongs to.',

@@ -205,6 +205,36 @@ describe('organisations integration', () => {
     })
   })
 
+  it('keeps an employer out of admin-only fields when they administer another tenant', async () => {
+    const employerAdminElsewhere = await makeUser(
+      'employer-admin-elsewhere',
+      [
+        { role: 'employer', tenant: harness.tenantA.id },
+        { role: 'tenant-admin', tenant: harness.tenantB.id },
+      ],
+      { organisation: orgA.id },
+    )
+
+    await harness.payload.update({
+      collection: 'organisations',
+      data: {
+        approved: true,
+        canPayByInvoice: true,
+        name: 'Renamed by the employer',
+        pageEnabled: true,
+      } as never,
+      id: orgA.id,
+      user: employerAdminElsewhere as never,
+    })
+
+    expect(await stored(orgA.id)).toMatchObject({
+      approved: false,
+      canPayByInvoice: false,
+      name: 'Renamed by the employer',
+      pageEnabled: false,
+    })
+  })
+
   it('rejects an employer editing another organisation', async () => {
     await expect(
       harness.payload.update({
