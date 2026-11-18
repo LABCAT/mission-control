@@ -193,6 +193,38 @@ describe('tenant scope: access and rules', () => {
   })
 })
 
+describe('global scope: concurrent creates with different singleton values', () => {
+  let harness: GlobalHarness
+
+  beforeAll(async () => {
+    harness = await bootGlobalTestPayload({ collections: [GlobalSettings] })
+  })
+
+  afterAll(async () => {
+    if (harness) await harness.destroy()
+  })
+
+  it('lets exactly one succeed', async () => {
+    const results = await Promise.allSettled(
+      ['a', 'b', 'c', 'd'].map((value) =>
+        harness.payload.create({
+          collection: 'xero-settings',
+          data: { singleton: value, xeroTenantId: value },
+          user: harness.admin as never,
+        }),
+      ),
+    )
+
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1)
+
+    const { totalDocs } = await harness.payload.find({
+      collection: 'xero-settings',
+      user: harness.admin as never,
+    })
+    expect(totalDocs).toBe(1)
+  })
+})
+
 describe('global scope: no tenant, one row, default access', () => {
   let harness: GlobalHarness
 
@@ -224,6 +256,30 @@ describe('global scope: no tenant, one row, default access', () => {
         user: harness.admin as never,
       }),
     ).rejects.toThrow(duplicateMessage('global'))
+  })
+
+  it('ignores a client-supplied singleton value on create and update', async () => {
+    const results = await Promise.allSettled(
+      ['a', 'b', 'c'].map((value) =>
+        harness.payload.create({
+          collection: 'xero-settings',
+          data: { singleton: value, xeroTenantId: value },
+          user: harness.admin as never,
+        }),
+      ),
+    )
+    expect(results.every((r) => r.status === 'rejected')).toBe(true)
+
+    const { docs } = await harness.payload.find({ collection: 'xero-settings', user: harness.admin as never })
+    const updated = (await harness.payload.update({
+      collection: 'xero-settings',
+      data: { singleton: 'other', dueDays: 21 },
+      id: docs[0].id,
+      user: harness.admin as never,
+    })) as Record<string, any>
+
+    expect(updated.singleton).toBe('xero')
+    expect(updated.dueDays).toBe(21)
   })
 
   it('enforces the single row in the database too, bypassing the hook', async () => {

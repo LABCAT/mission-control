@@ -8,6 +8,7 @@ import type {
 
 export const DEFAULT_SETTINGS_SLUG = 'xero-settings'
 export const DEFAULT_TENANT_FIELD = 'tenant'
+export const SINGLETON_VALUE = 'xero'
 
 /** `global`: one settings row for the whole site. `tenant`: one row per tenant. */
 export type XeroScope = 'global' | 'tenant'
@@ -126,11 +127,14 @@ export const buildXeroSettingsCollection = (options: XeroSettingsOptions = {}): 
   const tenantField = options.tenantField ?? DEFAULT_TENANT_FIELD
 
   // Global scope has no tenant to key on, so a constant unique column enforces one row.
+  // The value is server-controlled: the field hook overwrites whatever the request sent, so
+  // an API caller cannot dodge the unique index by supplying a different value.
   const singletonField: Field = {
     name: 'singleton',
     type: 'text',
     admin: { hidden: true, readOnly: true },
-    defaultValue: 'xero',
+    defaultValue: SINGLETON_VALUE,
+    hooks: { beforeChange: [() => SINGLETON_VALUE], beforeValidate: [() => SINGLETON_VALUE] },
     unique: true,
   }
 
