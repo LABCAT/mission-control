@@ -58,11 +58,26 @@ page.on('requestfailed', (request) => failedRequests.push(request.url()))
 
 // The Turnstile API is a third-party script the smoke does not need: a stub keeps the run
 // offline and deterministic, while the island's own code (the part this package owns) runs.
+// The stub mirrors Cloudflare where it matters: it adds its own response field to the form
+// unless `response-field` is false, and hands a token to the callback.
+const TURNSTILE_STUB = `
+window.turnstile = {
+  render: function (container, options) {
+    window.__turnstileCalls = (window.__turnstileCalls || 0) + 1
+    if (options['response-field'] !== false) {
+      var field = document.createElement('input')
+      field.type = 'hidden'
+      field.name = options['response-field-name'] || 'cf-turnstile-response'
+      container.appendChild(field)
+    }
+    if (options.callback) options.callback('stub-token')
+    return 'stub'
+  }
+}
+`
+
 await page.route('https://challenges.cloudflare.com/**', (route) =>
-  route.fulfill({
-    body: 'window.turnstile = { render: function () { return "stub" } }',
-    contentType: 'text/javascript',
-  }),
+  route.fulfill({ body: TURNSTILE_STUB, contentType: 'text/javascript' }),
 )
 
 let failure
@@ -101,10 +116,21 @@ try {
     `accent tag painted ${pillBackground}, expected the tenant accent ${ACCENT_RGB}`,
   )
 
+  // Exactly one response field: the component's own. If the widget were allowed to add its own,
+  // the form would post the same name twice and the server would see an empty or ambiguous token.
+  const responseFields = page.locator('input[name="cf-turnstile-response"]')
   check(
-    (await page.locator('input[name="cf-turnstile-response"]').count()) === 1,
-    'the Turnstile response field did not render',
+    (await responseFields.count()) === 1,
+    `expected one cf-turnstile-response field, found ${await responseFields.count()}`,
   )
+
+  // The island ran: the stub was called for the widget and the token reached the field.
+  const widgetToken = await responseFields.first().inputValue()
+  check(widgetToken === 'stub-token', `the response field holds "${widgetToken}", not the widget token`)
+
+  // The no-JavaScript fallback is a noscript element, so it is not shown when JS works.
+  const noscriptVisible = await page.locator('.lp-turnstile__noscript').isVisible().catch(() => false)
+  check(!noscriptVisible, 'the "needs JavaScript" message is visible even though JavaScript works')
 
   // The island runs, so its first-party module and the stylesheet it depends on were served.
   check(failedRequests.length === 0, `requests failed: ${failedRequests.join(', ')}`)

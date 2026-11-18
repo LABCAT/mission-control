@@ -57,13 +57,19 @@ describe('turnstileErrorMessage', () => {
 })
 
 describe('turnstileWidgetOptions', () => {
-  it('defaults the theme and language, and fills the field name Turnstile posts back', () => {
+  it('defaults the theme and language, and keeps its own response field', () => {
     expect(turnstileWidgetOptions({ action: 'apply', siteKey: '0x4AAAAAAABkMYinukE8nzY' })).toEqual({
       action: 'apply',
       language: 'auto',
+      'response-field': false,
       sitekey: '0x4AAAAAAABkMYinukE8nzY',
       theme: 'auto',
     })
     expect(TURNSTILE_RESPONSE_FIELD).toBe('cf-turnstile-response')
+  })
+
+  it('asks Turnstile not to add a second field with the same name', () => {
+    // The component renders and fills its own hidden field, so the widget must not add one.
+    expect(turnstileWidgetOptions({ siteKey: '0x4AAAAAAABkMYinukE8nzY' })['response-field']).toBe(false)
   })
 })

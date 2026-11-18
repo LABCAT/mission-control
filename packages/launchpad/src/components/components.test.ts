@@ -261,7 +261,18 @@ describe('Turnstile', () => {
     expect(html).toContain('name="cf-turnstile-response"')
     expect(html).toContain('data-turnstile-options')
     expect(html).toContain('&quot;sitekey&quot;:&quot;1x00000000000000000000AA&quot;')
-    // The widget cannot work without JavaScript, so the fallback text says so.
-    expect(html).toContain('needs JavaScript')
+    // One field only: the widget is told not to add its own with the same name.
+    expect(html).toContain('&quot;response-field&quot;:false')
+    expect(html.match(/name="cf-turnstile-response"/g)).toHaveLength(1)
+  })
+
+  it('shows the no-JavaScript fallback only when JavaScript is off', async () => {
+    const html = await container.renderToString(Turnstile, {
+      props: { action: 'apply', siteKey: '1x00000000000000000000AA' },
+    })
+
+    // A noscript element, so a visitor with JavaScript never sees the warning.
+    expect(html).toContain('<noscript>')
+    expect(html).toMatch(/<noscript>[\s\S]*needs JavaScript[\s\S]*<\/noscript>/)
   })
 })

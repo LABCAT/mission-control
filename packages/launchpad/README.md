@@ -59,7 +59,9 @@ useful.
 ## Conventions
 
 - Zero client JavaScript by default. Only `Turnstile` ships a script, and only the forms that
-  include it.
+  include it. The component owns its own `cf-turnstile-response` field, so the widget is
+  rendered with `response-field: false`; otherwise the token would be posted twice. Its
+  no-JavaScript notice is a `<noscript>`, so it is invisible when the script works.
 - Money is an integer amount of minor units plus an ISO 4217 code, never a float.
 - A tenant's domain, currency, timezone, locale and colours are never hardcoded here.
 - Filter values come from the URL, so they are validated against `FilterDefinition` before

@@ -50,6 +50,10 @@ export const turnstileErrorMessage = (code: null | string | undefined): string =
 /** The name of the field Turnstile puts its token in; the server reads it from the form. */
 export const TURNSTILE_RESPONSE_FIELD = 'cf-turnstile-response'
 
+/** Shown only when JavaScript is off, because the widget cannot render without it. */
+export const TURNSTILE_NOSCRIPT_MESSAGE =
+  "This step needs JavaScript. If you can't enable it, email the address on our contact page."
+
 export type TurnstileWidgetOptions = {
   action?: string
   language?: string
@@ -61,6 +65,9 @@ export type TurnstileWidgetOptions = {
 export const turnstileWidgetOptions = (options: TurnstileWidgetOptions) => ({
   action: options.action,
   language: options.language ?? 'auto',
+  // The component renders and fills its own hidden field; Turnstile's automatic one would
+  // submit the same name twice, leaving the server an empty or ambiguous token.
+  'response-field': false,
   sitekey: options.siteKey,
   theme: options.theme ?? 'auto',
 })

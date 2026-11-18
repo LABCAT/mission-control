@@ -1,12 +1,11 @@
 ---
 /**
  * Turnstile is a form island: the only JavaScript a site ships. With JavaScript off the
- * widget never renders, the form still posts, and the server rejects the empty token with
- * the message below — no page depends on this script for its content.
+ * widget never renders, so the noscript message explains the step and the form still posts.
  */
 import Field from '@labcat2020/rocketship/components/Field'
 
-import { TURNSTILE_RESPONSE_FIELD, turnstileWidgetOptions } from '../tenant/turnstile'
+import { TURNSTILE_NOSCRIPT_MESSAGE, TURNSTILE_RESPONSE_FIELD, turnstileWidgetOptions } from '../tenant/turnstile'
 
 type Props = {
   /** Public Turnstile site key. The secret key stays on the server. */
@@ -36,9 +35,9 @@ const options = turnstileWidgetOptions({ action, language, siteKey, theme })
     id={`${widgetId}-response`}
     data-turnstile-response
   />
-  <p class="lp-turnstile__noscript">
-    This step needs JavaScript. If you can't enable it, email the address on our contact page.
-  </p>
+  <noscript>
+    <p class="lp-turnstile__noscript">{TURNSTILE_NOSCRIPT_MESSAGE}</p>
+  </noscript>
   <p class="lp-turnstile__error" data-turnstile-error hidden>
     Verification failed. Please reload the page and try again.
   </p>
