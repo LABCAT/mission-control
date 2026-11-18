@@ -85,33 +85,14 @@ type BootTestPayloadArgs = {
 let bootCount = 0
 
 /**
- * Reset the disposable database before each boot. `push: true` runs drizzle-kit, which stops
- * to ask "is this table a rename of that one?" as soon as it sees tables it did not generate
- * — the previous suite's collections, or leftovers from a failed run. Starting from an empty
- * `public` schema keeps the push non-interactive. Only ever runs against `TEST_DATABASE_URL`.
- */
-const resetPublicSchema = async (connectionString: string): Promise<void> => {
-  const { Client } = await import('pg')
-  const client = new Client({ connectionString })
-
-  try {
-    await client.connect()
-    await client.query('DROP SCHEMA IF EXISTS public CASCADE')
-    await client.query('CREATE SCHEMA public')
-  } finally {
-    await client.end()
-  }
-}
-
-/**
  * Boot a Payload instance against Postgres (schema pushed for the test run) and seed
  * two tenants, A and B, plus a super-admin and one tenant-admin per tenant.
  *
  * The users are real auth documents: Payload's authorship tracking (`createdBy` /
  * `updatedBy`) foreign-keys every document a user creates back to the users collection.
  *
- * Every boot drops and recreates the database's `public` schema, so passes must point
- * `TEST_DATABASE_URL` at a disposable database and must not run concurrently.
+ * Every boot pushes into a schema of its own, so `TEST_DATABASE_URL` must point at a
+ * disposable database.
  */
 export const bootTestPayload = async ({
   collections,
@@ -123,7 +104,13 @@ export const bootTestPayload = async ({
     throw new Error('Set TEST_DATABASE_URL to a disposable Postgres database before running integration tests')
   }
 
-  await resetPublicSchema(testDatabaseUrl)
+  // Each boot gets its own schema. Drizzle's dev push compares the whole schema, so two
+  // boots with different collections in one schema prompt to rename each other's tables.
+  const schemaName = `mc_test_${++bootCount}_${Math.random().toString(36).slice(2, 8)}`
+
+  // Payload skips the push when the config's tables match the previous push in this
+  // process. Every boot here is a fresh schema, so the push must always run.
+  process.env.PAYLOAD_FORCE_DRIZZLE_PUSH = 'true'
 
   const config = await buildConfig({
     admin: { user: 'users' },
@@ -137,6 +124,7 @@ export const bootTestPayload = async ({
       },
       // CI gets a fresh Postgres; push the schema for this test run instead of migrations.
       push: true,
+      schemaName,
     }),
     plugins: [
       multiTenantPlugin({
@@ -159,7 +147,7 @@ export const bootTestPayload = async ({
   })
 
   // A unique key so concurrent tests never reuse a cached Payload instance.
-  const payload = await getPayload({ config, key: `payload-jobs-test-${++bootCount}` })
+  const payload = await getPayload({ config, key: `payload-jobs-test-${bootCount}` })
 
   const tenantIds: number[] = []
   const userIds: number[] = []
@@ -202,6 +190,18 @@ export const bootTestPayload = async ({
       } catch (error) {
         cleanupErrors.push(error)
       }
+    }
+
+    try {
+      // The schema holds every table this boot pushed; leaving it behind would make the
+      // next drizzle push offer its tables as renames. Drop it on the adapter's own pool,
+      // before `destroy()` closes that pool.
+      const { pool } = payload.db as unknown as {
+        pool?: { query: (statement: string) => Promise<unknown> }
+      }
+      await pool?.query(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE`)
+    } catch (error) {
+      cleanupErrors.push(error)
     }
 
     try {

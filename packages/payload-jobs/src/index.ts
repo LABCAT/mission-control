@@ -3,6 +3,7 @@ import type { CollectionConfig, Config, GlobalConfig, Plugin } from 'payload'
 import { accountAuthEndpoints, type AccountAuthOptions } from './account-auth'
 import { locationsCollection, locationsTenantSlugIndex } from './collections/locations'
 import { withLegacyPasswords } from './legacy-password'
+import { taxonomyCollections } from './taxonomies'
 import { jobBoardSettingsGlobal, jobBoardTenantFields } from './tenancy'
 
 export * from './access'
@@ -13,6 +14,7 @@ export * from './legacy-password'
 export * from './rate-limit'
 export * from './seed/vanuatu'
 export * from './site-keys'
+export * from './taxonomies'
 export * from './tenancy'
 
 export type TenancyMode = 'multi' | 'single'
@@ -164,8 +166,14 @@ export const payloadJobs =
       }
     }
 
+    const registeredSlugs = new Set(config.collections?.map((collection) => collection.slug))
+    const taxonomies = taxonomyCollections({ tenantScoped: tenancy === 'multi' }).filter(
+      (collection) => !registeredSlugs.has(collection.slug),
+    )
+
     return {
       ...config,
+      collections: [...(config.collections ?? []), ...taxonomies],
       custom: {
         ...config.custom,
         payloadJobs: { enabled: true, tenancy, features },

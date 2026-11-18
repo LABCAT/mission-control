@@ -2,6 +2,7 @@ import type { CollectionConfig, Config } from 'payload'
 import { describe, expect, it } from 'vitest'
 
 import { payloadJobs } from '../index'
+import { TAXONOMY_SLUGS } from '../taxonomies'
 import {
   ALLOWED_PARENT_KINDS,
   LOCATION_KINDS,
@@ -25,7 +26,11 @@ describe('locations collection', () => {
   it('is registered by the plugin without touching the host collections', async () => {
     const config = await payloadJobs()(baseConfig)
 
-    expect(config.collections?.map((collection) => collection.slug)).toEqual(['users', 'locations'])
+    expect(config.collections?.map((collection) => collection.slug)).toEqual([
+      'users',
+      'locations',
+      ...TAXONOMY_SLUGS,
+    ])
     expect(Locations.slug).toBe('locations')
     expect(Locations.versions).toBe(false)
   })

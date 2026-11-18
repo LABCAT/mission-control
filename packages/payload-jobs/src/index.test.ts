@@ -2,6 +2,7 @@ import type { Config } from 'payload'
 import { describe, expect, it } from 'vitest'
 
 import { payloadJobs } from './index'
+import { TAXONOMY_SLUGS } from './taxonomies'
 
 const baseConfig = {
   collections: [{ slug: 'users', fields: [] }],
@@ -16,10 +17,13 @@ describe('payloadJobs', () => {
     expect(result.collections?.map((collection) => collection.slug)).toEqual([
       'users',
       'locations',
+      ...TAXONOMY_SLUGS,
     ])
-    expect(result.collections?.[0]?.fields.map((field) => ('name' in field ? field.name : null))).toContain(
+    // mission-control: the users collection is extended (legacy password support, PJ-34).
+    expect(result.collections?.[0]?.fields.map((f) => ('name' in f ? f.name : null))).toContain(
       'legacyPasswordHash',
     )
+    expect(result.collections?.[0]?.hooks?.beforeOperation).toHaveLength(1)
     expect(result.globals?.[0]?.slug).toBe('job-board-settings')
     expect(result.custom).toEqual({
       existing: true,
