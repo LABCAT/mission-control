@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "pnpm --filter cms dev",
     "build": "pnpm --filter cms build",
+    "wp-import": "pnpm --filter cms wp-import",
     "typecheck": "pnpm -r --if-present typecheck",
     "lint": "oxlint packages",
     "test": "vitest run"
