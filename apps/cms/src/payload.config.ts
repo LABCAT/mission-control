@@ -17,6 +17,9 @@ import { SiteKeys } from './collections/SiteKeys'
 import { SystemStatus } from './globals/SystemStatus'
 import { cloudflareEmailAdapter } from './email/cloudflare-email-adapter'
 import { heartbeatTask } from './jobs/heartbeat'
+import { Documents } from './collections/Documents'
+import { createMediaTransformers } from './media'
+import { r2Storage } from '@payloadcms/storage-r2'
 import { multiTenantOptions } from './tenancy'
 
 const filename = fileURLToPath(import.meta.url)
@@ -24,9 +27,14 @@ const dirname = path.dirname(filename)
 
 // In workerd the database comes from the Hyperdrive binding. The Node CLI (migrations,
 // type generation) has no bindings and uses DATABASE_URL.
+// mission-control: also gates the sharp import and the R2 adapter below.
+const isWorkers = globalThis.navigator?.userAgent === 'Cloudflare-Workers'
 const workerEnv =
-  globalThis.navigator?.userAgent === 'Cloudflare-Workers'
-    ? ((await import('cloudflare:workers')).env as { HYPERDRIVE?: { connectionString: string } })
+  isWorkers
+    ? ((await import('cloudflare:workers')).env as {
+        HYPERDRIVE?: { connectionString: string }
+        MEDIA?: R2Bucket // mission-control: R2 bucket `mission-control-media`
+      })
     : undefined
 
 export default buildConfig({
@@ -38,7 +46,7 @@ export default buildConfig({
   },
   // Cloudflare Workers rejects PBKDF2 above 100,000 iterations (Payload's default is 600,000).
   auth: { passwordHashIterations: 100000 },
-  collections: [Users, Media, Folders, Tags, Tenants, SiteKeys], // mission-control: tenants, site keys
+  collections: [Users, Media, Folders, Tags, Tenants, SiteKeys, Documents], // mission-control: tenants, site keys, documents
   editor: lexicalEditor(),
   secret: process.env.PAYLOAD_SECRET || '',
   typescript: {
@@ -69,6 +77,17 @@ export default buildConfig({
   email: cloudflareEmailAdapter,
   globals: [SystemStatus],
   jobs: { tasks: [heartbeatTask] },
+  // mission-control: resized media variants (PJ-10)
+  upload: { transformers: await createMediaTransformers(isWorkers) },
+  // mission-control: media and documents live in R2 (binding `MEDIA`). The Node CLI has no
+  // bindings, so there the adapter is off and the schema stays identical.
+  storage: [
+    r2Storage({
+      bucket: workerEnv?.MEDIA as R2Bucket,
+      collections: { documents: true, media: true },
+      enabled: Boolean(workerEnv?.MEDIA),
+    }),
+  ],
   plugins: [payloadJobs({ tenancy: 'multi' }), multiTenantPlugin(multiTenantOptions)],
   localization: {
     locales: [{ code: 'en', label: 'English' }],

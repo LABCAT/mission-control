@@ -19,7 +19,9 @@
     "@payloadcms/graphql": "4.0.0-beta.7",
     "@payloadcms/plugin-multi-tenant": "4.0.0-beta.7",
     "@payloadcms/richtext-lexical": "4.0.0-beta.7",
+    "@payloadcms/storage-r2": "4.0.0-beta.7",
     "@payloadcms/tanstack-start": "4.0.0-beta.7",
+    "@payloadcms/transformer-sharp": "4.0.0-beta.7",
     "@payloadcms/ui": "4.0.0-beta.7",
     "@tanstack/react-router": "^1.170.44",
     "@tanstack/react-start": "^1.169.1",
@@ -29,6 +31,7 @@
     "payload": "4.0.0-beta.7",
     "react": "19.3.1",
     "react-dom": "19.3.1",
+    "sharp": "0.35.5",
     "srvx": "0.11.21",
     "vite": "8.3.0"
   },
