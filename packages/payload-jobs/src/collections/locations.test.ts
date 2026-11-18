@@ -30,6 +30,7 @@ describe('locations collection', () => {
     expect(config.collections?.map((collection) => collection.slug)).toEqual([
       'users',
       'locations',
+      'organisations',
       ALERT_SUBSCRIPTIONS_SLUG,
       ...TAXONOMY_SLUGS,
       'plans',

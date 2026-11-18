@@ -255,6 +255,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "organisation_id": {
+          "name": "organisation_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
         "updated_at": {
           "name": "updated_at",
           "type": "timestamp(3) with time zone",
@@ -332,6 +338,21 @@
         }
       },
       "indexes": {
+        "users_organisation_idx": {
+          "name": "users_organisation_idx",
+          "columns": [
+            {
+              "expression": "organisation_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "users_updated_at_idx": {
           "name": "users_updated_at_idx",
           "columns": [
@@ -378,7 +399,21 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "users_organisation_id_organisations_id_fk": {
+          "name": "users_organisation_id_organisations_id_fk",
+          "tableFrom": "users",
+          "tableTo": "organisations",
+          "columnsFrom": [
+            "organisation_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -5265,8 +5300,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.alert_subscriptions": {
-      "name": "alert_subscriptions",
+    "public.organisations": {
+      "name": "organisations",
       "schema": "",
       "columns": {
         "id": {
@@ -5281,40 +5316,135 @@
           "primaryKey": false,
           "notNull": false
         },
-        "email": {
-          "name": "email",
+        "name": {
+          "name": "name",
           "type": "varchar",
           "primaryKey": false,
           "notNull": true
         },
-        "confirmed": {
-          "name": "confirmed",
+        "slug": {
+          "name": "slug",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "enum_organisations_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "size": {
+          "name": "size",
+          "type": "enum_organisations_size",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "about": {
+          "name": "about",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "logo_id": {
+          "name": "logo_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cover_id": {
+          "name": "cover_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "website": {
+          "name": "website",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "phone": {
+          "name": "phone",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "location_id": {
+          "name": "location_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "socials_facebook": {
+          "name": "socials_facebook",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "socials_instagram": {
+          "name": "socials_instagram",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "socials_linkedin": {
+          "name": "socials_linkedin",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "socials_x": {
+          "name": "socials_x",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "socials_youtube": {
+          "name": "socials_youtube",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "listing_requested": {
+          "name": "listing_requested",
           "type": "boolean",
           "primaryKey": false,
           "notNull": false,
           "default": false
         },
-        "confirm_token": {
-          "name": "confirm_token",
+        "approved": {
+          "name": "approved",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": false
+        },
+        "page_enabled": {
+          "name": "page_enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": false
+        },
+        "can_pay_by_invoice": {
+          "name": "can_pay_by_invoice",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": false
+        },
+        "billing_email": {
+          "name": "billing_email",
           "type": "varchar",
           "primaryKey": false,
           "notNull": false
         },
-        "manage_token": {
-          "name": "manage_token",
+        "xero_contact_code": {
+          "name": "xero_contact_code",
           "type": "varchar",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "keywords": {
-          "name": "keywords",
-          "type": "varchar",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "last_sent_at": {
-          "name": "last_sent_at",
-          "type": "timestamp(3) with time zone",
           "primaryKey": false,
           "notNull": false
         },
@@ -5340,8 +5470,8 @@
         }
       },
       "indexes": {
-        "alert_subscriptions_tenant_idx": {
-          "name": "alert_subscriptions_tenant_idx",
+        "organisations_tenant_idx": {
+          "name": "organisations_tenant_idx",
           "columns": [
             {
               "expression": "tenant_id",
@@ -5355,11 +5485,11 @@
           "method": "btree",
           "with": {}
         },
-        "alert_subscriptions_confirmed_idx": {
-          "name": "alert_subscriptions_confirmed_idx",
+        "organisations_slug_idx": {
+          "name": "organisations_slug_idx",
           "columns": [
             {
-              "expression": "confirmed",
+              "expression": "slug",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -5370,38 +5500,68 @@
           "method": "btree",
           "with": {}
         },
-        "alert_subscriptions_confirm_token_idx": {
-          "name": "alert_subscriptions_confirm_token_idx",
+        "organisations_type_idx": {
+          "name": "organisations_type_idx",
           "columns": [
             {
-              "expression": "confirm_token",
+              "expression": "type",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
             }
           ],
-          "isUnique": true,
+          "isUnique": false,
           "concurrently": false,
           "method": "btree",
           "with": {}
         },
-        "alert_subscriptions_manage_token_idx": {
-          "name": "alert_subscriptions_manage_token_idx",
+        "organisations_logo_idx": {
+          "name": "organisations_logo_idx",
           "columns": [
             {
-              "expression": "manage_token",
+              "expression": "logo_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
             }
           ],
-          "isUnique": true,
+          "isUnique": false,
           "concurrently": false,
           "method": "btree",
           "with": {}
         },
-        "alert_subscriptions_legacy_id_idx": {
-          "name": "alert_subscriptions_legacy_id_idx",
+        "organisations_cover_idx": {
+          "name": "organisations_cover_idx",
+          "columns": [
+            {
+              "expression": "cover_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "organisations_location_idx": {
+          "name": "organisations_location_idx",
+          "columns": [
+            {
+              "expression": "location_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "organisations_legacy_id_idx": {
+          "name": "organisations_legacy_id_idx",
           "columns": [
             {
               "expression": "legacy_id",
@@ -5415,8 +5575,8 @@
           "method": "btree",
           "with": {}
         },
-        "alert_subscriptions_updated_at_idx": {
-          "name": "alert_subscriptions_updated_at_idx",
+        "organisations_updated_at_idx": {
+          "name": "organisations_updated_at_idx",
           "columns": [
             {
               "expression": "updated_at",
@@ -5430,8 +5590,8 @@
           "method": "btree",
           "with": {}
         },
-        "alert_subscriptions_created_at_idx": {
-          "name": "alert_subscriptions_created_at_idx",
+        "organisations_created_at_idx": {
+          "name": "organisations_created_at_idx",
           "columns": [
             {
               "expression": "created_at",
@@ -5445,8 +5605,8 @@
           "method": "btree",
           "with": {}
         },
-        "tenant_email_idx": {
-          "name": "tenant_email_idx",
+        "tenant_slug_1_idx": {
+          "name": "tenant_slug_1_idx",
           "columns": [
             {
               "expression": "tenant_id",
@@ -5455,7 +5615,7 @@
               "nulls": "last"
             },
             {
-              "expression": "email",
+              "expression": "slug",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -5468,12 +5628,51 @@
         }
       },
       "foreignKeys": {
-        "alert_subscriptions_tenant_id_tenants_id_fk": {
-          "name": "alert_subscriptions_tenant_id_tenants_id_fk",
-          "tableFrom": "alert_subscriptions",
+        "organisations_tenant_id_tenants_id_fk": {
+          "name": "organisations_tenant_id_tenants_id_fk",
+          "tableFrom": "organisations",
           "tableTo": "tenants",
           "columnsFrom": [
             "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "organisations_logo_id_media_id_fk": {
+          "name": "organisations_logo_id_media_id_fk",
+          "tableFrom": "organisations",
+          "tableTo": "media",
+          "columnsFrom": [
+            "logo_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "organisations_cover_id_media_id_fk": {
+          "name": "organisations_cover_id_media_id_fk",
+          "tableFrom": "organisations",
+          "tableTo": "media",
+          "columnsFrom": [
+            "cover_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "organisations_location_id_locations_id_fk": {
+          "name": "organisations_location_id_locations_id_fk",
+          "tableFrom": "organisations",
+          "tableTo": "locations",
+          "columnsFrom": [
+            "location_id"
           ],
           "columnsTo": [
             "id"
@@ -5488,8 +5687,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.alert_subscriptions_rels": {
-      "name": "alert_subscriptions_rels",
+    "public.organisations_rels": {
+      "name": "organisations_rels",
       "schema": "",
       "columns": {
         "id": {
@@ -5516,20 +5715,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "job_categories_id": {
-          "name": "job_categories_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "job_types_id": {
-          "name": "job_types_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "locations_id": {
-          "name": "locations_id",
+        "areas_of_focus_id": {
+          "name": "areas_of_focus_id",
           "type": "integer",
           "primaryKey": false,
           "notNull": false
@@ -5542,8 +5729,8 @@
         }
       },
       "indexes": {
-        "alert_subscriptions_rels_order_idx": {
-          "name": "alert_subscriptions_rels_order_idx",
+        "organisations_rels_order_idx": {
+          "name": "organisations_rels_order_idx",
           "columns": [
             {
               "expression": "order",
@@ -5557,8 +5744,8 @@
           "method": "btree",
           "with": {}
         },
-        "alert_subscriptions_rels_parent_idx": {
-          "name": "alert_subscriptions_rels_parent_idx",
+        "organisations_rels_parent_idx": {
+          "name": "organisations_rels_parent_idx",
           "columns": [
             {
               "expression": "parent_id",
@@ -5572,8 +5759,8 @@
           "method": "btree",
           "with": {}
         },
-        "alert_subscriptions_rels_path_idx": {
-          "name": "alert_subscriptions_rels_path_idx",
+        "organisations_rels_path_idx": {
+          "name": "organisations_rels_path_idx",
           "columns": [
             {
               "expression": "path",
@@ -5587,11 +5774,11 @@
           "method": "btree",
           "with": {}
         },
-        "alert_subscriptions_rels_job_categories_id_idx": {
-          "name": "alert_subscriptions_rels_job_categories_id_idx",
+        "organisations_rels_areas_of_focus_id_idx": {
+          "name": "organisations_rels_areas_of_focus_id_idx",
           "columns": [
             {
-              "expression": "job_categories_id",
+              "expression": "areas_of_focus_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -5602,38 +5789,8 @@
           "method": "btree",
           "with": {}
         },
-        "alert_subscriptions_rels_job_types_id_idx": {
-          "name": "alert_subscriptions_rels_job_types_id_idx",
-          "columns": [
-            {
-              "expression": "job_types_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "alert_subscriptions_rels_locations_id_idx": {
-          "name": "alert_subscriptions_rels_locations_id_idx",
-          "columns": [
-            {
-              "expression": "locations_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "alert_subscriptions_rels_users_id_idx": {
-          "name": "alert_subscriptions_rels_users_id_idx",
+        "organisations_rels_users_id_idx": {
+          "name": "organisations_rels_users_id_idx",
           "columns": [
             {
               "expression": "users_id",
@@ -5649,10 +5806,10 @@
         }
       },
       "foreignKeys": {
-        "alert_subscriptions_rels_parent_fk": {
-          "name": "alert_subscriptions_rels_parent_fk",
-          "tableFrom": "alert_subscriptions_rels",
-          "tableTo": "alert_subscriptions",
+        "organisations_rels_parent_fk": {
+          "name": "organisations_rels_parent_fk",
+          "tableFrom": "organisations_rels",
+          "tableTo": "organisations",
           "columnsFrom": [
             "parent_id"
           ],
@@ -5662,12 +5819,12 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "alert_subscriptions_rels_job_categories_fk": {
-          "name": "alert_subscriptions_rels_job_categories_fk",
-          "tableFrom": "alert_subscriptions_rels",
-          "tableTo": "job_categories",
+        "organisations_rels_areas_of_focus_fk": {
+          "name": "organisations_rels_areas_of_focus_fk",
+          "tableFrom": "organisations_rels",
+          "tableTo": "areas_of_focus",
           "columnsFrom": [
-            "job_categories_id"
+            "areas_of_focus_id"
           ],
           "columnsTo": [
             "id"
@@ -5675,35 +5832,9 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "alert_subscriptions_rels_job_types_fk": {
-          "name": "alert_subscriptions_rels_job_types_fk",
-          "tableFrom": "alert_subscriptions_rels",
-          "tableTo": "job_types",
-          "columnsFrom": [
-            "job_types_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "alert_subscriptions_rels_locations_fk": {
-          "name": "alert_subscriptions_rels_locations_fk",
-          "tableFrom": "alert_subscriptions_rels",
-          "tableTo": "locations",
-          "columnsFrom": [
-            "locations_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "alert_subscriptions_rels_users_fk": {
-          "name": "alert_subscriptions_rels_users_fk",
-          "tableFrom": "alert_subscriptions_rels",
+        "organisations_rels_users_fk": {
+          "name": "organisations_rels_users_fk",
+          "tableFrom": "organisations_rels",
           "tableTo": "users",
           "columnsFrom": [
             "users_id"
@@ -5825,8 +5956,8 @@
           "method": "btree",
           "with": {}
         },
-        "tenant_slug_1_idx": {
-          "name": "tenant_slug_1_idx",
+        "tenant_slug_2_idx": {
+          "name": "tenant_slug_2_idx",
           "columns": [
             {
               "expression": "tenant_id",
@@ -6184,8 +6315,8 @@
           "method": "btree",
           "with": {}
         },
-        "tenant_slug_2_idx": {
-          "name": "tenant_slug_2_idx",
+        "tenant_slug_3_idx": {
+          "name": "tenant_slug_3_idx",
           "columns": [
             {
               "expression": "tenant_id",
@@ -6536,8 +6667,8 @@
           "method": "btree",
           "with": {}
         },
-        "tenant_slug_3_idx": {
-          "name": "tenant_slug_3_idx",
+        "tenant_slug_4_idx": {
+          "name": "tenant_slug_4_idx",
           "columns": [
             {
               "expression": "tenant_id",
@@ -6888,8 +7019,8 @@
           "method": "btree",
           "with": {}
         },
-        "tenant_slug_4_idx": {
-          "name": "tenant_slug_4_idx",
+        "tenant_slug_5_idx": {
+          "name": "tenant_slug_5_idx",
           "columns": [
             {
               "expression": "tenant_id",
@@ -7240,8 +7371,8 @@
           "method": "btree",
           "with": {}
         },
-        "tenant_slug_5_idx": {
-          "name": "tenant_slug_5_idx",
+        "tenant_slug_6_idx": {
+          "name": "tenant_slug_6_idx",
           "columns": [
             {
               "expression": "tenant_id",
@@ -8611,8 +8742,8 @@
           "primaryKey": false,
           "notNull": false
         },
-        "alert_subscriptions_id": {
-          "name": "alert_subscriptions_id",
+        "organisations_id": {
+          "name": "organisations_id",
           "type": "integer",
           "primaryKey": false,
           "notNull": false
@@ -8820,11 +8951,11 @@
           "method": "btree",
           "with": {}
         },
-        "payload_locked_documents_rels_alert_subscriptions_id_idx": {
-          "name": "payload_locked_documents_rels_alert_subscriptions_id_idx",
+        "payload_locked_documents_rels_organisations_id_idx": {
+          "name": "payload_locked_documents_rels_organisations_id_idx",
           "columns": [
             {
-              "expression": "alert_subscriptions_id",
+              "expression": "organisations_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -9044,12 +9175,12 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "payload_locked_documents_rels_alert_subscriptions_fk": {
-          "name": "payload_locked_documents_rels_alert_subscriptions_fk",
+        "payload_locked_documents_rels_organisations_fk": {
+          "name": "payload_locked_documents_rels_organisations_fk",
           "tableFrom": "payload_locked_documents_rels",
-          "tableTo": "alert_subscriptions",
+          "tableTo": "organisations",
           "columnsFrom": [
-            "alert_subscriptions_id"
+            "organisations_id"
           ],
           "columnsTo": [
             "id"
@@ -9916,6 +10047,29 @@
         "town"
       ]
     },
+    "public.enum_organisations_type": {
+      "name": "enum_organisations_type",
+      "schema": "public",
+      "values": [
+        "business",
+        "government",
+        "nfp",
+        "consultant",
+        "recruiter",
+        "social-enterprise"
+      ]
+    },
+    "public.enum_organisations_size": {
+      "name": "enum_organisations_size",
+      "schema": "public",
+      "values": [
+        "1-10",
+        "11-50",
+        "51-200",
+        "201-500",
+        "500-plus"
+      ]
+    },
     "public.enum_plans_status": {
       "name": "enum_plans_status",
       "schema": "public",
@@ -9975,6 +10129,6 @@
     "tables": {},
     "columns": {}
   },
-  "id": "5c032e5a-f8eb-4344-aa49-778dfa2b26a5",
+  "id": "f9c4c5cc-7b54-4fcf-b78b-6db29abe1cd2",
   "prevId": "00000000-0000-0000-0000-000000000000"
 }

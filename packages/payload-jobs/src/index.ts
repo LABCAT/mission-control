@@ -3,6 +3,11 @@ import type { CollectionConfig, Config, GlobalConfig, Plugin } from 'payload'
 import { accountAuthEndpoints, type AccountAuthOptions } from './account-auth'
 import { ALERT_SUBSCRIPTIONS_SLUG, alertSubscriptionCollection } from './alert-subscriptions'
 import { locationsCollection, locationsTenantSlugIndex } from './collections/locations'
+import {
+  ORGANISATIONS_SLUG,
+  organisationsCollection,
+  withOrganisationField,
+} from './collections/organisations'
 import { withLegacyPasswords } from './legacy-password'
 import { planCollection, PLANS_SLUG, withPlanRestrictionGuards } from './plans'
 import { TAXONOMY_SLUGS, taxonomyCollections } from './taxonomies'
@@ -12,6 +17,7 @@ export * from './access'
 export * from './account-auth'
 export * from './alert-subscriptions'
 export * from './collections/locations'
+export * from './collections/organisations'
 export * from './email'
 export * from './legacy-password'
 export * from './money'
@@ -33,6 +39,7 @@ export type TenancyMode = 'multi' | 'single'
  */
 export const PAYLOAD_JOBS_TENANT_COLLECTIONS = [
   'locations',
+  ORGANISATIONS_SLUG,
   ...TAXONOMY_SLUGS,
   PLANS_SLUG,
   ALERT_SUBSCRIPTIONS_SLUG,
@@ -59,6 +66,8 @@ export type PayloadJobsOptions = {
   enabled?: boolean
   /** Which job-board collections to enable. All default to true. */
   features?: PayloadJobsFeatures
+  /** Slug of the host's upload collection for organisation logos and covers. Defaults to `media`. */
+  mediaSlug?: null | string
   /** Slug of the auth collection that gets legacy WordPress password support. Defaults to `users`. */
   usersSlug?: string
   /** Slug of the tenant settings global in single-tenant mode. */
@@ -80,8 +89,10 @@ const resolvedFeatures = (options: PayloadJobsOptions): Required<PayloadJobsFeat
 const jobBoardCollections = (
   tenancy: TenancyMode,
   features: Required<PayloadJobsFeatures>,
+  mediaSlug: null | string,
 ): CollectionConfig[] => [
   locationsCollection({ requireTenant: tenancy === 'multi' }),
+  organisationsCollection({ mediaSlug, tenantScoped: tenancy === 'multi' }),
   ...(features.alerts
     ? [alertSubscriptionCollection({ tenantScoped: tenancy === 'multi' })]
     : []),
@@ -102,18 +113,31 @@ export const payloadJobs =
 
     let config = incoming
 
-    // mission-control: imported WordPress users keep their passwords (PJ-34).
+    // mission-control: imported WordPress users keep their passwords (PJ-34), and employers
+    // point at their organisation (PJ-18).
     const usersSlug = options.usersSlug ?? 'users'
     config = {
       ...config,
       collections: config.collections?.map((collection) =>
-        collection.slug === usersSlug ? withLegacyPasswords(collection) : collection,
+        collection.slug === usersSlug
+          ? withOrganisationField(withLegacyPasswords(collection), tenancy === 'multi')
+          : collection,
       ),
     }
 
     const settingsSlug = options.settingsSlug ?? 'job-board-settings'
 
-    const added = jobBoardCollections(tenancy, features)
+    // Organisation logos and covers point at the host's upload collection. Without one (a
+    // minimal config or a test boot) the images are left out rather than failing the build.
+    const hostSlugs = new Set((config.collections ?? []).map((collection) => collection.slug))
+    const mediaSlug =
+      options.mediaSlug === undefined
+        ? hostSlugs.has('media')
+          ? 'media'
+          : null
+        : options.mediaSlug
+
+    const added = jobBoardCollections(tenancy, features, mediaSlug)
     const existingSlugs = new Set((config.collections ?? []).map((collection) => collection.slug))
     const clashes = added.filter((collection) => existingSlugs.has(collection.slug))
     if (clashes.length > 0) {
@@ -138,14 +162,16 @@ export const payloadJobs =
         if (options.accountAuth === false) return []
 
         const accountAuth = { tenantsSlug, ...options.accountAuth }
-        const usersSlug = accountAuth.usersSlug ?? 'users'
-        const users = config.collections?.find((collection) => collection.slug === usersSlug)
+        const accountUsersSlug = accountAuth.usersSlug ?? 'users'
+        const users = config.collections?.find(
+          (collection) => collection.slug === accountUsersSlug,
+        )
         const verify = typeof users?.auth === 'object' ? users.auth.verify : undefined
 
         if (!users || !verify) {
           throw new Error(
-            `payload-jobs: account auth needs a "${usersSlug}" auth collection with auth.verify ` +
-              'enabled. Enable it or pass accountAuth: false.',
+            `payload-jobs: account auth needs a "${accountUsersSlug}" auth collection with ` +
+              'auth.verify enabled. Enable it or pass accountAuth: false.',
           )
         }
 

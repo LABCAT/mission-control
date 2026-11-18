@@ -192,7 +192,7 @@ All Agent tasks except PJ-28. Each one is collection config, access control and 
   in `apps/cms`; it names one tenant on purpose (the tree is Vanuatu data, not tenant
   configuration), refuses an aggregate tenant, and is idempotent.
 
-**PJ-18**
+**PJ-18** – done 2026-11-18
 - `organisations`:
   - `name`, `slug`, `type` (business, government, NFP, consultant, recruiter, social enterprise), `size`, `areasOfFocus`
   - `logo` and `cover`, `website`, socials, `phone`, `location`, `about`
@@ -201,6 +201,24 @@ All Agent tasks except PJ-28. Each one is collection config, access control and 
   - `approved` (bool), `legacyId`
 - Users get `organisation` (relation).
 - Employers can edit their own organisation, but not the admin-only fields.
+- The employer profile is a document, not user meta: `users.organisation` replaces the WordPress
+  `job_lister` meta. A later task can let several accounts share one organisation.
+- Access: super admin all; tenant-admin/editor read and write in their tenants; an employer reads
+  and updates only their own organisation (`create`/`delete` are staff-only, so PJ-29 creates the
+  pair with `overrideAccess`); seekers nothing; an anonymous site key reads only `approved`
+  organisations whose page is enabled — its tenant's, or every tenant for an aggregate key.
+  `approved`, `pageEnabled` and the billing fields use field-level access, so an employer's write
+  to them is dropped rather than honoured. This is why `organisations` is deliberately absent
+  from `site-keys.ts`'s allowlist: its own filter is narrower.
+- Slug is unique per tenant (`validateTaxonomySlug` plus a `(tenant, slug)` unique index); `website`
+  and the socials must be full `http(s)` URLs.
+- Tenant is sticky: only a tenant admin of both the tenant an organisation leaves and the one it
+  joins may move it. Relations to media, locations and areas of focus must belong to the same
+  tenant.
+- Deviation from WordPress: `size` and `type` are URL-safe enum values rather than display
+  strings, and the legacy `enable_organisations_page` flag becomes two fields — an employer asks
+  (`listingRequested`), a tenant admin approves (`approved`) and turns the page on (`pageEnabled`).
+  The legacy `nickname` is `slug`.
 
 **PJ-19**
 - `jobs`:
