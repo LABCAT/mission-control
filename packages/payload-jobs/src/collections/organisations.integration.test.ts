@@ -323,8 +323,57 @@ describe('organisations integration', () => {
       })
       .catch((thrown: unknown) => thrown)
 
-    expect(JSON.stringify(error)).toMatch(/Only a tenant admin can move an organisation/)
+    expect(JSON.stringify(error)).toMatch(/Only a tenant admin of both tenants/)
     expect(JSON.stringify(await stored(orgA.id))).toContain(`"tenant":${harness.tenantA.id}`)
+  })
+
+  it('stops an admin of an unrelated tenant moving an organisation', async () => {
+    // Admin of tenant B only: nothing about tenant A's organisation is theirs to move.
+    const elsewhere = await makeUser(
+      'admin-elsewhere',
+      [
+        { role: 'employer', tenant: harness.tenantA.id },
+        { role: 'tenant-admin', tenant: harness.tenantB.id },
+      ],
+      { organisation: orgA.id },
+    )
+
+    const error = await harness.payload
+      .update({
+        collection: 'organisations',
+        data: { tenant: harness.tenantB.id } as never,
+        id: orgA.id,
+        user: elsewhere as never,
+      })
+      .catch((thrown: unknown) => thrown)
+
+    expect(JSON.stringify(error)).toMatch(/Only a tenant admin of both tenants/)
+    expect(JSON.stringify(await stored(orgA.id))).toContain(`"tenant":${harness.tenantA.id}`)
+  })
+
+  it('lets an admin of both tenants move the organisation', async () => {
+    const adminBoth = await makeUser('admin-both', [
+      { role: 'tenant-admin', tenant: harness.tenantA.id },
+      { role: 'tenant-admin', tenant: harness.tenantB.id },
+    ])
+
+    const moved = await harness.payload.update({
+      collection: 'organisations',
+      data: { tenant: harness.tenantB.id } as never,
+      id: orgA.id,
+      user: adminBoth as never,
+    })
+
+    const movedTenant = (moved as unknown as { tenant?: number | { id: number } }).tenant
+    expect(typeof movedTenant === 'object' ? movedTenant?.id : movedTenant).toBe(harness.tenantB.id)
+
+    // Put it back for the tests after this one.
+    await harness.payload.update({
+      collection: 'organisations',
+      data: { tenant: harness.tenantA.id } as never,
+      id: orgA.id,
+      overrideAccess: true,
+    })
   })
 
   it('stores the employer’s organisation on the user', async () => {

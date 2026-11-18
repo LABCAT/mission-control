@@ -311,7 +311,8 @@ export const organisationRelationsInTenant =
  * An organisation belongs to exactly one tenant, and moving it would take its jobs, orders and
  * page with it. The multi-tenant plugin's tenant field lets any member of the collection point a
  * document at a tenant they belong to, so an employer in two tenants could move their own
- * organisation. Only tenant admins may re-assign one.
+ * organisation. Only a tenant admin of *both* the tenant it leaves and the one it joins may
+ * re-assign it: an admin of an unrelated tenant decides nothing about either.
  */
 export const organisationTenantIsStable =
   (tenantScoped: boolean): CollectionBeforeChangeHook =>
@@ -323,12 +324,25 @@ export const organisationTenantIsStable =
     const stored = tenantIDOf(originalDoc.tenant)
     if (submitted === null || String(submitted) === String(stored)) return data
 
+    // No user is a system write: an `overrideAccess` call from the importer or a seed.
     const user = userOf(req)
-    if (user && (isSuperAdmin(user) || hasAnyTenantRole(user, ORGANISATION_ADMIN_ROLES))) return data
+    if (!user) return data
+    if (isSuperAdmin(user)) return data
+
+    const adminTenants = getUserTenantIDsByRole(user, ORGANISATION_ADMIN_ROLES)
+    const isAdminOf = (id: null | number | string): boolean =>
+      id !== null && adminTenants.some((tenantID) => String(tenantID) === String(id))
+
+    if (isAdminOf(stored) && isAdminOf(submitted)) return data
 
     throw new ValidationError({
       collection: ORGANISATIONS_SLUG,
-      errors: [{ message: 'Only a tenant admin can move an organisation', path: 'tenant' }],
+      errors: [
+        {
+          message: 'Only a tenant admin of both tenants can move an organisation',
+          path: 'tenant',
+        },
+      ],
       req,
     })
   }

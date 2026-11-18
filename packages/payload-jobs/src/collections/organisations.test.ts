@@ -5,6 +5,7 @@ import type { MissionControlUser } from '../access'
 import {
   ORGANISATION_ADMIN_ROLES,
   ORGANISATION_EDITOR_ROLES,
+  organisationTenantIsStable,
   ORGANISATION_SIZES,
   ORGANISATION_TYPES,
   PUBLIC_ORGANISATION_FILTER,
@@ -41,6 +42,9 @@ const userWith = (
 
 const argsFor = (user: MissionControlUser | null, data?: Record<string, unknown>) =>
   ({ data, req: { user } }) as unknown as AccessArgs
+
+const adminOf = (...tenants: number[]): MissionControlUser =>
+  userWith(tenants.map((tenant) => ({ role: 'tenant-admin' as const, tenant })))
 
 const fieldArgsFor = (user: MissionControlUser | null) =>
   ({ req: { user } }) as unknown as Parameters<typeof organisationAdminFieldAccess>[0]
@@ -373,5 +377,63 @@ describe('organisation write access', () => {
       await remove(argsFor(userWith([{ role: 'employer', tenant: 10 }], { organisation: 7 }))),
     ).toBe(false)
     expect(await remove(argsFor(userWith([], { role: 'super-admin' })))).toBe(true)
+  })
+})
+
+describe('organisationTenantIsStable', () => {
+  const moveHook = organisationTenantIsStable(true)
+  const move = (user: MissionControlUser | null, data: Record<string, unknown> = { tenant: 2 }) =>
+    moveHook({
+      data,
+      operation: 'update',
+      originalDoc: { tenant: 1 },
+      req: { user },
+    } as never)
+  // The hook throws synchronously, so a plain try/catch reads better than `rejects`.
+  const rejectsMove = (user: MissionControlUser): void => {
+    try {
+      move(user)
+    } catch (thrown) {
+      expect(JSON.stringify(thrown)).toMatch(/Only a tenant admin of both tenants/)
+      return
+    }
+    throw new Error('Expected the move to be rejected')
+  }
+
+  it('needs admin rights in both the tenant it leaves and the one it joins', async () => {
+    rejectsMove(adminOf(1))
+    rejectsMove(adminOf(2))
+
+    // The review case: an admin of an unrelated tenant, an employer in both affected ones.
+    rejectsMove(
+      userWith([
+        { role: 'employer', tenant: 1 },
+        { role: 'tenant-admin', tenant: 3 },
+      ]),
+    )
+
+    expect(await move(adminOf(1, 2))).toEqual({ tenant: 2 })
+  })
+
+  it('lets a super admin and a system write through', async () => {
+    expect(await move(userWith([], { role: 'super-admin' }))).toEqual({ tenant: 2 })
+    expect(await move(null)).toEqual({ tenant: 2 })
+  })
+
+  it('ignores writes that keep the tenant, omit it, or run unscoped', async () => {
+    expect(await move(userWith([{ role: 'employer', tenant: 1 }]), { tenant: 1 })).toEqual({
+      tenant: 1,
+    })
+    expect(await move(userWith([{ role: 'employer', tenant: 1 }]), { name: 'Renamed' })).toEqual({
+      name: 'Renamed',
+    })
+    expect(
+      await organisationTenantIsStable(false)({
+        data: { tenant: 2 },
+        operation: 'update',
+        originalDoc: { tenant: 1 },
+        req: { user: userWith([{ role: 'employer', tenant: 1 }]) },
+      } as never),
+    ).toEqual({ tenant: 2 })
   })
 })
