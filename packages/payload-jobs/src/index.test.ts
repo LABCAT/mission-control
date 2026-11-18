@@ -14,11 +14,15 @@ describe('payloadJobs', () => {
   it('keeps the existing config and custom keys when it registers itself', async () => {
     const result = await payloadJobs()(baseConfig)
 
-    expect(result.collections?.[0]).toBe(baseConfig.collections?.[0])
     expect(result.collections?.map((collection) => collection.slug)).toEqual([
       'users',
       ...TAXONOMY_SLUGS,
     ])
+    // mission-control: the users collection is extended (legacy password support, PJ-34).
+    expect(result.collections?.[0]?.fields.map((f) => ('name' in f ? f.name : null))).toContain(
+      'legacyPasswordHash',
+    )
+    expect(result.collections?.[0]?.hooks?.beforeOperation).toHaveLength(1)
     expect(result.globals?.[0]?.slug).toBe('job-board-settings')
     expect(result.custom).toEqual({
       existing: true,
