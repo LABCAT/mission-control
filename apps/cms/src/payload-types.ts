@@ -86,6 +86,7 @@ export interface Config {
     tenants: Tenant;
     'site-keys': SiteKey;
     documents: Document;
+    coupons: Coupon;
     'payload-kv': PayloadKv;
     'payload-jobs': PayloadJob;
     'payload-locked-documents': PayloadLockedDocument;
@@ -102,6 +103,7 @@ export interface Config {
     tenants: TenantsSelect<false> | TenantsSelect<true>;
     'site-keys': SiteKeysSelect<false> | SiteKeysSelect<true>;
     documents: DocumentsSelect<false> | DocumentsSelect<true>;
+    coupons: CouponsSelect<false> | CouponsSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-jobs': PayloadJobsSelect<false> | PayloadJobsSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
@@ -516,6 +518,49 @@ export interface Document {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "coupons".
+ */
+export interface Coupon {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  /**
+   * Saved in uppercase. Unique within the tenant, for example LINKPS.
+   */
+  code: string;
+  discountType: 'flat' | 'percent';
+  /**
+   * Flat: minor units of the tenant currency, so 500 is Vt 500. Percentage: a whole percentage, so 10 is 10%.
+   */
+  amount: number;
+  /**
+   * An inactive coupon is kept but cannot be applied.
+   */
+  active?: boolean | null;
+  /**
+   * How many orders have used the coupon. Only order processing changes it; other writes keep the stored value.
+   */
+  useCount: number;
+  /**
+   * Leave empty for unlimited uses.
+   */
+  maxUses?: number | null;
+  /**
+   * WordPress post id, for the import.
+   */
+  legacyId?: number | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv".
  */
 export interface PayloadKv {
@@ -675,6 +720,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'documents';
         value: number | Document;
+      } | null)
+    | ({
+        relationTo: 'coupons';
+        value: number | Coupon;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -1038,6 +1087,24 @@ export interface DocumentsSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "coupons_select".
+ */
+export interface CouponsSelect<T extends boolean = true> {
+  tenant?: T;
+  code?: T;
+  discountType?: T;
+  amount?: T;
+  active?: T;
+  useCount?: T;
+  maxUses?: T;
+  legacyId?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv_select".
  */
 export interface PayloadKvSelect<T extends boolean = true> {
@@ -1219,7 +1286,7 @@ export interface CollectionsWidget {
 export interface CollectionQueryWidget {
   data?: {
     title?: string | null;
-    relatedCollection: 'users' | 'media' | 'folders' | 'tags' | 'tenants' | 'site-keys' | 'documents';
+    relatedCollection: 'users' | 'media' | 'folders' | 'tags' | 'tenants' | 'site-keys' | 'documents' | 'coupons';
     where?:
       | {
           [k: string]: unknown;
@@ -1241,7 +1308,8 @@ export interface CollectionQueryWidget {
  */
 export interface ActivityWidget {
   data?: {
-    excludedCollections?: ('users' | 'media' | 'folders' | 'tags' | 'tenants' | 'site-keys' | 'documents')[] | null;
+    excludedCollections?:
+      ('users' | 'media' | 'folders' | 'tags' | 'tenants' | 'site-keys' | 'documents' | 'coupons')[] | null;
   };
   width: 'small' | 'medium' | 'large' | 'x-large' | 'full';
 }

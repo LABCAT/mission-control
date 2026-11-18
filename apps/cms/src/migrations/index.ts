@@ -5,6 +5,7 @@ import * as migration_20261105_223955_multi_tenancy from './20261105_223955_mult
 import * as migration_20261107_120535_tenancy_modes from './20261107_120535_tenancy_modes';
 import * as migration_20261109_171926_site_keys from './20261109_171926_site_keys';
 import * as migration_20261118_013433_media_documents_r2 from './20261118_013433_media_documents_r2';
+import * as migration_20261118_023507_coupons from './20261118_023507_coupons';
 
 export const migrations = [
   {
@@ -41,5 +42,10 @@ export const migrations = [
     up: migration_20261118_013433_media_documents_r2.up,
     down: migration_20261118_013433_media_documents_r2.down,
     name: '20261118_013433_media_documents_r2'
+  },
+  {
+    up: migration_20261118_023507_coupons.up,
+    down: migration_20261118_023507_coupons.down,
+    name: '20261118_023507_coupons'
   },
 ];
