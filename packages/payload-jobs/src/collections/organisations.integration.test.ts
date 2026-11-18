@@ -330,6 +330,44 @@ describe('organisations integration', () => {
     expect(id).toBe(orgA.id)
   })
 
+  it('refuses to link a user to an organisation from a tenant they do not belong to', async () => {
+    const adminA = await makeUser('admin-a-link', [
+      { role: 'tenant-admin', tenant: harness.tenantA.id },
+    ])
+
+    await expect(
+      harness.payload.update({
+        collection: 'users',
+        data: { organisation: orgB.id } as never,
+        id: employer.id,
+        user: adminA as never,
+      }),
+    ).rejects.toThrow(/Organisation/)
+
+    // Same tenant is fine.
+    await expect(
+      harness.payload.update({
+        collection: 'users',
+        data: { organisation: orgA.id } as never,
+        id: employer.id,
+        user: adminA as never,
+      }),
+    ).resolves.toMatchObject({ id: employer.id })
+  })
+
+  it('lets a super admin link an organisation without a tenant membership', async () => {
+    const superAdmin = await makeUser('root-link', null, { role: 'super-admin' })
+
+    await expect(
+      harness.payload.update({
+        collection: 'users',
+        data: { organisation: orgB.id } as never,
+        id: employer.id,
+        user: superAdmin as never,
+      }),
+    ).resolves.toMatchObject({ id: employer.id })
+  })
+
   it('rejects a relation from another tenant', async () => {
     const otherArea = await harness.payload.create({
       collection: 'areas-of-focus',

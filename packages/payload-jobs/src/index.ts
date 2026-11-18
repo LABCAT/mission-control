@@ -113,7 +113,7 @@ export const payloadJobs =
       ...config,
       collections: config.collections?.map((collection) =>
         collection.slug === usersSlug
-          ? withOrganisationField(withLegacyPasswords(collection))
+          ? withOrganisationField(withLegacyPasswords(collection), tenancy === 'multi')
           : collection,
       ),
     }

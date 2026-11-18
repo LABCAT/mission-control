@@ -8,6 +8,7 @@ import {
   type Field,
   type FieldAccess,
   type PayloadRequest,
+  type Validate,
   type Where,
 } from 'payload'
 
@@ -593,12 +594,65 @@ export const organisationsCollection = ({
   versions: false,
 })
 
+const tenantsOf = (user: Record<string, unknown> | undefined): (number | string)[] =>
+  idsOf((user?.tenants as { tenant?: unknown }[] | undefined)?.map((entry) => entry?.tenant))
+
+/**
+ * An employer's organisation must belong to a tenant that employer is a member of. Field access
+ * only says *who* may set the link; without this an admin of tenant A could point a user at a
+ * tenant B organisation, which would then leak that organisation to them on read.
+ *
+ * A super admin acting has no tenant membership, so the link is theirs to set.
+ */
+export const organisationMatchesUserTenants: Validate = async (
+  value,
+  { collectionSlug, data, id, operation, req },
+) => {
+  if (value === null || value === undefined) return true
+
+  const organisationID = idsOf(value)[0]
+  if (organisationID === undefined) return true
+
+  const organisation = (await req.payload.findByID({
+    collection: ORGANISATIONS_SLUG as CollectionSlug,
+    depth: 0,
+    disableErrors: true,
+    id: organisationID,
+    overrideAccess: true,
+    req,
+  })) as null | { tenant?: unknown }
+  if (!organisation) return 'Pick an existing organisation'
+
+  const organisationTenant = tenantIDOf(organisation.tenant)
+  if (organisationTenant === null) return true
+
+  const submitted = data as Record<string, unknown>
+  const user =
+    submitted.tenants === undefined && operation === 'update' && id !== undefined
+      ? ((await req.payload.findByID({
+          collection: (collectionSlug ?? req.payload.config.admin?.user ?? 'users') as CollectionSlug,
+          depth: 0,
+          disableErrors: true,
+          id,
+          overrideAccess: true,
+          req,
+        })) as null | Record<string, unknown>)
+      : submitted
+
+  if ((req.user as Record<string, unknown> | null)?.role === 'super-admin') return true
+  if (tenantsOf(user ?? undefined).some((tenant) => String(tenant) === String(organisationTenant))) {
+    return true
+  }
+
+  return 'Pick an organisation from one of this user’s tenants'
+}
+
 /**
  * The relation an employer user gets to their organisation. Added to the users collection by
  * the plugin. Only staff may move a user to another organisation: an employer must not be able
  * to re-point their account at somebody else's profile.
  */
-export const organisationField = (): Field => ({
+export const organisationField = (tenantScoped = true): Field => ({
   name: 'organisation',
   type: 'relationship',
   relationTo: ORGANISATIONS_SLUG,
@@ -607,6 +661,7 @@ export const organisationField = (): Field => ({
     create: organisationAdminFieldAccess(false),
     update: organisationAdminFieldAccess(false),
   },
+  validate: tenantScoped ? organisationMatchesUserTenants : undefined,
   admin: {
     description: 'The organisation this employer belongs to.',
     position: 'sidebar',
@@ -614,11 +669,14 @@ export const organisationField = (): Field => ({
 })
 
 /** Add `organisation` to a users collection, keeping everything else as it was. */
-export const withOrganisationField = (collection: CollectionConfig): CollectionConfig => {
+export const withOrganisationField = (
+  collection: CollectionConfig,
+  tenantScoped = true,
+): CollectionConfig => {
   const hasField = collection.fields.some(
     (field) => 'name' in field && field.name === 'organisation',
   )
   if (hasField) return collection
 
-  return { ...collection, fields: [...collection.fields, organisationField()] }
+  return { ...collection, fields: [...collection.fields, organisationField(tenantScoped)] }
 }

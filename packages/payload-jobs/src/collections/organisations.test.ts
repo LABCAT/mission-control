@@ -10,6 +10,8 @@ import {
   ORGANISATION_TYPES,
   PUBLIC_ORGANISATION_FILTER,
   organisationAdminFieldAccess,
+  organisationField,
+  organisationMatchesUserTenants,
   organisationsCollection,
   organisationTypeOptions,
   validateUrl,
@@ -266,6 +268,15 @@ describe('organisation field access', () => {
 
   it('rejects an admin-only write with no tenant to check against', () => {
     expect(adminFieldsAccess(fieldArgsFor(adminOf(1)))).toBe(false)
+  })
+
+  it('validates the user’s organisation against their tenants only when tenant-scoped', () => {
+    expect(organisationField(true)).toMatchObject({
+      name: 'organisation',
+      validate: organisationMatchesUserTenants,
+    })
+    // Single-tenant mode has no tenants to compare against.
+    expect((organisationField(false) as { validate?: unknown }).validate).toBeUndefined()
   })
 
   it('uses tenant-admin for the admin-only fields and includes editors in the staff roles', () => {
