@@ -1,0 +1,141 @@
+---
+import Button from '@labcat2020/rocketship/components/Button'
+import Field from '@labcat2020/rocketship/components/Field'
+import Input from '@labcat2020/rocketship/components/Input'
+import Label from '@labcat2020/rocketship/components/Label'
+import Select from '@labcat2020/rocketship/components/Select'
+
+import { hiddenFilterFields, type FilterDefinition, type FilterValues } from '../tenant/filters'
+
+export type FilterOption = { label: string; value: string }
+
+export type FilterControl =
+  | { label: string; name: string; placeholder?: string; type: 'search' | 'text' }
+  | {
+      label: string
+      name: string
+      options: readonly FilterOption[]
+      type: 'select'
+      /** The empty option that clears this filter, e.g. `All categories`. */
+      anyLabel?: string
+    }
+
+type Props = {
+  /** URL the form GETs; the listing page itself. */
+  action: string
+  controls: readonly FilterControl[]
+  values?: FilterValues
+  /** Query parameters this form owns, from the page's filter definitions. */
+  definitions?: readonly FilterDefinition[]
+  submitLabel?: string
+  clearLabel?: string
+  /** Where "clear" goes; omitted when nothing is set. */
+  clearHref?: string
+  class?: string
+}
+
+const {
+  action,
+  controls,
+  values = {},
+  definitions = [],
+  submitLabel = 'Filter',
+  clearLabel = 'Clear filters',
+  clearHref,
+  class: className,
+} = Astro.props as Props
+
+const controlNames = controls.map((control) => control.name)
+// Filters the page knows about but this bar has no control for are carried along unchanged,
+// so a simplified bar never silently drops a filter from someone's URL.
+const carried = definitions.length > 0 ? definitions : controlNames.map((name) => ({ name }))
+const hidden = hiddenFilterFields(values, carried, ['page', ...controlNames])
+---
+
+<form action={action} method="get" class:list={['lp-filters', className]} role="search">
+  {
+    hidden.map((field) => (
+      <input type="hidden" name={field.name} value={field.value} />
+    ))
+  }
+  <div class="lp-filters__controls">
+    {
+      controls.map((control) => (
+        <Field>
+          <Label for={`filter-${control.name}`}>{control.label}</Label>
+          {control.type === 'select' ? (
+            <Select id={`filter-${control.name}`} name={control.name}>
+              <option value="">{control.anyLabel ?? 'All'}</option>
+              {control.options.map((option) => (
+                <option value={option.value} selected={values[control.name] === option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </Select>
+          ) : (
+            <Input
+              id={`filter-${control.name}`}
+              name={control.name}
+              placeholder={control.placeholder}
+              type={control.type}
+              value={values[control.name] ?? undefined}
+            />
+          )}
+        </Field>
+      ))
+    }
+  </div>
+  <div class="lp-filters__actions">
+    <Button type="submit">{submitLabel}</Button>
+    {
+      clearHref && (
+        <Button href={clearHref} variant="ghost" size="small">
+          {clearLabel}
+        </Button>
+      )
+    }
+  </div>
+  <noscript>
+    <p class="lp-filters__noscript">Choose your filters and press {submitLabel}.</p>
+  </noscript>
+</form>
+
+<style>
+  /* Composition only: the controls are Rocketship components, unchanged. */
+  .lp-filters {
+    display: flex;
+    flex-direction: column;
+    gap: var(--rs-space-4);
+  }
+
+  .lp-filters__controls {
+    display: grid;
+    gap: var(--rs-space-3);
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .lp-filters__actions {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--rs-space-3);
+  }
+
+  .lp-filters__noscript {
+    color: var(--rs-color-muted);
+    font-size: var(--rs-font-size-sm);
+    margin: 0;
+  }
+
+  @media (min-width: 576px) {
+    .lp-filters__controls {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (min-width: 992px) {
+    .lp-filters__controls {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
+</style>

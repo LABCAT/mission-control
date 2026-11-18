@@ -10,6 +10,8 @@ type TenantReference = null | number | string | { id: number | string }
 
 export type MissionControlUser = {
   id?: number | string
+  /** The employer's organisation (PJ-18). Missing for staff and seekers. */
+  organisation?: TenantReference | null
   role?: GlobalRole | null
   tenants?:
     | null
@@ -80,6 +82,16 @@ export const getUserTenantIDsByRole = (
   }
 
   return ids
+}
+
+/** The organisation on the user, for the employer role, or null. */
+export const getUserOrganisationID = (
+  user: MissionControlUser | null | undefined,
+): null | number | string => {
+  const organisation = user?.organisation
+  if (organisation === null || organisation === undefined) return null
+
+  return typeof organisation === 'object' ? (organisation.id ?? null) : organisation
 }
 
 /** The user's role inside one tenant, or null when they are not a member. */
