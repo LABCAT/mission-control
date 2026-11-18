@@ -23,6 +23,12 @@ export async function up({ db, payload, req }: MigrateUpArgs): Promise<void> {
 }
 
 export async function down({ db, payload, req }: MigrateDownArgs): Promise<void> {
+  // mission-control: once `_status` is gone there is no way to express an unpublished tag, so a
+  // draft left behind would be read as an ordinary live tag. Data deletion is the only safe
+  // inverse: publishing them would leak staged content, and keeping them would publish it by
+  // accident. This runs before the NOT NULL restores as well, since a draft can have no name.
+  await db.execute(sql`DELETE FROM "tags" WHERE "_status" = 'draft';`)
+
   await db.execute(sql`
    DROP INDEX "tags__status_idx";
   DROP INDEX "_tags_v_version_version__status_idx";
