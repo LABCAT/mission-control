@@ -3,6 +3,7 @@ import {
   type Access,
   type AccessResult,
   type CollectionBeforeChangeHook,
+  type CollectionBeforeValidateHook,
   type CollectionConfig,
   type CollectionSlug,
   type Field,
@@ -407,6 +408,41 @@ const imageFields = (mediaSlug: string): Field[] => [
   },
 ]
 
+/**
+ * The page slug is unique per tenant in multi-tenant mode, and unique across the site when the
+ * tenant scope is off. The compound index covers the first case; this hook reports the clash
+ * with a readable message instead of a database error.
+ */
+export const uniqueOrganisationSlug =
+  (tenantScoped: boolean): CollectionBeforeValidateHook =>
+  async (args) => {
+    if (tenantScoped) return uniqueSlugPerTenant(ORGANISATIONS_SLUG as CollectionSlug)(args)
+
+    const { data, originalDoc, req } = args
+    const slug = typeof data?.slug === 'string' ? data.slug.trim() : ''
+    if (!slug) return data
+
+    const selfID = originalDoc?.id
+    const { docs } = await req.payload.find({
+      collection: ORGANISATIONS_SLUG as CollectionSlug,
+      depth: 0,
+      limit: 2,
+      overrideAccess: true,
+      pagination: false,
+      req,
+      where: { slug: { equals: slug } },
+    })
+
+    const conflict = docs.some((doc) => selfID === undefined || String(doc.id) !== String(selfID))
+    if (!conflict) return data
+
+    throw new ValidationError({
+      collection: ORGANISATIONS_SLUG,
+      errors: [{ message: `Slug "${slug}" is already used`, path: 'slug' }],
+      req,
+    })
+  }
+
 const profileFields = (mediaSlug: null | string, tenantScoped: boolean): Field[] => {
   const adminOnly = adminOnlyFor(tenantScoped)
   const billingOnly = adminOnlyForReads(tenantScoped)
@@ -420,11 +456,15 @@ const profileFields = (mediaSlug: null | string, tenantScoped: boolean): Field[]
   {
     name: 'slug',
     type: 'text',
+    // Single-tenant sites have no tenant to scope the slug to, so the column alone is unique.
     index: true,
     required: true,
+    unique: !tenantScoped,
     validate: validateOrganisationSlug,
     admin: {
-      description: 'Used in the organisation page URL. Unique within the tenant.',
+      description: tenantScoped
+        ? 'Used in the organisation page URL. Unique within the tenant.'
+        : 'Used in the organisation page URL. Unique across the site.',
     },
   },
   {
@@ -602,7 +642,7 @@ export const organisationsCollection = ({
       organisationRelationsInTenant(tenantScoped, mediaSlug),
       organisationTenantIsStable(tenantScoped),
     ],
-    beforeValidate: [uniqueSlugPerTenant(ORGANISATIONS_SLUG as CollectionSlug)],
+    beforeValidate: [uniqueOrganisationSlug(tenantScoped)],
   },
   // The unique index spans the tenant, so the same slug may exist on two tenants.
   indexes: tenantScoped ? [{ fields: ['tenant', 'slug'], unique: true }] : [],

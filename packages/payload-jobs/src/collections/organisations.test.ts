@@ -1,5 +1,5 @@
 import type { AccessArgs, CollectionConfig, Field, TextField } from 'payload'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import type { MissionControlUser } from '../access'
 import {
@@ -14,6 +14,7 @@ import {
   organisationMatchesUserTenants,
   organisationsCollection,
   organisationTypeOptions,
+  uniqueOrganisationSlug,
   validateUrl,
 } from './organisations'
 import { hashSiteKey } from '../site-keys'
@@ -154,11 +155,19 @@ describe('organisations collection config', () => {
     expect(fieldNamed('cover')).toMatchObject({ relationTo: 'media', type: 'upload' })
   })
 
-  it('indexes the slug and the legacy id, and keeps the slug unique per tenant', () => {
-    expect(fieldNamed('slug')).toMatchObject({ index: true, required: true })
+  it('indexes the legacy id and keeps the slug unique per tenant', () => {
+    // The unique index spans the tenant, so the column on its own is only indexed.
+    expect(fieldNamed('slug')).toMatchObject({ index: true, required: true, unique: false })
     expect(fieldNamed('legacyId')).toMatchObject({ index: true, type: 'number' })
     expect(collection.indexes).toEqual([{ fields: ['tenant', 'slug'], unique: true }])
     expect(collection.versions).toBe(false)
+  })
+
+  it('makes the slug unique across the site in single-tenant mode', () => {
+    const single = organisationsCollection({ mediaSlug: null, tenantScoped: false })
+
+    expect(fieldNamed('slug', single)).toMatchObject({ index: true, required: true, unique: true })
+    expect(single.indexes).toEqual([])
   })
 
   it('drops the media fields and the compound index without a media collection', () => {
@@ -181,6 +190,56 @@ describe('organisations collection config', () => {
 
     expect(() => fieldNamed('logo', organisations)).toThrow()
     expect(() => fieldNamed('name', organisations)).not.toThrow()
+  })
+})
+
+describe('organisation slug uniqueness', () => {
+  const hookFor = async (tenantScoped: boolean, existing: { id: number; slug: string }[]) => {
+    const find = vi.fn(async () => ({ docs: existing }))
+    const req = { payload: { find } }
+
+    return { find, hook: uniqueOrganisationSlug(tenantScoped), req }
+  }
+
+  it('scopes the check to the tenant in multi-tenant mode', async () => {
+    const { find, hook, req } = await hookFor(true, [])
+
+    await hook({ data: { slug: 'acme', tenant: 7 }, req } as never)
+
+    expect(find).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { and: [{ slug: { equals: 'acme' } }, { tenant: { equals: 7 } }] },
+      }),
+    )
+  })
+
+  it('checks every document when the tenant scope is off', async () => {
+    const { find, hook, req } = await hookFor(false, [{ id: 1, slug: 'acme' }])
+
+    const error = await hook({ data: { slug: 'acme' }, req } as never).catch((thrown: unknown) => thrown)
+
+    expect(error).toMatchObject({
+      message: 'The following field is invalid: slug',
+    })
+    expect(find).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { slug: { equals: 'acme' } } }),
+    )
+  })
+
+  it('lets a single-tenant document keep its own slug', async () => {
+    const { hook, req } = await hookFor(false, [{ id: 3, slug: 'acme' }])
+
+    await expect(
+      hook({ data: { slug: 'acme' }, originalDoc: { id: 3 }, req } as never),
+    ).resolves.toEqual({ slug: 'acme' })
+  })
+
+  it('skips the lookup when there is no slug', async () => {
+    const { find, hook, req } = await hookFor(false, [])
+
+    await hook({ data: {}, req } as never)
+
+    expect(find).not.toHaveBeenCalled()
   })
 })
 
