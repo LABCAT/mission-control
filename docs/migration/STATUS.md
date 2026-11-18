@@ -12,6 +12,7 @@ Orchestrator: session_01H9XNhzozJtHHbbc8KMd38e (replaces session_01H9XNhytrTqfZd
 | RCL-86 Pagination (Astro) | session_01H9XNhxyWEqz3FKnUHMSwGq | rcl-pagination (rocketship) | rocketship PR #117 open, checks pass; not merged | – |
 | PJ-10 R2 media + documents | session_01H9XNi2ukPLFrf7UXZq26qo | pj-10-r2-media | PR #45 (migration): CI green; Kinsho blocked: no variants in Worker → variants deferred to 1.x (PJ-85), updating PR | – |
 | PJ-81 Front-end account auth API | session_01H9XNhyACB3KEWtUM95Dxix | pj-81-account-auth | PR #46 (migration): CI green; Kinsho blocked (stale JWT membership) → fixing | – |
+| PJ-86 Fix Preview Neon branch limit (HIGH) | session_01H9XNhy1DvXtSP2Di9Stg72 | pj-86-preview-neon-cleanup | Dispatched 02:12 (exception to the WIP rule: it unblocks all PRs) | – |
 | PJ-54 Xero plugin skeleton | session_01H9XNi2enTmhN3JrbmoUZFh | pj-54-xero-skeleton | PR #44: CI green; Kinsho blocked (non-atomic one-row check) → fixing | – |
 
 Spend at 02:05 UTC: sub-sessions $8.04 (PJ-10 2.19, PJ-81 2.42, RCL-86 1.00, PJ-54 0.76, PJ-60 0.63, PJ-34 0.57, PJ-70 0.47) + orchestrator $3.13 = **$11.17**.
