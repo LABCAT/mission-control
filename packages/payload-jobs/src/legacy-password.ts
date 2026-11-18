@@ -1,6 +1,7 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto'
 
 import { compare } from 'bcryptjs'
+import type { CollectionBeforeOperationHook, CollectionConfig, Field } from 'payload'
 
 /**
  * Verifier for imported WordPress password hashes (PJ-34).
@@ -10,7 +11,7 @@ import { compare } from 'bcryptjs'
  *
  * Supported formats:
  * - phpass portable `$P$` / `$H$` (WordPress < 6.8, and every hash on old sites)
- * - WordPress 6.8+ `$wp$2y$..`: bcrypt over base64(HMAC-SHA384(trim(password), "wp-sha384")).
+ * - WordPress 6.8+ `$wp$2y$..`: bcrypt over base64(HMAC-SHA384(php_trim(password), "wp-sha384")).
  *   Source: WordPress 6.8.0 `wp-includes/pluggable.php`, `wp_check_password()` /
  *   `wp_hash_password()`; the `$wp` prefix is stripped before `password_verify`.
  * - plain bcrypt `$2y$` / `$2a$` / `$2b$`
@@ -26,6 +27,19 @@ const MAX_PHPASS_LOG2 = 20
 const MAX_BCRYPT_COST = 15
 
 const BCRYPT_RE = /^\$2[aby]\$(\d{2})\$[./A-Za-z0-9]{53}$/
+
+/**
+ * PHP's default `trim()`: only space, \t, \n, \r, NUL and \x0B. JavaScript's `trim()` also
+ * strips Unicode whitespace (e.g. U+00A0), which would reject valid WordPress passwords.
+ */
+const PHP_TRIM_CHARS = ' \t\n\r\0\x0B'
+export const phpTrim = (value: string): string => {
+  let start = 0
+  let end = value.length
+  while (start < end && PHP_TRIM_CHARS.includes(value[start]!)) start++
+  while (end > start && PHP_TRIM_CHARS.includes(value[end - 1]!)) end--
+  return value.slice(start, end)
+}
 
 function safeEqual(a: string, b: string): boolean {
   const left = Buffer.from(a)
@@ -82,7 +96,7 @@ export async function verifyLegacyWordPressHash(
     }
     if (hash.startsWith('$P$') || hash.startsWith('$H$')) return verifyPhpass(password, hash)
     if (hash.startsWith('$wp$')) {
-      const prehash = createHmac('sha384', 'wp-sha384').update(password.trim()).digest('base64')
+      const prehash = createHmac('sha384', 'wp-sha384').update(phpTrim(password)).digest('base64')
       return await verifyBcrypt(prehash, hash.slice(3))
     }
     return await verifyBcrypt(password, hash)
@@ -117,3 +131,73 @@ export async function legacyLoginHook(args: {
   }
   return { status: 'failed', countFailedAttempt: true }
 }
+
+export const LEGACY_PASSWORD_FIELD = 'legacyPasswordHash'
+
+/** Internal-only: never readable or writable through the API; set by the importer. */
+export const legacyPasswordHashField: Field = {
+  name: LEGACY_PASSWORD_FIELD,
+  type: 'text',
+  access: { create: () => false, read: () => false, update: () => false },
+  admin: { hidden: true },
+  index: false,
+}
+
+/**
+ * Runs *before* Payload's own login check (Payload's `beforeLogin` runs after it, so it could
+ * never accept a user who has no Payload hash yet). If the user still has a legacy hash and the
+ * password matches it, the password is saved through Payload (rehash) and the legacy hash is
+ * cleared, so the normal login that follows succeeds.
+ *
+ * A wrong password changes nothing: the user has no Payload hash, so Payload's own check fails
+ * and increments `loginAttempts`, which is what drives lockout. Locked users are skipped.
+ */
+export const legacyBeforeLoginOperation: CollectionBeforeOperationHook = async ({
+  args,
+  operation,
+}) => {
+  if (operation !== 'login') return args
+  const { collection, data, req } = args as {
+    collection: { config: { slug: string } }
+    data?: { email?: unknown; password?: unknown }
+    req: import('payload').PayloadRequest
+  }
+  if (typeof data?.email !== 'string' || typeof data.password !== 'string') return args
+
+  const slug = collection.config.slug
+  const { docs } = await req.payload.find({
+    collection: slug as never,
+    where: { email: { equals: data.email.trim().toLowerCase() } },
+    limit: 1,
+    depth: 0,
+    overrideAccess: true,
+    showHiddenFields: true,
+    pagination: false,
+  })
+  const user = docs[0] as
+    | { id: number | string; lockUntil?: string | null; legacyPasswordHash?: string | null }
+    | undefined
+  if (!user) return args
+  if (user.lockUntil && new Date(user.lockUntil).getTime() > Date.now()) return args
+
+  const result = await legacyLoginHook({ user, password: data.password })
+  if (result.status === 'verified') {
+    await req.payload.update({
+      collection: slug as never,
+      id: user.id,
+      data: result.update as never,
+      overrideAccess: true,
+    })
+  }
+  return args
+}
+
+/** Adds the legacy hash field and the login hook to an auth collection. */
+export const withLegacyPasswords = (collection: CollectionConfig): CollectionConfig => ({
+  ...collection,
+  fields: [...collection.fields, legacyPasswordHashField],
+  hooks: {
+    ...collection.hooks,
+    beforeOperation: [...(collection.hooks?.beforeOperation ?? []), legacyBeforeLoginOperation],
+  },
+})

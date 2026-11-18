@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { legacyLoginHook, verifyLegacyWordPressHash } from './legacy-password'
+import { legacyLoginHook, phpTrim, verifyLegacyWordPressHash } from './legacy-password'
 
 // phpass vector: published in phpass 0.5 test.php (openwall.com/phpass).
 const PHPASS = '$P$9IQRaTwmfeRo7ud9Fh4E2PdI0S3r.L0'
@@ -37,6 +37,15 @@ describe('verifyLegacyWordPressHash', () => {
     expect(await verifyLegacyWordPressHash(` ${PHPASS_PW}`, PHPASS)).toBe(false)
   })
 
+  it('keeps Unicode whitespace at the edges of a $wp$ password, like PHP trim()', async () => {
+    // PHP 8.3: password "\u00A0pw\u00A0 " hashed as WordPress 6.8 does; trim() removes only the final space.
+    const hash = '$wp$2y$04$RWmaCmrxGN4J/pulusjlj.txb.AtmMdrrhu5U6Ol1OxWTeAY6GC02'
+    expect(await verifyLegacyWordPressHash('\u00A0pw\u00A0', hash)).toBe(true)
+    expect(await verifyLegacyWordPressHash('\u00A0pw\u00A0 ', hash)).toBe(true)
+    // JavaScript's trim() would reduce the correct password to "pw"; that must not match.
+    expect(await verifyLegacyWordPressHash('pw', hash)).toBe(false)
+  })
+
   it('handles non-ASCII passwords as UTF-8', async () => {
     // Different bytes must not collide: wrong accent fails.
     expect(await verifyLegacyWordPressHash('tést12345', PHPASS)).toBe(false)
@@ -70,6 +79,20 @@ describe('verifyLegacyWordPressHash', () => {
     await expect(verifyLegacyWordPressHash(undefined as never, PHPASS)).resolves.toBe(false)
     await expect(verifyLegacyWordPressHash(PHPASS_PW, null as never)).resolves.toBe(false)
   })
+})
+
+describe('phpTrim', () => {
+  it("strips exactly PHP's default characters from both ends", () => {
+    expect(phpTrim(' \t\n\r\0\x0Bpw\x0B\0\r\n\t ')).toBe('pw')
+    expect(phpTrim(' a b ')).toBe('a b')
+  })
+
+  it.each(['\u00A0', '\u2003', '\u3000', '\uFEFF', '\f'])(
+    'leaves Unicode / other whitespace %j at the edges alone',
+    (ws) => {
+      expect(phpTrim(`${ws}pw${ws}`)).toBe(`${ws}pw${ws}`)
+    },
+  )
 })
 
 describe('legacyLoginHook', () => {
