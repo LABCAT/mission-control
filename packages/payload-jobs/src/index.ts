@@ -1,6 +1,7 @@
 import type { CollectionConfig, Config, GlobalConfig, Plugin } from 'payload'
 
 import { accountAuthEndpoints, type AccountAuthOptions } from './account-auth'
+import { ALERT_SUBSCRIPTIONS_SLUG, alertSubscriptionCollection } from './alert-subscriptions'
 import { locationsCollection, locationsTenantSlugIndex } from './collections/locations'
 import { withLegacyPasswords } from './legacy-password'
 import { planCollection, PLANS_SLUG, withPlanRestrictionGuards } from './plans'
@@ -9,6 +10,7 @@ import { jobBoardSettingsGlobal, jobBoardTenantFields } from './tenancy'
 
 export * from './access'
 export * from './account-auth'
+export * from './alert-subscriptions'
 export * from './collections/locations'
 export * from './email'
 export * from './legacy-password'
@@ -29,12 +31,17 @@ export type TenancyMode = 'multi' | 'single'
  * every one of them in the multi-tenant plugin's `collections`, which adds their `tenant`
  * field; Payload otherwise rejects the config ("Field tenant was not found").
  */
-export const PAYLOAD_JOBS_TENANT_COLLECTIONS = ['locations', ...TAXONOMY_SLUGS, PLANS_SLUG] as const
+export const PAYLOAD_JOBS_TENANT_COLLECTIONS = [
+  'locations',
+  ...TAXONOMY_SLUGS,
+  PLANS_SLUG,
+  ALERT_SUBSCRIPTIONS_SLUG,
+] as const
 
 export type PayloadJobsFeatures = {
   /** Job applications. The collection is added by a later task. Defaults to true. */
   applications?: boolean
-  /** Job alert subscriptions. The collection is added by a later task. Defaults to true. */
+  /** Email-only job alert subscriptions (PJ-26). Defaults to true. */
   alerts?: boolean
   /** Organisation job credits. Added by a later task. Defaults to true. */
   credits?: boolean
@@ -70,8 +77,14 @@ const resolvedFeatures = (options: PayloadJobsOptions): Required<PayloadJobsFeat
 })
 
 /** Job-board collections owned by this plugin. Later tasks append to this list. */
-const jobBoardCollections = (tenancy: TenancyMode): CollectionConfig[] => [
+const jobBoardCollections = (
+  tenancy: TenancyMode,
+  features: Required<PayloadJobsFeatures>,
+): CollectionConfig[] => [
   locationsCollection({ requireTenant: tenancy === 'multi' }),
+  ...(features.alerts
+    ? [alertSubscriptionCollection({ tenantScoped: tenancy === 'multi' })]
+    : []),
 ]
 
 /**
@@ -100,7 +113,7 @@ export const payloadJobs =
 
     const settingsSlug = options.settingsSlug ?? 'job-board-settings'
 
-    const added = jobBoardCollections(tenancy)
+    const added = jobBoardCollections(tenancy, features)
     const existingSlugs = new Set((config.collections ?? []).map((collection) => collection.slug))
     const clashes = added.filter((collection) => existingSlugs.has(collection.slug))
     if (clashes.length > 0) {

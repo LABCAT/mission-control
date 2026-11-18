@@ -32,6 +32,9 @@ export const multiTenantOptions = {
     // mission-control: plans read site keys themselves (active plans only), so they skip the
     // generic site key override; seekers are denied (PJ-21).
     plans: { accessResultOverride: denySeekerOnly(({ accessResult }) => accessResult) },
+    // mission-control: alert subscribers are personal data (PJ-26). The collection's own access
+    // already denies site keys, seekers and anonymous callers, so no override is needed here.
+    'alert-subscriptions': {},
   },
   tenantsArrayField: {
     rowFields: [

@@ -1,6 +1,7 @@
 import type { CollectionConfig, Config } from 'payload'
 import { describe, expect, it } from 'vitest'
 
+import { ALERT_SUBSCRIPTIONS_SLUG } from '../alert-subscriptions'
 import { payloadJobs } from '../index'
 import { TAXONOMY_SLUGS } from '../taxonomies'
 import {
@@ -29,6 +30,7 @@ describe('locations collection', () => {
     expect(config.collections?.map((collection) => collection.slug)).toEqual([
       'users',
       'locations',
+      ALERT_SUBSCRIPTIONS_SLUG,
       ...TAXONOMY_SLUGS,
       'plans',
     ])
