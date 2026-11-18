@@ -4,8 +4,7 @@ import type { PlanSeed } from '@mission-control/payload-jobs'
  * Vanuatu Wok's live plans (USAGE.md, founder decision 18 Nov 2026): every live plan someone
  * buys is kept: Regular listing, Job pack, 10 Job pack, Volunteer listing and Enhanced listing.
  * "Unlimited 6 month" is not built. Enhanced listing is a plan that includes the Enhanced
- * add-on; the add-ons themselves (Enhanced, Premium) are seeded in PJ-87, and `seedPlans` defers
- * the plan until then.
+ * add-on (seeded from `vwok-add-ons.ts`, before the plans).
  *
  * Prices are VUV, which has no minor units, so 5000 is Vt 5,000.
  *

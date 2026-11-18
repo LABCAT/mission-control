@@ -8,6 +8,8 @@ import {
 } from './collections/organisations'
 import { locationsCollection, locationsTenantSlugIndex } from './collections/locations'
 import { withLegacyPasswords } from './legacy-password'
+import { addOnCollection, ADD_ONS_SLUG } from './add-ons'
+import { expireJobPlacementsTask, PLACEMENTS_FIELD } from './placements'
 import { planCollection, PLANS_SLUG, withPlanRestrictionGuards } from './plans'
 import { TAXONOMY_SLUGS, taxonomyCollections } from './taxonomies'
 import { jobBoardSettingsGlobal, jobBoardTenantFields } from './tenancy'
@@ -19,6 +21,10 @@ export * from './collections/organisations'
 export * from './email'
 export * from './legacy-password'
 export * from './money'
+export * from './add-ons'
+export * from './add-ons-seed'
+export * from './catalog'
+export * from './placements'
 export * from './plans'
 export * from './plans-seed'
 export * from './pricing'
@@ -39,6 +45,7 @@ export const PAYLOAD_JOBS_TENANT_COLLECTIONS = [
   'locations',
   ORGANISATIONS_SLUG,
   ...TAXONOMY_SLUGS,
+  ADD_ONS_SLUG,
   PLANS_SLUG,
 ] as const
 
@@ -73,6 +80,11 @@ export type PayloadJobsOptions = {
   tenancy?: TenancyMode
   /** Slug of the tenants collection in multi-tenant mode. */
   tenantsSlug?: string
+  /**
+   * Slug of the jobs collection (PJ-19). When it exists and has the `placements` field
+   * (`jobPlacementsField()`), the daily task that expires placements is registered.
+   */
+  jobsSlug?: string
 }
 
 const resolvedFeatures = (options: PayloadJobsOptions): Required<PayloadJobsFeatures> => ({
@@ -218,12 +230,30 @@ export const payloadJobs =
       ),
       { tenantScoped: tenancy === 'multi' },
     )
-    // Plans are always on: every job board sells listings, even if every plan is free.
-    const plans = planCollection({ settingsSlug, tenantScoped: tenancy === 'multi', tenantsSlug })
+    const catalogOptions = { settingsSlug, tenantScoped: tenancy === 'multi', tenantsSlug }
+    // Plans and add-ons are always on: every job board sells listings, even if all are free.
+    const addOns = addOnCollection(catalogOptions)
+    const plans = planCollection(catalogOptions)
+
+    // Expire job placements daily, once there is a jobs collection that has them (PJ-19).
+    const jobsSlug = options.jobsSlug ?? 'jobs'
+    const jobs = config.collections?.find((collection) => collection.slug === jobsSlug)
+    const hasPlacements = jobs?.fields.some(
+      (field) => 'name' in field && field.name === PLACEMENTS_FIELD,
+    )
+    const jobsConfig = hasPlacements
+      ? {
+          ...config.jobs,
+          tasks: [...(config.jobs?.tasks ?? []), expireJobPlacementsTask({ jobsSlug })],
+        }
+      : config.jobs
 
     return {
       ...config,
-      collections: [...(config.collections ?? []), ...taxonomies, plans],
+      // Plans before add-ons: Payload numbers compound index names in collection order, and
+      // plans' existing `tenant_key_idx` must keep its name.
+      collections: [...(config.collections ?? []), ...taxonomies, plans, addOns],
+      jobs: jobsConfig,
       custom: {
         ...config.custom,
         payloadJobs: { enabled: true, tenancy, features },
