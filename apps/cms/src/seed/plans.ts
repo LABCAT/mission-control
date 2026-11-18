@@ -1,23 +1,25 @@
 import { getPayload } from 'payload'
 
-import { seedPlans } from '@mission-control/payload-jobs'
+import { seedAddOns, seedPlans } from '@mission-control/payload-jobs'
 
 import config from '../payload.config'
+import { vwokAddOns } from './vwok-add-ons'
 import { vwokPlans } from './vwok-plans'
 
 /**
- * Seed a tenant's plans: `SEED_PLANS_CONFIRM=1 SEED_PLANS_TENANT=vwok pnpm seed:plans`.
- * Idempotent: existing plans (same key or legacyId) are never changed.
+ * Seed a tenant's add-ons, then its plans (plans include add-ons):
+ * `SEED_PLANS_CONFIRM=1 SEED_PLANS_TENANT=vwok pnpm seed:plans`.
+ * Idempotent: existing add-ons and plans (same key or legacy id) are never changed.
  */
-const seeds = { vwok: vwokPlans }
+const seeds = { vwok: { addOns: vwokAddOns, plans: vwokPlans } }
 
 if (process.env.SEED_PLANS_CONFIRM !== '1') {
   throw new Error('Refusing to seed plans. Set SEED_PLANS_CONFIRM=1 for the intended database.')
 }
 
 const tenantSlug = process.env.SEED_PLANS_TENANT ?? 'vwok'
-const plans = seeds[tenantSlug as keyof typeof seeds]
-if (!plans) throw new Error(`No plan seed for tenant "${tenantSlug}"`)
+const seed = seeds[tenantSlug as keyof typeof seeds]
+if (!seed) throw new Error(`No plan seed for tenant "${tenantSlug}"`)
 
 const payload = await getPayload({ config })
 
@@ -31,9 +33,14 @@ try {
   const tenant = docs[0]
   if (!tenant) throw new Error(`Tenant "${tenantSlug}" not found. Run seed:tenants first.`)
 
-  const result = await seedPlans({ payload, plans, tenantID: tenant.id })
+  // Both seeds check all their data before writing; plans need the add-ons to exist first.
+  const addOns = await seedAddOns({ addOns: seed.addOns, payload, tenantID: tenant.id })
   payload.logger.info(
-    `Plans for ${tenantSlug}: created [${result.created.join(', ')}], kept [${result.existing.join(', ')}]`,
+    `Add-ons for ${tenantSlug}: created [${addOns.created.join(', ')}], kept [${addOns.existing.join(', ')}]`,
+  )
+  const plans = await seedPlans({ payload, plans: seed.plans, tenantID: tenant.id })
+  payload.logger.info(
+    `Plans for ${tenantSlug}: created [${plans.created.join(', ')}], kept [${plans.existing.join(', ')}]`,
   )
 } finally {
   await payload.destroy()

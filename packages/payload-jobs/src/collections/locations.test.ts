@@ -34,6 +34,7 @@ describe('locations collection', () => {
       ALERT_SUBSCRIPTIONS_SLUG,
       ...TAXONOMY_SLUGS,
       'plans',
+      'add-ons',
     ])
     expect(Locations.slug).toBe('locations')
     expect(Locations.versions).toBe(false)

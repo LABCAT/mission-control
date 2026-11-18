@@ -333,6 +333,7 @@ describe('quote examples', () => {
       addOns: [
         {
           durationDays: 30,
+          grantedBy: null,
           name: 'Enhanced',
           placement: 'featured-in-listings',
           ref: { id: 'enhanced', key: null, legacyId: null },
@@ -639,5 +640,131 @@ describe('plan restrictions (examples)', () => {
     expect(codeOf(() => quote({ job: { categories: 'ngo' as never }, plan: vatu() }))).toBe('invalid-job')
     expect(codeOf(() => quote({ job: { type: {} as never }, plan: vatu() }))).toBe('invalid-job')
     expect(codeOf(() => quote({ job: { type: 1.5 }, plan: vatu() }))).toBe('invalid-job')
+  })
+})
+
+describe('add-on grants', () => {
+  const premium: QuotableAddOn = {
+    active: true,
+    currency: 'VUV',
+    durationDays: 14,
+    grants: [{ addOn: enhanced, durationDays: 30 }],
+    id: 'premium',
+    name: 'Premium',
+    placement: 'featured-in-category',
+    price: 5000,
+  }
+
+  it('gives Premium’s 30 days of Enhanced for free, recorded as a grant', () => {
+    const result = quote({ addOns: [premium], plan: vatu() })
+
+    expect(result.total).toBe(10000)
+    expect(result.lines.map((line) => line.name)).toEqual(['Regular listing', 'Premium'])
+    expect(result.entitlements.addOns).toEqual([
+      {
+        durationDays: 14,
+        grantedBy: null,
+        name: 'Premium',
+        placement: 'featured-in-category',
+        ref: { id: 'premium', key: null, legacyId: null },
+        source: 'purchase',
+      },
+      {
+        durationDays: 30,
+        grantedBy: { id: 'premium', key: null, legacyId: null },
+        name: 'Enhanced',
+        placement: 'featured-in-listings',
+        ref: { id: 'enhanced', key: null, legacyId: null },
+        source: 'grant',
+      },
+    ])
+  })
+
+  it('follows grants from add-ons a plan includes, resolving ids from the catalog', () => {
+    const premiumByID = { ...premium, grants: [{ addOn: 'enhanced', durationDays: 30 }] }
+    const plan = vatu({ includedAddOns: [{ addOn: 'premium' }] })
+
+    const result = quote({ addOnCatalog: [enhanced, premiumByID], plan })
+
+    expect(result.total).toBe(5000)
+    expect(result.entitlements.addOns.map((row) => [row.ref.id, row.source, row.durationDays])).toEqual([
+      ['premium', 'plan', 14],
+      ['enhanced', 'grant', 30],
+    ])
+  })
+
+  it('refuses an add-on given by id that is not in the catalog', () => {
+    expect(codeOf(() => quote({ plan: vatu({ includedAddOns: [{ addOn: 'premium' }] }) }))).toBe(
+      'invalid-add-on',
+    )
+    expect(
+      codeOf(() =>
+        quote({ addOns: [{ ...premium, grants: [{ addOn: 'ghost', durationDays: 30 }] }], plan: vatu() }),
+      ),
+    ).toBe('invalid-add-on')
+  })
+
+  it('cuts grant cycles instead of looping, and never grants the root to itself', () => {
+    const a = { ...enhanced, grants: [] as { addOn: string; durationDays: number }[], id: 'a', name: 'A' }
+    const b = { ...enhanced, grants: [{ addOn: 'c', durationDays: 5 }], id: 'b', name: 'B' }
+    const c = { ...enhanced, grants: [{ addOn: 'a', durationDays: 5 }, { addOn: 'b', durationDays: 5 }], id: 'c', name: 'C' }
+    a.grants = [{ addOn: 'b', durationDays: 5 }]
+
+    const result = quote({ addOnCatalog: [a, b, c], addOns: [a], plan: vatu() })
+
+    expect(result.entitlements.addOns.map((row) => [row.ref.id, row.source])).toEqual([
+      ['a', 'purchase'],
+      ['b', 'grant'],
+      ['c', 'grant'],
+    ])
+  })
+
+  it('honours grants of add-ons that are no longer sold, but not other currencies or bad durations', () => {
+    const retired = { ...premium, grants: [{ addOn: { ...enhanced, active: false }, durationDays: 30 }] }
+    expect(quote({ addOns: [retired], plan: vatu() }).entitlements.addOns).toHaveLength(2)
+
+    expect(
+      codeOf(() =>
+        quote({
+          addOns: [{ ...premium, grants: [{ addOn: { ...enhanced, currency: 'NZD' }, durationDays: 30 }] }],
+          plan: vatu(),
+        }),
+      ),
+    ).toBe('currency-mismatch')
+    expect(
+      codeOf(() => quote({ addOns: [{ ...premium, grants: [{ addOn: enhanced, durationDays: 0 }] }], plan: vatu() })),
+    ).toBe('invalid-add-on')
+  })
+
+  it('never charges for a grant (property)', () => {
+    const chain = fc.array(fc.record({ durationDays: days, price: money }), { minLength: 1, maxLength: 5 })
+
+    fc.assert(
+      fc.property(fc.integer({ min: 0, max: 1_000_000 }), chain, fc.boolean(), (planPrice, links, cyclic) => {
+        // A chain of add-ons, each granting the next; optionally the last grants the first.
+        const ids = links.map((_, index) => `g${index}`)
+        const catalog: QuotableAddOn[] = links.map((link, index) => ({
+          active: true,
+          currency: 'VUV',
+          durationDays: link.durationDays,
+          grants:
+            index + 1 < links.length
+              ? [{ addOn: ids[index + 1], durationDays: link.durationDays }]
+              : cyclic
+                ? [{ addOn: ids[0], durationDays: link.durationDays }]
+                : [],
+          id: ids[index],
+          name: ids[index],
+          placement: 'featured-in-listings',
+          price: link.price,
+        }))
+
+        const result = quote({ addOnCatalog: catalog, addOns: [catalog[0]], plan: vatu({ price: planPrice }) })
+
+        expect(result.subtotal).toBe(planPrice + links[0].price)
+        expect(result.entitlements.addOns.map((row) => row.ref.id)).toEqual(ids)
+        expect(result.entitlements.addOns.slice(1).every((row) => row.source === 'grant')).toBe(true)
+      }),
+    )
   })
 })

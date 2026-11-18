@@ -28,21 +28,37 @@ export type PricedRef = {
   legacyId?: null | number
 }
 
-/** An add-on as `quote()` reads it. The add-ons collection arrives with PJ-87. */
+/** An add-on as `quote()` reads it. An add-ons collection document satisfies this. */
 export type QuotableAddOn = PricedRef & {
-  /** `false` when the add-on is no longer sold on its own. Plans that include it still honour it. */
+  /** `false` when the add-on is no longer sold on its own. Plans and grants still honour it. */
   active?: boolean | null
   currency: string
   durationDays: number
+  /**
+   * Other add-ons this one gives for free, each for its own duration (Premium gives 30 days of
+   * Enhanced). Granted add-ons' own grants are followed too; a cycle is cut, never looped.
+   */
+  grants?: null | readonly AddOnGrant[]
   name: string
-  /** Where the add-on shows the job, e.g. `featured-in-listings`. Interpreted by PJ-87. */
+  /** Where the add-on shows the job, e.g. `featured-in-listings` (see `ADD_ON_PLACEMENTS`). */
   placement?: null | string
   price: number
 }
 
+/**
+ * An add-on, populated or as an id. An id is looked up in `QuoteArgs.addOnCatalog`, so plans
+ * and grants read at depth 0 can be quoted without populating every level.
+ */
+export type AddOnRef = DocumentID | QuotableAddOn
+
+export type AddOnGrant = {
+  addOn: AddOnRef
+  durationDays: number
+}
+
 /** An add-on a plan includes at no extra charge, optionally for a different duration. */
 export type IncludedAddOn = {
-  addOn: QuotableAddOn
+  addOn: AddOnRef
   /** Defaults to the add-on's own duration. */
   durationDays?: null | number
 }
@@ -110,6 +126,11 @@ export type QuoteJob = {
 }
 
 export type QuoteArgs = {
+  /**
+   * The tenant's add-ons, to resolve add-ons given by id in `plan.includedAddOns` and in grants.
+   * Not needed when those are populated.
+   */
+  addOnCatalog?: readonly QuotableAddOn[]
   /** Add-ons bought on top of the plan. Each one may appear once. */
   addOns?: readonly QuotableAddOn[]
   /** Job credits the organisation holds. A plan that accepts credits uses one instead of cash. */
@@ -156,10 +177,12 @@ export type AddOnEntitlementSource = 'grant' | 'plan' | 'purchase'
 
 export type AddOnEntitlement = {
   durationDays: number
+  /** For a grant, the add-on that gave it; otherwise `null`. */
+  grantedBy: null | PricedRef
   name: string
   placement: null | string
   ref: PricedRef
-  /** `plan`: included in the plan. `purchase`: bought. `grant`: given by another add-on (PJ-87). */
+  /** `plan`: included in the plan. `purchase`: bought. `grant`: given by another add-on. */
   source: AddOnEntitlementSource
 }
 
@@ -333,6 +356,70 @@ const validateAddOn = (addOn: QuotableAddOn, currency: string): void => {
   }
 }
 
+/** Look up an add-on given populated or by id (in the catalog). */
+const addOnResolver =
+  (catalog: readonly QuotableAddOn[]) =>
+  (ref: AddOnRef | null | undefined): QuotableAddOn => {
+    if (ref !== null && typeof ref === 'object') return ref
+    if (typeof ref === 'number' || (typeof ref === 'string' && ref !== '')) {
+      const found = catalog.find((addOn) => addOn && sameID(addOn.id, ref))
+      if (found) return found
+      throw new PricingError(
+        'invalid-add-on',
+        `Add-on ${ref} is not populated and not in addOnCatalog`,
+      )
+    }
+    throw new PricingError('invalid-add-on', 'An add-on reference is missing')
+  }
+
+/**
+ * The add-ons `root` grants, depth first in the order they are listed, each for the grant's own
+ * duration. A granted add-on's grants are followed too. Each add-on appears at most once per
+ * root, and never the root itself, so a cycle (A grants B grants A) ends instead of looping.
+ * Granted add-ons are free whether or not they are still sold on their own.
+ */
+const grantsOf = (
+  root: QuotableAddOn,
+  currency: string,
+  resolve: ReturnType<typeof addOnResolver>,
+): AddOnEntitlement[] => {
+  const seen: DocumentID[] = [root.id]
+  const result: AddOnEntitlement[] = []
+
+  const walk = (giver: QuotableAddOn): void => {
+    const grants = giver.grants ?? []
+    if (!Array.isArray(grants)) {
+      throw new PricingError('invalid-add-on', `Add-on "${giver.name}": grants must be a list`)
+    }
+
+    for (const grant of grants) {
+      const granted = resolve(grant?.addOn)
+      validateAddOn(granted, currency)
+      if (!isPositiveInteger(grant.durationDays)) {
+        throw new PricingError(
+          'invalid-add-on',
+          `Add-on "${giver.name}": the duration of the "${granted.name}" it grants must be a whole number of days, 1 or more`,
+        )
+      }
+      if (seen.some((id) => sameID(id, granted.id))) continue
+      seen.push(granted.id)
+
+      result.push({
+        durationDays: grant.durationDays,
+        grantedBy: refOf(giver),
+        name: granted.name,
+        placement: granted.placement ?? null,
+        ref: refOf(granted),
+        source: 'grant',
+      })
+      walk(granted)
+    }
+  }
+
+  walk(root)
+  return result
+}
+
 const failJob = (message: string): never => {
   throw new PricingError('invalid-job', `Job: ${message}`)
 }
@@ -462,6 +549,7 @@ const deepFreeze = <T>(value: T): T => {
  * 3. Coupon: applied to what is left after credits, capped at that amount.
  */
 export const quote = ({
+  addOnCatalog = [],
   addOns = [],
   availableCredits = 0,
   coupon = null,
@@ -493,10 +581,12 @@ export const quote = ({
   const entitlementAddOns: AddOnEntitlement[] = []
   const includedIDs: DocumentID[] = []
 
-  for (const included of plan.includedAddOns ?? []) {
-    validateAddOn(included?.addOn, plan.currency)
+  const resolve = addOnResolver(addOnCatalog)
 
-    const { addOn } = included
+  for (const included of plan.includedAddOns ?? []) {
+    const addOn = resolve(included?.addOn)
+    validateAddOn(addOn, plan.currency)
+
     if (includedIDs.some((id) => sameID(id, addOn.id))) {
       throw new PricingError('duplicate-add-on', `Plan "${plan.name}" includes "${addOn.name}" twice`)
     }
@@ -521,7 +611,15 @@ export const quote = ({
       ref: refOf(addOn),
       unitPrice: addOn.price,
     })
-    entitlementAddOns.push({ durationDays, name: addOn.name, placement, ref: refOf(addOn), source: 'plan' })
+    entitlementAddOns.push({
+      durationDays,
+      grantedBy: null,
+      name: addOn.name,
+      placement,
+      ref: refOf(addOn),
+      source: 'plan',
+    })
+    entitlementAddOns.push(...grantsOf(addOn, plan.currency, resolve))
   }
 
   const purchasedIDs: DocumentID[] = []
@@ -556,11 +654,13 @@ export const quote = ({
     })
     entitlementAddOns.push({
       durationDays: addOn.durationDays,
+      grantedBy: null,
       name: addOn.name,
       placement,
       ref: refOf(addOn),
       source: 'purchase',
     })
+    entitlementAddOns.push(...grantsOf(addOn, plan.currency, resolve))
   }
 
   const subtotal = sumMinorUnits(lines.map((line) => line.amount))

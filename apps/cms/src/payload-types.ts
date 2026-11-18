@@ -95,6 +95,7 @@ export interface Config {
     'salary-bands': SalaryBand;
     'areas-of-focus': AreasOfFocus;
     plans: Plan;
+    'add-ons': AddOn;
     'payload-kv': PayloadKv;
     'payload-jobs': PayloadJob;
     'payload-locked-documents': PayloadLockedDocument;
@@ -120,6 +121,7 @@ export interface Config {
     'salary-bands': SalaryBandsSelect<false> | SalaryBandsSelect<true>;
     'areas-of-focus': AreasOfFocusSelect<false> | AreasOfFocusSelect<true>;
     plans: PlansSelect<false> | PlansSelect<true>;
+    'add-ons': AddOnsSelect<false> | AddOnsSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-jobs': PayloadJobsSelect<false> | PayloadJobsSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
@@ -879,6 +881,19 @@ export interface Plan {
    */
   acceptsCredits?: boolean | null;
   /**
+   * Add-ons that come with this plan at no extra charge.
+   */
+  includedAddOns?:
+    | {
+        addOn: number | AddOn;
+        /**
+         * Days the add-on lasts. Empty: the add-on’s own duration.
+         */
+        durationDays?: number | null;
+        id?: string | null;
+      }[]
+    | null;
+  /**
    * Only for voluntary jobs (a job type marked as volunteer).
    */
   isVolunteer?: boolean | null;
@@ -902,6 +917,74 @@ export interface Plan {
    * WordPress pricing-plan post id, for the import.
    */
   legacyId?: number | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * Extras on a listing, such as featuring it. Mark one inactive to stop selling it; past orders keep what they bought.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "add-ons".
+ */
+export interface AddOn {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  name: string;
+  /**
+   * Stable identifier used by seeds and imports, e.g. enhanced. Unique in the tenant.
+   */
+  key: string;
+  description?: string | null;
+  /**
+   * Whole minor units of the tenant currency: 2500 is Vt 2,500, or $25.00 in NZD.
+   */
+  price: number;
+  /**
+   * Copied from the tenant when the add-on is saved.
+   */
+  currency?: string | null;
+  /**
+   * How long the add-on lasts on a job, in days.
+   */
+  durationDays: number;
+  /**
+   * Where the add-on shows the job.
+   */
+  placement: 'featured-in-listings' | 'featured-in-category';
+  /**
+   * Other add-ons this one gives for free, each for its own duration.
+   */
+  grants?:
+    | {
+        addOn: number | AddOn;
+        durationDays: number;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * Inactive add-ons can no longer be bought. Plans and grants that give them still do.
+   */
+  active?: boolean | null;
+  /**
+   * Lower numbers are shown first.
+   */
+  sortOrder?: number | null;
+  /**
+   * WordPress id, for the import, when there is one.
+   */
+  legacyId?: number | null;
+  /**
+   * The JobRoller job meta key this replaces, e.g. _jr_featured-listings, for the import.
+   */
+  legacyKey?: string | null;
   createdBy?: {
     relationTo: 'users';
     value: number | User;
@@ -1110,6 +1193,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'plans';
         value: number | Plan;
+      } | null)
+    | ({
+        relationTo: 'add-ons';
+        value: number | AddOn;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -1636,12 +1723,48 @@ export interface PlansSelect<T extends boolean = true> {
   jobCredits?: T;
   creditExpiryDays?: T;
   acceptsCredits?: T;
+  includedAddOns?:
+    | T
+    | {
+        addOn?: T;
+        durationDays?: T;
+        id?: T;
+      };
   isVolunteer?: T;
   allowedJobTypes?: T;
   allowedJobCategories?: T;
   status?: T;
   sortOrder?: T;
   legacyId?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "add-ons_select".
+ */
+export interface AddOnsSelect<T extends boolean = true> {
+  tenant?: T;
+  name?: T;
+  key?: T;
+  description?: T;
+  price?: T;
+  currency?: T;
+  durationDays?: T;
+  placement?: T;
+  grants?:
+    | T
+    | {
+        addOn?: T;
+        durationDays?: T;
+        id?: T;
+      };
+  active?: T;
+  sortOrder?: T;
+  legacyId?: T;
+  legacyKey?: T;
   createdBy?: T;
   updatedBy?: T;
   updatedAt?: T;
@@ -1846,7 +1969,8 @@ export interface CollectionQueryWidget {
       | 'job-tags'
       | 'salary-bands'
       | 'areas-of-focus'
-      | 'plans';
+      | 'plans'
+      | 'add-ons';
     where?:
       | {
           [k: string]: unknown;
@@ -1886,6 +2010,7 @@ export interface ActivityWidget {
           | 'salary-bands'
           | 'areas-of-focus'
           | 'plans'
+          | 'add-ons'
         )[]
       | null;
   };

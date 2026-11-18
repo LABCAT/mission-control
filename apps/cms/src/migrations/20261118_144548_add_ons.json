@@ -5852,462 +5852,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.alert_subscriptions": {
-      "name": "alert_subscriptions",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "serial",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "tenant_id": {
-          "name": "tenant_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "email": {
-          "name": "email",
-          "type": "varchar",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "confirmed": {
-          "name": "confirmed",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": false,
-          "default": false
-        },
-        "confirm_token": {
-          "name": "confirm_token",
-          "type": "varchar",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "manage_token": {
-          "name": "manage_token",
-          "type": "varchar",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "keywords": {
-          "name": "keywords",
-          "type": "varchar",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "last_sent_at": {
-          "name": "last_sent_at",
-          "type": "timestamp(3) with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "legacy_id": {
-          "name": "legacy_id",
-          "type": "numeric",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp(3) with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp(3) with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "alert_subscriptions_tenant_idx": {
-          "name": "alert_subscriptions_tenant_idx",
-          "columns": [
-            {
-              "expression": "tenant_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "alert_subscriptions_confirmed_idx": {
-          "name": "alert_subscriptions_confirmed_idx",
-          "columns": [
-            {
-              "expression": "confirmed",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "alert_subscriptions_confirm_token_idx": {
-          "name": "alert_subscriptions_confirm_token_idx",
-          "columns": [
-            {
-              "expression": "confirm_token",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "alert_subscriptions_manage_token_idx": {
-          "name": "alert_subscriptions_manage_token_idx",
-          "columns": [
-            {
-              "expression": "manage_token",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "alert_subscriptions_legacy_id_idx": {
-          "name": "alert_subscriptions_legacy_id_idx",
-          "columns": [
-            {
-              "expression": "legacy_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "alert_subscriptions_updated_at_idx": {
-          "name": "alert_subscriptions_updated_at_idx",
-          "columns": [
-            {
-              "expression": "updated_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "alert_subscriptions_created_at_idx": {
-          "name": "alert_subscriptions_created_at_idx",
-          "columns": [
-            {
-              "expression": "created_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "tenant_email_idx": {
-          "name": "tenant_email_idx",
-          "columns": [
-            {
-              "expression": "tenant_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "email",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "alert_subscriptions_tenant_id_tenants_id_fk": {
-          "name": "alert_subscriptions_tenant_id_tenants_id_fk",
-          "tableFrom": "alert_subscriptions",
-          "tableTo": "tenants",
-          "columnsFrom": [
-            "tenant_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.alert_subscriptions_rels": {
-      "name": "alert_subscriptions_rels",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "serial",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "order": {
-          "name": "order",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "parent_id": {
-          "name": "parent_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "path": {
-          "name": "path",
-          "type": "varchar",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "job_categories_id": {
-          "name": "job_categories_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "job_types_id": {
-          "name": "job_types_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "locations_id": {
-          "name": "locations_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "users_id": {
-          "name": "users_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "alert_subscriptions_rels_order_idx": {
-          "name": "alert_subscriptions_rels_order_idx",
-          "columns": [
-            {
-              "expression": "order",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "alert_subscriptions_rels_parent_idx": {
-          "name": "alert_subscriptions_rels_parent_idx",
-          "columns": [
-            {
-              "expression": "parent_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "alert_subscriptions_rels_path_idx": {
-          "name": "alert_subscriptions_rels_path_idx",
-          "columns": [
-            {
-              "expression": "path",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "alert_subscriptions_rels_job_categories_id_idx": {
-          "name": "alert_subscriptions_rels_job_categories_id_idx",
-          "columns": [
-            {
-              "expression": "job_categories_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "alert_subscriptions_rels_job_types_id_idx": {
-          "name": "alert_subscriptions_rels_job_types_id_idx",
-          "columns": [
-            {
-              "expression": "job_types_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "alert_subscriptions_rels_locations_id_idx": {
-          "name": "alert_subscriptions_rels_locations_id_idx",
-          "columns": [
-            {
-              "expression": "locations_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "alert_subscriptions_rels_users_id_idx": {
-          "name": "alert_subscriptions_rels_users_id_idx",
-          "columns": [
-            {
-              "expression": "users_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "alert_subscriptions_rels_parent_fk": {
-          "name": "alert_subscriptions_rels_parent_fk",
-          "tableFrom": "alert_subscriptions_rels",
-          "tableTo": "alert_subscriptions",
-          "columnsFrom": [
-            "parent_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "alert_subscriptions_rels_job_categories_fk": {
-          "name": "alert_subscriptions_rels_job_categories_fk",
-          "tableFrom": "alert_subscriptions_rels",
-          "tableTo": "job_categories",
-          "columnsFrom": [
-            "job_categories_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "alert_subscriptions_rels_job_types_fk": {
-          "name": "alert_subscriptions_rels_job_types_fk",
-          "tableFrom": "alert_subscriptions_rels",
-          "tableTo": "job_types",
-          "columnsFrom": [
-            "job_types_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "alert_subscriptions_rels_locations_fk": {
-          "name": "alert_subscriptions_rels_locations_fk",
-          "tableFrom": "alert_subscriptions_rels",
-          "tableTo": "locations",
-          "columnsFrom": [
-            "locations_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "alert_subscriptions_rels_users_fk": {
-          "name": "alert_subscriptions_rels_users_fk",
-          "tableFrom": "alert_subscriptions_rels",
-          "tableTo": "users",
-          "columnsFrom": [
-            "users_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.job_categories": {
       "name": "job_categories",
       "schema": "",
@@ -8075,6 +7619,122 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.plans_included_add_ons": {
+      "name": "plans_included_add_ons",
+      "schema": "",
+      "columns": {
+        "_order": {
+          "name": "_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "_parent_id": {
+          "name": "_parent_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "id": {
+          "name": "id",
+          "type": "varchar",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "add_on_id": {
+          "name": "add_on_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "duration_days": {
+          "name": "duration_days",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "plans_included_add_ons_order_idx": {
+          "name": "plans_included_add_ons_order_idx",
+          "columns": [
+            {
+              "expression": "_order",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "plans_included_add_ons_parent_id_idx": {
+          "name": "plans_included_add_ons_parent_id_idx",
+          "columns": [
+            {
+              "expression": "_parent_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "plans_included_add_ons_add_on_idx": {
+          "name": "plans_included_add_ons_add_on_idx",
+          "columns": [
+            {
+              "expression": "add_on_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "plans_included_add_ons_add_on_id_add_ons_id_fk": {
+          "name": "plans_included_add_ons_add_on_id_add_ons_id_fk",
+          "tableFrom": "plans_included_add_ons",
+          "tableTo": "add_ons",
+          "columnsFrom": [
+            "add_on_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "plans_included_add_ons_parent_id_fk": {
+          "name": "plans_included_add_ons_parent_id_fk",
+          "tableFrom": "plans_included_add_ons",
+          "tableTo": "plans",
+          "columnsFrom": [
+            "_parent_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.plans": {
       "name": "plans",
       "schema": "",
@@ -8574,6 +8234,570 @@
         "plans_rels_users_fk": {
           "name": "plans_rels_users_fk",
           "tableFrom": "plans_rels",
+          "tableTo": "users",
+          "columnsFrom": [
+            "users_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.add_ons_grants": {
+      "name": "add_ons_grants",
+      "schema": "",
+      "columns": {
+        "_order": {
+          "name": "_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "_parent_id": {
+          "name": "_parent_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "id": {
+          "name": "id",
+          "type": "varchar",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "add_on_id": {
+          "name": "add_on_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "duration_days": {
+          "name": "duration_days",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "add_ons_grants_order_idx": {
+          "name": "add_ons_grants_order_idx",
+          "columns": [
+            {
+              "expression": "_order",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "add_ons_grants_parent_id_idx": {
+          "name": "add_ons_grants_parent_id_idx",
+          "columns": [
+            {
+              "expression": "_parent_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "add_ons_grants_add_on_idx": {
+          "name": "add_ons_grants_add_on_idx",
+          "columns": [
+            {
+              "expression": "add_on_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "add_ons_grants_add_on_id_add_ons_id_fk": {
+          "name": "add_ons_grants_add_on_id_add_ons_id_fk",
+          "tableFrom": "add_ons_grants",
+          "tableTo": "add_ons",
+          "columnsFrom": [
+            "add_on_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "add_ons_grants_parent_id_fk": {
+          "name": "add_ons_grants_parent_id_fk",
+          "tableFrom": "add_ons_grants",
+          "tableTo": "add_ons",
+          "columnsFrom": [
+            "_parent_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.add_ons": {
+      "name": "add_ons",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "key": {
+          "name": "key",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "price": {
+          "name": "price",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "currency": {
+          "name": "currency",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "duration_days": {
+          "name": "duration_days",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "placement": {
+          "name": "placement",
+          "type": "enum_add_ons_placement",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "active": {
+          "name": "active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": true
+        },
+        "sort_order": {
+          "name": "sort_order",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "legacy_id": {
+          "name": "legacy_id",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "legacy_key": {
+          "name": "legacy_key",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp(3) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp(3) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "add_ons_tenant_idx": {
+          "name": "add_ons_tenant_idx",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "add_ons_key_idx": {
+          "name": "add_ons_key_idx",
+          "columns": [
+            {
+              "expression": "key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "add_ons_active_idx": {
+          "name": "add_ons_active_idx",
+          "columns": [
+            {
+              "expression": "active",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "add_ons_legacy_id_idx": {
+          "name": "add_ons_legacy_id_idx",
+          "columns": [
+            {
+              "expression": "legacy_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "add_ons_legacy_key_idx": {
+          "name": "add_ons_legacy_key_idx",
+          "columns": [
+            {
+              "expression": "legacy_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "add_ons_updated_at_idx": {
+          "name": "add_ons_updated_at_idx",
+          "columns": [
+            {
+              "expression": "updated_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "add_ons_created_at_idx": {
+          "name": "add_ons_created_at_idx",
+          "columns": [
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "tenant_key_1_idx": {
+          "name": "tenant_key_1_idx",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "add_ons_tenant_id_tenants_id_fk": {
+          "name": "add_ons_tenant_id_tenants_id_fk",
+          "tableFrom": "add_ons",
+          "tableTo": "tenants",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.add_ons_locales": {
+      "name": "add_ons_locales",
+      "schema": "",
+      "columns": {
+        "name": {
+          "name": "name",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "_locale": {
+          "name": "_locale",
+          "type": "_locales",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "_parent_id": {
+          "name": "_parent_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "add_ons_locales_parent_id_locale_unique": {
+          "name": "add_ons_locales_parent_id_locale_unique",
+          "columns": [
+            {
+              "expression": "_parent_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "_locale",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "add_ons_locales_parent_id_fk": {
+          "name": "add_ons_locales_parent_id_fk",
+          "tableFrom": "add_ons_locales",
+          "tableTo": "add_ons",
+          "columnsFrom": [
+            "_parent_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.add_ons_rels": {
+      "name": "add_ons_rels",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "order": {
+          "name": "order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "parent_id": {
+          "name": "parent_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "path": {
+          "name": "path",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "users_id": {
+          "name": "users_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "add_ons_rels_order_idx": {
+          "name": "add_ons_rels_order_idx",
+          "columns": [
+            {
+              "expression": "order",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "add_ons_rels_parent_idx": {
+          "name": "add_ons_rels_parent_idx",
+          "columns": [
+            {
+              "expression": "parent_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "add_ons_rels_path_idx": {
+          "name": "add_ons_rels_path_idx",
+          "columns": [
+            {
+              "expression": "path",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "add_ons_rels_users_id_idx": {
+          "name": "add_ons_rels_users_id_idx",
+          "columns": [
+            {
+              "expression": "users_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "add_ons_rels_parent_fk": {
+          "name": "add_ons_rels_parent_fk",
+          "tableFrom": "add_ons_rels",
+          "tableTo": "add_ons",
+          "columnsFrom": [
+            "parent_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "add_ons_rels_users_fk": {
+          "name": "add_ons_rels_users_fk",
+          "tableFrom": "add_ons_rels",
           "tableTo": "users",
           "columnsFrom": [
             "users_id"
@@ -9204,12 +9428,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "alert_subscriptions_id": {
-          "name": "alert_subscriptions_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
         "job_categories_id": {
           "name": "job_categories_id",
           "type": "integer",
@@ -9242,6 +9460,12 @@
         },
         "plans_id": {
           "name": "plans_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "add_ons_id": {
+          "name": "add_ons_id",
           "type": "integer",
           "primaryKey": false,
           "notNull": false
@@ -9428,21 +9652,6 @@
           "method": "btree",
           "with": {}
         },
-        "payload_locked_documents_rels_alert_subscriptions_id_idx": {
-          "name": "payload_locked_documents_rels_alert_subscriptions_id_idx",
-          "columns": [
-            {
-              "expression": "alert_subscriptions_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "payload_locked_documents_rels_job_categories_id_idx": {
           "name": "payload_locked_documents_rels_job_categories_id_idx",
           "columns": [
@@ -9523,6 +9732,21 @@
           "columns": [
             {
               "expression": "plans_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "payload_locked_documents_rels_add_ons_id_idx": {
+          "name": "payload_locked_documents_rels_add_ons_id_idx",
+          "columns": [
+            {
+              "expression": "add_ons_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -9665,19 +9889,6 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "payload_locked_documents_rels_alert_subscriptions_fk": {
-          "name": "payload_locked_documents_rels_alert_subscriptions_fk",
-          "tableFrom": "payload_locked_documents_rels",
-          "tableTo": "alert_subscriptions",
-          "columnsFrom": [
-            "alert_subscriptions_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
         "payload_locked_documents_rels_job_categories_fk": {
           "name": "payload_locked_documents_rels_job_categories_fk",
           "tableFrom": "payload_locked_documents_rels",
@@ -9749,6 +9960,19 @@
           "tableTo": "plans",
           "columnsFrom": [
             "plans_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "payload_locked_documents_rels_add_ons_fk": {
+          "name": "payload_locked_documents_rels_add_ons_fk",
+          "tableFrom": "payload_locked_documents_rels",
+          "tableTo": "add_ons",
+          "columnsFrom": [
+            "add_ons_id"
           ],
           "columnsTo": [
             "id"
@@ -10568,6 +10792,14 @@
         "archived"
       ]
     },
+    "public.enum_add_ons_placement": {
+      "name": "enum_add_ons_placement",
+      "schema": "public",
+      "values": [
+        "featured-in-listings",
+        "featured-in-category"
+      ]
+    },
     "public.enum_payload_jobs_log_task_slug": {
       "name": "enum_payload_jobs_log_task_slug",
       "schema": "public",
@@ -10619,6 +10851,6 @@
     "tables": {},
     "columns": {}
   },
-  "id": "de9f37df-b3c7-489f-9480-7c3b1163201f",
+  "id": "202ad730-e550-4359-8668-89242995fd67",
   "prevId": "00000000-0000-0000-0000-000000000000"
 }
