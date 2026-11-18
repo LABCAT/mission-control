@@ -24,3 +24,14 @@ SELECT COALESCE(YEAR(um.meta_value), 'never') AS last_login_year, COUNT(*) AS us
 FROM wp_users u
 LEFT JOIN wp_usermeta um ON um.user_id = u.ID AND um.meta_key = 'last_login'
 GROUP BY last_login_year ORDER BY last_login_year DESC;
+
+-- 5. Coupons: settings, and how often each was used in the last 12 months (LINKPS decision)
+SELECT c.ID, c.post_title AS code, c.post_status, pm.meta_key, pm.meta_value
+FROM wp_posts c JOIN wp_postmeta pm ON pm.post_id = c.ID
+WHERE c.post_type = 'discount_coupon' ORDER BY c.ID, pm.meta_key;
+SELECT c.post_title AS code, COUNT(*) AS orders_last_12mo, MAX(o.post_date) AS last_used
+FROM wp_p2p x
+JOIN wp_posts c ON c.ID IN (x.p2p_from, x.p2p_to) AND c.post_type = 'discount_coupon'
+JOIN wp_posts o ON o.ID IN (x.p2p_from, x.p2p_to) AND o.ID <> c.ID
+WHERE o.post_date >= NOW() - INTERVAL 12 MONTH
+GROUP BY c.post_title;
