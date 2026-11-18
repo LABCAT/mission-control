@@ -16,6 +16,8 @@ export const multiTenantOptions = {
     folders: { accessResultOverride: siteKeyAccessOverride },
     media: { accessResultOverride: siteKeyAccessOverride },
     tags: { accessResultOverride: siteKeyAccessOverride },
+    // mission-control: coupons are tenant-scoped but never readable with a site key (PJ-22).
+    coupons: {},
   },
   tenantsArrayField: {
     rowFields: [

@@ -10,10 +10,11 @@ const baseConfig = {
 } as unknown as Config
 
 describe('payloadJobs', () => {
-  it('keeps the existing config and custom keys when it registers itself', async () => {
+  it('keeps the existing config collections and custom keys when it registers itself', async () => {
     const result = await payloadJobs()(baseConfig)
 
-    expect(result.collections).toBe(baseConfig.collections)
+    expect(result.collections?.[0]).toEqual(baseConfig.collections?.[0])
+    expect(result.collections?.map((collection) => collection.slug)).toEqual(['users', 'coupons'])
     expect(result.globals?.[0]?.slug).toBe('job-board-settings')
     expect(result.custom).toEqual({
       existing: true,
@@ -42,5 +43,13 @@ describe('payloadJobs', () => {
         tenancy: 'single',
       },
     })
+  })
+
+  it('adds coupons only when the feature is on', async () => {
+    const on = await payloadJobs()(baseConfig)
+    const off = await payloadJobs({ features: { coupons: false } })(baseConfig)
+
+    expect(on.collections?.map((collection) => collection.slug)).toContain('coupons')
+    expect(off.collections?.map((collection) => collection.slug)).not.toContain('coupons')
   })
 })

@@ -1,8 +1,10 @@
 import type { Config, GlobalConfig, Plugin } from 'payload'
 
+import { couponCollection } from './coupons'
 import { jobBoardSettingsGlobal, jobBoardTenantFields } from './tenancy'
 
 export * from './access'
+export * from './coupons'
 export * from './email'
 export * from './site-keys'
 export * from './tenancy'
@@ -16,7 +18,7 @@ export type PayloadJobsFeatures = {
   alerts?: boolean
   /** Organisation job credits. Added by a later task. Defaults to true. */
   credits?: boolean
-  /** Coupons. Added by a later task. Defaults to true. */
+  /** Coupon codes and their discounts. Defaults to true. */
   coupons?: boolean
 }
 
@@ -89,8 +91,11 @@ export const payloadJobs =
       }
     }
 
+    const coupons = features.coupons ? [couponCollection({ tenantScoped: tenancy === 'multi' })] : []
+
     return {
       ...config,
+      collections: [...(config.collections ?? []), ...coupons],
       custom: {
         ...config.custom,
         payloadJobs: { enabled: true, tenancy, features },
