@@ -1,4 +1,4 @@
-import { allocateProportionally, isMinorUnits, mulDivHalfUp, sumMinorUnits } from './money'
+import { allocateProportionally, isMinorUnits, MoneyError, mulDivHalfUp, sumMinorUnits } from './money'
 
 /**
  * Tax, configured per tenant (VAT in Vanuatu, GST in New Zealand, none on the hub). Pure: no
@@ -166,6 +166,17 @@ const EXEMPT = Symbol('exempt')
  * or a taxable line with no rate to fall back on. With tax off every line is untaxed.
  */
 export const computeTax = (items: readonly TaxableItem[], settings: TaxSettings = TAX_DISABLED): TaxResult => {
+  try {
+    return computeTaxChecked(items, settings)
+  } catch (error) {
+    // Every sum is checked (`sumMinorUnits`): a gross past Number.MAX_SAFE_INTEGER can't be
+    // represented exactly, so it is refused rather than returned imprecise.
+    if (error instanceof MoneyError) throw new TaxError(`Tax: ${error.message}`)
+    throw error
+  }
+}
+
+const computeTaxChecked = (items: readonly TaxableItem[], settings: TaxSettings): TaxResult => {
   assertTaxSettings(settings)
   for (const item of items) {
     if (!isMinorUnits(item?.amount)) {
@@ -211,7 +222,7 @@ export const computeTax = (items: readonly TaxableItem[], settings: TaxSettings 
     const tax = taxes[index]
     const net = settings.pricesIncludeTax ? item.amount - tax : item.amount
     return {
-      gross: net + tax,
+      gross: sumMinorUnits([net, tax]),
       net,
       rate:
         rate === EXEMPT
@@ -228,7 +239,7 @@ export const computeTax = (items: readonly TaxableItem[], settings: TaxSettings 
     const net = sumMinorUnits(rows.map((row) => row.net))
     const tax = sumMinorUnits(rows.map((row) => row.tax))
     return [
-      { gross: net + tax, key: rate.key, name: rate.name, net, rate: rate.rate, tax, xeroTaxType: rate.xeroTaxType ?? null },
+      { gross: sumMinorUnits([net, tax]), key: rate.key, name: rate.name, net, rate: rate.rate, tax, xeroTaxType: rate.xeroTaxType ?? null },
     ]
   })
 
@@ -238,7 +249,7 @@ export const computeTax = (items: readonly TaxableItem[], settings: TaxSettings 
   return {
     breakdown,
     exemptNet: sumMinorUnits(lines.filter((_, index) => assigned[index] === EXEMPT).map((line) => line.net)),
-    gross: net + tax,
+    gross: sumMinorUnits([net, tax]),
     lines,
     net,
     tax,

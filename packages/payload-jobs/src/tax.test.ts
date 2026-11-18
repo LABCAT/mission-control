@@ -204,6 +204,20 @@ describe('computeTax examples', () => {
     expect(result.exemptNet).toBe(1000)
   })
 
+  it('refuses a gross too large to represent exactly, instead of returning it imprecise', () => {
+    const max = Number.MAX_SAFE_INTEGER
+    // Exclusive, 100%: net + tax would be 2 × MAX_SAFE_INTEGER.
+    expect(() => computeTax([{ amount: max }], vat({ rates: [{ key: 'vat', name: 'VAT', rate: 10_000 }] }))).toThrow(
+      TaxError,
+    )
+    // Two lines whose own grosses are fine but whose total is not.
+    expect(() => computeTax([{ amount: max - 10 }, { amount: 20 }], vat({ rates: [{ key: 'vat', name: 'VAT', rate: 0 }] }))).toThrow(
+      TaxError,
+    )
+    // Inclusive tax never adds to the price, so the same amount is fine.
+    expect(computeTax([{ amount: max }], vat({ pricesIncludeTax: true })).gross).toBe(max)
+  })
+
   it('refuses unusable settings and unknown rates', () => {
     expect(() => computeTax([{ amount: 1, taxRateKey: 'ghost' }], vat())).toThrow(TaxError)
     expect(() => computeTax([{ amount: 1 }], vat({ defaultRateKey: null }))).toThrow(/no default rate/)

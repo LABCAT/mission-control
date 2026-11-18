@@ -821,6 +821,14 @@ describe('quote with tax', () => {
     expect(result.total).toBe(2000)
   })
 
+  it('refuses a payable total too large to represent exactly', () => {
+    const huge = vatu({ price: Number.MAX_SAFE_INTEGER })
+    const allTax = vatSettings({ rates: [{ key: 'vat', name: 'VAT', rate: 10_000 }] })
+
+    expect(codeOf(() => quote({ plan: huge, tax: allTax }))).toBe('invalid-tax')
+    expect(quote({ plan: huge, tax: { ...allTax, pricesIncludeTax: true } }).total).toBe(Number.MAX_SAFE_INTEGER)
+  })
+
   it('refuses a plan naming a rate the tenant does not have', () => {
     expect(codeOf(() => quote({ plan: vatu({ taxRateKey: 'ghost' }), tax: vatSettings() }))).toBe('invalid-tax')
     expect(codeOf(() => quote({ plan: vatu(), tax: vatSettings({ rates: [] }) }))).toBe('invalid-tax')
