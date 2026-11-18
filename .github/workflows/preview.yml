@@ -214,6 +214,9 @@ jobs:
       (github.event_name == 'pull_request' && github.event.action == 'closed' &&
        github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@v4
       - name: Delete the Worker Preview and its Neon branch
@@ -223,20 +226,24 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
           GIT_BRANCH: ${{ github.event.ref || github.head_ref }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
           NAME=$(.github/scripts/preview-name.sh branch "$GIT_BRANCH")
-          BRANCH=preview/$NAME
-          .github/scripts/preview-neon.mjs valid "$BRANCH"
-          npx -y "$WRANGLER" preview delete --name "$NAME" --worker-name "$WORKER_NAME" --skip-confirmation \
-            || echo "No Worker Preview named $NAME"
-          # Only "not there" is fine; an auth or API failure must fail the job, not leak a branch.
-          neon() { npx -y "$NEONCTL" "$@" --project-id "$PROJECT" --api-key "$NEON_API_KEY"; }
-          if neon branches list --output json | jq -e --arg b "$BRANCH" 'any(.[]; .name == $b)' > /dev/null; then
-            neon branches delete "$BRANCH"
-          else
-            echo "No Neon branch $BRANCH"
+          # Another open PR (feature/foo vs feature-foo) can share this preview name. Keep it then.
+          gh pr list --state open --limit 1000 --json headRefName,isCrossRepository > "$RUNNER_TEMP/prs.json"
+          [ "$(jq length "$RUNNER_TEMP/prs.json")" -lt 1000 ] || { echo "::error::1000+ open PRs; the list may be truncated"; exit 1; }
+          # Exit 0 = still used, 1 = free to delete, anything else = error, so fail and delete nothing.
+          rc=0
+          .github/scripts/preview-neon.mjs live "$GIT_BRANCH" "$RUNNER_TEMP/prs.json" || rc=$?
+          if [ "$rc" = 0 ]; then
+            echo "An open PR still uses preview $NAME; not deleting it."
+            exit 0
+          elif [ "$rc" != 1 ]; then
+            echo "::error::Could not decide whether preview $NAME is in use"; exit 1
           fi
+          .github/scripts/delete-preview.sh "$NAME"
 
   # Daily and on demand: delete preview/* Neon branches (and their Worker Previews) with no
   # open PR. Catches whatever the event-driven cleanup missed. Manual runs default to a dry run.
@@ -276,10 +283,5 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           [ "$DRY_RUN" != true ] || exit 0
           while IFS= read -r BRANCH; do
-            .github/scripts/preview-neon.mjs valid "$BRANCH"
-            NAME=${BRANCH#preview/}
-            npx -y "$WRANGLER" preview delete --name "$NAME" --worker-name "$WORKER_NAME" --skip-confirmation </dev/null \
-              || echo "No Worker Preview named $NAME"
-            neon branches delete "$BRANCH" </dev/null > /dev/null
-            echo "Deleted $BRANCH"
+            .github/scripts/delete-preview.sh "${BRANCH#preview/}"
           done < "$RUNNER_TEMP/stale.txt"

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error plain .mjs script, no types
-import { capacityProblem, isPreviewBranch, isRcPreview, previewName, staleBranches } from './preview-neon.mjs'
+import { capacityProblem, isPreviewBranch, previewName, previewStillUsed, staleBranches } from './preview-neon.mjs'
 
 const here = import.meta.dirname
 const b = (name: string, extra = {}) => ({ name, ...extra })
@@ -65,6 +65,24 @@ describe('staleBranches', () => {
   })
 })
 
+describe('previewStillUsed', () => {
+  it('is true when another open PR normalizes to the same name', () => {
+    expect(previewStillUsed('feature/foo', [pr('feature-foo')])).toBe(true)
+    expect(previewStillUsed('Feature_Foo', [pr('feature/foo')])).toBe(true)
+  })
+  it('is true for another open PR on the very same branch', () => {
+    expect(previewStillUsed('feature/foo', [pr('feature/foo')])).toBe(true)
+  })
+  it('is false with no match, an empty list, or only fork PRs', () => {
+    expect(previewStillUsed('feature/foo', [pr('feature/bar')])).toBe(false)
+    expect(previewStillUsed('feature/foo', [])).toBe(false)
+    expect(previewStillUsed('feature/foo', [pr('feature-foo', true)])).toBe(false)
+  })
+  it('throws on a bad list so the caller fails instead of deleting', () => {
+    expect(() => previewStillUsed('x', null)).toThrow()
+  })
+})
+
 describe('capacityProblem', () => {
   const list = [b('main'), b('preview/a'), b('preview/b'), b('other')]
   it('is fine under the limit or when the branch already exists', () => {
@@ -96,6 +114,12 @@ describe('cli', () => {
   })
   it('stale fails closed on bad input', () => {
     expect(run('stale', write('b2.json', []), write('p2.json', [])).code).toBe(2)
+  })
+  it('live exits 0 when used, 1 when not, 2 on bad input', () => {
+    const prs = write('p4.json', [pr('feature-foo')])
+    expect(run('live', 'feature/foo', prs).code).toBe(0)
+    expect(run('live', 'other', prs).code).toBe(1)
+    expect(run('live', 'x', write('p5.json', {})).code).toBe(2)
   })
   it('capacity exits 1 with the list', () => {
     const r = run('capacity', write('b3.json', [b('main'), b('preview/x')]), '2', 'preview/new')

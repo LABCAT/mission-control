@@ -4,6 +4,8 @@
 //
 //   preview-neon.mjs stale <neon-branches.json> <open-prs.json>
 //       Prints, one per line, the `preview/*` Neon branches with no open PR.
+//   preview-neon.mjs live <git-branch> <open-prs.json>
+//       Exits 0 if an open same-repo PR still uses that branch's preview name, 1 if not.
 //   preview-neon.mjs valid <neon-branch>
 //       Exits 0 only if the name is a well-formed `preview/<name>`; use it before any delete.
 //   preview-neon.mjs capacity <neon-branches.json> <limit> <target-branch>
@@ -65,6 +67,14 @@ export function staleBranches(branches, openPrs) {
     .map((b) => b.name)
 }
 
+// True if an open same-repo PR maps to the same preview name as `gitBranch`, so the
+// preview is still in use (e.g. feature/foo and feature-foo both give "feature-foo").
+export function previewStillUsed(gitBranch, openPrs) {
+  if (!Array.isArray(openPrs)) throw new Error('Open PR list is not an array')
+  const name = previewName(gitBranch)
+  return openPrs.some((p) => p && p.isCrossRepository === false && typeof p.headRefName === 'string' && previewName(p.headRefName) === name)
+}
+
 // Returns an error message when `target` is new and the project is at its limit.
 export function capacityProblem(branches, limit, target) {
   const list = neonBranchNames(branches)
@@ -85,6 +95,8 @@ function main(argv) {
   if (cmd === 'stale' && args.length === 2) {
     const out = staleBranches(readJson(args[0]), readJson(args[1]))
     if (out.length) console.log(out.join('\n'))
+  } else if (cmd === 'live' && args.length === 2) {
+    process.exit(previewStillUsed(args[0], readJson(args[1])) ? 0 : 1)
   } else if (cmd === 'valid' && args.length === 1) {
     if (!isPreviewBranch(args[0])) {
       console.error(`Refusing: "${args[0]}" is not a preview/<name> branch`)
@@ -99,7 +111,7 @@ function main(argv) {
       process.exit(1)
     }
   } else {
-    console.error('usage: preview-neon.mjs stale <branches.json> <prs.json> | valid <branch> | capacity <branches.json> <limit> <target>')
+    console.error('usage: preview-neon.mjs stale <branches.json> <prs.json> | live <branch> <prs.json> | valid <branch> | capacity <branches.json> <limit> <target>')
     process.exit(2)
   }
 }
