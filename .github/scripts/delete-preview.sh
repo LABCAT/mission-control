@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 # Deletes one preview: its Worker Preview, then its Neon branch preview/<name>.
 #   delete-preview.sh <name>
-# Env: WRANGLER, NEONCTL, WORKER_NAME, PROJECT, NEON_API_KEY (and the Cloudflare vars wrangler needs).
+# Env: WRANGLER, NEONCTL, WORKER_NAME, PROJECT, NEON_API_KEY (and the Cloudflare vars wrangler needs),
+#      plus GH_TOKEN and GH_REPO for `gh`.
+# Right before deleting, it fetches the open PRs again and skips the delete if an open same-repo PR
+# maps to this preview name (feature/foo and feature-foo share one), so a PR opened after the caller
+# decided cannot lose its preview. An unreadable PR list fails the script.
 # Only a confirmed "not found" is tolerated. Any other failure stops the script, and the Neon
 # branch is only deleted after the Worker Preview delete succeeded or was confirmed absent.
 set -euo pipefail
@@ -10,6 +14,17 @@ BRANCH=preview/$NAME
 "$(dirname "$0")/preview-neon.mjs" valid "$BRANCH"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
+
+gh pr list --state open --limit 1000 --json headRefName,isCrossRepository > "$TMP/prs.json"
+[ "$(jq length "$TMP/prs.json")" -lt 1000 ] || { echo "::error::1000+ open PRs; the list may be truncated"; exit 1; }
+rc=0
+"$(dirname "$0")/preview-neon.mjs" live "$NAME" "$TMP/prs.json" || rc=$?
+if [ "$rc" = 0 ]; then
+  echo "An open PR now uses preview $NAME; not deleting it."
+  exit 0
+elif [ "$rc" != 1 ]; then
+  echo "::error::Could not decide whether preview $NAME is in use"; exit 1
+fi
 
 if ! npx -y "$WRANGLER" preview delete --name "$NAME" --worker-name "$WORKER_NAME" --skip-confirmation </dev/null > "$TMP/wrangler.log" 2>&1; then
   cat "$TMP/wrangler.log"

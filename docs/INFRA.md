@@ -47,7 +47,7 @@ A preview is **stale** when no open PR from this repo has its branch name. The s
 - `preview/rc-*`. RC previews belong to the release flow.
 - A branch Neon marks primary, default or protected.
 
-It stops without deleting if the Neon list has no `main` or the open PR list could be truncated. The rules live in `.github/scripts/preview-neon.mjs` and are tested in `preview-neon.test.ts` (`pnpm test`). Every delete goes through `.github/scripts/delete-preview.sh`, which first checks the name with `preview-neon.mjs valid`. It tolerates only a confirmed "not found" from the Worker Preview delete, and fails on any other error before touching Neon. It treats a Neon branch as absent only if the branch list was fetched and parsed successfully.
+It stops without deleting if the Neon list has no `main` or the open PR list could be truncated. The rules live in `.github/scripts/preview-neon.mjs` and are tested in `preview-neon.test.ts` (`pnpm test`). Every delete goes through `.github/scripts/delete-preview.sh`, which first checks the name with `preview-neon.mjs valid`. Right before deleting, it fetches the open PRs again and skips the preview if an open PR now maps to its name, so a PR opened during a sweep keeps its preview. It tolerates only a confirmed "not found" from the Worker Preview delete, and fails on any other error before touching Neon. It treats a Neon branch as absent only if the branch list was fetched and parsed successfully.
 
 Manual runs default to a **dry run** that only lists what it would delete (also in the run summary). To clean up the current backlog, dry run first, then delete:
 

@@ -231,18 +231,7 @@ jobs:
         run: |
           set -euo pipefail
           NAME=$(.github/scripts/preview-name.sh branch "$GIT_BRANCH")
-          # Another open PR (feature/foo vs feature-foo) can share this preview name. Keep it then.
-          gh pr list --state open --limit 1000 --json headRefName,isCrossRepository > "$RUNNER_TEMP/prs.json"
-          [ "$(jq length "$RUNNER_TEMP/prs.json")" -lt 1000 ] || { echo "::error::1000+ open PRs; the list may be truncated"; exit 1; }
-          # Exit 0 = still used, 1 = free to delete, anything else = error, so fail and delete nothing.
-          rc=0
-          .github/scripts/preview-neon.mjs live "$GIT_BRANCH" "$RUNNER_TEMP/prs.json" || rc=$?
-          if [ "$rc" = 0 ]; then
-            echo "An open PR still uses preview $NAME; not deleting it."
-            exit 0
-          elif [ "$rc" != 1 ]; then
-            echo "::error::Could not decide whether preview $NAME is in use"; exit 1
-          fi
+          # delete-preview.sh skips it if another open PR (feature/foo vs feature-foo) shares the name.
           .github/scripts/delete-preview.sh "$NAME"
 
   # Daily and on demand: delete preview/* Neon branches (and their Worker Previews) with no
