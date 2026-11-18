@@ -27,7 +27,7 @@ export type TaxonomyCollection = keyof typeof LEGACY_TAXONOMY_KEYS
 /** One `wp_terms` row joined with its `wp_term_taxonomy` row. */
 export type LegacyTerm = {
   name: string
-  /** `wp_term_taxonomy.parent`: the parent's `term_taxonomy_id`, `0` for a root term. */
+  /** `wp_term_taxonomy.parent`: the parent's `term_id`, `0` for a root term. */
   parent: number
   slug: string
   taxonomy: string
@@ -100,21 +100,23 @@ const isVolunteerRoot = (term: LegacyTerm): boolean =>
  * A parent loop in the legacy data ends the walk instead of hanging.
  */
 export const volunteerTermIDs = (terms: readonly LegacyTerm[]): Set<number> => {
-  const byId = new Map(terms.map((term) => [term.term_taxonomy_id, term]))
+  // `wp_term_taxonomy.parent` holds the parent's `term_id`, not its `term_taxonomy_id`, and the
+  // two differ once a term is shared, so the walk follows `term_id`.
+  const byTermId = new Map(terms.map((term) => [term.term_id, term]))
   const volunteers = new Set<number>()
 
   for (const term of terms) {
     const visited = new Set<number>()
     let current: LegacyTerm | undefined = term
 
-    while (current && !visited.has(current.term_taxonomy_id)) {
+    while (current && !visited.has(current.term_id)) {
       if (isVolunteerRoot(current) || volunteers.has(current.term_taxonomy_id)) {
         volunteers.add(term.term_taxonomy_id)
         break
       }
 
-      visited.add(current.term_taxonomy_id)
-      current = current.parent > 0 ? byId.get(current.parent) : undefined
+      visited.add(current.term_id)
+      current = current.parent > 0 ? byTermId.get(current.parent) : undefined
     }
   }
 

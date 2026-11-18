@@ -71,8 +71,8 @@ describe('volunteerTermIDs', () => {
 
   it('stops at a parent loop in the legacy data instead of hanging', () => {
     const loop = [
-      legacyTerm({ name: 'A', parent: 302, slug: 'a', term_id: 1, term_taxonomy_id: 301 }),
-      legacyTerm({ name: 'B', parent: 301, slug: 'b', term_id: 2, term_taxonomy_id: 302 }),
+      legacyTerm({ name: 'A', parent: 2, slug: 'a', term_id: 1, term_taxonomy_id: 301 }),
+      legacyTerm({ name: 'B', parent: 1, slug: 'b', term_id: 2, term_taxonomy_id: 302 }),
     ]
 
     expect([...volunteerTermIDs(loop)]).toEqual([])
@@ -81,11 +81,23 @@ describe('volunteerTermIDs', () => {
   it('finds a volunteer ancestor two levels up', () => {
     const terms = [
       legacyTerm({ name: 'Voluntary', parent: 0, slug: 'voluntary', term_id: 1, term_taxonomy_id: 201 }),
-      legacyTerm({ name: 'Board position', parent: 201, slug: 'board-position', term_id: 2, term_taxonomy_id: 202 }),
-      legacyTerm({ name: 'Chair', parent: 202, slug: 'chair', term_id: 3, term_taxonomy_id: 203 }),
+      legacyTerm({ name: 'Board position', parent: 1, slug: 'board-position', term_id: 2, term_taxonomy_id: 202 }),
+      legacyTerm({ name: 'Chair', parent: 2, slug: 'chair', term_id: 3, term_taxonomy_id: 203 }),
     ]
 
     expect([...volunteerTermIDs(terms)].toSorted((a, b) => a - b)).toEqual([201, 202, 203])
+  })
+
+  it('follows `parent` as a term id, which WordPress stores, not a term_taxonomy id', () => {
+    // Every term is shared with another taxonomy, so the two id spaces are completely disjoint.
+    const terms = [
+      legacyTerm({ name: 'Voluntary', parent: 0, slug: 'voluntary', term_id: 10, term_taxonomy_id: 501 }),
+      legacyTerm({ name: 'Board position', parent: 10, slug: 'board-position', term_id: 11, term_taxonomy_id: 502 }),
+      legacyTerm({ name: 'Chair', parent: 11, slug: 'chair', term_id: 12, term_taxonomy_id: 503 }),
+      legacyTerm({ name: 'Full-Time', parent: 0, slug: 'full-time', term_id: 20, term_taxonomy_id: 504 }),
+    ]
+
+    expect([...volunteerTermIDs(terms)].toSorted((a, b) => a - b)).toEqual([501, 502, 503])
   })
 })
 
@@ -122,7 +134,7 @@ describe('importableTerms', () => {
   it('adds the volunteer flag only when asked, so the other taxonomies stay unchanged', () => {
     const terms = [
       legacyTerm({ name: 'Voluntary', slug: 'voluntary', term_id: 22, term_taxonomy_id: 202 }),
-      legacyTerm({ name: 'Chair', parent: 202, slug: 'chair', term_id: 23, term_taxonomy_id: 203 }),
+      legacyTerm({ name: 'Chair', parent: 22, slug: 'chair', term_id: 23, term_taxonomy_id: 203 }),
     ]
 
     expect(importableTerms(terms).map((row) => row.isVolunteer)).toEqual([undefined, undefined])

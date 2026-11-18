@@ -68,8 +68,8 @@ export const taxonomyTables: Record<string, Row[]> = {
     { term_taxonomy_id: 201, term_id: 21, taxonomy: 'job_type', parent: 0, count: 9 },
     { term_taxonomy_id: 202, term_id: 22, taxonomy: 'job_type', parent: 0, count: 5 },
     // Children of Voluntary: volunteer jobs by AUDIT.md.
-    { term_taxonomy_id: 203, term_id: 23, taxonomy: 'job_type', parent: 202, count: 1 },
-    { term_taxonomy_id: 204, term_id: 24, taxonomy: 'job_type', parent: 202, count: 1 },
+    { term_taxonomy_id: 203, term_id: 23, taxonomy: 'job_type', parent: 22, count: 1 },
+    { term_taxonomy_id: 204, term_id: 24, taxonomy: 'job_type', parent: 22, count: 1 },
     { term_taxonomy_id: 205, term_id: 25, taxonomy: 'job_type', parent: 0, count: 3 },
     { term_taxonomy_id: 301, term_id: 31, taxonomy: 'job_tag', parent: 0, count: 7 },
     { term_taxonomy_id: 401, term_id: 41, taxonomy: 'job_salary', parent: 0, count: 6 },
