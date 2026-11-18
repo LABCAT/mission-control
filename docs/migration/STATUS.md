@@ -92,3 +92,4 @@ Spend at 02:05 UTC: sub-sessions $8.04 (PJ-10 2.19, PJ-81 2.42, RCL-86 1.00, PJ-
 - 10:45: merged #48 (PJ-21 plans + pricing, migration). PJ-21 done. Opus continues with PJ-87, then PJ-91.
 - **Decision (founder, 18 Nov): previews never email the public.** All non-production email is redirected to one inbox (EMAIL_REDIRECT_TO); only ENVIRONMENT=production delivers. PJ-94 is running in the PJ-92 session.
 - **Decision (founder, 18 Nov): Cloudflare Access** only on the vwok site's preview and pre-launch hostnames, not the CMS. PJ-95, done with the founder. PJ-03 runbook = PJ-96.
+- **Open (founder decides later): platform brand + CMS admin domain.** Not a LABCAT domain; possibly a Pacific-wide brand. PJ-97 (assigned to LABCAT, needed before go-live). Meanwhile no hostname is hardcoded and the CMS stays on workers.dev.
