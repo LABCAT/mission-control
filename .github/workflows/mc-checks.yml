@@ -45,3 +45,44 @@ jobs:
       - run: pnpm test
       - run: pnpm --filter cms build
       - run: pnpm --filter @mission-control/launchpad build
+
+  # A down() that no longer matches its up() only shows up on a rollback, which nothing else
+  # runs. This job migrates a disposable Postgres up, rolls every migration back, and
+  # migrates up again, then compares the schema.
+  migrations:
+    name: Migration round-trip
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: orbit
+          POSTGRES_PASSWORD: orbit
+          POSTGRES_DB: orbit
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U orbit"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://orbit:orbit@localhost:5432/orbit
+      # The CLI refuses to load the config without a secret; migrations don't use it.
+      PAYLOAD_SECRET: migrate-only
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Migration round-trip
+        run: |
+          # The runner image ships psql; install it only if that ever stops being true.
+          if ! command -v psql > /dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends postgresql-client
+          fi
+          .github/scripts/migration-round-trip.sh
