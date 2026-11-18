@@ -52,6 +52,17 @@ describe('delete-preview.sh re-check before deleting', () => {
     expect(r.deleted).toBe(false)
     expect(r.touchedWorker).toBe(false)
   })
+  it('ALLOW_LIVE=true deletes even when a PR uses the name, without asking gh', () => {
+    const r = setup()('feature-foo', { PRS: JSON.stringify([pr('feature/foo')]), ALLOW_LIVE: 'true' })
+    expect(r.code).toBe(0)
+    expect(r.deleted).toBe(true)
+    expect(r.calls).not.toContain('gh ')
+  })
+  it.each(['rc-0-2-0', 'main/x'])('ALLOW_LIVE=true still refuses %s', (name) => {
+    const r = setup()(name, { PRS: '[]', ALLOW_LIVE: 'true' })
+    expect(r.deleted).toBe(false)
+    expect(r.touchedWorker).toBe(false)
+  })
   it('fails and deletes nothing when the PR list cannot be fetched', () => {
     const r = setup()('feature-foo', { PRS: '[]', GH_RC: '1' })
     expect(r.code).not.toBe(0)
