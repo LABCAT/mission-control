@@ -6,6 +6,7 @@ import * as migration_20261107_120535_tenancy_modes from './20261107_120535_tena
 import * as migration_20261109_171926_site_keys from './20261109_171926_site_keys';
 import * as migration_20261118_013433_media_documents_r2 from './20261118_013433_media_documents_r2';
 import * as migration_20261118_021548_legacy_password_hash from './20261118_021548_legacy_password_hash';
+import * as migration_20261118_044335_account_auth from './20261118_044335_account_auth';
 import * as migration_20261118_054003_tags_drafts from './20261118_054003_tags_drafts';
 
 export const migrations = [
@@ -50,8 +51,13 @@ export const migrations = [
     name: '20261118_021548_legacy_password_hash',
   },
   {
+    up: migration_20261118_044335_account_auth.up,
+    down: migration_20261118_044335_account_auth.down,
+    name: '20261118_044335_account_auth',
+  },
+  {
     up: migration_20261118_054003_tags_drafts.up,
     down: migration_20261118_054003_tags_drafts.down,
-    name: '20261118_054003_tags_drafts'
+    name: '20261118_054003_tags_drafts',
   },
 ];
