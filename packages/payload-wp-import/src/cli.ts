@@ -43,30 +43,38 @@ export const parseArgs = (argv: string[]): CliArgs => {
   return { dryRun, entity: positional[0]!, limit, tenant }
 }
 
+/** Check the registry as a whole: names match keys and every dependency is registered. */
+export const validateRegistry = (registry: Record<string, Importer>): void => {
+  for (const [key, importer] of Object.entries(registry)) {
+    if (importer.name !== key) {
+      throw new Error(`Registry key "${key}" does not match importer name "${importer.name}"`)
+    }
+    for (const dependency of importer.dependsOn) {
+      if (!registry[dependency]) {
+        throw new Error(`Importer "${key}" depends on "${dependency}", which is not registered`)
+      }
+    }
+  }
+}
+
 /** The importers to run: all of them, or the named one plus everything it depends on. */
 export const selectImporters = (registry: Record<string, Importer>, entity: string): Importer[] => {
-  const all = Object.values(registry)
-  if (entity === 'all') return all
+  validateRegistry(registry)
+  const known = Object.keys(registry)
+  if (known.length === 0) throw new Error('No importers are registered yet, so there is nothing to run')
+  if (entity === 'all') return Object.values(registry)
 
-  const root = registry[entity]
-  if (!root) {
-    const known = Object.keys(registry)
-    throw new Error(
-      `Unknown entity "${entity}". ` +
-        (known.length ? `Available: ${known.join(', ')}, all` : 'No importers are registered yet'),
-    )
+  if (!registry[entity]) {
+    throw new Error(`Unknown entity "${entity}". Available: ${known.join(', ')}, all`)
   }
 
   const selected = new Map<string, Importer>()
   const add = (importer: Importer) => {
     if (selected.has(importer.name)) return
     selected.set(importer.name, importer)
-    for (const name of importer.dependsOn) {
-      const dependency = all.find((candidate) => candidate.name === name)
-      if (dependency) add(dependency)
-    }
+    for (const name of importer.dependsOn) add(registry[name]!)
   }
-  add(root)
+  add(registry[entity])
   return [...selected.values()]
 }
 
@@ -77,8 +85,9 @@ const withLimit = (importer: Importer, limit?: number): Importer => {
     read: async function* (reader) {
       let count = 0
       for await (const row of importer.read(reader)) {
-        if (count++ >= limit) return
         yield row
+        // Stop here, before asking the reader for another row.
+        if (++count >= limit) return
       }
     },
   }

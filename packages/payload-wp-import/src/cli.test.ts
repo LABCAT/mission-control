@@ -43,7 +43,27 @@ describe('selectImporters', () => {
 
   it('lists available entities for an unknown one', () => {
     expect(() => selectImporters(registry, 'nope')).toThrow(/Unknown entity "nope".*terms, users, jobs/)
-    expect(() => selectImporters({}, 'nope')).toThrow(/No importers are registered/)
+  })
+
+  it('rejects a registry with a missing dependency, even for an entity that does not use it', () => {
+    const broken = {
+      ...registry,
+      orders: rowsImporter('orders', [], { dependsOn: ['jobs', 'missing'] }),
+    }
+
+    expect(() => selectImporters(broken, 'terms')).toThrow(/"orders" depends on "missing"/)
+    expect(() => selectImporters(broken, 'all')).toThrow(/depends on "missing"/)
+  })
+
+  it('rejects a registry key that does not match the importer name', () => {
+    expect(() => selectImporters({ terms: rowsImporter('other', []) }, 'terms')).toThrow(
+      /key "terms" does not match/,
+    )
+  })
+
+  it('refuses an empty registry, for "all" and for named entities', () => {
+    expect(() => selectImporters({}, 'all')).toThrow(/No importers are registered yet/)
+    expect(() => selectImporters({}, 'terms')).toThrow(/No importers are registered yet/)
   })
 })
 
@@ -85,6 +105,55 @@ describe('runCli', () => {
     expect(lines.join('\n')).toMatch(/Unknown tenant "nope"/)
     expect(lines.join('\n')).toMatch(/Unknown entity "bogus"/)
     expect(writes).toEqual([])
+  })
+
+  it('--limit stops right after the Nth row without pulling another from the reader', async () => {
+    const { payload } = createFakePayload({ tenants: [{ id: 7, slug: 'vwok' }] })
+    let pulled = 0
+    let closed = false
+    const source = rowsImporter('terms', [], {
+      read: () => ({
+        [Symbol.asyncIterator]: () => {
+          let id = 0
+          return {
+            next: async () => {
+              pulled++
+              return { done: false, value: { id: ++id } }
+            },
+            return: async () => {
+              closed = true
+              return { done: true, value: undefined }
+            },
+          }
+        },
+      }),
+    })
+    const code = await runCli({
+      argv: ['terms', '--tenant', 'vwok', '--limit', '2'],
+      log: () => {},
+      payload,
+      reader: fakeReader,
+      registry: { terms: source },
+    })
+
+    expect(code).toBe(0)
+    expect(pulled).toBe(2)
+    expect(closed).toBe(true)
+  })
+
+  it('exits non-zero with a clear message for "all" on an empty registry', async () => {
+    const { payload } = createFakePayload({ tenants: [{ id: 7, slug: 'vwok' }] })
+    const lines: string[] = []
+    const code = await runCli({
+      argv: ['all', '--tenant', 'vwok'],
+      log: (l) => lines.push(l),
+      payload,
+      reader: fakeReader,
+      registry: {},
+    })
+
+    expect(code).toBe(2)
+    expect(lines.join('\n')).toMatch(/No importers are registered yet/)
   })
 
   it('exits 1 when rows failed, and prints the errors', async () => {

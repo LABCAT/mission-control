@@ -3,6 +3,6 @@ export type { MysqlConnection, MysqlReaderOptions, PageOptions } from './mysql-r
 export { runImport, sortImporters } from './run-import'
 export type { RunImportOptions } from './run-import'
 export type * from './types'
-export { formatSummary, parseArgs, resolveTenant, runCli, selectImporters } from './cli'
+export { formatSummary, parseArgs, resolveTenant, runCli, selectImporters, validateRegistry } from './cli'
 export type { CliArgs, RunCliOptions } from './cli'
 export { registry } from './registry'
