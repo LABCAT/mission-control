@@ -1,0 +1,14 @@
+{
+  "name": "@mission-control/url-parity",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "start": "node --experimental-strip-types src/cli.ts"
+  },
+  "devDependencies": {
+    "@types/node": "24.12.3",
+    "typescript": "6.0.3"
+  }
+}
