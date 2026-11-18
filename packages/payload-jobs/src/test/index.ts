@@ -29,6 +29,8 @@ export type TestUser = {
 
 export type TestHarness = {
   destroy: () => Promise<void>
+  /** A signed-in user with no tenant memberships and no privileged role. */
+  member: TestUser
   payload: Payload
   superAdmin: TestUser
   tenantA: TestTenant
@@ -97,6 +99,11 @@ type BootTestPayloadArgs = {
   globalCollections?: string[]
   /** Add the stub `media` collection, required by upload fields. */
   media?: boolean
+  /**
+   * `multi` (default) installs the multi-tenant plugin and seeds tenants. `single` boots a
+   * host with no tenancy at all, the way a single-site install runs.
+   */
+  tenancy?: 'multi' | 'single'
 }
 
 let bootCount = 0
@@ -120,6 +127,7 @@ export const bootTestPayload = async ({
   databaseUrl,
   globalCollections = [],
   media = false,
+  tenancy = 'multi',
 }: BootTestPayloadArgs): Promise<TestHarness> => {
   const testDatabaseUrl = databaseUrl ?? process.env.TEST_DATABASE_URL
 
@@ -153,24 +161,27 @@ export const bootTestPayload = async ({
       push: true,
       schemaName,
     }),
-    plugins: [
-      multiTenantPlugin({
-        collections: pluginCollections,
-        tenantsArrayField: {
-          rowFields: [
-            {
-              name: 'role',
-              type: 'select',
-              required: true,
-              options: tenantRoleOptions,
-              saveToJWT: true,
-            },
-          ],
-        },
-        tenantsSlug: 'tenants',
-        userHasAccessToAllTenants: (user) => isSuperAdmin(user),
-      }),
-    ],
+    plugins:
+      tenancy === 'multi'
+        ? [
+            multiTenantPlugin({
+              collections: pluginCollections,
+              tenantsArrayField: {
+                rowFields: [
+                  {
+                    name: 'role',
+                    type: 'select',
+                    required: true,
+                    options: tenantRoleOptions,
+                    saveToJWT: true,
+                  },
+                ],
+              },
+              tenantsSlug: 'tenants',
+              userHasAccessToAllTenants: (user) => isSuperAdmin(user),
+            }),
+          ]
+        : [],
   })
 
   // A unique key so concurrent tests never reuse a cached Payload instance.
@@ -182,13 +193,13 @@ export const bootTestPayload = async ({
     const cleanupErrors: unknown[] = []
 
     for (const { slug } of collections) {
-      if (tenantIds.length === 0) break
+      if (tenancy === 'multi' && tenantIds.length === 0) break
 
       try {
         await payload.delete({
           collection: slug,
           overrideAccess: true,
-          where: { tenant: { in: tenantIds } },
+          where: tenancy === 'multi' ? { tenant: { in: tenantIds } } : { id: { exists: true } },
         })
       } catch (error) {
         cleanupErrors.push(error)
@@ -260,19 +271,26 @@ export const bootTestPayload = async ({
     const createUser = async (
       email: string,
       role: TestUser['role'],
-      tenants: TestUser['tenants'],
+      memberships: TestUser['tenants'],
     ): Promise<TestUser> => {
+      // Only the multi-tenant plugin adds the `tenants` array to the users collection.
       const doc = (await payload.create({
         collection: 'users',
-        data: { email, password: 'test-password', role, tenants },
+        data: {
+          email,
+          password: 'test-password',
+          role,
+          ...(tenancy === 'multi' ? { tenants: memberships } : {}),
+        },
         overrideAccess: true,
       })) as { email: string; id: number }
       userIds.push(doc.id)
 
-      return { collection: 'users', email: doc.email, id: doc.id, role, tenants }
+      return { collection: 'users', email: doc.email, id: doc.id, role, tenants: memberships }
     }
 
     const superAdmin = await createUser(`super-admin-${runId}@example.invalid`, 'super-admin', [])
+    const member = await createUser(`member-${runId}@example.invalid`, 'user', [])
     const tenantAdminA = await createUser(`tenant-admin-a-${runId}@example.invalid`, 'user', [
       { role: 'tenant-admin', tenant: tenantA.id },
     ])
@@ -282,6 +300,7 @@ export const bootTestPayload = async ({
 
     return {
       destroy,
+      member,
       payload,
       superAdmin,
       tenantA,

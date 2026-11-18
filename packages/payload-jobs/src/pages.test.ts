@@ -197,3 +197,55 @@ describe('pages', () => {
     expect(new Set(all.docs.map((doc) => (doc as { tenant?: number }).tenant)).size).toBe(2)
   })
 })
+
+describe('pages on a single-tenant host', () => {
+  let single: TestHarness
+
+  beforeAll(async () => {
+    single = await bootTestPayload({
+      collections: [pagesCollection({ tenantScoped: false })],
+      media: true,
+      tenancy: 'single',
+    })
+  }, 120_000)
+
+  afterAll(async () => {
+    await single.destroy()
+  })
+
+  it('lets an ordinary signed-in user create, update and delete a page', async () => {
+    const created = (await single.payload.create({
+      collection: 'pages',
+      data: { slug: 'about-us', title: 'About us' } as never,
+      user: single.member,
+    })) as { id: number }
+
+    expect(created.id).toBeDefined()
+
+    const updated = (await single.payload.update({
+      collection: 'pages',
+      data: { title: 'About us (updated)' },
+      id: created.id,
+      user: single.member,
+    })) as { title?: string }
+
+    expect(updated.title).toBe('About us (updated)')
+
+    await expect(
+      single.payload.delete({
+        collection: 'pages',
+        id: created.id,
+        user: single.member,
+      }),
+    ).resolves.toBeDefined()
+  })
+
+  it('still denies anonymous reads and writes', async () => {
+    await expect(
+      single.payload.create({
+        collection: 'pages',
+        data: { slug: 'anonymous', title: 'Anonymous' } as never,
+      }),
+    ).rejects.toThrow()
+  })
+})

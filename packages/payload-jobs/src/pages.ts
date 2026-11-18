@@ -76,9 +76,11 @@ export const pagesCollection = ({
     // Public sites read pages through a site key, which the plugin's accessResultOverride
     // narrows to the tenant. Signed-in staff see their own tenant in the admin.
     read: authenticatedAccess,
-    create: contentWriteAccess(),
-    delete: contentWriteAccess(),
-    update: contentWriteAccess(),
+    // Single-tenant hosts have no tenant memberships to check, so any signed-in user may
+    // edit; multi-tenant hosts fall back to the plugin, which scopes to the user's tenants.
+    create: contentWriteAccess({ allowAnyAuthenticated: !tenantScoped }),
+    delete: contentWriteAccess({ allowAnyAuthenticated: !tenantScoped }),
+    update: contentWriteAccess({ allowAnyAuthenticated: !tenantScoped }),
   },
   fields: [
     {
