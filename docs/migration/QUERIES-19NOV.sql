@@ -35,3 +35,7 @@ JOIN wp_posts c ON c.ID IN (x.p2p_from, x.p2p_to) AND c.post_type = 'discount_co
 JOIN wp_posts o ON o.ID IN (x.p2p_from, x.p2p_to) AND o.ID <> c.ID
 WHERE o.post_date >= NOW() - INTERVAL 12 MONTH
 GROUP BY c.post_title;
+
+-- 6. Tax / VAT settings in the old site (PJ-91): JobRoller and Xero plugin options mentioning tax or VAT
+SELECT option_name, LEFT(option_value, 400) AS value FROM wp_options
+WHERE option_name LIKE '%tax%' OR option_name LIKE '%vat%' OR option_name LIKE '%xero%' OR option_name LIKE 'jr_%';
