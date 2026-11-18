@@ -46,9 +46,18 @@ export function parseSitemap(xml: string): { kind: 'index' | 'urlset'; locs: str
     throw new Error(`not a sitemap: root element must be <urlset> or <sitemapindex> (document starts "${seen}")`)
   }
   const kind = root[1]!.toLowerCase() === 'sitemapindex' ? 'index' : 'urlset'
+  const rootPrefix = /^<(?:([\w.-]+):)?/.exec(body)?.[1] ?? ''
   const locs: string[] = []
-  for (const m of body.matchAll(/<loc>\s*(?:<!\[CDATA\[([\s\S]*?)\]\]>|([\s\S]*?))\s*<\/loc>/gi)) {
-    const loc = (m[1] ?? decodeEntities(m[2] ?? '')).trim()
+  // Entries and <loc> are matched by local name, so `<ns:url><ns:loc>` works. Elements from other
+  // namespaces nested in an entry (e.g. `<image:image><image:loc>`) are dropped first: they are not pages.
+  const entryRe = /<(?:[\w.-]+:)?(?:url|sitemap)(?=[\s>])[^>]*>([\s\S]*?)<\/(?:[\w.-]+:)?(?:url|sitemap)>/gi
+  for (const entry of body.matchAll(entryRe)) {
+    const own = entry[1]!.replace(
+      /<([\w.-]+):[\w.-]+(?=[\s>])[^>]*>[\s\S]*?<\/\1:[\w.-]+>/g,
+      (block, prefix: string) => (prefix === rootPrefix ? block : ''),
+    )
+    const m = /<(?:[\w.-]+:)?loc(?=[\s>])[^>]*>\s*(?:<!\[CDATA\[([\s\S]*?)\]\]>|([\s\S]*?))\s*<\/(?:[\w.-]+:)?loc>/i.exec(own)
+    const loc = m ? (m[1] ?? decodeEntities(m[2] ?? '')).trim() : ''
     if (loc) locs.push(loc)
   }
   if (locs.length === 0) throw new Error(`empty sitemap: <${root[1]}> contains no <loc> entries`)
@@ -164,23 +173,33 @@ export function summarize(checks: Check[]): Record<Result, number> {
   return counts
 }
 
-const namedEntities: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", raquo: '»', ndash: '–', mdash: '—' }
+const namedEntities: Record<string, string> = {
+  amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: '\u00a0', raquo: '»', laquo: '«',
+  ndash: '–', mdash: '—', lsquo: '‘', rsquo: '’', ldquo: '“', rdquo: '”', hellip: '…', copy: '©',
+}
 
-/** Text of the first `<title>`, entity-decoded with whitespace collapsed; null if absent. */
+const fromCodePoint = (n: number, fallback: string): string =>
+  Number.isInteger(n) && n > 0 && n <= 0x10ffff ? String.fromCodePoint(n) : fallback
+
+/** Decode HTML entities in one pass (so `&amp;lt;` becomes `&lt;`, not `<`). Unknown entities are kept. */
+export function decodeHtmlEntities(s: string): string {
+  return s.replace(/&(?:#x([0-9a-f]+)|#(\d+)|([a-z][a-z0-9]*));/gi, (e, hex?: string, dec?: string, name?: string) =>
+    hex ? fromCodePoint(parseInt(hex, 16), e) : dec ? fromCodePoint(Number(dec), e) : (namedEntities[name!.toLowerCase()] ?? e),
+  )
+}
+
+/** Text of the first `<title>`, entity-decoded with whitespace (incl. NBSP) collapsed; null if absent. */
 export function extractTitle(html: string): string | null {
   const m = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html)
   if (!m) return null
-  return m[1]!
-    .replace(/&#x([0-9a-f]+);/gi, (_, h: string) => String.fromCodePoint(parseInt(h, 16)))
-    .replace(/&#(\d+);/g, (_, d: string) => String.fromCodePoint(Number(d)))
-    .replace(/&([a-z]+);/gi, (e, n: string) => namedEntities[n.toLowerCase()] ?? e)
-    .replace(/\s+/g, ' ')
-    .trim()
+  return decodeHtmlEntities(m[1]!).replace(WS, ' ').trim()
 }
+
+const WS = /[\s\u00a0\u200b\ufeff]+/g
 
 /** Comparable form of a title: drops the " » Site name" / " | Site name" suffix, case and spacing. */
 export function normalizeTitle(title: string): string {
-  return title.replace(/\s+[»|]\s+[^»|]*$/, '').replace(/\s+/g, ' ').trim().toLowerCase()
+  return title.replace(WS, ' ').replace(/ [»|] [^»|]*$/, '').trim().toLowerCase()
 }
 
 export const titlesMatch = (a: string, b: string): boolean => normalizeTitle(a) === normalizeTitle(b)

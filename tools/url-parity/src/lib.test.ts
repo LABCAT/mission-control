@@ -63,6 +63,15 @@ describe('sitemap parsing', () => {
     const xml = '\uFEFF<?xml version="1.0"?>\n<!-- c -->\n<ns:urlset xmlns:ns="x"><url><loc>https://a.example/</loc></url></ns:urlset>'
     expect(parseSitemap(xml).locs).toEqual(['https://a.example/'])
   })
+  it('matches url/loc by local name and ignores nested image:loc', () => {
+    const r = parseSitemap(fx('prefixed-sitemap.xml'))
+    expect(r.kind).toBe('urlset')
+    expect(r.locs).toEqual(['https://legacy.example/prefixed/', 'https://legacy.example/prefixed/two/?a=1&b=2'])
+  })
+  it('ignores image:loc inside unprefixed entries and does not mistake <location> for <loc>', () => {
+    const xml = '<urlset xmlns:image="i"><url><location>no</location><image:image><image:loc>https://a.example/i.jpg</image:loc></image:image><loc>https://a.example/p/</loc></url></urlset>'
+    expect(parseSitemap(xml).locs).toEqual(['https://a.example/p/'])
+  })
   it('rejects empty sitemaps and indexes with a clear error', () => {
     expect(() => parseSitemap('<urlset xmlns="x"></urlset>')).toThrow(/empty sitemap/)
     expect(() => parseSitemap('<sitemapindex><sitemap><loc> </loc></sitemap></sitemapindex>')).toThrow(/empty sitemap/)
@@ -155,9 +164,21 @@ describe('report', () => {
 describe('titles', () => {
   it('extracts and decodes', () => {
     expect(extractTitle('<html><TITLE>\n Jobs Archive &#187; Vanuatu&nbsp;Wok &amp; Co </TITLE>')).toBe(
-      'Jobs Archive » Vanuatu&nbsp;Wok & Co',
+      'Jobs Archive » Vanuatu Wok & Co',
     )
     expect(extractTitle('<p>none</p>')).toBeNull()
+  })
+  it('decodes named, hex and decimal entities in one pass', () => {
+    expect(extractTitle('<title>A&amp;B &lt;x&gt; &quot;q&quot; &#39;s&#39; &#x27;h&#x27; &#8211; &nbsp;z</title>')).toBe(
+      'A&B <x> "q" \'s\' \'h\' – z',
+    )
+    expect(extractTitle('<title>&amp;lt; &#38;amp;</title>')).toBe('&lt; &amp;')
+    expect(extractTitle('<title>&bogus; &#99999999;</title>')).toBe('&bogus; &#99999999;')
+  })
+  it('entity and literal characters compare equal, NBSP counts as a space', () => {
+    expect(titlesMatch(extractTitle('<title>Terms &amp; Conditions &#8211; Fish&nbsp;Chips</title>')!, 'Terms & Conditions – Fish Chips')).toBe(true)
+    expect(titlesMatch(extractTitle('<title>A&nbsp;&nbsp;B&nbsp;» Site</title>')!, 'a b | Other')).toBe(true)
+    expect(titlesMatch('Terms &amp; Conditions', 'Terms & Conditions')).toBe(false) // raw, undecoded text is not magically equal
   })
   it('ignores a site-name suffix, case and spacing', () => {
     expect(titlesMatch('About us » Vanuatu Wok', 'ABOUT  us | New Site')).toBe(true)
