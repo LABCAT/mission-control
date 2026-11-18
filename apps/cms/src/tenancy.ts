@@ -22,6 +22,12 @@ export const multiTenantOptions = {
     folders: { accessResultOverride: tenantContentOverride },
     media: { accessResultOverride: tenantContentOverride },
     tags: { accessResultOverride: tenantContentOverride },
+    // mission-control: job-board taxonomies (PJ-16).
+    'areas-of-focus': { accessResultOverride: tenantContentOverride },
+    'job-categories': { accessResultOverride: tenantContentOverride },
+    'job-tags': { accessResultOverride: tenantContentOverride },
+    'job-types': { accessResultOverride: tenantContentOverride },
+    'salary-bands': { accessResultOverride: tenantContentOverride },
   },
   tenantsArrayField: {
     rowFields: [
