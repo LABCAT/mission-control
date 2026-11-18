@@ -14,6 +14,7 @@ import * as migration_20261118_112249_organisations from './20261118_112249_orga
 import * as migration_20261118_144548_add_ons from './20261118_144548_add_ons';
 import * as migration_20261118_150954_tax from './20261118_150954_tax';
 import * as migration_20261118_152848_alert_subscriptions from './20261118_152848_alert_subscriptions';
+import * as migration_20261118_154336_jobs from './20261118_154336_jobs';
 
 export const migrations = [
   {
@@ -95,5 +96,10 @@ export const migrations = [
     up: migration_20261118_152848_alert_subscriptions.up,
     down: migration_20261118_152848_alert_subscriptions.down,
     name: '20261118_152848_alert_subscriptions',
-  }
+  },
+  {
+    up: migration_20261118_154336_jobs.up,
+    down: migration_20261118_154336_jobs.down,
+    name: '20261118_154336_jobs'
+  },
 ];
