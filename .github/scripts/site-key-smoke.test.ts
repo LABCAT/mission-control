@@ -9,6 +9,7 @@ import {
   draftDoc,
   psqlEnv,
   publishedDoc,
+  readWithRetry,
   smokeDocNames,
   TENANT_A,
   TENANT_B,
@@ -250,6 +251,57 @@ describe('checkSiteKeyReads', () => {
     })
 
     expect(result.failures).toEqual(['aggregate: the preview answered HTTP 502'])
+  })
+})
+
+describe('readWithRetry', () => {
+  const reply = (status, names = []) => ({ names, status })
+
+  it('returns a response that is not a 5xx without retrying', async () => {
+    let calls = 0
+    const attempt = async () => {
+      calls += 1
+      return reply(403)
+    }
+
+    const response = await readWithRetry('https://preview', 'sk_key', { attempt })
+
+    expect(response.status).toBe(403)
+    expect(calls).toBe(1)
+  })
+
+  it('retries a 5xx until the Worker answers', async () => {
+    const statuses = [500, 502, 200]
+    const seen = []
+    const attempt = async (_url, key) => {
+      seen.push(key)
+      return reply(statuses.shift())
+    }
+
+    const response = await readWithRetry('https://preview', 'sk_key', {
+      attempt,
+      wait: async () => {},
+    })
+
+    expect(response.status).toBe(200)
+    expect(seen).toEqual(['sk_key', 'sk_key', 'sk_key'])
+  })
+
+  it('gives up at the deadline and returns the last 5xx for the assertions to report', async () => {
+    let calls = 0
+    const attempt = async () => {
+      calls += 1
+      return reply(500)
+    }
+
+    const response = await readWithRetry('https://preview', undefined, {
+      attempt,
+      deadlineMs: 0,
+      wait: async () => {},
+    })
+
+    expect(response.status).toBe(500)
+    expect(calls).toBe(1)
   })
 })
 

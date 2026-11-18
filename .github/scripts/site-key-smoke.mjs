@@ -252,19 +252,26 @@ const readDocuments = async (previewUrl, key) => {
   return { names: smokeDocNames(body), status: response.status }
 }
 
-/** The publish job already waited for the Worker; this absorbs a cold start on the first call. */
-const waitForPreview = async (previewUrl) => {
-  const deadline = Date.now() + 60_000
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+/**
+ * A Worker that has just been deployed can answer 500 while it starts, which would look like a
+ * mismatch. Retry any 5xx until the deadline, then let the response through so the assertions
+ * report it.
+ */
+export const readWithRetry = async (
+  previewUrl,
+  key,
+  { attempt = readDocuments, deadlineMs = 60_000, stepMs = 3000, wait = sleep } = {},
+) => {
+  const deadline = Date.now() + deadlineMs
 
   for (;;) {
-    const response = await readDocuments(previewUrl)
+    const response = await attempt(previewUrl, key)
 
-    if (response.status < 500) return response
-    if (Date.now() > deadline) {
-      throw new Error(`/api/${COLLECTION} kept answering HTTP ${response.status}`)
-    }
+    if (response.status < 500 || Date.now() >= deadline) return response
 
-    await new Promise((resolve) => setTimeout(resolve, 3000))
+    await wait(stepMs)
   }
 }
 
@@ -338,16 +345,14 @@ const main = async () => {
 
   const seeded = seed(env, keys)
 
-  // A Worker that has not started yet answers 500, which would look like a mismatch on the
-  // aggregate and tenant reads. Confirm it is up first, and reuse that call as the
-  // anonymous request.
-  const anonymous = await waitForPreview(previewUrl)
+  // This call also serves as the anonymous request, so every read below shares one retry path.
+  const anonymous = await readWithRetry(previewUrl)
   const responses = {
-    aggregate: await readDocuments(previewUrl, keys.aggregate.key),
+    aggregate: await readWithRetry(previewUrl, keys.aggregate.key),
     anonymous,
-    badKey: await readDocuments(previewUrl, keys.bad),
-    tenantA: await readDocuments(previewUrl, keys.tenantA.key),
-    spare: await readDocuments(previewUrl, keys.spare.key),
+    badKey: await readWithRetry(previewUrl, keys.bad),
+    tenantA: await readWithRetry(previewUrl, keys.tenantA.key),
+    spare: await readWithRetry(previewUrl, keys.spare.key),
   }
 
   const { failures, notes } = checkSiteKeyReads({ responses, seeded })
