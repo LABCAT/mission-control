@@ -99,12 +99,13 @@ export type QuoteCouponRejection =
 export type TaxonomyRef = DocumentID | { id: DocumentID; isVolunteer?: boolean | null }
 
 /**
- * The job a plan is bought for (PJ-19's type and categories). `isVolunteer` defaults to the job
- * type's own flag when the type is a populated document.
+ * The job a plan is bought for (PJ-19's type and categories).
+ *
+ * Whether the job is voluntary comes only from its job type document's own `isVolunteer` flag,
+ * never from the caller, so a volunteer-only plan needs `type` populated (depth 1 or more).
  */
 export type QuoteJob = {
   categories?: null | readonly TaxonomyRef[]
-  isVolunteer?: boolean | null
   type?: null | TaxonomyRef
 }
 
@@ -188,7 +189,8 @@ export type Quote = {
   /** The job as quoted, or `null` when none was given. */
   job: null | {
     categories: DocumentID[]
-    isVolunteer: boolean
+    /** The job type's flag; `null` when the type was given as a bare id, so it is unknown. */
+    isVolunteer: boolean | null
     type: DocumentID | null
   }
   lines: QuoteLine[]
@@ -345,19 +347,22 @@ const normalizeJob = (job: QuoteJob): NonNullable<Quote['job']> => {
   if (!Array.isArray(categories) || categories.some((ref) => taxonomyID(ref) === null)) {
     failJob('categories must be a list of job categories')
   }
-  if (job.isVolunteer !== null && job.isVolunteer !== undefined && typeof job.isVolunteer !== 'boolean') {
-    failJob('isVolunteer must be true or false')
+  // A caller-supplied flag can't be checked, so it is refused rather than trusted.
+  if ('isVolunteer' in job) {
+    failJob('isVolunteer comes from the job type; pass the populated type instead')
   }
 
   const typeFlag =
     typeof job.type === 'object' && job.type !== null ? job.type.isVolunteer : undefined
-  if (typeof job.isVolunteer === 'boolean' && typeof typeFlag === 'boolean' && job.isVolunteer !== typeFlag) {
-    failJob("isVolunteer doesn't match the job type")
+  if (typeFlag !== null && typeFlag !== undefined && typeof typeFlag !== 'boolean') {
+    failJob("the job type's isVolunteer must be true or false")
   }
 
   return {
     categories: taxonomyIDs(categories),
-    isVolunteer: (job.isVolunteer ?? typeFlag) === true,
+    // A populated type without the flag stored is a type that isn't voluntary (the field
+    // defaults to false); a bare id tells us nothing.
+    isVolunteer: typeof job.type === 'object' && job.type !== null ? typeFlag === true : null,
     type,
   }
 }
@@ -365,7 +370,8 @@ const normalizeJob = (job: QuoteJob): NonNullable<Quote['job']> => {
 /**
  * Throw unless the plan may be used for this job. A plan with no restrictions allows any job,
  * or no job. A restricted plan needs the job:
- * - `isVolunteer`: the job must be voluntary.
+ * - `isVolunteer`: the job type must be a populated document flagged voluntary. A bare type id
+ *   is refused as `invalid-job`, because it can't show that the job is voluntary.
  * - `allowedJobTypes`: the job's type must be listed.
  * - `allowedJobCategories`: the job needs at least one category, and every one must be listed,
  *   so a cheaper category plan can't be stretched over a listing in other categories.
@@ -385,7 +391,16 @@ const assertJobAllowed = (plan: QuotablePlan, job: Quote['job']): void => {
     throw new PricingError('job-not-allowed', `Plan "${plan.name}" ${why}`)
   }
 
-  if (volunteerOnly && !job.isVolunteer) refuse('is only for voluntary jobs')
+  if (volunteerOnly) {
+    if (job.type === null) refuse('needs a voluntary job type')
+    if (job.isVolunteer === null) {
+      throw new PricingError(
+        'invalid-job',
+        `Plan "${plan.name}" is only for voluntary jobs; pass the job type document to check it`,
+      )
+    }
+    if (!job.isVolunteer) refuse('is only for voluntary jobs')
+  }
   if (types.length > 0 && (job.type === null || !types.includes(String(job.type)))) {
     refuse(job.type === null ? 'needs a job type' : `is not for job type ${job.type}`)
   }

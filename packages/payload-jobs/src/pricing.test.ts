@@ -466,17 +466,27 @@ describe('quote rejects what cannot be sold', () => {
   })
 })
 
+type ArbJobType = null | string | { id: string; isVolunteer: boolean }
+
+const typeIDOf = (type: ArbJobType): null | string => (typeof type === 'object' && type ? type.id : type)
+
 /** Independent statement of the rules: null means allowed, otherwise the expected code. */
 const expectedRefusal = (
   plan: { allowedJobCategories: string[]; allowedJobTypes: string[]; isVolunteer: boolean },
-  job: null | { categories: string[]; isVolunteer: boolean; type: null | string },
+  job: null | { categories: string[]; type: ArbJobType },
 ): null | string => {
   const restricted =
     plan.isVolunteer || plan.allowedJobTypes.length > 0 || plan.allowedJobCategories.length > 0
   if (!restricted) return null
   if (!job) return 'job-required'
-  if (plan.isVolunteer && !job.isVolunteer) return 'job-not-allowed'
-  if (plan.allowedJobTypes.length > 0 && !plan.allowedJobTypes.includes(job.type ?? '')) {
+  if (plan.isVolunteer) {
+    if (job.type === null) return 'job-not-allowed'
+    // Only the populated type document can show the job is voluntary.
+    if (typeof job.type === 'string') return 'invalid-job'
+    if (!job.type.isVolunteer) return 'job-not-allowed'
+  }
+  const typeID = typeIDOf(job.type)
+  if (plan.allowedJobTypes.length > 0 && (typeID === null || !plan.allowedJobTypes.includes(typeID))) {
     return 'job-not-allowed'
   }
   if (plan.allowedJobCategories.length > 0) {
@@ -495,14 +505,13 @@ describe('plan restrictions (property-based)', () => {
     allowedJobTypes: slugs,
     isVolunteer: fc.boolean(),
   })
-  const jobArb = fc.option(
-    fc.record({
-      categories: slugs,
-      isVolunteer: fc.boolean(),
-      type: fc.option(slug, { nil: null }),
-    }),
-    { nil: null },
+  // The type arrives as a bare id or as the populated document with its own flag.
+  const typeArb: fc.Arbitrary<ArbJobType> = fc.oneof(
+    fc.constant(null),
+    slug,
+    fc.record({ id: slug, isVolunteer: fc.boolean() }),
   )
+  const jobArb = fc.option(fc.record({ categories: slugs, type: typeArb }), { nil: null })
 
   it('sells a plan for a job exactly when every restriction allows it', () => {
     fc.assert(
@@ -526,7 +535,13 @@ describe('plan restrictions (property-based)', () => {
         expect(withJob.total).toBe(without.total)
         expect(withJob.lines).toEqual(without.lines)
         expect(withJob.job).toEqual(
-          job ? { categories: job.categories, isVolunteer: job.isVolunteer, type: job.type } : null,
+          job
+            ? {
+                categories: job.categories,
+                isVolunteer: typeof job.type === 'object' && job.type ? job.type.isVolunteer : null,
+                type: typeIDOf(job.type),
+              }
+            : null,
         )
       }),
     )
@@ -537,7 +552,7 @@ describe('plan restrictions (examples)', () => {
   const volunteer = vatu({ acceptsCredits: false, isVolunteer: true, key: 'volunteer-listing', price: 0 })
 
   it('lets a voluntary job use the free volunteer plan', () => {
-    const result = quote({ job: { isVolunteer: true, type: 'voluntary' }, plan: volunteer })
+    const result = quote({ job: { type: { id: 'voluntary', isVolunteer: true } }, plan: volunteer })
 
     expect(result.total).toBe(0)
     expect(result.plan).toMatchObject({ isVolunteer: true })
@@ -545,10 +560,13 @@ describe('plan restrictions (examples)', () => {
   })
 
   it('refuses the volunteer plan for a paid job, or with no job at all', () => {
-    expect(codeOf(() => quote({ job: { isVolunteer: false, type: 'full-time' }, plan: volunteer }))).toBe(
+    expect(
+      codeOf(() => quote({ job: { type: { id: 'full-time', isVolunteer: false } }, plan: volunteer })),
+    ).toBe('job-not-allowed')
+    expect(codeOf(() => quote({ job: { type: { id: 'full-time' } }, plan: volunteer }))).toBe(
       'job-not-allowed',
     )
-    expect(codeOf(() => quote({ job: { type: 'full-time' }, plan: volunteer }))).toBe('job-not-allowed')
+    expect(codeOf(() => quote({ job: {}, plan: volunteer }))).toBe('job-not-allowed')
     expect(codeOf(() => quote({ plan: volunteer }))).toBe('job-required')
   })
 
@@ -582,12 +600,20 @@ describe('plan restrictions (examples)', () => {
     expect(codeOf(() => quote({ job: { categories: [3], type: 9 }, plan }))).toBe('job-not-allowed')
   })
 
-  it('takes isVolunteer from a populated job type, and refuses a contradiction', () => {
+  it('only trusts the populated job type to say a job is voluntary', () => {
     const voluntaryType = { id: 5, isVolunteer: true }
 
     expect(quote({ job: { type: voluntaryType }, plan: volunteer }).job?.isVolunteer).toBe(true)
+    // A bare id can't show it, and a caller-supplied flag is refused rather than trusted.
+    expect(codeOf(() => quote({ job: { type: 5 }, plan: volunteer }))).toBe('invalid-job')
     expect(
-      codeOf(() => quote({ job: { isVolunteer: false, type: voluntaryType }, plan: volunteer })),
+      codeOf(() => quote({ job: { isVolunteer: true } as never, plan: volunteer })),
+    ).toBe('invalid-job')
+    expect(
+      codeOf(() => quote({ job: { isVolunteer: true, type: 5 } as never, plan: volunteer })),
+    ).toBe('invalid-job')
+    expect(
+      codeOf(() => quote({ job: { type: { id: 5, isVolunteer: 'yes' as never } }, plan: volunteer })),
     ).toBe('invalid-job')
     expect(codeOf(() => quote({ job: { type: { id: 6, isVolunteer: false } }, plan: volunteer }))).toBe(
       'job-not-allowed',
@@ -604,7 +630,7 @@ describe('plan restrictions (examples)', () => {
     ;(plan.allowedJobTypes as string[]).push('full-time')
 
     expect(snapshot.plan.allowedJobTypes).toEqual(['contract'])
-    expect(snapshot.job).toEqual({ categories: ['ngo'], isVolunteer: false, type: 'contract' })
+    expect(snapshot.job).toEqual({ categories: ['ngo'], isVolunteer: null, type: 'contract' })
   })
 
   it('rejects malformed restrictions and jobs', () => {

@@ -387,7 +387,18 @@ describe('plans', () => {
         overrideAccess: true,
       })) as { id: number }
 
-      // What checkout reads: ids at depth 0, documents at depth 1. Both quote the same.
+      // Checkout passes the job's type as the stored document, which carries its own flag.
+      const typeDoc = (id: number) =>
+        harness.payload.findByID({
+          collection: 'job-types',
+          depth: 0,
+          id,
+          overrideAccess: true,
+        }) as Promise<{ id: number; isVolunteer: boolean }>
+      const voluntary = await typeDoc(tax.voluntaryA)
+      const fullTime = await typeDoc(tax.fullTimeA)
+
+      // The plan as checkout reads it: ids at depth 0, documents at depth 1. Both quote the same.
       for (const depth of [0, 1]) {
         const plan = (await harness.payload.findByID({
           collection: PLANS_SLUG,
@@ -397,15 +408,14 @@ describe('plans', () => {
         })) as unknown as QuotablePlan
 
         expect(plan.isVolunteer).toBe(true)
-        expect(
-          quote({ job: { categories: [tax.ngoA], isVolunteer: true, type: tax.voluntaryA }, plan }).total,
-        ).toBe(0)
-        expect(() => quote({ job: { categories: [tax.ngoA], type: tax.fullTimeA }, plan })).toThrow(
-          /voluntary/,
+        expect(quote({ job: { categories: [tax.ngoA], type: voluntary }, plan }).total).toBe(0)
+        expect(() => quote({ job: { categories: [tax.ngoA], type: fullTime }, plan })).toThrow(
+          /only for voluntary jobs/,
         )
-        expect(() =>
-          quote({ job: { categories: [tax.ngoA], isVolunteer: true, type: tax.fullTimeA }, plan }),
-        ).toThrow(/job type/)
+        // A bare type id can't prove the job is voluntary.
+        expect(() => quote({ job: { categories: [tax.ngoA], type: tax.voluntaryA }, plan })).toThrow(
+          /pass the job type document/,
+        )
       }
     })
 
