@@ -1,6 +1,7 @@
 import type { CollectionSlug, Payload, PayloadRequest, Where } from 'payload'
 
 import { ADD_ONS_SLUG } from './add-ons'
+import { missingTaxRateKeys } from './catalog'
 import {
   planFieldValidators,
   PLAN_JOB_CATEGORIES_SLUG,
@@ -40,6 +41,9 @@ export type PlanSeed = {
   name: string
   price: null | number
   sortOrder: number
+  taxExempt?: boolean
+  /** One of the tenant's tax rate keys; omitted: the default rate. */
+  taxRateKey?: null | string
 }
 
 const PLAN_SEED_KEYS = new Set<string>([
@@ -57,6 +61,8 @@ const PLAN_SEED_KEYS = new Set<string>([
   'name',
   'price',
   'sortOrder',
+  'taxExempt',
+  'taxRateKey',
 ])
 
 /** Values that may be `null` in seed data, meaning "not confirmed yet". */
@@ -256,6 +262,18 @@ export const seedPlans = async ({
     }
   }
 
+  const unknownRates = await missingTaxRateKeys({
+    keys: plans.flatMap((plan) => (plan.taxRateKey ? [plan.taxRateKey] : [])),
+    payload: payload as never,
+    req,
+    tenantID,
+  })
+  if (unknownRates.length > 0) {
+    throw new PlanSeedError(
+      `Plan seed is not ready:\n- ${unknownRates.map((key) => `no tax rate "${key}" on this tenant`).join('\n- ')}`,
+    )
+  }
+
   const result: SeedPlansResult = { created: [], existing: [] }
 
   for (const plan of plans) {
@@ -299,6 +317,8 @@ export const seedPlans = async ({
         price: plan.price,
         sortOrder: plan.sortOrder,
         status: 'active',
+        taxExempt: plan.taxExempt ?? false,
+        taxRateKey: plan.taxRateKey ?? null,
         tenant: tenantID,
       } as never,
       overrideAccess: true,

@@ -12,15 +12,18 @@ import {
   catalogCreateAccess,
   catalogDeleteAccess,
   catalogReadAccess,
+  catalogTaxFields,
   catalogUpdateAccess,
   currencyFromTenant,
   idsOf,
   optionalBoolean,
   resultingTenantID,
+  taxRateKeyInTenant,
   uniqueKeyPerTenant,
   validateCatalogKey,
   validateName,
   validatePrice,
+  validateTaxRateKey,
   wholeNumber,
 } from './catalog'
 
@@ -187,6 +190,8 @@ export const addOnFieldValidators = {
     isAddOnPlacement(value) ? true : `Placement must be one of ${ADD_ON_PLACEMENTS.join(', ')}`,
   price: validatePrice,
   sortOrder: wholeNumber('Sort order', { optional: true }),
+  taxExempt: optionalBoolean('Tax exempt'),
+  taxRateKey: validateTaxRateKey,
 } as const
 
 export type AddOnCollectionOptions = {
@@ -258,6 +263,7 @@ export const addOnCollection = ({
         },
       ],
     },
+    ...catalogTaxFields(),
     {
       name: 'placement',
       type: 'select',
@@ -325,6 +331,7 @@ export const addOnCollection = ({
   hooks: {
     beforeChange: [
       currencyFromTenant({ noun: 'add-on', settingsSlug, tenantScoped, tenantsSlug }),
+      taxRateKeyInTenant({ settingsSlug, tenantScoped, tenantsSlug }),
       addOnGrantsValid(tenantScoped),
     ],
     beforeDelete: [preventDeletingAddOnInUse({ tenantScoped })],

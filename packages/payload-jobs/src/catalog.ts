@@ -4,6 +4,7 @@ import {
   type CollectionBeforeChangeHook,
   type CollectionBeforeValidateHook,
   type CollectionSlug,
+  type Field,
   type GlobalSlug,
   type PayloadRequest,
   type Where,
@@ -256,6 +257,43 @@ export const uniqueKeyPerTenant =
     return data
   }
 
+/**
+ * A plan or add-on that names a tax rate must name one of its tenant's rates. Without a name it
+ * uses the tenant's default rate; `taxExempt` items are never taxed.
+ */
+export const taxRateKeyInTenant =
+  ({ settingsSlug, tenantScoped, tenantsSlug }: Omit<TenantCurrencySource, 'noun'>): CollectionBeforeChangeHook =>
+  async ({ collection, data, originalDoc, req }) => {
+    const key = (data && 'taxRateKey' in data ? data.taxRateKey : originalDoc?.taxRateKey) as unknown
+    if (key === null || key === undefined || key === '') return data
+
+    let source: unknown
+    if (tenantScoped) {
+      const tenantID = resultingTenantID(data, originalDoc)
+      if (tenantID === null) return data // currencyFromTenant rejects this.
+      source = await req.payload.findByID({
+        collection: tenantsSlug as CollectionSlug,
+        depth: 0,
+        disableErrors: true,
+        id: tenantID,
+        overrideAccess: true,
+        req,
+      })
+    } else {
+      source = await req.payload.findGlobal({ depth: 0, overrideAccess: true, req, slug: settingsSlug as GlobalSlug })
+    }
+
+    const rates = (source as null | { tax?: { rates?: { key?: unknown }[] | null } | null })?.tax?.rates ?? []
+    if (!rates.some((rate) => rate?.key === key)) {
+      throw new ValidationError({
+        collection: collection.slug,
+        errors: [{ message: `"${String(key)}" is not one of the tenant’s tax rates`, path: 'taxRateKey' }],
+        req,
+      })
+    }
+    return data
+  }
+
 export type Validator<T> = (value: T) => string | true
 
 export const wholeNumber =
@@ -283,6 +321,62 @@ export const validateCatalogKey =
 
 export const validateName: Validator<null | string | undefined> = (value) =>
   typeof value === 'string' && value.trim() ? true : 'Name is required'
+
+export const validateTaxRateKey: Validator<null | string | undefined> = (value) =>
+  value === null || value === undefined || value === '' || CATALOG_KEY_PATTERN.test(value)
+    ? true
+    : 'Use the key of one of the tenant’s tax rates, e.g. standard'
+
+/** `taxExempt` and `taxRateKey`, the same on plans and add-ons. */
+export const catalogTaxFields = (): Field[] => [
+  {
+    type: 'row',
+    fields: [
+      {
+        name: 'taxExempt',
+        type: 'checkbox',
+        defaultValue: false,
+        admin: { description: 'Never taxed, whatever the tenant’s rates.' },
+      },
+      {
+        name: 'taxRateKey',
+        type: 'text',
+        validate: validateTaxRateKey,
+        admin: { description: 'One of the tenant’s tax rate keys. Empty: the tenant’s default rate.' },
+      },
+    ],
+  },
+]
+
+/**
+ * Seed data names tax rates by key too. Check every key against the tenant before writing
+ * anything, so a bad key can't stop a seed half way.
+ */
+export const missingTaxRateKeys = async ({
+  keys,
+  payload,
+  req,
+  tenantID,
+  tenantsSlug = 'tenants',
+}: {
+  keys: readonly string[]
+  payload: { findByID: (args: never) => Promise<unknown> }
+  req?: unknown
+  tenantID: number | string
+  tenantsSlug?: string
+}): Promise<string[]> => {
+  if (keys.length === 0) return []
+  const tenant = (await payload.findByID({
+    collection: tenantsSlug,
+    depth: 0,
+    disableErrors: true,
+    id: tenantID,
+    overrideAccess: true,
+    req,
+  } as never)) as null | { tax?: { rates?: { key?: unknown }[] | null } | null }
+  const known = new Set((tenant?.tax?.rates ?? []).map((rate) => rate?.key))
+  return [...new Set(keys)].filter((key) => !known.has(key))
+}
 
 export const optionalBoolean =
   (label: string): Validator<unknown> =>

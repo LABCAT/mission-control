@@ -1,4 +1,5 @@
-import { isMinorUnits, percentOf, sumMinorUnits } from './money'
+import { allocateProportionally, isMinorUnits, percentOf, sumMinorUnits } from './money'
+import { computeTax, TAX_DISABLED, TaxError, type TaxBreakdownRow, type TaxRoundingMode, type TaxSettings } from './tax'
 
 /**
  * The pricing engine. `quote()` turns a plan, paid add-ons, an optional coupon and the
@@ -43,6 +44,14 @@ export type QuotableAddOn = PricedRef & {
   /** Where the add-on shows the job, e.g. `featured-in-listings` (see `ADD_ON_PLACEMENTS`). */
   placement?: null | string
   price: number
+} & TaxableTerms
+
+/** How a plan or add-on is taxed (see `tax.ts`). */
+export type TaxableTerms = {
+  /** Never taxed, whatever the tenant's rates. */
+  taxExempt?: boolean | null
+  /** The tenant tax rate to use; empty means the tenant's default rate. */
+  taxRateKey?: null | string
 }
 
 /**
@@ -85,7 +94,7 @@ export type QuotablePlan = PricedRef & {
   name: string
   price: number
   status: PlanStatus
-}
+} & TaxableTerms
 
 export const QUOTE_COUPON_DISCOUNT_TYPES = ['flat', 'percent'] as const
 export type QuoteCouponDiscountType = (typeof QUOTE_COUPON_DISCOUNT_TYPES)[number]
@@ -144,6 +153,8 @@ export type QuoteArgs = {
    */
   job?: null | QuoteJob
   plan: QuotablePlan
+  /** The tenant's tax settings (see `tenantTaxSettings`). Omitted or `null`: no tax. */
+  tax?: null | TaxSettings
 }
 
 export type QuoteLineKind = 'add-on' | 'plan'
@@ -160,7 +171,21 @@ export type QuoteLine = {
   ref: PricedRef
   /** The list price, kept even when the line is included, for invoices and reports. */
   unitPrice: number
+  /** The part of the credit and coupon discount that falls on this line. */
+  discount: number
+  /** After discounts, without tax. */
+  net: number
+  tax: number
+  /** After discounts, with tax: what this line costs the customer. */
+  gross: number
+  /** The rate applied, or `null` when the line is exempt or the tenant has tax off. */
+  taxRate: null | { key: string; name: string; rate: number; xeroTaxType: null | string }
+  /** The Xero tax type for the invoice line (PJ-57). */
+  xeroTaxType: null | string
 }
+
+/** A line before discounts and tax are worked out. */
+type DraftLine = Omit<QuoteLine, 'discount' | 'gross' | 'net' | 'tax' | 'taxRate' | 'xeroTaxType'>
 
 export type QuoteCouponResult = {
   /** The coupon value as quoted: minor units for flat, a percentage for percent. */
@@ -227,9 +252,25 @@ export type Quote = {
     name: string
     price: number
   }
-  /** Sum of the line amounts. */
+  /** Sum of the line amounts, before discounts, in price terms (incl. or excl. tax as configured). */
   subtotal: number
-  /** Subtotal minus discount, never below 0. */
+  /** How tax was worked out, and the totals. `net + tax = gross = total`. */
+  tax: {
+    breakdown: TaxBreakdownRow[]
+    enabled: boolean
+    /** Net of lines that carry no tax. */
+    exemptNet: number
+    gross: number
+    label: null | string
+    net: number
+    pricesIncludeTax: boolean
+    rounding: TaxRoundingMode
+    tax: number
+  }
+  /**
+   * What the customer pays: the gross, never below 0. Without tax, or with tax-inclusive prices,
+   * this is the subtotal minus the discount; with tax-exclusive prices the tax is added on top.
+   */
   total: number
 }
 
@@ -257,6 +298,7 @@ export const PRICING_ERROR_CODES = [
   'invalid-credits',
   'invalid-job',
   'invalid-plan',
+  'invalid-tax',
   'job-not-allowed',
   'job-required',
   'plan-archived',
@@ -298,6 +340,16 @@ const taxonomyID = (ref: unknown): DocumentID | null => {
 const taxonomyIDs = (refs: null | readonly TaxonomyRef[] | undefined): DocumentID[] =>
   (refs ?? []).map((ref) => taxonomyID(ref) as DocumentID)
 
+const taxableTermsProblem = (terms: TaxableTerms): null | string => {
+  if (terms.taxExempt !== null && terms.taxExempt !== undefined && typeof terms.taxExempt !== 'boolean') {
+    return 'taxExempt must be true or false'
+  }
+  if (terms.taxRateKey !== null && terms.taxRateKey !== undefined && (typeof terms.taxRateKey !== 'string' || !terms.taxRateKey)) {
+    return 'taxRateKey must be a tax rate key'
+  }
+  return null
+}
+
 const validatePlan = (plan: QuotablePlan, currency: string | undefined): void => {
   const fail = (message: string): never => {
     throw new PricingError('invalid-plan', `Plan "${plan?.name ?? '?'}": ${message}`)
@@ -325,6 +377,8 @@ const validatePlan = (plan: QuotablePlan, currency: string | undefined): void =>
   if (plan.isVolunteer !== null && plan.isVolunteer !== undefined && typeof plan.isVolunteer !== 'boolean') {
     fail('isVolunteer must be true or false')
   }
+  const taxProblem = taxableTermsProblem(plan)
+  if (taxProblem) fail(taxProblem)
   if (plan.status === 'archived') {
     throw new PricingError('plan-archived', `Plan "${plan.name}" is archived and can't be bought`)
   }
@@ -348,6 +402,8 @@ const validateAddOn = (addOn: QuotableAddOn, currency: string): void => {
   if (!isPositiveInteger(addOn.durationDays)) {
     fail('duration must be a whole number of days, 1 or more')
   }
+  const taxProblem = taxableTermsProblem(addOn)
+  if (taxProblem) fail(taxProblem)
   if (addOn.currency !== currency) {
     throw new PricingError(
       'currency-mismatch',
@@ -556,6 +612,7 @@ export const quote = ({
   currency,
   job = null,
   plan,
+  tax = null,
 }: QuoteArgs): Quote => {
   validatePlan(plan, currency)
 
@@ -566,7 +623,8 @@ export const quote = ({
   const quotedJob = job ? normalizeJob(job) : null
   assertJobAllowed(plan, quotedJob)
 
-  const lines: QuoteLine[] = [
+  // Lines are drafted first; discounts and tax are added once the totals are known.
+  const lines: DraftLine[] = [
     {
       amount: plan.price,
       durationDays: plan.durationDays,
@@ -578,6 +636,7 @@ export const quote = ({
       unitPrice: plan.price,
     },
   ]
+  const lineTerms: TaxableTerms[] = [plan]
   const entitlementAddOns: AddOnEntitlement[] = []
   const includedIDs: DocumentID[] = []
 
@@ -611,6 +670,7 @@ export const quote = ({
       ref: refOf(addOn),
       unitPrice: addOn.price,
     })
+    lineTerms.push(addOn)
     entitlementAddOns.push({
       durationDays,
       grantedBy: null,
@@ -652,6 +712,7 @@ export const quote = ({
       ref: refOf(addOn),
       unitPrice: addOn.price,
     })
+    lineTerms.push(addOn)
     entitlementAddOns.push({
       durationDays: addOn.durationDays,
       grantedBy: null,
@@ -685,8 +746,42 @@ export const quote = ({
     }
   }
 
-  const discount = creditDiscount + (couponResult?.discount ?? 0)
+  const couponDiscount = couponResult?.discount ?? 0
+  const discount = creditDiscount + couponDiscount
   const creditExpiryDays = plan.creditExpiryDays ?? null
+
+  // Spread the discounts over the lines they fall on, so each line is taxed on what is paid:
+  // the credit pays the plan line (always the first), the coupon is shared in proportion.
+  const creditParts = lines.map((_, index) => (index === 0 ? creditDiscount : 0))
+  const afterCreditAmounts = lines.map((line, index) => line.amount - creditParts[index])
+  const couponParts = allocateProportionally(couponDiscount, afterCreditAmounts)
+  const charged = afterCreditAmounts.map((amount, index) => amount - couponParts[index])
+
+  const taxSettings = tax ?? TAX_DISABLED
+  let taxed: ReturnType<typeof computeTax>
+  try {
+    taxed = computeTax(
+      charged.map((amount, index) => ({
+        amount,
+        taxExempt: lineTerms[index].taxExempt ?? null,
+        taxRateKey: lineTerms[index].taxRateKey ?? null,
+      })),
+      taxSettings,
+    )
+  } catch (error) {
+    if (error instanceof TaxError) throw new PricingError('invalid-tax', error.message)
+    throw error
+  }
+
+  const quotedLines: QuoteLine[] = lines.map((line, index) => ({
+    ...line,
+    discount: creditParts[index] + couponParts[index],
+    gross: taxed.lines[index].gross,
+    net: taxed.lines[index].net,
+    tax: taxed.lines[index].tax,
+    taxRate: taxed.lines[index].rate,
+    xeroTaxType: taxed.lines[index].xeroTaxType,
+  }))
 
   return deepFreeze({
     coupon: couponResult,
@@ -700,7 +795,7 @@ export const quote = ({
       listingDays: plan.durationDays,
     },
     job: quotedJob,
-    lines,
+    lines: quotedLines,
     plan: {
       ...refOf(plan),
       allowedJobCategories: taxonomyIDs(plan.allowedJobCategories),
@@ -713,7 +808,18 @@ export const quote = ({
       price: plan.price,
     },
     subtotal,
-    total: subtotal - discount,
+    tax: {
+      breakdown: taxed.breakdown,
+      enabled: taxSettings.enabled,
+      exemptNet: taxed.exemptNet,
+      gross: taxed.gross,
+      label: taxSettings.label ?? null,
+      net: taxed.net,
+      pricesIncludeTax: taxSettings.pricesIncludeTax,
+      rounding: taxSettings.rounding,
+      tax: taxed.tax,
+    },
+    total: taxed.gross,
   })
 }
 
