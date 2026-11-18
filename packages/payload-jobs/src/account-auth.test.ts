@@ -18,6 +18,7 @@ import {
   isSuperAdmin,
   payloadJobs,
   superAdminAccess,
+  TAXONOMY_SLUGS,
   tenantRoleOptions,
   END_USER_IP_HEADER,
   createMemoryRateLimiter,
@@ -230,7 +231,8 @@ describe('account auth endpoints', () => {
       plugins: [
         payloadJobs({ accountAuth: { rateLimiter: () => limiter }, tenancy: 'multi' }),
         multiTenantPlugin({
-          collections: {},
+          // payloadJobs adds the taxonomies in tenancy "multi"; the plugin must scope them.
+          collections: Object.fromEntries(TAXONOMY_SLUGS.map((slug) => [slug, {}])),
           tenantsArrayField: {
             rowFields: [
               {
