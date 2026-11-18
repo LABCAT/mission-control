@@ -1,20 +1,33 @@
 # Worker Previews, each on its own Neon branch with this code's migrations applied.
-#   Push a branch other than main  -> preview named after the branch. Its Neon branch
-#                                     (preview/<name>) is cut from prod once and kept,
-#                                     so test data survives later pushes.
-#   Push an RC tag (0.2.0-rc.1)    -> preview rc-0-2-0 on a fresh copy of prod, replaced by
-#                                     each later RC of that version. Released by release.yml.
-#   Delete a branch                -> its preview and Neon branch are deleted.
+#   Push to a branch with an open PR -> preview named after the branch. Its Neon branch
+#   (or a PR is opened/reopened)       (preview/<name>) is cut from prod once and kept,
+#                                      so test data survives later pushes. A branch with
+#                                      no open PR gets no preview.
+#   Push an RC tag (0.2.0-rc.1)      -> preview rc-0-2-0 on a fresh copy of prod, replaced by
+#                                      each later RC of that version. Released by release.yml.
+#   PR closed/merged, branch deleted -> its preview and Neon branch are deleted.
+#   Daily, or run by hand            -> sweep: delete every preview/* Neon branch (and its
+#                                      Worker Preview) that has no open PR. See docs/INFRA.md.
 name: Preview
 
 on:
   push:
     branches-ignore: [main]
     tags: ['[0-9]+.[0-9]+.[0-9]+-rc.[0-9]+']
+  pull_request:
+    types: [opened, reopened, closed]
   delete:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: List the stale previews without deleting anything
+        type: boolean
+        default: true
 
 concurrency:
-  group: preview-${{ github.event_name == 'delete' && github.event.ref || github.ref_name }}
+  group: preview-${{ github.event_name == 'delete' && github.event.ref || github.event_name == 'pull_request' && github.head_ref || (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && 'sweep' || github.ref_name }}
   cancel-in-progress: true
 
 env:
@@ -25,16 +38,51 @@ env:
   WORKERS_SUBDOMAIN: ${{ vars.WORKERS_SUBDOMAIN || 'labcat.workers.dev' }}
 
 jobs:
+  # Previews are only for RC tags and for branches with an open PR from this repo.
+  gate:
+    name: Needs a preview?
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      publish: ${{ steps.gate.outputs.publish }}
+    steps:
+      - id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          IS_FORK: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = pull_request ]; then
+            publish=$([ "$IS_FORK" = true ] && echo false || echo true)
+          elif [ "$GITHUB_REF_TYPE" = tag ]; then
+            publish=true
+          else
+            open=$(gh pr list --head "$GITHUB_REF_NAME" --state open --json isCrossRepository --jq '[.[] | select(.isCrossRepository | not)] | length')
+            publish=$([ "$open" -gt 0 ] && echo true || echo false)
+          fi
+          [ "$publish" = true ] || echo "::notice::No open PR for $GITHUB_REF_NAME, so no preview. Opening a PR creates it."
+          echo "publish=$publish" >> "$GITHUB_OUTPUT"
+
   publish:
     name: Publish preview
-    if: github.event_name == 'push'
+    needs: gate
+    if: needs.gate.outputs.publish == 'true'
     runs-on: ubuntu-latest
+    env:
+      # The branch to preview. On pull_request events GITHUB_REF_NAME is "<n>/merge".
+      REF_NAME: ${{ github.head_ref || github.ref_name }}
     outputs:
       name: ${{ steps.name.outputs.name }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Name the preview
         id: name
@@ -45,7 +93,7 @@ jobs:
             echo "name=$(.github/scripts/preview-name.sh rc "${GITHUB_REF_NAME%%-rc.*}")" >> "$GITHUB_OUTPUT"
             echo "fresh=true" >> "$GITHUB_OUTPUT"
           else
-            echo "name=$(.github/scripts/preview-name.sh branch "$GITHUB_REF_NAME")" >> "$GITHUB_OUTPUT"
+            echo "name=$(.github/scripts/preview-name.sh branch "$REF_NAME")" >> "$GITHUB_OUTPUT"
             echo "fresh=false" >> "$GITHUB_OUTPUT"
           fi
 
@@ -56,15 +104,23 @@ jobs:
           PROJECT: ${{ vars.NEON_PROJECT_ID }}
           BRANCH: preview/${{ steps.name.outputs.name }}
           FRESH: ${{ steps.name.outputs.fresh }}
+          LIMIT: ${{ vars.NEON_BRANCH_LIMIT || '10' }}
         run: |
           set -euo pipefail
+          .github/scripts/preview-neon.mjs valid "$BRANCH"
           neon() { npx -y "$NEONCTL" "$@" --project-id "$PROJECT" --api-key "$NEON_API_KEY"; }
-          exists=$(neon branches list --output json | jq --arg b "$BRANCH" '[.[] | select(.name == $b)] | length')
+          LIST=$RUNNER_TEMP/neon-branches.json
+          neon branches list --output json > "$LIST"
+          exists=$(jq --arg b "$BRANCH" '[.[] | select(.name == $b)] | length' "$LIST")
           if [ "$exists" != 0 ] && [ "$FRESH" = true ]; then
             neon branches delete "$BRANCH" > /dev/null
+            neon branches list --output json > "$LIST"
             exists=0
           fi
           if [ "$exists" = 0 ]; then
+            # Fail early with the list of preview/* branches instead of Neon's bare error.
+            .github/scripts/preview-neon.mjs capacity "$LIST" "$LIMIT" "$BRANCH" \
+              || { echo "::error::Neon branch limit reached, see the log for the existing preview/* branches"; exit 1; }
             neon branches create --name "$BRANCH" --parent main --output json > /dev/null
           fi
           URI=$(neon connection-string "$BRANCH" --database-name neondb --role-name neondb_owner)
@@ -102,7 +158,7 @@ jobs:
           SECRETS=$(mktemp)
           trap 'rm -f "$SECRETS"' EXIT
           jq -n '{DATABASE_URL: env.DATABASE_URL, PAYLOAD_SECRET: env.PAYLOAD_SECRET}' > "$SECRETS"
-          pnpm exec wrangler preview --name "$NAME" --worker-name "$WORKER_NAME" --message "$GITHUB_REF_NAME @ ${GITHUB_SHA::7}" --secrets-file "$SECRETS"
+          pnpm exec wrangler preview --name "$NAME" --worker-name "$WORKER_NAME" --message "$REF_NAME @ $(git rev-parse --short HEAD)" --secrets-file "$SECRETS"
 
       - name: Smoke
         env:
@@ -123,7 +179,6 @@ jobs:
   admin-smoke:
     name: Admin smoke
     needs: publish
-    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -184,10 +239,17 @@ jobs:
           command -v psql > /dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client; }
           DATABASE_URL="$URI" node .github/scripts/site-key-smoke.mjs
 
+  # PR closed or merged, or the git branch deleted: remove that branch's preview.
   cleanup:
     name: Delete preview
-    if: github.event_name == 'delete' && github.event.ref_type == 'branch'
+    if: >-
+      (github.event_name == 'delete' && github.event.ref_type == 'branch') ||
+      (github.event_name == 'pull_request' && github.event.action == 'closed' &&
+       github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@v4
       - name: Delete the Worker Preview and its Neon branch
@@ -196,11 +258,52 @@ jobs:
           PROJECT: ${{ vars.NEON_PROJECT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-          DELETED: ${{ github.event.ref }}
+          GIT_BRANCH: ${{ github.event.ref || github.head_ref }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
-          set -uo pipefail
-          NAME=$(.github/scripts/preview-name.sh branch "$DELETED")
-          npx -y "$WRANGLER" preview delete --name "$NAME" --worker-name "$WORKER_NAME" --skip-confirmation \
-            || echo "No Worker Preview named $NAME"
-          npx -y "$NEONCTL" branches delete "preview/$NAME" --project-id "$PROJECT" --api-key "$NEON_API_KEY" \
-            || echo "No Neon branch preview/$NAME"
+          set -euo pipefail
+          NAME=$(.github/scripts/preview-name.sh branch "$GIT_BRANCH")
+          # delete-preview.sh skips it if another open PR (feature/foo vs feature-foo) shares the name.
+          .github/scripts/delete-preview.sh "$NAME"
+
+  # Daily and on demand: delete preview/* Neon branches (and their Worker Previews) with no
+  # open PR. Catches whatever the event-driven cleanup missed. Manual runs default to a dry run.
+  sweep:
+    name: Sweep stale previews
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - name: Delete stale previews
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          PROJECT: ${{ vars.NEON_PROJECT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == true }}
+        run: |
+          set -euo pipefail
+          neon() { npx -y "$NEONCTL" "$@" --project-id "$PROJECT" --api-key "$NEON_API_KEY"; }
+          neon branches list --output json > "$RUNNER_TEMP/branches.json"
+          gh pr list --state open --limit 1000 --json headRefName,isCrossRepository > "$RUNNER_TEMP/prs.json"
+          [ "$(jq length "$RUNNER_TEMP/prs.json")" -lt 1000 ] || { echo "::error::1000+ open PRs; the list may be truncated"; exit 1; }
+          .github/scripts/preview-neon.mjs stale "$RUNNER_TEMP/branches.json" "$RUNNER_TEMP/prs.json" > "$RUNNER_TEMP/stale.txt"
+          if [ ! -s "$RUNNER_TEMP/stale.txt" ]; then echo "No stale previews."; exit 0; fi
+          echo "Stale previews (no open PR):"; sed 's/^/  /' "$RUNNER_TEMP/stale.txt"
+          {
+            echo "### Stale previews ($([ "$DRY_RUN" = true ] && echo "dry run, nothing deleted" || echo deleted))"
+            sed 's/^/- `/; s/$/`/' "$RUNNER_TEMP/stale.txt"
+          } >> "$GITHUB_STEP_SUMMARY"
+          [ "$DRY_RUN" != true ] || exit 0
+          while IFS= read -r BRANCH; do
+            .github/scripts/delete-preview.sh "${BRANCH#preview/}"
+          done < "$RUNNER_TEMP/stale.txt"
