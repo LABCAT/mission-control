@@ -86,3 +86,4 @@ Spend at 02:05 UTC: sub-sessions $8.04 (PJ-10 2.19, PJ-81 2.42, RCL-86 1.00, PJ-
 - **User migration (founder, 18 Nov):** based on last login. The legacy theme stores `last_login` user meta. Default rule: logged in within 3 years, OR a job/order since 2022, OR admin/editor. The cut-off is confirmed from query 4 in QUERIES-19NOV.sql. PJ-62 updated.
 - **Decision (founder, 18 Nov): tax.** vwok works exactly like the old site, but tax is fully configurable per tenant (label, rates, inclusive/exclusive prices, rounding, exemptions, Xero tax types). New ticket PJ-91, claimed for Opus after PJ-21.
 - LINKPS coupon: default is to keep it if used in the last 12 months (query 5 in QUERIES-19NOV.sql).
+- **Decision (founder, 18 Nov): moderation.** Keep the legacy rule, configurable per tenant (PJ-32 updated). PJ-90 #49 merged: previews reset themselves after a PR renames a migration.
