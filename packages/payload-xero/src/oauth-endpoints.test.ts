@@ -8,11 +8,12 @@ import {
   type Payload,
   type SanitizedConfig,
 } from 'payload'
+import { createServer, type Server } from 'node:http'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { generateEncryptionKey } from './crypto'
 import { payloadXero } from './index'
-import { signOAuthState, XERO_OAUTH_SCOPES } from './oauth'
+import { signOAuthState, verifyOAuthState, XERO_OAUTH_SCOPES } from './oauth'
 import { getXeroAccessToken, findSettingsWithTokens, saveXeroTokens } from './token-store'
 import { tenantAdminAccess, tenantRoleOptions, isSuperAdmin, superAdminAccess } from './test/roles'
 
@@ -21,6 +22,8 @@ const SCHEMA = 'xero_oauth_test'
 const INSTANCE_KEY = 'xero-oauth-test'
 const PASSWORD = 'correct horse battery'
 const STATE_SECRET = 'xero-oauth-state-secret'
+/** The nonce a `goodState` carries, and the cookie a matching browser sends. */
+const NONCE = 'browser-nonce-1'
 const ENCRYPTION_KEY = generateEncryptionKey()
 const REDIRECT_URI = 'https://cms.example.invalid/api/xero/callback'
 
@@ -189,12 +192,13 @@ const createUser = async (email: string, tenants: { role: string; tenant: number
   return { token: token!, user: user as unknown as { id: number } }
 }
 
-type CallOptions = { method?: string; tenant?: string; token?: null | string }
+type CallOptions = { cookie?: null | string; method?: string; tenant?: string; token?: null | string }
 
 /** Drive a real HTTP request through Payload's own endpoint router. */
-const call = async (path: string, { method = 'GET', tenant, token }: CallOptions = {}) => {
+const call = async (path: string, { cookie, method = 'GET', tenant, token }: CallOptions = {}) => {
   const headers = new Headers()
   if (token) headers.set('authorization', `Bearer ${token}`)
+  if (cookie) headers.set('cookie', cookie)
   const query = tenant ? `?tenant=${encodeURIComponent(tenant)}` : ''
 
   const response = await handleEndpoints({
@@ -216,18 +220,47 @@ const call = async (path: string, { method = 'GET', tenant, token }: CallOptions
 
 const connect = (tenant?: string, options: CallOptions = {}) =>
   call('/connect', { ...options, tenant })
-const callback = (query: string) => call(`/callback${query}`)
+
+/** The connect nonce cookie a browser would keep, parsed off the 302 to Xero. */
+const nonceCookieOf = (response: Response): null | string => {
+  const header = response.headers.get('set-cookie')
+  const match = header?.match(/xero_oauth=([^;]*)/)
+
+  return match ? `xero_oauth=${match[1]}` : null
+}
+
+/** `/connect`, returning the state it signed and the cookie the initiating browser would hold. */
+const beginConnect = async (tenant: string, options: CallOptions = {}) => {
+  const response = await connect(tenant, options)
+  const location = response.response.headers.get('location')
+  if (!location) throw new Error(`connect did not redirect (${response.status})`)
+
+  return {
+    cookie: nonceCookieOf(response.response),
+    state: new URL(location).searchParams.get('state')!,
+  }
+}
+
+const callback = (query: string, options: CallOptions = {}) =>
+  call(`/callback${query}`, options)
 
 /** A state the server would have signed for this tenant's row. */
-const goodState = async (tenant: Tenant, user: number) => {
+const goodState = async (
+  tenant: Tenant,
+  user: number,
+  { nonce = NONCE }: { nonce?: string } = {},
+) => {
   const settings = await settingsFor(tenant)
   if (!settings) throw new Error('connect first')
 
   return signOAuthState({
     secret: STATE_SECRET,
-    state: { collection: 'users', settings: settings.id, tenant: tenant.id, user },
+    state: { collection: 'users', nonce, settings: settings.id, tenant: tenant.id, user },
   })
 }
+
+/** The cookie a browser that started the flow would send back with `goodState`. */
+const GOOD_COOKIE = `xero_oauth=${NONCE}`
 
 /** A row whose access token has expired but whose refresh token is live. */
 const expiredRow = async (tenant: Tenant, overrides: Record<string, unknown> = {}) => {
@@ -332,6 +365,142 @@ describe('Xero OAuth endpoints', () => {
     superAdmin = await createUser(`super-${runId}@example.invalid`, [], 'super-admin')
   })
 
+  /**
+   * The rest of the suite drives Payload's router in-process. This block proves the same flow
+   * over a real socket, with real HTTP semantics: a browser follows redirects, keeps the nonce
+   * cookie, and sends it back with the cross-site callback. A response-object test cannot catch a
+   * cookie that is set but not honoured, or a redirect the browser would refuse.
+   */
+  describe('over real HTTP', () => {
+    let server: Server
+    let base: string
+
+    beforeAll(async () => {
+      server = createServer(async (request, response) => {
+        const headers = new Headers()
+        for (const [name, value] of Object.entries(request.headers)) {
+          if (typeof value === 'string') headers.set(name, value)
+        }
+
+        const result = await handleEndpoints({
+          config,
+          payloadInstanceCacheKey: INSTANCE_KEY,
+          request: new Request(`${base}${request.url}`, {
+            headers,
+            method: request.method,
+          }),
+        })
+
+        const setCookie = result.headers.get('set-cookie')
+        response.writeHead(result.status, {
+          ...(setCookie ? { 'set-cookie': setCookie } : {}),
+          'cache-control': result.headers.get('cache-control') ?? 'no-store',
+          location: result.headers.get('location') ?? '',
+        })
+        response.end(await result.text())
+      })
+
+      await new Promise<void>((resolve) => {
+        server.listen(0, '127.0.0.1', resolve)
+      })
+
+      const address = server.address()
+      if (!address || typeof address === 'string') throw new Error('no port')
+      base = `http://127.0.0.1:${address.port}`
+    })
+
+    afterAll(async () => {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()))
+      })
+    })
+
+    it('runs connect → Xero → callback with the cookie and never leaks the token', async () => {
+      connections = [{ tenantId: 'org-http', tenantName: 'HTTP Practice', tenantType: 'ORGANISATION' }]
+        const tenant = await createTenant('golf')
+        const admin = await createUser(`admin-golf-${runId}@example.invalid`, [
+        { role: 'tenant-admin', tenant: tenant.id },
+      ])
+  
+      // 1. The admin clicks connect. Manual redirect so the 302 to Xero can be inspected.
+        const started = await fetch(`${base}/api/xero/connect?tenant=${tenant.slug}`, {
+        headers: { authorization: `Bearer ${admin.token}` },
+        redirect: 'manual',
+      })
+  
+      expect(started.status).toBe(302)
+      const xeroURL = new URL(started.headers.get('location')!)
+      expect(xeroURL.origin + xeroURL.pathname).toBe('https://login.xero.com/identity/connect/authorize')
+
+      const setCookie = started.headers.get('set-cookie')!
+      const cookie = setCookie.split(';')[0]
+      expect(cookie).toMatch(/^xero_oauth=/)
+      // A browser will not send this cookie to another site, which is the point of binding it.
+      expect(setCookie).toContain('SameSite=Lax')
+
+      const state = xeroURL.searchParams.get('state')!
+
+      // 2. The browser returns to our callback with that cookie, exactly as it would from Xero.
+      const finished = await fetch(
+        `${base}/api/xero/callback?code=good-code&state=${encodeURIComponent(state)}`,
+        { headers: { cookie }, redirect: 'manual' },
+      )
+
+      expect(finished.status).toBe(302)
+      expect(finished.headers.get('location')).toMatch(
+        new RegExp(`^/admin/collections/xero-settings/\\d+\\?xero=connected$`),
+      )
+
+      const row = await settingsFor(tenant)
+      expect(row?.xeroTenantId).toBe('org-http')
+      expect(row?.tokens?.accessToken).toEqual(expect.any(String))
+      // Ciphertext only: the plaintext token is nowhere on the row.
+      expect(JSON.stringify(row)).not.toContain('access-http')
+
+      // 3. The refresh endpoint answers over HTTP and still never returns a token.
+      const refreshed = await fetch(`${base}/api/xero/refresh?tenant=${tenant.slug}`, {
+        headers: { authorization: `Bearer ${admin.token}` },
+        method: 'POST',
+      })
+
+      expect(refreshed.status).toBe(200)
+      const body = (await refreshed.json()) as Record<string, unknown>
+      // No token of any kind: the caller only learns whether it refreshed, and when it expires.
+      expect(body).toHaveProperty('expiresAt')
+      expect(body).toHaveProperty('refreshed')
+      expect(Object.keys(body)).toHaveLength(2)
+    })
+
+    it('refuses the callback over HTTP when the browser has no nonce cookie', async () => {
+      const tenant = await createTenant('hotel')
+      const admin = await createUser(`admin-hotel-${runId}@example.invalid`, [
+        { role: 'tenant-admin', tenant: tenant.id },
+      ])
+
+      const started = await fetch(`${base}/api/xero/connect?tenant=${tenant.slug}`, {
+        headers: { authorization: `Bearer ${admin.token}` },
+        redirect: 'manual',
+      })
+      const state = new URL(started.headers.get('location')!).searchParams.get('state')!
+
+      // The victim's browser follows an attacker-supplied link; it holds no matching cookie.
+      const refused = await fetch(
+        `${base}/api/xero/callback?code=good-code&state=${encodeURIComponent(state)}`,
+        { redirect: 'manual' },
+      )
+
+      expect(refused.status).toBe(400)
+      expect(((await refused.json()) as { error: { code: string } }).error.code).toBe('invalid_state')
+      expect((await settingsFor(tenant))?.xeroTenantId ?? null).toBeNull()
+    })
+
+    it('answers 401 over HTTP for an anonymous connect', async () => {
+      const response = await fetch(`${base}/api/xero/connect?tenant=any`, { redirect: 'manual' })
+
+      expect(response.status).toBe(401)
+    })
+  })
+
   afterAll(async () => {
     if (!payload) return
 
@@ -389,6 +558,30 @@ describe('Xero OAuth endpoints', () => {
       expect(result.response.headers.get('cache-control')).toBe('no-store')
     })
 
+    it('binds the flow to this browser with a nonce cookie that the state repeats', async () => {
+      const { cookie, state } = await beginConnect(tenantA.slug, { token: adminA.token })
+
+      expect(cookie).toMatch(/^xero_oauth=[0-9a-f-]{36}$/)
+      const setCookie = (await connect(tenantA.slug, { token: adminA.token })).response.headers.get(
+        'set-cookie',
+      )
+      expect(setCookie).toContain('HttpOnly')
+      expect(setCookie).toContain('SameSite=Lax')
+      expect(setCookie).toContain('Path=/')
+
+      // The state carries the same value, which the callback compares against the cookie.
+      const verified = await verifyOAuthState({ secret: STATE_SECRET, token: state })
+      expect(cookie).toBe(`xero_oauth=${verified.nonce}`)
+    })
+
+    it('gives each connect attempt its own nonce', async () => {
+      const first = await beginConnect(tenantA.slug, { token: adminA.token })
+      const second = await beginConnect(tenantA.slug, { token: adminA.token })
+
+      expect(first.cookie).not.toBe(second.cookie)
+      expect(first.state).not.toBe(second.state)
+    })
+
     it('accepts a tenant id as well as a slug', async () => {
       const result = await connect(String(tenantA.id), { token: adminA.token })
 
@@ -423,7 +616,7 @@ describe('Xero OAuth endpoints', () => {
       ]
       const state = await goodState(tenantA, adminA.user.id)
 
-      const result = await callback(`?code=good-code&state=${encodeURIComponent(state)}`)
+      const result = await callback(`?code=good-code&state=${encodeURIComponent(state)}`, { cookie: GOOD_COOKIE })
 
       expect(result.status).toBe(302)
       expect(result.response.headers.get('location')).toBe(
@@ -457,7 +650,7 @@ describe('Xero OAuth endpoints', () => {
       const [version, body] = state.split('.')
 
       const tampered = `${version}.${body}.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA`
-      const result = await callback(`?code=good-code&state=${encodeURIComponent(tampered)}`)
+      const result = await callback(`?code=good-code&state=${encodeURIComponent(tampered)}`, { cookie: GOOD_COOKIE })
 
       expect(result.status).toBe(400)
       expect(result.body?.error.code).toBe('invalid_state')
@@ -469,19 +662,20 @@ describe('Xero OAuth endpoints', () => {
         secret: 'not-the-payload-secret',
         state: {
           collection: 'users',
+          nonce: NONCE,
           settings: (await settingsFor(tenantB))!.id,
           tenant: tenantB.id,
           user: adminB.user.id,
         },
       })
 
-      expect((await callback(`?code=good-code&state=${encodeURIComponent(state)}`)).status).toBe(400)
+      expect((await callback(`?code=good-code&state=${encodeURIComponent(state)}`, { cookie: GOOD_COOKIE })).status).toBe(400)
     })
 
     it('refuses a correctly signed state whose user belongs to another tenant', async () => {
       const state = await goodState(tenantA, adminB.user.id)
 
-      const result = await callback(`?code=good-code&state=${encodeURIComponent(state)}`)
+      const result = await callback(`?code=good-code&state=${encodeURIComponent(state)}`, { cookie: GOOD_COOKIE })
 
       expect(result.status).toBe(403)
       expect(result.body?.error.code).toBe('not_authorised')
@@ -492,7 +686,7 @@ describe('Xero OAuth endpoints', () => {
       // Signed correctly (only the server can do that), but the user is an editor of A.
       const state = await goodState(tenantA, editorA.user.id)
 
-      const result = await callback(`?code=good-code&state=${encodeURIComponent(state)}`)
+      const result = await callback(`?code=good-code&state=${encodeURIComponent(state)}`, { cookie: GOOD_COOKIE })
 
       expect(result.status).toBe(403)
       expect(result.body?.error.code).toBe('not_authorised')
@@ -501,12 +695,43 @@ describe('Xero OAuth endpoints', () => {
     it('surfaces Xero’s code refusal without storing anything', async () => {
       const state = await goodState(tenantB, adminB.user.id)
 
-      const result = await callback(`?code=expired-code&state=${encodeURIComponent(state)}`)
+      const result = await callback(`?code=expired-code&state=${encodeURIComponent(state)}`, { cookie: GOOD_COOKIE })
 
       expect(result.status).toBe(502)
       expect(result.body?.error.code).toBe('token_request_failed')
       expect(result.body?.error.message).toContain('invalid_grant')
       expect((await settingsFor(tenantB))?.tokens?.accessToken ?? null).toBeNull()
+    })
+
+    it('refuses a state the returning browser did not start', async () => {
+      // An attacker signs a state for their own row and hands the victim the Xero URL; the
+      // victim's browser has no matching cookie, so the callback refuses it.
+      const state = await goodState(tenantA, adminA.user.id)
+
+      const missing = await callback(`?code=good-code&state=${encodeURIComponent(state)}`)
+      expect(missing.status).toBe(400)
+      expect(missing.body?.error.code).toBe('invalid_state')
+
+      const wrongBrowser = await callback(`?code=good-code&state=${encodeURIComponent(state)}`, {
+        cookie: 'xero_oauth=another-browser',
+      })
+      expect(wrongBrowser.status).toBe(400)
+      expect(wrongBrowser.body?.error.code).toBe('invalid_state')
+
+      // Neither attempt touched the tenant's tokens.
+      expect((await settingsFor(tenantA))?.tokens?.accessToken ?? null).not.toBeNull()
+    })
+
+    it('completes a browser-driven connect: cookie, state and tokens line up', async () => {
+      connections = [{ tenantId: 'org-vwok', tenantName: 'Vanuatu Wok', tenantType: 'ORGANISATION' }]
+      const { cookie, state } = await beginConnect(tenantB.slug, { token: adminB.token })
+
+      const result = await callback(`?code=good-code&state=${encodeURIComponent(state)}`, { cookie })
+
+      expect(result.status).toBe(302)
+      // The nonce is single-use in the sense that the cookie is cleared on the way back.
+      expect(result.response.headers.get('set-cookie')).toContain('Max-Age=0')
+      expect((await settingsFor(tenantB))?.xeroTenantId).toBe('org-vwok')
     })
 
     it('reports a cancelled connection', async () => {
@@ -518,7 +743,7 @@ describe('Xero OAuth endpoints', () => {
 
     it('needs a code', async () => {
       const state = await goodState(tenantB, adminB.user.id)
-      const result = await callback(`?state=${encodeURIComponent(state)}`)
+      const result = await callback(`?state=${encodeURIComponent(state)}`, { cookie: GOOD_COOKIE })
 
       expect(result.status).toBe(400)
       expect(result.body?.error.code).toBe('invalid_request')
@@ -528,7 +753,7 @@ describe('Xero OAuth endpoints', () => {
       connections = [{ tenantId: 'practice-1', tenantName: 'Practice', tenantType: 'PRACTICEMANAGER' }]
       const state = await goodState(tenantB, adminB.user.id)
 
-      const result = await callback(`?code=good-code&state=${encodeURIComponent(state)}`)
+      const result = await callback(`?code=good-code&state=${encodeURIComponent(state)}`, { cookie: GOOD_COOKIE })
 
       expect(result.status).toBe(502)
       expect(result.body?.error.code).toBe('no_organisation')
@@ -539,7 +764,7 @@ describe('Xero OAuth endpoints', () => {
       const first = await settingsFor(tenantB)
       const state = await goodState(tenantB, adminB.user.id)
 
-      expect((await callback(`?code=good-code&state=${encodeURIComponent(state)}`)).status).toBe(302)
+      expect((await callback(`?code=good-code&state=${encodeURIComponent(state)}`, { cookie: GOOD_COOKIE })).status).toBe(302)
 
       const second = await settingsFor(tenantB)
       expect(second?.id).toBe(first?.id)

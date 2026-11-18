@@ -26,6 +26,7 @@ import {
   resolveXeroOAuth,
   signOAuthState,
   verifyOAuthState,
+  XERO_OAUTH_COOKIE,
   xeroOrganisationId,
   type XeroOAuthOptions,
   XeroOAuthError,
@@ -92,6 +93,44 @@ const errorResponse = (error: XeroOAuthError): Response =>
 /** A redirect the browser follows (to Xero, or back to the admin). */
 const redirectResponse = (location: string): Response =>
   noStore(new Response(null, { headers: { location }, status: 302 }))
+
+/**
+ * The callback is a cross-site top-level navigation and cannot rely on the admin's auth cookie,
+ * so the signed state carries the identity. That alone would let an attacker start a flow on
+ * their own row and hand the victim the Xero URL, linking the victim's Xero account to the
+ * attacker's settings. A nonce set as a cookie here and echoed in the state ties the two ends
+ * to the same browser.
+ *
+ * `SameSite=Lax` is what makes the cookie survive the return from Xero: the callback is a
+ * top-level GET. The nonce is checked against the state, not used as a credential on its own.
+ */
+const nonceCookie = (nonce: string, maxAge: number): string =>
+  `${XERO_OAUTH_COOKIE}=${nonce}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}`
+
+/** A cleared nonce cookie, for after the callback has consumed it. */
+const clearedNonceCookie = (): string => `${XERO_OAUTH_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`
+
+const cookieValue = (req: PayloadRequest, name: string): null | string => {
+  const header = req.headers?.get('cookie')
+  if (!header) return null
+
+  for (const part of header.split(';')) {
+    const [key, ...rest] = part.trim().split('=')
+    if (key === name) return rest.join('=') || null
+  }
+
+  return null
+}
+
+/** Compare two secrets without leaking where they differ. */
+const sameSecret = (a: null | string, b: null | string): boolean => {
+  if (!a || !b || a.length !== b.length) return false
+
+  let mismatch = 0
+  for (let index = 0; index < a.length; index++) mismatch |= a.charCodeAt(index) ^ b.charCodeAt(index)
+
+  return mismatch === 0
+}
 
 type RelationRef = null | number | string | { id: number | string } | undefined
 
@@ -274,17 +313,23 @@ export const xeroConnectHandler =
         user,
       })
 
+      const { stateTtlSeconds } = resolveXeroOAuth(options.oauth)
+      const nonce = crypto.randomUUID()
       const state = await signOAuthState({
         secret: stateSecretOf(req, options),
         state: {
           collection: (user.collection as string | undefined) ?? req.payload.config.admin.user,
+          nonce,
           settings: settings.id,
           tenant: tenantID,
           user: user.id as number | string,
         },
       })
 
-      return redirectResponse(buildAuthorizeUrl(options.oauth, { state }))
+      const response = redirectResponse(buildAuthorizeUrl(options.oauth, { state }))
+      response.headers.append('set-cookie', nonceCookie(nonce, stateTtlSeconds))
+
+      return response
     } catch (error) {
       if (error instanceof XeroOAuthError) return errorResponse(error)
 
@@ -329,6 +374,11 @@ export const xeroCallbackHandler =
         token: req.searchParams?.get('state'),
       })
 
+      // The browser returning from Xero must be the one that started the flow.
+      if (!sameSecret(cookieValue(req, XERO_OAUTH_COOKIE), state.nonce)) {
+        throw new XeroOAuthError('invalid_state', 'This connect link is invalid or has expired.')
+      }
+
       if (options.scope === 'tenant' && state.tenant === null) {
         throw new XeroOAuthError('invalid_state', 'This connect link is invalid or has expired.')
       }
@@ -369,7 +419,10 @@ export const xeroCallbackHandler =
         tokens: refreshTokenRequired(tokens),
       })
 
-      return redirectResponse(settingsAdminURL(req, settings, options.settingsSlug))
+      const response = redirectResponse(settingsAdminURL(req, settings, options.settingsSlug))
+      response.headers.append('set-cookie', clearedNonceCookie())
+
+      return response
     } catch (error) {
       if (error instanceof XeroOAuthError) return errorResponse(error)
 

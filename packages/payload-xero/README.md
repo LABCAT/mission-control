@@ -128,6 +128,8 @@ The callback is a cross-site browser navigation from `login.xero.com`, so the ad
 
 So a replayed, edited or old link gets a `400`, and a state signed for tenant A can never write tenant B.
 
+The state alone would still leave an account-linking hole: anyone who can start a connection could hand a victim the Xero URL and have the victim's Xero organisation linked to the attacker's settings row. `/connect` therefore also sets a short-lived `HttpOnly; SameSite=Lax` nonce cookie, repeats the nonce inside the signed state, and the callback refuses the flow unless the returning browser presents the same value. The cookie is cleared on the way back, and a callback with no cookie, or with a different browser's, is an `invalid_state` `400`.
+
 ### Tokens at rest
 
 Tokens are stored in a hidden `tokens` group on the settings row, encrypted with AES-256-GCM and bound to the row's ID as authenticated data: a token copied to another tenant's row will not decrypt. The group refuses `create`, `read` and `update` through the API, so even a super-admin reading the REST API sees the row without `tokens`.

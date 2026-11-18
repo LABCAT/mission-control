@@ -33,6 +33,8 @@ export const XERO_STATE_SECRET_ENV = 'XERO_STATE_SECRET'
 export const XERO_REFRESH_MARGIN_MS = 60_000
 /** How long the connect link (the signed state) stays valid. */
 export const XERO_STATE_TTL_SECONDS = 600
+/** Cookie that binds a connect attempt to the browser that started it. */
+export const XERO_OAUTH_COOKIE = 'xero_oauth'
 
 const STATE_VERSION = 'v1'
 
@@ -181,6 +183,12 @@ export type XeroOAuthState = {
   collection: string
   /** Epoch milliseconds after which the state is refused. */
   expiresAt: number
+  /**
+   * Random value also set as a cookie on the browser that started the flow. The callback must
+   * present the same value, which is what stops an attacker handing a victim a connect link and
+   * having the victim's Xero account linked to the attacker's settings row.
+   */
+  nonce: string
   /** The settings row this connection writes to, so the callback cannot stray to another. */
   settings: number | string
   /** Tenant the connection belongs to; null in global scope. */
@@ -246,6 +254,7 @@ export const signOAuthState = async ({
       JSON.stringify({
         collection: state.collection,
         expiresAt: state.expiresAt ?? now + XERO_STATE_TTL_SECONDS * 1000,
+        nonce: state.nonce,
         settings: state.settings,
         tenant: state.tenant,
         user: state.user,
@@ -286,6 +295,8 @@ export const verifyOAuthState = async ({
     typeof state !== 'object' ||
     typeof state.collection !== 'string' ||
     typeof state.expiresAt !== 'number' ||
+    typeof state.nonce !== 'string' ||
+    state.nonce.length === 0 ||
     !isID(state.settings) ||
     !isID(state.user)
   ) {

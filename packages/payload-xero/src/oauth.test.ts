@@ -117,13 +117,19 @@ describe('authorize URL', () => {
 })
 
 describe('signed state', () => {
-  const state = { collection: 'users', settings: 3, tenant: 7, user: 42 }
+  const state = { collection: 'users', nonce: 'nonce-1', settings: 3, tenant: 7, user: 42 }
 
   it('round-trips the tenant and user', async () => {
     const token = await signOAuthState({ now: NOW, secret: SECRET, state })
     const verified = await verifyOAuthState({ now: NOW + 1000, secret: SECRET, token })
 
-    expect(verified).toMatchObject({ collection: 'users', settings: 3, tenant: 7, user: 42 })
+    expect(verified).toMatchObject({
+      collection: 'users',
+      nonce: 'nonce-1',
+      settings: 3,
+      tenant: 7,
+      user: 42,
+    })
     expect(verified.expiresAt).toBe(NOW + 600_000)
   })
 
@@ -154,6 +160,18 @@ describe('signed state', () => {
     await expect(
       verifyOAuthState({ now: NOW + 600_001, secret: SECRET, token }),
     ).rejects.toThrow('invalid or has expired')
+  })
+
+  it('refuses a state that carries no browser nonce', async () => {
+    const token = await signOAuthState({
+      now: NOW,
+      secret: SECRET,
+      state: { ...state, nonce: '' },
+    })
+
+    await expect(verifyOAuthState({ now: NOW, secret: SECRET, token })).rejects.toThrow(
+      'invalid or has expired',
+    )
   })
 
   it('refuses missing and malformed states', async () => {
