@@ -1,4 +1,12 @@
-export type Result = 'ok' | 'redirect-ok' | 'redirect-wrong' | 'redirect-unmapped' | 'not-found' | 'other'
+export type Result =
+  | 'ok'
+  | 'redirect-ok'
+  | 'redirect-wrong'
+  | 'redirect-broken'
+  | 'redirect-unmapped'
+  | 'title-mismatch'
+  | 'not-found'
+  | 'other'
 
 export type RedirectMap = Map<string, string>
 
@@ -8,6 +16,8 @@ export interface Check {
   location: string
   expected: string
   result: Result
+  /** Final URL status after following redirects ('' when not applicable). */
+  finalStatus: number | ''
 }
 
 const decodeEntities = (s: string): string =>
@@ -101,7 +111,8 @@ export function classify(
   return 'other'
 }
 
-export const isFailure = (r: Result): boolean => r === 'not-found' || r === 'redirect-wrong'
+export const isFailure = (r: Result): boolean =>
+  r === 'not-found' || r === 'redirect-wrong' || r === 'redirect-broken' || r === 'title-mismatch'
 
 export function csvEscape(v: string | number): string {
   const s = String(v)
@@ -109,8 +120,8 @@ export function csvEscape(v: string | number): string {
 }
 
 export function toCsv(checks: Check[]): string {
-  const rows = checks.map((c) => [c.path, c.status, c.result, c.location, c.expected].map(csvEscape).join(','))
-  return ['path,status,result,location,expected', ...rows].join('\n') + '\n'
+  const rows = checks.map((c) => [c.path, c.status, c.result, c.location, c.expected, c.finalStatus].map(csvEscape).join(','))
+  return ['path,status,result,location,expected,final_status', ...rows].join('\n') + '\n'
 }
 
 export function summarize(checks: Check[]): Record<Result, number> {
@@ -118,10 +129,89 @@ export function summarize(checks: Check[]): Record<Result, number> {
     ok: 0,
     'redirect-ok': 0,
     'redirect-wrong': 0,
+    'redirect-broken': 0,
+    'title-mismatch': 0,
     'redirect-unmapped': 0,
     'not-found': 0,
     other: 0,
   }
   for (const c of checks) counts[c.result]++
   return counts
+}
+
+const namedEntities: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", raquo: '»', ndash: '–', mdash: '—' }
+
+/** Text of the first `<title>`, entity-decoded with whitespace collapsed; null if absent. */
+export function extractTitle(html: string): string | null {
+  const m = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html)
+  if (!m) return null
+  return m[1]!
+    .replace(/&#x([0-9a-f]+);/gi, (_, h: string) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (_, d: string) => String.fromCodePoint(Number(d)))
+    .replace(/&([a-z]+);/gi, (e, n: string) => namedEntities[n.toLowerCase()] ?? e)
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/** Comparable form of a title: drops the " » Site name" / " | Site name" suffix, case and spacing. */
+export function normalizeTitle(title: string): string {
+  return title.replace(/\s+[»|]\s+[^»|]*$/, '').replace(/\s+/g, ' ').trim().toLowerCase()
+}
+
+export const titlesMatch = (a: string, b: string): boolean => normalizeTitle(a) === normalizeTitle(b)
+
+export interface Fetched {
+  status: number
+  location: string
+  body: string
+}
+
+export interface CheckDeps {
+  /** Single request, redirects NOT followed. `body` only needs to be filled for 200s. */
+  get: (url: string) => Promise<Fetched>
+  /** Full legacy URL's HTML title, or null if it can't be fetched/has no title. */
+  legacyTitle: () => Promise<string | null>
+}
+
+const MAX_HOPS = 5
+
+/**
+ * Check one legacy path on the target.
+ * - 200: the page <title> must match the legacy page's.
+ * - 301/308: must carry a Location; with a map entry it must point there; the redirect chain
+ *   is then followed and must end in a 200, otherwise `redirect-broken`.
+ */
+export async function checkTarget(
+  path: string,
+  target: string,
+  expected: string | undefined,
+  deps: CheckDeps,
+): Promise<Check> {
+  const base = { path, expected: expected ?? '' }
+  const first = await deps.get(new URL(path, target).href)
+  const result = classify(first.status, first.location, expected, target)
+  const out = (r: Result, finalStatus: number | ''): Check => ({
+    ...base,
+    status: first.status,
+    location: first.location,
+    result: r,
+    finalStatus,
+  })
+
+  if (result === 'ok') {
+    const [legacy, current] = [await deps.legacyTitle(), extractTitle(first.body)]
+    if (legacy === null) return out('other', 200) // cannot verify title: not provably right
+    return out(current !== null && titlesMatch(legacy, current) ? 'ok' : 'title-mismatch', 200)
+  }
+  if (result === 'redirect-ok' || result === 'redirect-unmapped') {
+    let hop = first
+    let url = new URL(path, target).href
+    for (let i = 0; i < MAX_HOPS && (hop.status === 301 || hop.status === 308 || hop.status === 302 || hop.status === 307); i++) {
+      if (!hop.location) return out('redirect-broken', hop.status)
+      url = new URL(hop.location, url).href
+      hop = await deps.get(url)
+    }
+    return out(hop.status === 200 ? result : 'redirect-broken', hop.status)
+  }
+  return out(result, '')
 }

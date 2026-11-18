@@ -1,6 +1,9 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
+  checkTarget,
+  extractTitle,
+  titlesMatch,
   classify,
   collectUrls,
   isFailure,
@@ -115,13 +118,90 @@ describe('redirect map', () => {
 
 describe('report', () => {
   const checks = [
-    { path: '/a/', status: 200, location: '', expected: '', result: 'ok' as const },
-    { path: '/b,"c"/', status: 404, location: '', expected: '', result: 'not-found' as const },
+    { path: '/a/', status: 200, location: '', expected: '', result: 'ok' as const, finalStatus: 200 as const },
+    { path: '/b,"c"/', status: 404, location: '', expected: '', result: 'not-found' as const, finalStatus: '' as const },
   ]
   it('counts by result', () => {
     expect(summarize(checks)).toMatchObject({ ok: 1, 'not-found': 1, 'redirect-wrong': 0 })
   })
   it('writes CSV with escaping', () => {
-    expect(toCsv(checks)).toBe('path,status,result,location,expected\n/a/,200,ok,,\n"/b,""c""/",404,not-found,,\n')
+    expect(toCsv(checks)).toBe(
+      'path,status,result,location,expected,final_status\n/a/,200,ok,,,200\n"/b,""c""/",404,not-found,,,\n',
+    )
+  })
+})
+
+describe('titles', () => {
+  it('extracts and decodes', () => {
+    expect(extractTitle('<html><TITLE>\n Jobs Archive &#187; Vanuatu&nbsp;Wok &amp; Co </TITLE>')).toBe(
+      'Jobs Archive » Vanuatu&nbsp;Wok & Co',
+    )
+    expect(extractTitle('<p>none</p>')).toBeNull()
+  })
+  it('ignores a site-name suffix, case and spacing', () => {
+    expect(titlesMatch('About us » Vanuatu Wok', 'ABOUT  us | New Site')).toBe(true)
+    expect(titlesMatch('About us', 'Contact us')).toBe(false)
+    expect(titlesMatch('JOB VACANCY – JUNIOR', 'JOB VACANCY')).toBe(false)
+  })
+})
+
+const page = (title: string) => ({ status: 200, location: '', body: `<title>${title}</title>` })
+const redirect = (to: string, status = 301) => ({ status, location: to, body: '' })
+
+describe('checkTarget', () => {
+  const T = 'https://new.example'
+  const none = { status: 404, location: '', body: '' }
+  const site = (routes: Record<string, { status: number; location: string; body: string }>) => ({
+    get: async (url: string) => routes[url] ?? none,
+    legacyTitle: async () => 'About us » Vanuatu Wok' as string | null,
+  })
+
+  it('200 with matching title is ok', async () => {
+    const r = await checkTarget('/about/', T, undefined, site({ [`${T}/about/`]: page('About us') }))
+    expect(r.result).toBe('ok')
+  })
+  it('200 with a different title fails', async () => {
+    const r = await checkTarget('/about/', T, undefined, site({ [`${T}/about/`]: page('Welcome') }))
+    expect(r.result).toBe('title-mismatch')
+    expect(isFailure(r.result)).toBe(true)
+  })
+  it('200 when the legacy title is unavailable is other, not ok', async () => {
+    const deps = { ...site({ [`${T}/about/`]: page('x') }), legacyTitle: async () => null }
+    expect((await checkTarget('/about/', T, undefined, deps)).result).toBe('other')
+  })
+  it('mapped 301 to a 200 is redirect-ok', async () => {
+    const r = await checkTarget('/old/', T, '/new/', site({ [`${T}/old/`]: redirect('/new/'), [`${T}/new/`]: page('x') }))
+    expect(r).toMatchObject({ result: 'redirect-ok', finalStatus: 200 })
+  })
+  it('mapped 301 whose destination is 404 is redirect-broken', async () => {
+    const r = await checkTarget('/old/', T, '/new/', site({ [`${T}/old/`]: redirect('/new/') }))
+    expect(r).toMatchObject({ result: 'redirect-broken', finalStatus: 404 })
+  })
+  it('follows chains and fails if a later hop has no Location', async () => {
+    const ok = await checkTarget('/a/', T, '/b/', site({ [`${T}/a/`]: redirect('/b/'), [`${T}/b/`]: redirect('/c/', 308), [`${T}/c/`]: page('x') }))
+    expect(ok.result).toBe('redirect-ok')
+    const bad = await checkTarget('/a/', T, '/b/', site({ [`${T}/a/`]: redirect('/b/'), [`${T}/b/`]: redirect('') }))
+    expect(bad.result).toBe('redirect-broken')
+  })
+  it('redirect loops end as redirect-broken', async () => {
+    const r = await checkTarget('/a/', T, '/b/', site({ [`${T}/a/`]: redirect('/b/'), [`${T}/b/`]: redirect('/b/') }))
+    expect(r.result).toBe('redirect-broken')
+  })
+  it('301 with no Location always fails, mapped or not', async () => {
+    for (const expected of [undefined, '/new/']) {
+      const r = await checkTarget('/old/', T, expected, site({ [`${T}/old/`]: redirect('') }))
+      expect(isFailure(r.result)).toBe(true)
+    }
+  })
+  it('unmapped 301 to a 200 is unmapped (non-failing); to a 404 fails', async () => {
+    const good = await checkTarget('/old/', T, undefined, site({ [`${T}/old/`]: redirect('/n/'), [`${T}/n/`]: page('x') }))
+    expect(good.result).toBe('redirect-unmapped')
+    expect(isFailure(good.result)).toBe(false)
+    const bad = await checkTarget('/old/', T, undefined, site({ [`${T}/old/`]: redirect('/n/') }))
+    expect(bad.result).toBe('redirect-broken')
+  })
+  it('404 and wrong-target redirects keep their classification', async () => {
+    expect((await checkTarget('/x/', T, undefined, site({}))).result).toBe('not-found')
+    expect((await checkTarget('/old/', T, '/new/', site({ [`${T}/old/`]: redirect('/elsewhere/') }))).result).toBe('redirect-wrong')
   })
 })
