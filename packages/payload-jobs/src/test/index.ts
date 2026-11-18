@@ -37,7 +37,7 @@ export type TestHarness = {
   tenantB: TestTenant
 }
 
-const tenantsCollection = (extraFields: Field[]): CollectionConfig => ({
+const tenantsCollection = (extraFields: Field[], hooks?: CollectionConfig['hooks']): CollectionConfig => ({
   slug: 'tenants',
   admin: { useAsTitle: 'name' },
   access: {
@@ -46,6 +46,7 @@ const tenantsCollection = (extraFields: Field[]): CollectionConfig => ({
     read: authenticatedAccess,
     update: superAdminAccess,
   },
+  ...(hooks ? { hooks } : {}),
   fields: [
     { name: 'name', type: 'text', required: true },
     { name: 'slug', type: 'text', required: true, unique: true, index: true },
@@ -89,6 +90,8 @@ type BootTestPayloadArgs = {
   tenantData?: (which: 'A' | 'B') => Record<string, unknown>
   /** Extra fields on the tenants collection. */
   tenantFields?: Field[]
+  /** Extra hooks on the tenants collection, e.g. the plugin's tenant-delete cleanup. */
+  tenantHooks?: CollectionConfig['hooks']
   /** Extra fields on the users collection, e.g. `organisation` (PJ-18). */
   userFields?: Field[]
 }
@@ -111,6 +114,7 @@ export const bootTestPayload = async ({
   globalCollections = [],
   tenantData = () => ({}),
   tenantFields = [],
+  tenantHooks,
   userFields = [],
 }: BootTestPayloadArgs): Promise<TestHarness> => {
   const testDatabaseUrl = databaseUrl ?? process.env.TEST_DATABASE_URL
@@ -131,7 +135,7 @@ export const bootTestPayload = async ({
     admin: { user: 'users' },
     auth: { passwordHashIterations: 100000 },
     secret: 'test-secret',
-    collections: [Users(userFields), tenantsCollection(tenantFields), ...globalCollections, ...collections],
+    collections: [Users(userFields), tenantsCollection(tenantFields, tenantHooks), ...globalCollections, ...collections],
     db: postgresAdapter({
       pool: {
         connectionString: testDatabaseUrl,

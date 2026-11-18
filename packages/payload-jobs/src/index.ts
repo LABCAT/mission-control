@@ -1,7 +1,11 @@
 import type { CollectionConfig, Config, GlobalConfig, Plugin } from 'payload'
 
 import { accountAuthEndpoints, type AccountAuthOptions } from './account-auth'
-import { ALERT_SUBSCRIPTIONS_SLUG, alertSubscriptionCollection } from './alert-subscriptions'
+import {
+  ALERT_SUBSCRIPTIONS_SLUG,
+  alertSubscriptionCollection,
+  removeTenantAlertSubscriptions,
+} from './alert-subscriptions'
 import { locationsCollection, locationsTenantSlugIndex } from './collections/locations'
 import {
   ORGANISATIONS_SLUG,
@@ -204,6 +208,16 @@ export const payloadJobs =
                 ...accountEndpoints,
               ],
               fields: [...collection.fields, ...jobBoardTenantFields],
+              hooks: {
+                ...collection.hooks,
+                // Deleting a tenant must take its subscribers with it, not detach them.
+                beforeDelete: features.alerts
+                  ? [
+                      ...(collection.hooks?.beforeDelete ?? []),
+                      removeTenantAlertSubscriptions,
+                    ]
+                  : collection.hooks?.beforeDelete,
+              },
             }
           }
 
