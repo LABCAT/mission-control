@@ -25,6 +25,7 @@ const databaseUrl = process.env.TEST_DATABASE_URL
 let platform: PlatformProxy<{ MEDIA: R2Bucket }>
 let bucket: R2Bucket
 let payload: Payload
+let workerPayload: Payload
 
 type Actor = { collection: 'users'; id: number; role: 'super-admin' | 'user'; tenants: unknown[] }
 let tenantA: { id: number }
@@ -151,22 +152,29 @@ describe.skipIf(!databaseUrl)('media and documents (R2, tenant scoped)', () => {
     })
     bucket = platform.env.MEDIA
 
-    const config = await buildConfig({
-      admin: { user: 'users' },
-      auth: { passwordHashIterations: 100000 },
-      collections: [Users, Media, Folders, Tags, Tenants, SiteKeys, Documents],
-      // A private schema, so pushing these tables never races other suites on the shared database.
-      db: postgresAdapter({
-        pool: { connectionString: databaseUrl, max: 10 },
-        push: true,
-        schemaName: 'media_test',
-      }),
-      plugins: [payloadJobs({ tenancy: 'multi' }), multiTenantPlugin(multiTenantOptions)],
-      secret: 'test-secret',
-      storage: [r2Storage({ bucket, collections: { documents: true, media: true } })],
-      upload: { transformers: await createMediaTransformers(false) },
+    const makeConfig = async (isWorkers: boolean) =>
+      buildConfig({
+        admin: { user: 'users' },
+        auth: { passwordHashIterations: 100000 },
+        collections: [Users, Media, Folders, Tags, Tenants, SiteKeys, Documents],
+        // A private schema, so pushing these tables never races other suites on the shared database.
+        db: postgresAdapter({
+          pool: { connectionString: databaseUrl, max: 10 },
+          push: true,
+          schemaName: 'media_test',
+        }),
+        plugins: [payloadJobs({ tenancy: 'multi' }), multiTenantPlugin(multiTenantOptions)],
+        secret: 'test-secret',
+        storage: [r2Storage({ bucket, collections: { documents: true, media: true } })],
+        upload: { transformers: await createMediaTransformers(isWorkers) },
+      })
+    payload = await getPayload({ config: await makeConfig(false), key: 'media-test' })
+
+    // The production Worker's config: same schema, but no resizing (see createMediaTransformers).
+    workerPayload = await getPayload({
+      config: await makeConfig(true),
+      key: 'media-test-worker',
     })
-    payload = await getPayload({ config, key: 'media-test' })
 
     const run = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
     const tenant = async (slug: string) =>
@@ -218,6 +226,7 @@ describe.skipIf(!databaseUrl)('media and documents (R2, tenant scoped)', () => {
       })
       await payload.delete({ collection: 'tenants', overrideAccess: true, where: { id: { in: [tenantA.id, tenantB.id] } } })
     }
+    await workerPayload?.destroy()
     await payload?.destroy()
     await platform?.dispose()
   })
@@ -322,6 +331,24 @@ describe.skipIf(!databaseUrl)('media and documents (R2, tenant scoped)', () => {
       await expect(
         payload.delete({ collection: 'media', id: doc.id, overrideAccess: false, user: adminB as never }),
       ).rejects.toThrow()
+    })
+
+    it('falls back to the original when an image has no variants (Worker uploads)', async () => {
+      const doc = (await workerPayload.create({
+        collection: 'media',
+        data: { alt: 'no variants', tenant: tenantA.id },
+        file: file(await png(1600, 900), 'plain.png', 'image/png'),
+        overrideAccess: true,
+      })) as Record<string, any>
+
+      // Sites render `url`; with no variants it must still point at the original.
+      expect(doc.url).toBe(`/api/media/file/${doc.filename}`)
+      expect(doc.width).toBe(1600)
+      expect(await objectKeys()).toContain(keyOf(doc))
+      for (const variant of mediaVariants) {
+        expect(doc.variants[variant.name].url ?? null).toBeNull()
+        expect(doc.variants[variant.name].filename ?? null).toBeNull()
+      }
     })
 
     it('stays publicly readable', async () => {
