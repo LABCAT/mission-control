@@ -1,9 +1,12 @@
 import { Forbidden, type Access, type CollectionBeforeChangeHook, type CollectionConfig, type Where } from 'payload'
 
 import {
-  authenticatedAccess,
+  ACCOUNT_SIGNUP_CONTEXT,
+  accountUserHooks,
+  adminPanelAccess,
   getUserTenantIDsByRole,
   globalRoleOptions,
+  isSeekerOnly,
   isSuperAdmin,
   type MissionControlUser,
   superAdminAccess,
@@ -35,6 +38,16 @@ export const usersUpdateAccess: Access = ({ req }) => {
   } as Where
 }
 
+// mission-control: seekers (site accounts) may only read their own user. Other roles keep the
+// tenant-scoped read access the multi-tenant plugin adds.
+export const usersReadAccess: Access = ({ req }) => {
+  const user = req.user as MissionControlUser | null | undefined
+  if (!user) return false
+  if (isSeekerOnly(user)) return { id: { equals: user.id } } as Where
+
+  return true
+}
+
 // mission-control: a tenant-admin may edit another member's profile, but not their login.
 export const preventTenantAdminCredentialChanges: CollectionBeforeChangeHook = ({
   data,
@@ -60,6 +73,8 @@ export const ensureFirstUserIsSuperAdmin: CollectionBeforeChangeHook = async ({
   req,
 }) => {
   if (operation !== 'create') return data
+  // Site sign-ups are never the bootstrap user, even on an empty database.
+  if (req.context?.[ACCOUNT_SIGNUP_CONTEXT]) return data
 
   const { totalDocs } = await req.payload.count({
     collection: 'users',
@@ -78,15 +93,23 @@ export const Users: CollectionConfig = {
     useAsTitle: 'email',
   },
   access: {
+    admin: adminPanelAccess, // mission-control: seekers use the site dashboards, not the admin
     create: superAdminAccess,
     // mission-control: super-admin only, so a tenant-admin can never delete a super-admin.
     delete: superAdminAccess,
-    read: authenticatedAccess,
+    read: usersReadAccess,
     update: usersUpdateAccess,
   },
-  auth: true,
+  // mission-control: `verify` gates site sign-ups (PJ-81). accountUserHooks keep admin-created
+  // users verified and stop Payload's own verification email.
+  auth: { verify: true },
   hooks: {
-    beforeChange: [ensureFirstUserIsSuperAdmin, preventTenantAdminCredentialChanges],
+    beforeChange: [
+      ensureFirstUserIsSuperAdmin,
+      preventTenantAdminCredentialChanges,
+      accountUserHooks.beforeChange,
+    ],
+    beforeOperation: [accountUserHooks.beforeOperation],
   },
   fields: [
     // mission-control: global role; per-tenant roles live in the plugin's `tenants` array.
