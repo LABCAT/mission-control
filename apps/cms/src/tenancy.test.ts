@@ -515,6 +515,80 @@ describe('plans (PJ-21)', () => {
   })
 })
 
+describe('organisations (PJ-18)', () => {
+  const employerA: TestUser = {
+    id: 40,
+    collection: 'users',
+    role: 'user',
+    tenants: [{ role: 'employer', tenant: tenantA }],
+    organisation: 5,
+  }
+  const seekerA: TestUser = {
+    id: 41,
+    collection: 'users',
+    role: 'user',
+    tenants: [{ role: 'seeker', tenant: tenantA }],
+    organisation: 5,
+  }
+
+  it('registers organisations with the multi-tenant plugin and a tenant field', async () => {
+    const config = await buildConfig()
+    const organisations = config.collections?.find((collection) => collection.slug === 'organisations')
+
+    expect(organisations?.fields.some((field) => 'name' in field && field.name === 'tenant')).toBe(
+      true,
+    )
+    expect(PAYLOAD_JOBS_TENANT_COLLECTIONS).toContain('organisations')
+  })
+
+  it('adds the organisation relation to users', async () => {
+    const config = await buildConfig()
+    const users = config.collections?.find((collection) => collection.slug === 'users')
+
+    expect(users?.fields.some((field) => 'name' in field && field.name === 'organisation')).toBe(true)
+  })
+
+  it('scopes staff reads to their tenant and an employer to their own organisation', async () => {
+    const config = await buildConfig()
+
+    expect(await collectionAccess(config, 'read', 'organisations', tenantAdminA)).toEqual({
+      and: [{ tenant: { in: [tenantA.id] } }, { tenant: { in: [tenantA.id] } }],
+    })
+    expect(await collectionAccess(config, 'read', 'organisations', employerA)).toEqual({
+      and: [{ id: { equals: 5 } }, { tenant: { in: [tenantA.id] } }],
+    })
+    expect(await collectionAccess(config, 'read', 'organisations', seekerA)).toBe(false)
+    expect(await collectionAccess(config, 'read', 'organisations', null)).toBe(false)
+  })
+
+  it('lets a site key read only approved, page-enabled organisations of its tenant', async () => {
+    const config = await buildConfig()
+    const req = await siteKeyRequest({ key: 'sk_tenant', tenant: tenantA.id })
+    ;(req.payload.collections as Record<string, unknown>)['site-keys'] = {}
+
+    // An anonymous request carries no tenant scope, so the plugin leaves the collection's own
+    // filter alone; the filter already pins the site key's tenant and the published state.
+    expect(await collectionAccessWithReq(config, 'read', 'organisations', req)).toEqual({
+      and: [
+        { tenant: { equals: tenantA.id } },
+        { and: [{ approved: { equals: true } }, { pageEnabled: { equals: true } }] },
+      ],
+    })
+  })
+
+  it('lets an employer update only their own organisation and never delete one', async () => {
+    const config = await buildConfig()
+
+    expect(await collectionAccess(config, 'update', 'organisations', employerA)).toEqual({
+      and: [{ id: { equals: 5 } }, { tenant: { in: [tenantA.id] } }],
+    })
+    expect(await collectionAccess(config, 'delete', 'organisations', employerA)).toBe(false)
+    expect(await collectionAccess(config, 'delete', 'organisations', tenantAdminA)).toEqual({
+      and: [{ tenant: { in: [tenantA.id] } }, { tenant: { in: [tenantA.id] } }],
+    })
+  })
+})
+
 describe('credential updates', () => {
   const target = { id: 20, email: 'b@example.com' }
 

@@ -1,0 +1,344 @@
+import type { CollectionConfig } from 'payload'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+
+import type { MissionControlUser } from '../access'
+import { taxonomyCollections } from '../taxonomies'
+import { locationsCollection } from './locations'
+import { organisationField, organisationsCollection } from './organisations'
+import { bootTestPayload, tenantIsolation, type TestHarness } from '../test'
+
+/**
+ * `mediaSlug: null` keeps the boot free of an upload collection: the images are checked in the
+ * config tests, and everything else here needs only relations to tenant-owned documents.
+ */
+const organisations = (): CollectionConfig[] => [
+  organisationsCollection({ mediaSlug: null }),
+  locationsCollection({ requireTenant: true }),
+  ...taxonomyCollections({ tenantScoped: true }),
+]
+
+const organisationData = (overrides: Record<string, unknown> = {}) => ({
+  about: 'We brew beer in Port Vila.',
+  name: 'Vanuatu Brewing',
+  slug: `brewing-${Math.random().toString(36).slice(2, 8)}`,
+  ...overrides,
+})
+
+tenantIsolation({
+  boot: { userFields: [organisationField()] },
+  collection: organisationsCollection({ mediaSlug: null }),
+  createData: (tenant) => organisationData({ slug: `brewing-${tenant.id}` }),
+  extraCollections: organisations().slice(1),
+})
+
+type Employer = MissionControlUser & { collection: 'users'; id: number; role: 'user' }
+
+describe('organisations integration', () => {
+  let harness: TestHarness
+  let orgA: { id: number }
+  let orgB: { id: number }
+  let employer: Employer
+  let createdUserIDs: number[] = []
+
+  const makeUser = async (
+    label: string,
+    tenants: Employer['tenants'],
+    extra: Record<string, unknown> = {},
+  ): Promise<Employer> => {
+    const doc = (await harness.payload.create({
+      collection: 'users',
+      data: {
+        email: `${label}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}@example.invalid`,
+        password: 'test-password',
+        role: 'user',
+        tenants,
+        ...extra,
+      },
+      overrideAccess: true,
+    })) as { id: number }
+    createdUserIDs.push(doc.id)
+
+    return { collection: 'users', id: doc.id, role: 'user', tenants, ...extra } as Employer
+  }
+
+  beforeEach(async () => {
+    createdUserIDs = []
+    harness = await bootTestPayload({
+      collections: organisations(),
+      userFields: [organisationField()],
+    })
+
+    orgA = (await harness.payload.create({
+      collection: 'organisations',
+      data: { ...organisationData({ slug: 'brewing-a' }), tenant: harness.tenantA.id } as never,
+      overrideAccess: true,
+    })) as { id: number }
+
+    orgB = (await harness.payload.create({
+      collection: 'organisations',
+      data: { ...organisationData({ slug: 'brewing-b' }), tenant: harness.tenantB.id } as never,
+      overrideAccess: true,
+    })) as { id: number }
+
+    employer = await makeUser(
+      'employer',
+      [{ role: 'employer', tenant: harness.tenantA.id }],
+      { organisation: orgA.id },
+    )
+  })
+
+  afterEach(async () => {
+    if (!harness) return
+
+    if (createdUserIDs.length > 0) {
+      await harness.payload.delete({
+        collection: 'users',
+        overrideAccess: true,
+        where: { id: { in: createdUserIDs } },
+      })
+    }
+
+    await harness.destroy()
+  })
+
+  const stored = async (id: number) =>
+    (await harness.payload.findByID({
+      collection: 'organisations',
+      depth: 0,
+      id,
+      overrideAccess: true,
+    })) as Record<string, unknown>
+
+  it('keeps one slug per tenant and the same slug on two tenants', async () => {
+    await expect(
+      harness.payload.create({
+        collection: 'organisations',
+        data: { ...organisationData({ slug: 'brewing-a' }), tenant: harness.tenantA.id } as never,
+        overrideAccess: true,
+      }),
+    ).rejects.toThrow()
+
+    await expect(
+      harness.payload.create({
+        collection: 'organisations',
+        data: { ...organisationData({ slug: 'brewing-a' }), tenant: harness.tenantB.id } as never,
+        overrideAccess: true,
+      }),
+    ).resolves.toMatchObject({ slug: 'brewing-a' })
+  })
+
+  it('keeps the WordPress user id for the import', async () => {
+    const imported = await harness.payload.create({
+      collection: 'organisations',
+      data: {
+        ...organisationData({ legacyId: 4711, slug: 'imported' }),
+        tenant: harness.tenantA.id,
+      } as never,
+      overrideAccess: true,
+    })
+
+    expect(imported).toMatchObject({ legacyId: 4711 })
+  })
+
+  it('lets an employer read their own organisation only', async () => {
+    const { docs } = await harness.payload.find({
+      collection: 'organisations',
+      user: employer as never,
+    })
+
+    expect(docs.map((doc) => doc.id)).toEqual([orgA.id])
+  })
+
+  it('lets an employer edit the profile but drops the admin-only fields', async () => {
+    await harness.payload.update({
+      collection: 'organisations',
+      data: {
+        approved: true,
+        billingEmail: 'pay@example.invalid',
+        canPayByInvoice: true,
+        name: 'Vanuatu Brewing Ltd',
+        pageEnabled: true,
+        website: 'https://example.vu',
+        xeroContactCode: 'XERO-1',
+      } as never,
+      id: orgA.id,
+      user: employer as never,
+    })
+
+    const doc = await stored(orgA.id)
+
+    expect(doc).toMatchObject({
+      approved: false,
+      canPayByInvoice: false,
+      name: 'Vanuatu Brewing Ltd',
+      pageEnabled: false,
+      website: 'https://example.vu',
+    })
+    expect(doc.billingEmail ?? null).toBeNull()
+    expect(doc.xeroContactCode ?? null).toBeNull()
+  })
+
+  it('lets a tenant admin approve an organisation and set its billing terms', async () => {
+    const admin = await makeUser('admin-a', [
+      { role: 'tenant-admin', tenant: harness.tenantA.id },
+    ])
+
+    await harness.payload.update({
+      collection: 'organisations',
+      data: {
+        approved: true,
+        billingEmail: 'pay@example.invalid',
+        canPayByInvoice: true,
+        pageEnabled: true,
+        xeroContactCode: 'XERO-1',
+      } as never,
+      id: orgA.id,
+      user: admin as never,
+    })
+
+    expect(await stored(orgA.id)).toMatchObject({
+      approved: true,
+      billingEmail: 'pay@example.invalid',
+      canPayByInvoice: true,
+      pageEnabled: true,
+      xeroContactCode: 'XERO-1',
+    })
+  })
+
+  it('rejects an employer editing another organisation', async () => {
+    await expect(
+      harness.payload.update({
+        collection: 'organisations',
+        data: { name: 'Hijacked' } as never,
+        id: orgB.id,
+        user: employer as never,
+      }),
+    ).rejects.toThrow()
+
+    expect((await stored(orgB.id)).name).toBe('Vanuatu Brewing')
+  })
+
+  it('rejects an employer re-pointing their user at another organisation', async () => {
+    await harness.payload.update({
+      collection: 'users',
+      data: { organisation: orgB.id } as never,
+      id: employer.id,
+      user: employer as never,
+    })
+
+    const user = (await harness.payload.findByID({
+      collection: 'users',
+      depth: 0,
+      id: employer.id,
+      overrideAccess: true,
+    })) as { organisation?: unknown }
+
+    const id = typeof user.organisation === 'object' && user.organisation !== null
+      ? (user.organisation as { id: number }).id
+      : user.organisation
+
+    expect(id).toBe(orgA.id)
+  })
+
+  it('rejects a relation from another tenant', async () => {
+    const otherArea = await harness.payload.create({
+      collection: 'areas-of-focus',
+      data: { name: 'Marine', slug: 'marine', tenant: harness.tenantB.id } as never,
+      overrideAccess: true,
+    })
+
+    const error = await harness.payload
+      .create({
+        collection: 'organisations',
+        data: {
+          ...organisationData({ areasOfFocus: [otherArea.id], slug: 'cross-tenant' }),
+          tenant: harness.tenantA.id,
+        } as never,
+        overrideAccess: true,
+      })
+      .catch((thrown: unknown) => thrown)
+
+    expect(JSON.stringify(error)).toMatch(/areas of focus/)
+  })
+
+  it('accepts the same relations inside the tenant', async () => {
+    const area = await harness.payload.create({
+      collection: 'areas-of-focus',
+      data: { name: 'Youth', slug: 'youth', tenant: harness.tenantA.id } as never,
+      overrideAccess: true,
+    })
+    const town = await harness.payload.create({
+      collection: 'locations',
+      data: {
+        kind: 'town',
+        name: 'Port Vila',
+        slug: 'port-vila',
+        tenant: harness.tenantA.id,
+      } as never,
+      overrideAccess: true,
+    })
+
+    const created = await harness.payload.create({
+      collection: 'organisations',
+      data: {
+        ...organisationData({ areasOfFocus: [area.id], location: town.id, slug: 'related' }),
+        tenant: harness.tenantA.id,
+      } as never,
+      overrideAccess: true,
+    })
+
+    expect(created).toMatchObject({ slug: 'related' })
+  })
+
+  it('rejects an update that targets another tenant, before any hook runs', async () => {
+    const error = await harness.payload
+      .update({
+        collection: 'organisations',
+        data: { name: 'Hijacked', tenant: harness.tenantB.id } as never,
+        id: orgA.id,
+        user: employer as never,
+      })
+      .catch((thrown: unknown) => thrown)
+
+    expect(error).toBeTruthy()
+    expect((await stored(orgA.id)).name).toBe('Vanuatu Brewing')
+  })
+
+  it('stops an employer who belongs to two tenants moving their organisation', async () => {
+    const bothTenants = await makeUser(
+      'employer-both',
+      [
+        { role: 'employer', tenant: harness.tenantA.id },
+        { role: 'employer', tenant: harness.tenantB.id },
+      ],
+      { organisation: orgA.id },
+    )
+
+    const error = await harness.payload
+      .update({
+        collection: 'organisations',
+        data: { tenant: harness.tenantB.id } as never,
+        id: orgA.id,
+        user: bothTenants as never,
+      })
+      .catch((thrown: unknown) => thrown)
+
+    expect(JSON.stringify(error)).toMatch(/Only a tenant admin can move an organisation/)
+    expect(JSON.stringify(await stored(orgA.id))).toContain(`"tenant":${harness.tenantA.id}`)
+  })
+
+  it('stores the employer’s organisation on the user', async () => {
+    const user = (await harness.payload.findByID({
+      collection: 'users',
+      depth: 0,
+      id: employer.id,
+      overrideAccess: true,
+    })) as { organisation?: unknown }
+
+    const id = typeof user.organisation === 'object' && user.organisation !== null
+      ? (user.organisation as { id: number }).id
+      : user.organisation
+
+    expect(id).toBe(orgA.id)
+  })
+})

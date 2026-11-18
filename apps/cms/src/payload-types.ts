@@ -87,6 +87,7 @@ export interface Config {
     'site-keys': SiteKey;
     documents: Document;
     locations: Location;
+    organisations: Organisation;
     'job-categories': JobCategory;
     'job-types': JobType;
     'job-tags': JobTag;
@@ -110,6 +111,7 @@ export interface Config {
     'site-keys': SiteKeysSelect<false> | SiteKeysSelect<true>;
     documents: DocumentsSelect<false> | DocumentsSelect<true>;
     locations: LocationsSelect<false> | LocationsSelect<true>;
+    organisations: OrganisationsSelect<false> | OrganisationsSelect<true>;
     'job-categories': JobCategoriesSelect<false> | JobCategoriesSelect<true>;
     'job-types': JobTypesSelect<false> | JobTypesSelect<true>;
     'job-tags': JobTagsSelect<false> | JobTagsSelect<true>;
@@ -183,6 +185,10 @@ export interface User {
   firstName?: string | null;
   lastName?: string | null;
   legacyPasswordHash?: string | null;
+  /**
+   * The organisation this employer belongs to.
+   */
+  organisation?: (number | null) | Organisation;
   tenants?:
     | {
         tenant: number | Tenant;
@@ -221,6 +227,87 @@ export interface User {
     | null;
   password?: string | null;
   collection: 'users';
+}
+/**
+ * Employer profiles. An employer edits their own; tenant admins approve them and set billing.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "organisations".
+ */
+export interface Organisation {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  name: string;
+  /**
+   * Used in the organisation page URL. Unique within the tenant.
+   */
+  slug: string;
+  type?: ('business' | 'government' | 'nfp' | 'consultant' | 'recruiter' | 'social-enterprise') | null;
+  size?: ('1-10' | '11-50' | '51-200' | '201-500' | '500-plus') | null;
+  /**
+   * From the tenant’s areas of focus. The directory filter uses these.
+   */
+  areasOfFocus?: (number | AreasOfFocus)[] | null;
+  about?: string | null;
+  /**
+   * Shown in the directory and on the organisation page.
+   */
+  logo?: (number | null) | Media;
+  /**
+   * Wide banner at the top of the organisation page.
+   */
+  cover?: (number | null) | Media;
+  website?: string | null;
+  phone?: string | null;
+  /**
+   * The tenant’s location tree, not a free-text address.
+   */
+  location?: (number | null) | Location;
+  socials?: {
+    facebook?: string | null;
+    instagram?: string | null;
+    linkedin?: string | null;
+    x?: string | null;
+    youtube?: string | null;
+  };
+  /**
+   * The employer has asked for a public page. The admin is notified.
+   */
+  listingRequested?: boolean | null;
+  /**
+   * Set by a tenant admin. Unapproved organisations cannot publish jobs.
+   */
+  approved?: boolean | null;
+  /**
+   * Set by a tenant admin. The public page and directory entry go live.
+   */
+  pageEnabled?: boolean | null;
+  /**
+   * Known customers pay by invoice instead of at checkout.
+   */
+  canPayByInvoice?: boolean | null;
+  /**
+   * Receives invoices. Falls back to the account email when empty.
+   */
+  billingEmail?: string | null;
+  /**
+   * Xero contact for this organisation, used by invoice orders.
+   */
+  xeroContactCode?: string | null;
+  /**
+   * WordPress user id of the legacy employer, for the import.
+   */
+  legacyId?: number | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -459,6 +546,59 @@ export interface Tag {
   _h_titlePath?: string | null;
 }
 /**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "areas-of-focus".
+ */
+export interface AreasOfFocus {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  name: string;
+  /**
+   * Used in listing URLs and filters. Unique within the tenant.
+   */
+  slug: string;
+  /**
+   * WordPress term id, for the import.
+   */
+  legacyId?: number | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "locations".
+ */
+export interface Location {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  name: string;
+  slug: string;
+  kind: 'region' | 'island' | 'town';
+  parent?: (number | null) | Location;
+  /**
+   * WordPress id, so the importer can match an existing location.
+   */
+  legacyId?: number | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
  * Keys public sites use to read their own tenant. The raw key is shown once.
  *
  * This interface was referenced by `Config`'s JSON-Schema
@@ -530,32 +670,6 @@ export interface Document {
   };
   focalX?: number | null;
   focalY?: number | null;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "locations".
- */
-export interface Location {
-  id: number;
-  tenant?: (number | null) | Tenant;
-  name: string;
-  slug: string;
-  kind: 'region' | 'island' | 'town';
-  parent?: (number | null) | Location;
-  /**
-   * WordPress id, so the importer can match an existing location.
-   */
-  legacyId?: number | null;
-  createdBy?: {
-    relationTo: 'users';
-    value: number | User;
-  } | null;
-  updatedBy?: {
-    relationTo: 'users';
-    value: number | User;
-  } | null;
-  updatedAt: string;
-  createdAt: string;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -647,33 +761,6 @@ export interface JobTag {
  * via the `definition` "salary-bands".
  */
 export interface SalaryBand {
-  id: number;
-  tenant?: (number | null) | Tenant;
-  name: string;
-  /**
-   * Used in listing URLs and filters. Unique within the tenant.
-   */
-  slug: string;
-  /**
-   * WordPress term id, for the import.
-   */
-  legacyId?: number | null;
-  createdBy?: {
-    relationTo: 'users';
-    value: number | User;
-  } | null;
-  updatedBy?: {
-    relationTo: 'users';
-    value: number | User;
-  } | null;
-  updatedAt: string;
-  createdAt: string;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "areas-of-focus".
- */
-export interface AreasOfFocus {
   id: number;
   tenant?: (number | null) | Tenant;
   name: string;
@@ -937,6 +1024,10 @@ export interface PayloadLockedDocument {
         value: number | Location;
       } | null)
     | ({
+        relationTo: 'organisations';
+        value: number | Organisation;
+      } | null)
+    | ({
         relationTo: 'job-categories';
         value: number | JobCategory;
       } | null)
@@ -1033,6 +1124,7 @@ export interface UsersSelect<T extends boolean = true> {
   firstName?: T;
   lastName?: T;
   legacyPasswordHash?: T;
+  organisation?: T;
   tenants?:
     | T
     | {
@@ -1341,6 +1433,44 @@ export interface LocationsSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "organisations_select".
+ */
+export interface OrganisationsSelect<T extends boolean = true> {
+  tenant?: T;
+  name?: T;
+  slug?: T;
+  type?: T;
+  size?: T;
+  areasOfFocus?: T;
+  about?: T;
+  logo?: T;
+  cover?: T;
+  website?: T;
+  phone?: T;
+  location?: T;
+  socials?:
+    | T
+    | {
+        facebook?: T;
+        instagram?: T;
+        linkedin?: T;
+        x?: T;
+        youtube?: T;
+      };
+  listingRequested?: T;
+  approved?: T;
+  pageEnabled?: T;
+  canPayByInvoice?: T;
+  billingEmail?: T;
+  xeroContactCode?: T;
+  legacyId?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "job-categories_select".
  */
 export interface JobCategoriesSelect<T extends boolean = true> {
@@ -1628,6 +1758,7 @@ export interface CollectionQueryWidget {
       | 'site-keys'
       | 'documents'
       | 'locations'
+      | 'organisations'
       | 'job-categories'
       | 'job-types'
       | 'job-tags'
@@ -1665,6 +1796,7 @@ export interface ActivityWidget {
           | 'site-keys'
           | 'documents'
           | 'locations'
+          | 'organisations'
           | 'job-categories'
           | 'job-types'
           | 'job-tags'
