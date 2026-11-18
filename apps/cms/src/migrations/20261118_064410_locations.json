@@ -305,6 +305,18 @@
           "primaryKey": false,
           "notNull": false
         },
+        "_verified": {
+          "name": "_verified",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "_verificationtoken": {
+          "name": "_verificationtoken",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
         "login_attempts": {
           "name": "login_attempts",
           "type": "numeric",
@@ -6906,7 +6918,8 @@
       "values": [
         "tenant-admin",
         "editor",
-        "employer"
+        "employer",
+        "seeker"
       ]
     },
     "public.enum_users_role": {
@@ -6977,6 +6990,6 @@
     "tables": {},
     "columns": {}
   },
-  "id": "8b6194e8-90da-4acd-bb53-e3fddd0b3ca2",
+  "id": "6f9c79b7-8ea0-4d24-ab0f-2e435c8b83b6",
   "prevId": "00000000-0000-0000-0000-000000000000"
 }

@@ -44,7 +44,7 @@ export async function up({ db, payload, req }: MigrateUpArgs): Promise<void> {
 }
 
 export async function down({ db, payload, req }: MigrateDownArgs): Promise<void> {
-  // Drop the foreign key, index and column before the tables: `DROP TABLE ... CASCADE` takes
+  // Drop the foreign key, index and column before the tables: "DROP TABLE ... CASCADE" takes
   // the constraint with it, and dropping it again afterwards fails.
   await db.execute(sql`
    ALTER TABLE "locations" DISABLE ROW LEVEL SECURITY;
