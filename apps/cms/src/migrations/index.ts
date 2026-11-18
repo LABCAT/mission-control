@@ -5,8 +5,8 @@ import * as migration_20261105_223955_multi_tenancy from './20261105_223955_mult
 import * as migration_20261107_120535_tenancy_modes from './20261107_120535_tenancy_modes';
 import * as migration_20261109_171926_site_keys from './20261109_171926_site_keys';
 import * as migration_20261118_013433_media_documents_r2 from './20261118_013433_media_documents_r2';
-import * as migration_20261118_021548_legacy_password_hash from './20261118_021548_legacy_password_hash'
-import * as migration_20261114_115130_locations from './20261114_115130_locations';
+import * as migration_20261118_021548_legacy_password_hash from './20261118_021548_legacy_password_hash';
+import * as migration_20261118_062714_locations from './20261118_062714_locations';
 
 export const migrations = [
   {
@@ -47,11 +47,11 @@ export const migrations = [
   {
     up: migration_20261118_021548_legacy_password_hash.up,
     down: migration_20261118_021548_legacy_password_hash.down,
-    name: '20261118_021548_legacy_password_hash'
+    name: '20261118_021548_legacy_password_hash',
   },
   {
-    up: migration_20261114_115130_locations.up,
-    down: migration_20261114_115130_locations.down,
-    name: '20261114_115130_locations'
+    up: migration_20261118_062714_locations.up,
+    down: migration_20261118_062714_locations.down,
+    name: '20261118_062714_locations',
   },
 ];
