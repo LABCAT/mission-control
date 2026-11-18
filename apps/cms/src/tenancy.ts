@@ -37,6 +37,8 @@ export const multiTenantOptions = {
     plans: { accessResultOverride: denySeekerOnly(({ accessResult }) => accessResult) },
     // mission-control: add-ons, like plans, read site keys themselves (on-sale only) (PJ-87).
     'add-ons': { accessResultOverride: denySeekerOnly(({ accessResult }) => accessResult) },
+    // mission-control: jobs read site keys themselves (published and expired only) (PJ-19).
+    jobs: { accessResultOverride: denySeekerOnly(({ accessResult }) => accessResult) },
   },
   tenantsArrayField: {
     rowFields: [

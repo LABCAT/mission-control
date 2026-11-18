@@ -33,6 +33,7 @@ describe('locations collection', () => {
       ...TAXONOMY_SLUGS,
       'plans',
       'add-ons',
+      'jobs',
     ])
     expect(Locations.slug).toBe('locations')
     expect(Locations.versions).toBe(false)

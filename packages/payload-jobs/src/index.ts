@@ -9,6 +9,7 @@ import {
 import { locationsCollection, locationsTenantSlugIndex } from './collections/locations'
 import { withLegacyPasswords } from './legacy-password'
 import { addOnCollection, ADD_ONS_SLUG } from './add-ons'
+import { jobsCollection, JOBS_SLUG } from './collections/jobs'
 import { expireJobPlacementsTask, PLACEMENTS_FIELD } from './placements'
 import { planCollection, PLANS_SLUG, withPlanRestrictionGuards } from './plans'
 import { TAXONOMY_SLUGS, taxonomyCollections } from './taxonomies'
@@ -22,6 +23,8 @@ export * from './email'
 export * from './legacy-password'
 export * from './money'
 export * from './add-ons'
+export * from './collections/jobs'
+export * from './job-status'
 export * from './add-ons-seed'
 export * from './catalog'
 export * from './placements'
@@ -49,6 +52,7 @@ export const PAYLOAD_JOBS_TENANT_COLLECTIONS = [
   ...TAXONOMY_SLUGS,
   ADD_ONS_SLUG,
   PLANS_SLUG,
+  JOBS_SLUG,
 ] as const
 
 export type PayloadJobsFeatures = {
@@ -72,6 +76,8 @@ export type PayloadJobsOptions = {
   enabled?: boolean
   /** Which job-board collections to enable. All default to true. */
   features?: PayloadJobsFeatures
+  /** Slug of the host's upload collection for PDF job descriptions. Defaults to `documents`. */
+  documentsSlug?: null | string
   /** Slug of the host's upload collection for organisation logos and covers. Defaults to `media`. */
   mediaSlug?: null | string
   /** Slug of the auth collection that gets legacy WordPress password support. Defaults to `users`. */
@@ -238,9 +244,23 @@ export const payloadJobs =
     const plans = planCollection(catalogOptions)
 
     // Expire job placements daily, once there is a jobs collection that has them (PJ-19).
-    const jobsSlug = options.jobsSlug ?? 'jobs'
-    const jobs = config.collections?.find((collection) => collection.slug === jobsSlug)
-    const hasPlacements = jobs?.fields.some(
+    // Jobs go last: Payload numbers compound index names in collection order, and the
+    // existing `tenant_slug_*` indexes of organisations and taxonomies must keep their names.
+    const documentsSlug =
+      options.documentsSlug === undefined
+        ? hostSlugs.has('documents')
+          ? 'documents'
+          : null
+        : options.documentsSlug
+    const jobs = jobsCollection({
+      documentsSlug,
+      richTextDescription: Boolean(config.editor),
+      tenantScoped: tenancy === 'multi',
+    })
+
+    const jobsSlug = options.jobsSlug ?? JOBS_SLUG
+    const jobsWithPlacements = [...(config.collections ?? []), jobs].find((collection) => collection.slug === jobsSlug)
+    const hasPlacements = jobsWithPlacements?.fields.some(
       (field) => 'name' in field && field.name === PLACEMENTS_FIELD,
     )
     const jobsConfig = hasPlacements
@@ -254,7 +274,7 @@ export const payloadJobs =
       ...config,
       // Plans before add-ons: Payload numbers compound index names in collection order, and
       // plans' existing `tenant_key_idx` must keep its name.
-      collections: [...(config.collections ?? []), ...taxonomies, plans, addOns],
+      collections: [...(config.collections ?? []), ...taxonomies, plans, addOns, jobs],
       jobs: jobsConfig,
       custom: {
         ...config.custom,

@@ -1,7 +1,7 @@
 import type { Config } from 'payload'
 import { describe, expect, it } from 'vitest'
 
-import { EXPIRE_PLACEMENTS_TASK, jobPlacementsField, payloadJobs } from './index'
+import { EXPIRE_PLACEMENTS_TASK, payloadJobs } from './index'
 import { TAXONOMY_SLUGS } from './taxonomies'
 
 const baseConfig = {
@@ -24,6 +24,7 @@ describe('payloadJobs', () => {
       ...TAXONOMY_SLUGS,
       'plans',
       'add-ons',
+      'jobs',
     ])
     expect(result.collections?.[0]?.fields.map((f) => ('name' in f ? f.name : null))).toContain(
       'legacyPasswordHash',
@@ -62,20 +63,27 @@ describe('payloadJobs', () => {
     })
   })
 
-  it('registers the placement expiry task only once a jobs collection has placements (PJ-19)', async () => {
+  it('adds jobs with placements, and the daily task that expires them, keeping host tasks', async () => {
     const taskSlugs = (config: Config) => (config.jobs?.tasks ?? []).map((task) => task.slug)
-    const withJobs = (fields: unknown[]) =>
-      ({
-        ...baseConfig,
-        collections: [...(baseConfig.collections ?? []), { slug: 'jobs', fields }],
-        jobs: { tasks: [{ handler: () => ({ output: {} }), slug: 'heartbeat' }] },
-      }) as unknown as Config
+    const withHostTask = {
+      ...baseConfig,
+      jobs: { tasks: [{ handler: () => ({ output: {} }), slug: 'heartbeat' }] },
+    } as unknown as Config
 
-    expect(taskSlugs(await payloadJobs()(baseConfig))).toEqual([])
-    expect(taskSlugs(await payloadJobs()(withJobs([{ name: 'title', type: 'text' }])))).toEqual(['heartbeat'])
-    expect(taskSlugs(await payloadJobs()(withJobs([jobPlacementsField()])))).toEqual([
-      'heartbeat',
-      EXPIRE_PLACEMENTS_TASK,
-    ])
+    const result = await payloadJobs()(withHostTask)
+    const jobs = result.collections?.find((collection) => collection.slug === 'jobs')
+
+    expect(jobs?.fields.some((field) => 'name' in field && field.name === 'placements')).toBe(true)
+    expect(taskSlugs(result)).toEqual(['heartbeat', EXPIRE_PLACEMENTS_TASK])
+  })
+
+  it('uses a rich-text job description only when the host has an editor', async () => {
+    const description = async (config: Config) =>
+      (await payloadJobs()(config)).collections
+        ?.find((collection) => collection.slug === 'jobs')
+        ?.fields.find((field) => 'name' in field && field.name === 'description')?.type
+
+    expect(await description(baseConfig)).toBe('textarea')
+    expect(await description({ ...baseConfig, editor: {} } as unknown as Config)).toBe('richText')
   })
 })
