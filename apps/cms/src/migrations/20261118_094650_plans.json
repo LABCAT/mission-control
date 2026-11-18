@@ -4985,6 +4985,13 @@
           "notNull": false,
           "default": true
         },
+        "is_volunteer": {
+          "name": "is_volunteer",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": false
+        },
         "status": {
           "name": "status",
           "type": "enum_plans_status",
@@ -5221,6 +5228,85 @@
           "tableTo": "plans",
           "columnsFrom": [
             "_parent_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.plans_texts": {
+      "name": "plans_texts",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "order": {
+          "name": "order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "parent_id": {
+          "name": "parent_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "path": {
+          "name": "path",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "text": {
+          "name": "text",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "plans_texts_order_parent": {
+          "name": "plans_texts_order_parent",
+          "columns": [
+            {
+              "expression": "order",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "parent_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "plans_texts_parent_fk": {
+          "name": "plans_texts_parent_fk",
+          "tableFrom": "plans_texts",
+          "tableTo": "plans",
+          "columnsFrom": [
+            "parent_id"
           ],
           "columnsTo": [
             "id"
@@ -7090,6 +7176,6 @@
     "tables": {},
     "columns": {}
   },
-  "id": "5adfb53f-d0b1-4c3d-b112-d8811662ac39",
+  "id": "7ae102c9-3d82-47cc-803e-d5f87f5589a6",
   "prevId": "00000000-0000-0000-0000-000000000000"
 }
