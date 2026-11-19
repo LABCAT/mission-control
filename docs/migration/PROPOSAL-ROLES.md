@@ -40,3 +40,10 @@ Affects tickets: PJ-18 (organisations, merged), PJ-29 (sign-up), PJ-62 (import),
    - The client organisation's page can list jobs posted for it by agencies (configurable).
    - No user needs to be in several organisations.
    - Legacy `recruiter` users → members of an agency organisation.
+
+## Proposed sign-up flow (19 Nov, asked to founder)
+- "Post a job" sign-up creates the user + organisation together. One question: employer or recruitment agency (default employer; a site manager can change it). First user = **owner**.
+- Other users join by **owner invite only** (email invite → set password → member).
+- Duplicate organisation name → "this organisation exists, ask the owner for an invite" (or a site manager links them). No duplicate organisations.
+- Seekers: separate, optional sign-up.
+- Configurable per site.
