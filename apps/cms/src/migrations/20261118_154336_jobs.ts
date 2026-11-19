@@ -109,6 +109,26 @@ export async function up({ db, payload, req }: MigrateUpArgs): Promise<void> {
 }
 
 export async function down({ db, payload, req }: MigrateDownArgs): Promise<void> {
+  // mission-control: the task-slug enums are rebuilt below without 'expire-job-placements'.
+  // Queued runs of that task (never tried) are dropped: the task won't exist after rollback.
+  // Job history (tried, failed or completed runs, or their log rows) is never deleted: roll
+  // back fails with a message saying what to clear first.
+  await db.execute(sql`
+  DO $$
+  BEGIN
+    IF EXISTS (
+      SELECT 1 FROM "payload_jobs_log"
+      WHERE "task_slug" = 'expire-job-placements' OR "parent_task_slug" = 'expire-job-placements'
+    ) OR EXISTS (
+      SELECT 1 FROM "payload_jobs"
+      WHERE "task_slug" = 'expire-job-placements'
+        AND ("completed_at" IS NOT NULL OR "has_error" = true OR COALESCE("total_tried", 0) > 0)
+    ) THEN
+      RAISE EXCEPTION 'Cannot roll back 20261118_154336_jobs: payload_jobs / payload_jobs_log hold history for the expire-job-placements task. Review and clear those rows first, then migrate down again.';
+    END IF;
+  END $$;
+  DELETE FROM "payload_jobs" WHERE "task_slug" = 'expire-job-placements';`)
+
   await db.execute(sql`
    -- mission-control: drop the locked-documents FK before the tables (the generated order fails).
   ALTER TABLE "payload_locked_documents_rels" DROP CONSTRAINT IF EXISTS "payload_locked_documents_rels_jobs_fk";
