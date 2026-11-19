@@ -130,3 +130,4 @@ Spend at 02:05 UTC: sub-sessions $8.04 (PJ-10 2.19, PJ-81 2.42, RCL-86 1.00, PJ-
 - **Decision (19 Nov): apply form.** One page; CV required (PDF/DOC/DOCX); plain-text message; per-job 'apply online' switch; 'account required' is a site setting, off by default; LinkedIn apply post-MVP. PJ-45/25 updated. Next: the job posting form (Lexical in Svelte, proposed).
 - **Decision (19 Nov): job description editor** = Lexical in a Svelte island, saving Lexical JSON only; legacy HTML converted at import. The multi-step posting form is kept with drafts. PJ-82/64 updated.
 - **Decision (19 Nov): job duration** is fixed per plan (vwok values from query 1, possibly 45 days).
+- **Decision (19 Nov): credits never expire** by default (per-tenant option, off). Cancelled-before-publish refunds the credit. PJ-24/65/21 updated. Note: PJ-21's plan `creditExpiry` field defaults to none.
