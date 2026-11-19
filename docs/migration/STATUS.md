@@ -197,3 +197,4 @@ Not imported: applications/CVs, resumes, logs (order-log, job-alerts-log, resume
 - **Tax:** not in the first 100 rows of query 6 → follow-up query needed.
 - **Decision (19 Nov): job duration** = employer picks a close date, max per plan (vwok: 45 days); default close date = max. Overrides the 'fixed per plan' note.
 - **Decision (19 Nov): analytics visible in the product.** Admin dashboard widget (Cloudflare Web Analytics via API + our own numbers); employers see views/applications per job in /account. PJ-110.
+- **Decision (19 Nov): analytics packaging.** Traffic panel = generic plugin @labcat2020/payload-cloudflare-analytics (any Payload site); job stats stay in payload-jobs core. PJ-110.
