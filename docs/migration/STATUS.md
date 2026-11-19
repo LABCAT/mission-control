@@ -124,3 +124,4 @@ Spend at 02:05 UTC: sub-sessions $8.04 (PJ-10 2.19, PJ-81 2.42, RCL-86 1.00, PJ-
 ## PAUSED 19 Nov ~03:15 UTC (founder): important decisions pending
 - Founder will review **docs/migration/PROPOSAL-ROLES.md** (organisations, teams, agency model, roles). Nothing touching roles, organisations, sign-up or dashboards proceeds until it is decided.
 - All Claude sessions told to stop. #63 (OpenHands merging main) can finish, but I won't merge it while paused.
+- **Decision (founder, 19 Nov): filter URLs** /jobs/{category}, /jobs/{location}, /jobs/{location}/{category}, with no '/in'. Slugs unique across categories+locations (PJ-98). Location pages include sub-locations. Flat categories. Empty pages: 200, noindex, kept out of the sitemap. Locations and categories are CMS-managed. Notes on PJ-36/40/42.
