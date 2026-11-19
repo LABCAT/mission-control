@@ -172,3 +172,4 @@ Not imported: applications/CVs, resumes, logs (order-log, job-alerts-log, resume
 **MailChimp: dropped.** The code only runs if the registration form sends an `update_subscription` field, and no vwok form has it (a Do Good Jobs leftover). The hardcoded MailChimp key in the legacy repo should still be revoked.
 - **Decision (19 Nov): seeker accounts kept and migrated** (same last_login cut-off as other users). MVP account: my applications, my alerts, profile basics.
 - **Decision (19 Nov): no seeker profiles in MVP; no saved jobs in MVP.** Future idea only: PJ-108 (private apply profile, or a professional page on a pacificjobs.com hub).
+- **Decision (19 Nov): English only.** No locales/translations in the MVP (as legacy; editors may write other languages in page content). Only cheap prep: UI strings in one place per site, html lang from a site setting.
