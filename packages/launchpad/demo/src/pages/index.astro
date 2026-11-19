@@ -10,6 +10,7 @@ import FilterBar from '../../../src/components/FilterBar.astro'
 import JobCard from '../../../src/components/JobCard.astro'
 import OrgCard from '../../../src/components/OrgCard.astro'
 import Pagination from '../../../src/components/Pagination.astro'
+import RecentlyViewed from '../../../src/components/RecentlyViewed.astro'
 import Turnstile from '../../../src/components/Turnstile.astro'
 import { hasActiveFilters, parseFilters } from '../../../src/tenant/filters'
 import { resultsSummary } from '../../../src/tenant/pagination'
@@ -30,6 +31,13 @@ const href = (target: number): string => {
 }
 
 const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ?? '1x00000000000000000000AA'
+
+// The list only needs title and url; the ids match JobCard's data-job-id.
+const recentlyViewedJobs = jobs.map((job) => ({
+  id: String(job.id ?? job.url),
+  title: job.title,
+  url: job.url,
+}))
 ---
 
 <BaseLayout
@@ -112,5 +120,13 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ?? '1x0000000000000000
         </Stack>
       </form>
     </Stack>
+  </Container>
+
+  {/*
+    Last block on the page: when it appears on idle it only extends the document, so nothing
+    already in the viewport moves (CLS stays 0). A site app can also pass `endpoint` instead.
+  */}
+  <Container size="wide">
+    <RecentlyViewed jobs={recentlyViewedJobs} />
   </Container>
 </BaseLayout>

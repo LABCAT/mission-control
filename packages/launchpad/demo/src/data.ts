@@ -31,6 +31,7 @@ export const jobs: JobSummary[] = [
   {
     closes: '2026-12-01',
     featured: true,
+    id: 1,
     jobType: 'Full time',
     location: 'Port Vila, Vanuatu',
     organisation: { name: 'Vanuatu Wok', url: '/organisations/vanuatu-wok' },
@@ -41,6 +42,7 @@ export const jobs: JobSummary[] = [
   },
   {
     closes: '2026-11-30',
+    id: 2,
     isVolunteer: true,
     jobType: 'Voluntary',
     location: 'Luganville, Vanuatu',
@@ -50,6 +52,7 @@ export const jobs: JobSummary[] = [
     url: '/jobs/water-project-volunteer',
   },
   {
+    id: 3,
     jobType: 'Part time',
     location: 'Port Vila, Vanuatu',
     organisation: { name: 'Blue Lagoon Tours', url: '/organisations/blue-lagoon-tours' },

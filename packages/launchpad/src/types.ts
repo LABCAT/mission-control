@@ -16,6 +16,8 @@ export type Salary = {
 }
 
 export type JobSummary = {
+  /** Stable job identifier, used by the browser-only viewed-jobs history. Defaults to `url`. */
+  id?: null | number | string
   title: string
   /** Path on the current site, e.g. `/jobs/123`. */
   url: string
