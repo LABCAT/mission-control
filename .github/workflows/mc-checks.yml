@@ -69,6 +69,8 @@ jobs:
         with:
           name: lighthouse-vwok
           path: apps/vwok/.lighthouseci/
+          # `.lighthouseci` starts with a dot, and the action skips hidden files by default.
+          include-hidden-files: true
           if-no-files-found: ignore
 
   # Runtime evidence for the theme: the build job proves the demo's HTML exists, this loads it
