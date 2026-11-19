@@ -221,3 +221,4 @@ Not imported: applications/CVs, resumes, logs (order-log, job-alerts-log, resume
 - **Decision (19 Nov): sessions** = 'Keep me signed in': 1 day unticked, 30 days rolling ticked; per-tenant settings (replaces 90 days). PJ-109.
 - **Decision (19 Nov): training** = short how-to inside the admin, written before launch. PJ-113.
 - **Decision (19 Nov): backups.** MVP: Neon 7-day restore + UpdraftPlus archive of old site to Google Drive at decommission. Post-MVP: generic @labcat2020/payload-backups plugin (daily DB export + media sync off-site to another provider, retention, restore). PJ-114.
+- **Decision (19 Nov): accessibility** WCAG 2.2 AA; Lighthouse accessibility 100. **Market note:** no official Payload marketplace; plugins are almost all free/OSS (payload.market community site); paid products are templates (~US$79–349). Selling plugins = uncharted; revisit post-MVP.
