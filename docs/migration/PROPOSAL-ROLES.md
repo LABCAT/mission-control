@@ -47,3 +47,7 @@ Affects tickets: PJ-18 (organisations, merged), PJ-29 (sign-up), PJ-62 (import),
 - Duplicate organisation name → "this organisation exists, ask the owner for an invite" (or a site manager links them). No duplicate organisations.
 - Seekers: separate, optional sign-up.
 - Configurable per site.
+
+## Decided 19 Nov (founder)
+- **Never block a paying sign-up.** A name match still creates the organisation, flagged as a possible duplicate. The existing owner gets a one-click "X wants to join" approve email; on approve, the user and their jobs move in. Otherwise a site manager merges the organisations (jobs, members, orders) or clears the flag. Needs a small "merge organisations" admin tool.
+- **Organisation pages are private by default.** The owner chooses to make the page public. A possible-duplicate organisation can't be made public until the duplicate is resolved. Jobs still show the organisation name. Imported vwok organisations keep their current visibility. All configurable per site.
