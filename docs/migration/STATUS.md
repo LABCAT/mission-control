@@ -175,3 +175,23 @@ Not imported: applications/CVs, resumes, logs (order-log, job-alerts-log, resume
 - **Decision (19 Nov): English only.** No locales/translations in the MVP (as legacy; editors may write other languages in page content). Only cheap prep: UI strings in one place per site, html lang from a site setting.
 - **Decision (19 Nov): sign-in** = email (link + code in one email) + optional password (legacy WP passwords keep working via PJ-34, upgraded on first login); 90-day sessions; Google/Microsoft post-MVP; no Facebook. PJ-109.
 - **Decision (19 Nov): analytics.** Default Cloudflare Web Analytics (tiny, no cookies); fallback server-side counting (Workers Analytics Engine). GA/Pixel etc only via Cloudflare Zaraz, set up by us on request (site-settings IDs post-MVP). No GTM in MVP (later: per-tenant GTM ID loaded on first interaction). Whether vwok needs GA at all: wait for query 18.
+
+## Query results 19 Nov (docs/migration/QUERY-RESULTS-19NOV.md) – findings
+- **Plans (seed):** Basic 3,900 VT; Enhanced 5,900 VT (featured 30 days); 5 Job Pack 17,500 VT (5 credits); 10 Job Pack 33,000 VT (10 credits); Volunteer free. Relist price = price. Pack credits never expire (matches decision). No 'Premium' published (1 pending plan from 2019).
+- **Duration:** plans say 30 days, but site default is 45 and jobs have a per-job close date (fxtender `_jr_fx_expire_days`): the employer picks a close date, max 45 days. → FOUNDER CHECK.
+- **Expired jobs:** legacy setting `jr_expired_action = hide` (contradicts the earlier reading). Our decision (200 + banner + noindex, 410 after 12 months) stands as a per-tenant setting; FOUNDER CHECK.
+- **Moderation:** off in legacy (`jr_jobs_require_moderation` empty, edits need no approval) → vwok default off.
+- **Admin copy of applications:** on (`jr_bcc_apply_emails = 1`) – matches decision.
+- **Alerts:** daily, max 5 jobs per email, 560 users with alert status. Default 'max jobs per alert email' = 5 for vwok.
+- **Users:** 15,844 total; last_login known for 3,418 (2023+: 1,630). Many spam accounts (disposable domains). Migration rule (last 3 years or has job/order/alert, admins) stands.
+- **Coupons:** LINKPS (1,900 VT off, no end date) used 501 times, 77 coupon orders in the last 12 months → keep. Others expired → import as expired or skip.
+- **Orders:** 5,902 transactions stay 'pending' (bank transfer never marked complete in WP; payment lives in Xero). Import maps them to 'invoiced', not 'unpaid'.
+- **Xero:** 71 users have `xero_contact_code` → import onto organisations for the Xero add-on.
+- **Saved jobs exist:** `_starred_jobs` on 240 users → FOUNDER CHECK (we said legacy had none).
+- **Blog:** none (1 draft). Not imported. Comments: none.
+- **Pages to import:** About us, Contact (contact-2), For Employers, Organisations, Volunteering, Land Law Reforms, Organisation Competition; the rest are WP/JobRoller system pages (dropped). No privacy page; T&C from 2017.
+- **Taxonomies:** job_type (13), job_cat (29), job_salary (18) used; job_tag and area-of-focus unused → dropped.
+- **Job fields to import:** company/URL, how to apply, per-job application email (`jr_fx_apps_recipient_address`), apply-online switch, address + geo, displayed salary text, featured flags, view counts (9.29M total). Not imported: `user_IP`.
+- **Analytics:** only a dead Universal Analytics tag (UA stopped in 2023) → **no GA for vwok**; Cloudflare Web Analytics only.
+- **Email providers:** gmail 6,249; yahoo 540; hotmail+outlook 446 → Google login is the useful one post-MVP; Microsoft low value.
+- **Tax:** not in the first 100 rows of query 6 → follow-up query needed.
