@@ -1,0 +1,34 @@
+{
+  "name": "@mission-control/payload-cloudflare-analytics",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./rsc": "./src/exports/rsc.ts",
+    "./client": "./src/exports/client.ts",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "payload": "4.0.0-beta.7",
+    "react": "19.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "19.3.0",
+    "payload": "4.0.0-beta.7",
+    "react": "19.3.1",
+    "typescript": "6.0.3"
+  },
+  "description": "Payload plugin that shows Cloudflare Web Analytics traffic in the admin panel, scoped per tenant site tag.",
+  "keywords": [
+    "payload",
+    "payload-plugin",
+    "cloudflare",
+    "web-analytics",
+    "rum"
+  ],
+  "sideEffects": false
+}
