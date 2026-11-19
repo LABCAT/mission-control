@@ -201,3 +201,4 @@ Not imported: applications/CVs, resumes, logs (order-log, job-alerts-log, resume
 - **Tax (query 19):** legacy charges no tax on the site (tax_charge = 0); prices as listed. Xero: account codes 225 (job plan), 226 (add-on), 227 (coupon discount), invoices due in 14 days, no payment reconciliation, no tracking category. → vwok tax setting = none; Xero add-on settings seeded with these codes.
 - **Decision (19 Nov, confirmed): expired jobs** stay as decided (200 + banner + noindex, 410 after 12 months), per-tenant setting; vwok uses it despite legacy 'hide'.
 - **Decision (19 Nov, founder: very important): saved jobs in the MVP** + import legacy _starred_jobs (240 users). PJ-83/PJ-66.
+- **Decision (19 Nov): viewed jobs** via localStorage ('Viewed' label + recently viewed), no score impact. PJ-111.
