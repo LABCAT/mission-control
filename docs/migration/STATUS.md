@@ -198,3 +198,4 @@ Not imported: applications/CVs, resumes, logs (order-log, job-alerts-log, resume
 - **Decision (19 Nov): job duration** = employer picks a close date, max per plan (vwok: 45 days); default close date = max. Overrides the 'fixed per plan' note.
 - **Decision (19 Nov): analytics visible in the product.** Admin dashboard widget (Cloudflare Web Analytics via API + our own numbers); employers see views/applications per job in /account. PJ-110.
 - **Decision (19 Nov): analytics packaging.** Traffic panel = generic plugin @labcat2020/payload-cloudflare-analytics (any Payload site); job stats stay in payload-jobs core. PJ-110.
+- **Tax (query 19):** legacy charges no tax on the site (tax_charge = 0); prices as listed. Xero: account codes 225 (job plan), 226 (add-on), 227 (coupon discount), invoices due in 14 days, no payment reconciliation, no tracking category. → vwok tax setting = none; Xero add-on settings seeded with these codes.
