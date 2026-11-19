@@ -225,6 +225,21 @@ describe('cachedResponse', () => {
     expect(render).toHaveBeenCalledTimes(2)
   })
 
+  it('passes through a page the caller marks no-store, so it is not kept under this key', async () => {
+    const cache = memoryCache()
+    const render = vi.fn(async () =>
+      html('<p>someone else\'s page</p>', { 'cache-control': 'no-store' }),
+    )
+
+    const first = await cachedResponse('k', 300, render, { cache, tags: ['site:vwok'] })
+    await cachedResponse('k', 300, render, { cache, tags: ['site:vwok'] })
+
+    expect(await first.text()).toBe("<p>someone else's page</p>")
+    expect(first.headers.get('cache-control')).toBe('no-store')
+    expect(render).toHaveBeenCalledTimes(2)
+    expect([...cache.store.keys()].filter((url) => url.includes('/page/'))).toHaveLength(0)
+  })
+
   it('does not escape the cache namespace into another site', async () => {
     const cache = memoryCache()
     const render = vi.fn(async () => html('<p>x</p>'))

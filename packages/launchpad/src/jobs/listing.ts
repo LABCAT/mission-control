@@ -117,6 +117,12 @@ export type JobListingView = {
   filters: FilterValues
   /** True when a query-string filter is set; the path slug of a section page does not count. */
   hasActiveFilters: boolean
+  /**
+   * True when the URL asked for something this listing does not do: a taxonomy slug the tenant
+   * lacks, or a page past the end. The HTML is right, but it is not the HTML that URL names, so
+   * `serveJobListing` does not store it under that URL's key.
+   */
+  inexact: boolean
   /** Builds the href for a page of this listing; page 1 is the bare listing URL. */
   href: (page: number) => string
   jobs: JobSummary[]
@@ -450,6 +456,7 @@ export type JobListingViewInput = {
   definitions: readonly FilterDefinition[]
   facets: ListingFacets
   filters: FilterValues
+  inexact?: boolean
   /** One page of jobs, already mapped and in CMS order. */
   jobs: JobSummary[]
   locale?: string
@@ -477,6 +484,7 @@ export const jobListingView = (input: JobListingViewInput): JobListingView => {
     filters: input.filters,
     formAction: lockedKeys.length > 0 ? '/jobs' : input.basePath,
     hasActiveFilters: Object.values(queryOnly).some((value) => value.trim() !== ''),
+    inexact: input.inexact ?? false,
     href: (target: number) =>
       listingHref({
         basePath: input.basePath,
@@ -588,6 +596,15 @@ export const loadJobListing = async (options: LoadJobListingOptions): Promise<Jo
   const missing = unknownSection(locked, facets)
   if (missing) return missing
 
+  // A query filter this tenant has no value for was dropped above, so the page will not be the
+  // one the URL describes. The answer is still right (an unfiltered or narrower listing), it just
+  // must not be stored under a key claiming that filter. A filter the path fixes is not compared:
+  // the path wins, and the cache key already leaves it out.
+  const lockedKeys = Object.keys(locked)
+  const inexact = Object.entries(query.filters).some(
+    ([name, value]) => !lockedKeys.includes(name) && filters[name] !== value,
+  )
+
   const where = listingWhere({ facets, filters, now })
   const sort = ['-publishedAt', '-id']
   const page = query.page
@@ -612,6 +629,7 @@ export const loadJobListing = async (options: LoadJobListingOptions): Promise<Jo
       definitions,
       facets,
       filters,
+      inexact: inexact || result.page !== page,
       jobs,
       locale,
       lockedKeys: Object.keys(locked),
@@ -661,7 +679,15 @@ export const serveJobListing = async (options: ServeJobListingOptions): Promise<
         })
       }
 
-      return render(result.view)
+      const response = await render(result.view)
+      if (!result.view.inexact) return response
+
+      // The URL promised a filter or a page this listing does not have, so its HTML does not
+      // belong to its key: `?category=made-up-a` and `?category=made-up-b` both render the
+      // unfiltered listing, and storing each would waste an entry per made-up slug.
+      const headers = new Headers(response.headers)
+      headers.set('cache-control', 'no-store')
+      return new Response(response.body, { headers, status: response.status })
     },
     { cache, tags },
   )

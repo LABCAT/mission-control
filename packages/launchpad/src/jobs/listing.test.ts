@@ -550,6 +550,38 @@ describe('loadJobListing', () => {
     expect(find.mock.calls[0]![1]).toMatchObject({ locale: 'en' })
   })
 
+  it('marks a dropped filter as an inexact answer, so it is not stored under that URL', async () => {
+    const { cms } = fakeCms(() => listOf([job()]))
+
+    const result = await loadJobListing({ cms, now: NOW, search: '?category=made-up', tenant })
+
+    if (!result.found) throw new Error('expected a view')
+    expect(result.view.filters).toEqual({})
+    expect(result.view.inexact).toBe(true)
+  })
+
+  it('is exact for the filters it does apply', async () => {
+    const { cms } = fakeCms(() => listOf([job()]))
+
+    const result = await loadJobListing({ cms, now: NOW, search: '?category=trades&q=chef', tenant })
+
+    if (!result.found) throw new Error('expected a view')
+    expect(result.view.inexact).toBe(false)
+  })
+
+  it('marks a page past the end as inexact, because it renders another page', async () => {
+    const { cms } = fakeCms((options: { page: number }) =>
+      options.page === 99
+        ? listOf([], { limit: 20, page: 99, totalDocs: 25 })
+        : listOf([job()], { limit: 20, page: 2, totalDocs: 25 }),
+    )
+
+    const result = await loadJobListing({ cms, now: NOW, search: '?page=99', tenant })
+
+    if (!result.found) throw new Error('expected a view')
+    expect(result.view.inexact).toBe(true)
+  })
+
   it('drops a job that cannot be rendered rather than failing the page', async () => {
     const { cms } = fakeCms(() => listOf([job(), job({ id: 103, slug: null })]))
 
@@ -612,6 +644,32 @@ describe('serveJobListing', () => {
     // A five-minute cache that still queries the CMS on every request saves nothing.
     expect(find).not.toHaveBeenCalled()
     expect(calls).toBeGreaterThan(0)
+  })
+
+  it('does not store a made-up filter, so junk slugs cannot fill the cache', async () => {
+    const cache = pageCache()
+    const { cms, find } = fakeCms(() => listOf([job()]))
+    const base = { cache, cms, now: NOW, render: renderView, site: 'vwok', tenant }
+
+    const one = await serveJobListing({ ...base, search: '?category=made-up-a' })
+    const two = await serveJobListing({ ...base, search: '?category=made-up-b' })
+
+    // Same HTML both times, and neither is kept: the URL claims a filter the listing did not apply.
+    expect(await one.text()).toBe(await two.text())
+    expect(one.headers.get('cache-control')).toBe('no-store')
+    expect([...cache.store.keys()].filter((url) => url.includes('/page/'))).toHaveLength(0)
+    expect(find).toHaveBeenCalledTimes(2)
+  })
+
+  it('still caches a slug the tenant does have, so real filters are held', async () => {
+    const cache = pageCache()
+    const { cms } = fakeCms(() => listOf([job()]))
+    const base = { cache, cms, now: NOW, render: renderView, site: 'vwok', tenant }
+
+    const first = await serveJobListing({ ...base, search: '?category=trades' })
+
+    expect(first.headers.get('cache-control')).toBe('public, max-age=300')
+    expect([...cache.store.keys()].filter((url) => url.includes('/page/'))).toHaveLength(1)
   })
 
   it('gives a different filter set a different entry, so a hit is never the wrong page', async () => {

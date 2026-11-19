@@ -120,6 +120,10 @@ const responseRequest = (namespace: string, key: string, versions: readonly stri
  * fails is skipped, not fatal, and `render`'s own errors are never cached. Only a 200 is stored,
  * because a 404 is this URL's real answer and would otherwise outlive a fix. `Cache-Control`
  * and `Cache-Tag` are written here, so the page cannot be held longer than the caller said.
+ *
+ * A page that comes back `Cache-Control: no-store` is passed through untouched: a caller that
+ * knows this response does not belong to its own key must be able to say so, or the cache would
+ * hold one URL's HTML under another's.
  */
 export const cachedResponse = async (
   key: string,
@@ -149,7 +153,8 @@ export const cachedResponse = async (
   }
 
   const response = await render()
-  if (!request || response.status !== 200) return response
+  const refusable = /\bno-store\b/i.test(response.headers.get('cache-control') ?? '')
+  if (!request || response.status !== 200 || refusable) return response
 
   const body = await response.text()
   const headers = new Headers(response.headers)

@@ -129,6 +129,10 @@ return serveJobListing({
   the path already fixes and values that could not be a filter are dropped, so a stranger cannot
   fill the cache with junk; two filter sets never share an entry. PJ-41 purges the tags; a 404 is
   never cached.
+- A page that is not the one its URL names is not stored. A filter the tenant has no value for
+  (`?category=made-up`) and a page past the end both still render a correct page, but not *that*
+  URL's page: storing each made-up slug would waste an entry per slug. The view carries
+  `inexact` for this, and `serveJobListing` answers those with `Cache-Control: no-store`.
 
 ## Conventions
 
