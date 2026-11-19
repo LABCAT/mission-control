@@ -195,3 +195,5 @@ Not imported: applications/CVs, resumes, logs (order-log, job-alerts-log, resume
 - **Analytics:** only a dead Universal Analytics tag (UA stopped in 2023) → **no GA for vwok**; Cloudflare Web Analytics only.
 - **Email providers:** gmail 6,249; yahoo 540; hotmail+outlook 446 → Google login is the useful one post-MVP; Microsoft low value.
 - **Tax:** not in the first 100 rows of query 6 → follow-up query needed.
+- **Decision (19 Nov): job duration** = employer picks a close date, max per plan (vwok: 45 days); default close date = max. Overrides the 'fixed per plan' note.
+- **Decision (19 Nov): analytics visible in the product.** Admin dashboard widget (Cloudflare Web Analytics via API + our own numbers); employers see views/applications per job in /account. PJ-110.
