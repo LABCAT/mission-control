@@ -1,5 +1,6 @@
 import { postgresAdapter } from '@payloadcms/db-postgres'
 import { multiTenantPlugin } from '@payloadcms/plugin-multi-tenant'
+import { lexicalEditor } from '@payloadcms/richtext-lexical'
 import {
   buildConfig,
   getPayload,
@@ -132,6 +133,8 @@ export const bootTestPayload = async ({
     auth: { passwordHashIterations: 100000 },
     secret: 'test-secret',
     collections: [Users(userFields), tenantsCollection(tenantFields), ...globalCollections, ...collections],
+    // Jobs have a rich-text description; the CMS uses Lexical, so the harness does too.
+    editor: lexicalEditor(),
     db: postgresAdapter({
       pool: {
         connectionString: testDatabaseUrl,

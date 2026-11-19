@@ -233,6 +233,7 @@ All Agent tasks except PJ-28. Each one is collection config, access control and 
   - employers can create jobs and update their own organisation's `draft`/`pending` jobs
   - tenant-admin/editor can do everything
 - Tests, including tenant isolation.
+- Deferred from PJ-19 (#62): `order` waits for the orders collection and is added in PJ-23. `createdBy` is not in #62 either; it follows with the order relationship.
 
 **PJ-20**
 - `pages`: `title`, `slug`, `content`, SEO group, `legacyId`.
@@ -249,6 +250,7 @@ All Agent tasks except PJ-28. Each one is collection config, access control and 
 **PJ-23**
 - `orders`: `organisation`, `plan`, `coupon`, `subtotal`, `discount`, `total`, `currency`, `status` (`pending` | `paid` | `cancelled` | `failed`), `paymentMethod` (`invoice` | `free` | `credit`), `jobs`, `xeroInvoiceId`, `xeroInvoiceUrl`, `log[]`, `legacyId`.
 - An employer can read their own organisation's orders.
+- Also adds `jobs.order` (and `jobs.createdBy`), deferred from PJ-19, with their migration. Like the other private job fields, they're readable only by staff and the owning organisation (`jobPrivateFieldRead`).
 - Access tests.
 
 **PJ-24**
