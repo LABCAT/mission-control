@@ -153,3 +153,4 @@ Spend at 02:05 UTC: sub-sessions $8.04 (PJ-10 2.19, PJ-81 2.42, RCL-86 1.00, PJ-
 - **Decision (19 Nov): pages, not globals.** Home/About/Contact/Organisations are system pages (role field): seeded per site, undeletable (unpublish only). Home at /, no parent/children; Organisations no children (directory block + other blocks). PJ-103.
 - **Decision (19 Nov): GEO.** One SEO tab; structured data generated automatically; llms.txt; per-tenant AI-crawler setting. PJ-104.
 - **Decision (19 Nov): share images.** Auto-generated per job/org/home, with org logo (fallback site logo), PNG 1200x630, R2 + edge cache. PJ-105.
+- **Decision (19 Nov): payments.** No PayPal. vwok MVP = invoice only, invoiced by Youth Challenge Vanuatu (as today, via Xero add-on). Core gets a generic payment-provider plug point; Stripe is a post-MVP add-on. Collecting on tenants' behalf with Wise payouts = post-MVP idea, needs accountant first (PJ-106).
