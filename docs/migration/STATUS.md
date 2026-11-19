@@ -170,3 +170,4 @@ Add / confirm:
 8. **Redirects:** every legacy URL (jobs, orgs/authors, taxonomies, pages, blog) → new URL (PJ-70 parity crawler).
 Not imported: applications/CVs, resumes, logs (order-log, job-alerts-log, resume-reminder-log), comments (unless query 16 shows real use), PayPal data.
 **MailChimp: dropped.** The code only runs if the registration form sends an `update_subscription` field, and no vwok form has it (a Do Good Jobs leftover). The hardcoded MailChimp key in the legacy repo should still be revoked.
+- **Decision (19 Nov): seeker accounts kept and migrated** (same last_login cut-off as other users). MVP account: my applications, my alerts, profile basics.
