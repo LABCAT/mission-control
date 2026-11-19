@@ -87,9 +87,12 @@ export type FindOrCreateContactArgs = XeroApiArgs & {
   contact: XeroContactInput
 }
 
+const isLegacyUserId = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isInteger(value) && value > 0
+
 /** The code the WordPress plugin used for a legacy user's contact. */
 export const legacyContactCode = (legacyUserId: number): string => {
-  if (!Number.isInteger(legacyUserId) || legacyUserId <= 0) {
+  if (!isLegacyUserId(legacyUserId)) {
     throw new XeroContactError('invalid_contact', 'A legacy contact code needs a positive user id.')
   }
 
@@ -291,10 +294,10 @@ export const findOrCreateXeroContact = async (
 
   const code = text(args.contact.code)
   const email = text(args.contact.email)
-  const legacyCode =
-    args.contact.legacyUserId === undefined || args.contact.legacyUserId === null
-      ? undefined
-      : legacyContactCode(args.contact.legacyUserId)
+  // A row with a junk legacy id is still invoiceable by code or email; only a usable id is a lookup.
+  const legacyCode = isLegacyUserId(args.contact.legacyUserId)
+    ? legacyContactCode(args.contact.legacyUserId)
+    : undefined
 
   // A stored code that already is the legacy code must not be searched twice.
   const lookups: Lookup[] = []
@@ -311,12 +314,15 @@ export const findOrCreateXeroContact = async (
   if (legacyCode) addLookup({ code: legacyCode, matchedBy: 'legacyId' })
   if (email) addLookup({ email, matchedBy: 'email' })
 
+  const api = { ...args, accessToken, tenantId }
+
   for (const lookup of lookups) {
-    const where =
+    const found = await findContact(
+      api,
       'code' in lookup
         ? `ContactNumber=="${filterValue(lookup.code)}"`
-        : `EmailAddress=="${filterValue(lookup.email)}"`
-    const found = await findContact({ ...args, accessToken, tenantId }, where)
+        : `EmailAddress=="${filterValue(lookup.email)}"`,
+    )
 
     if (found) return { contact: found, matchedBy: lookup.matchedBy }
   }

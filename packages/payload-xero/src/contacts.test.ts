@@ -173,6 +173,21 @@ describe('findOrCreateXeroContact lookups', () => {
     expect(result.contact.ContactID).toBe('active')
   })
 
+  it('skips a legacy id that cannot form a code, and still looks up the email', async () => {
+    const xero = mockXero((call) =>
+      call.url.searchParams.get('where') === 'EmailAddress=="billing@acme.test"'
+        ? found(contact({ ContactID: 'by-email' }))
+        : found(),
+    )
+
+    const result = await run(xero, { email: 'billing@acme.test', legacyUserId: 0 })
+
+    expect(result.matchedBy).toBe('email')
+    expect(xero.calls.map((call) => call.url.searchParams.get('where'))).toEqual([
+      'EmailAddress=="billing@acme.test"',
+    ])
+  })
+
   it('trims blank values, so an empty code or email is not looked up', async () => {
     const xero = mockXero(() => found(contact({ ContactID: 'by-legacy' })))
 
