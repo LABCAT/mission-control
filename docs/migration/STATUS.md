@@ -129,3 +129,4 @@ Spend at 02:05 UTC: sub-sessions $8.04 (PJ-10 2.19, PJ-81 2.42, RCL-86 1.00, PJ-
 - **Decision (19 Nov): search.** Clean-URL redirect when a filter maps to one, else /jobs?…; keyword search uses Postgres full-text (no Elastic/Algolia). AI search is post-MVP (PJ-100, Workers AI + Vectorize, founder keen).
 - **Decision (19 Nov): apply form.** One page; CV required (PDF/DOC/DOCX); plain-text message; per-job 'apply online' switch; 'account required' is a site setting, off by default; LinkedIn apply post-MVP. PJ-45/25 updated. Next: the job posting form (Lexical in Svelte, proposed).
 - **Decision (19 Nov): job description editor** = Lexical in a Svelte island, saving Lexical JSON only; legacy HTML converted at import. The multi-step posting form is kept with drafts. PJ-82/64 updated.
+- **Decision (19 Nov): job duration** is fixed per plan (vwok values from query 1, possibly 45 days).
