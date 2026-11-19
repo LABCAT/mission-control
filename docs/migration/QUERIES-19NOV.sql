@@ -94,3 +94,16 @@ SELECT comment_type, comment_approved, COUNT(*) n FROM wp_comments GROUP BY comm
 -- 17. Email providers used (domain only, top 25) — decides Google/Microsoft login
 SELECT LOWER(SUBSTRING_INDEX(user_email,'@',-1)) domain, COUNT(*) n
 FROM wp_users GROUP BY domain ORDER BY n DESC LIMIT 25;
+
+-- 35. Do recent jobs have map coordinates? (proof before building a job map)
+SELECT YEAR(p.post_date) y, COUNT(*) jobs,
+  SUM(lat.meta_value IS NOT NULL AND lat.meta_value <> '') with_coords
+FROM wp_posts p
+LEFT JOIN wp_postmeta lat ON lat.post_id=p.ID AND lat.meta_key='_jr_geo_latitude'
+WHERE p.post_type='job_listing' AND p.post_status IN ('publish','expired')
+GROUP BY y ORDER BY y;
+
+-- 36. Multiple locations per job: how are they stored? (sample of addresses with commas)
+SELECT pm.meta_value address, COUNT(*) n FROM wp_postmeta pm JOIN wp_posts p ON p.ID=pm.post_id
+WHERE p.post_type='job_listing' AND pm.meta_key='_jr_address' AND pm.meta_value LIKE '%,%'
+GROUP BY pm.meta_value ORDER BY n DESC LIMIT 30;
