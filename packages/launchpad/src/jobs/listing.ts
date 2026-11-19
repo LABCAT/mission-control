@@ -351,10 +351,19 @@ export type ListingCache = { key: string; tags: string[]; ttl: number }
 
 export type ListingCacheOptions = {
   basePath: string
+  /** Filters the path already fixes (`/jobs/category/trades`), so repeating one in the query changes nothing. */
+  lockedKeys?: readonly string[]
   /** The request's raw query string; `page` included. */
   search: null | string | URLSearchParams
   site: string
 }
+
+/**
+ * The highest page a key distinguishes. Twenty jobs a page makes this 10,000 jobs, far past any
+ * real listing; beyond it every URL is the listing's last page, so they share one entry instead of
+ * letting a stranger mint a million keys that all store the same HTML.
+ */
+const MAX_KEY_PAGE = 500
 
 /** A taxonomy slug as a URL carries it; anything else cannot name a section, so it is not a key. */
 const SLUG_PATTERN = /^[\w-]{1,64}$/
@@ -378,8 +387,14 @@ const keyFilters = (search: null | string | URLSearchParams): FilterValues => {
       if (value.length <= MAX_KEYWORD_LENGTH) values[name] = value
       continue
     }
-    if (name === VOLUNTARY_PARAM || name === 'page') {
-      if (/^\d{1,6}$/.test(value)) values[name] = value
+    if (name === 'page') {
+      // Any number is a page; it is clamped below. Dropping a huge one instead would give it
+      // page 1's key while the loader renders the last page, which is the wrong HTML.
+      if (/^\d{1,12}$/.test(value)) values[name] = value
+      continue
+    }
+    if (name === VOLUNTARY_PARAM) {
+      if (/^\d$/.test(value)) values[name] = value
       continue
     }
     if (SLUG_PATTERN.test(value)) values[name] = value
@@ -394,15 +409,20 @@ const keyFilters = (search: null | string | URLSearchParams): FilterValues => {
  * the CMS. Two URLs that differ only in a dropped parameter (a `utm_` tag, `?page=1`) share an
  * entry; two that differ in a filter do not.
  */
-export const listingCache = ({ basePath, search, site }: ListingCacheOptions): ListingCache => {
+export const listingCache = ({
+  basePath,
+  lockedKeys = [],
+  search,
+  site,
+}: ListingCacheOptions): ListingCache => {
   const values = keyFilters(search)
   const requested = Number(values.page ?? '1')
-  const page = Number.isFinite(requested) ? Math.max(1, Math.trunc(requested)) : 1
+  const page = Number.isFinite(requested) ? Math.min(Math.max(1, Math.trunc(requested)), MAX_KEY_PAGE) : 1
 
   const params = new URLSearchParams()
   for (const name of JOB_LISTING_FILTER_NAMES) {
     const value = values[name]
-    if (value && name !== 'page') params.set(name, value)
+    if (value && name !== 'page' && !lockedKeys.includes(name)) params.set(name, value)
   }
   if (page > 1) params.set('page', String(page))
 
@@ -602,6 +622,7 @@ export const serveJobListing = async (options: ServeJobListingOptions): Promise<
   // The key comes from the request, so a hit is answered without touching the CMS.
   const { key, tags, ttl } = listingCache({
     basePath: loadOptions.basePath ?? '/jobs',
+    lockedKeys: Object.keys(loadOptions.locked ?? {}),
     search: loadOptions.search,
     site: loadOptions.site,
   })

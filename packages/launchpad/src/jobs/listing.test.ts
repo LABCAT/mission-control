@@ -349,8 +349,8 @@ describe('jobFilterControls', () => {
   })
 })
 
-const keyFor = (search: string, basePath = '/jobs', site = 'vwok') =>
-  listingCache({ basePath, search, site })
+const keyFor = (search: string, basePath = '/jobs', site = 'vwok', lockedKeys: string[] = []) =>
+  listingCache({ basePath, lockedKeys, search, site })
 
 describe('listingCache', () => {
 
@@ -379,6 +379,20 @@ describe('listingCache', () => {
     expect(keyFor('?q=chef&utm_source=newsletter').key).toBe('vwok:html:/jobs?q=chef')
   })
 
+  it('does not repeat a filter the path already fixed, so a section has one entry', () => {
+    expect(keyFor('?category=trades', '/jobs/category/trades', 'vwok', ['category']).key).toBe(
+      'vwok:html:/jobs/category/trades',
+    )
+    // The path wins over the query, so a stale `?category=` cannot make the section a second entry.
+    expect(keyFor('?category=hospitality', '/jobs/category/trades', 'vwok', ['category']).key).toBe(
+      'vwok:html:/jobs/category/trades',
+    )
+    // The section's own pages stay distinct.
+    expect(keyFor('?page=2', '/jobs/category/trades', 'vwok', ['category']).key).toBe(
+      'vwok:html:/jobs/category/trades?page=2',
+    )
+  })
+
   it('carries the page number, so page 2 is not served page 1', () => {
     expect(keyFor('?page=2').key).toBe('vwok:html:/jobs?page=2')
     expect(keyFor('?q=chef&page=2').key).toBe('vwok:html:/jobs?q=chef&page=2')
@@ -388,7 +402,8 @@ describe('listingCache', () => {
     expect(keyFor('?q=' + 'x'.repeat(500)).key).toBe('vwok:html:/jobs')
     expect(keyFor('?category=%3Cscript%3E').key).toBe('vwok:html:/jobs')
     expect(keyFor('?page=abc').key).toBe('vwok:html:/jobs')
-    expect(keyFor('?page=999999999').key).toBe('vwok:html:/jobs')
+    // Past the last real page every number is the same listing, so it is one entry, not a million.
+    expect(keyFor('?page=999999999').key).toBe('vwok:html:/jobs?page=500')
     expect(keyFor('?voluntary=yes').key).toBe('vwok:html:/jobs')
   })
 

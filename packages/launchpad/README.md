@@ -114,12 +114,13 @@ return serveJobListing({
 - The query is live jobs only: published and either not expired or with no expiry
   (`liveJobsWhere` in `packages/payload-jobs`). Voluntary jobs are left out unless `voluntary=1`
   or the section is itself a voluntary type.
-- `listingCache({ basePath, search, site })` gives the edge-cache identity: the key
+- `listingCache({ basePath, lockedKeys, search, site })` gives the edge-cache identity: the key
   (`<site>:html:<path>?<canonical filters>`), the tags (`site:<slug>`, `site:<slug>:jobs`) and
   the TTL (300s). `serveJobListing` builds it from the request *before* it loads anything, so a
-  hit answers without a CMS query. Unknown parameters (`utm_`), a meaningless `?page=1` and
-  out-of-range values are dropped, so a stranger cannot fill the cache with junk; two filter
-  sets never share an entry. PJ-41 purges the tags; a 404 is never cached.
+  hit answers without a CMS query. Unknown parameters (`utm_*`), a meaningless `?page=1`, a filter
+  the path already fixes and values that could not be a filter are dropped, so a stranger cannot
+  fill the cache with junk; two filter sets never share an entry. PJ-41 purges the tags; a 404 is
+  never cached.
 
 ## Conventions
 
