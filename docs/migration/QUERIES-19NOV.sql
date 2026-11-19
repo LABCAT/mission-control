@@ -107,3 +107,63 @@ GROUP BY y ORDER BY y;
 SELECT pm.meta_value address, COUNT(*) n FROM wp_postmeta pm JOIN wp_posts p ON p.ID=pm.post_id
 WHERE p.post_type='job_listing' AND pm.meta_key='_jr_address' AND pm.meta_value LIKE '%,%'
 GROUP BY pm.meta_value ORDER BY n DESC LIMIT 30;
+
+-- ===== Feature inventory follow-ups (added 19 Nov, FEATURE-INVENTORY.md) =====
+-- 37. Shortcodes / forms on published pages (no content, only the first shortcode name and length)
+SELECT ID, post_type, post_name, REGEXP_SUBSTR(post_content,'\\[[A-Za-z0-9_-]+') first_shortcode,
+  CHAR_LENGTH(post_content) len
+FROM wp_posts WHERE post_type IN ('page','custom-form') AND post_status='publish' ORDER BY post_name;
+
+-- 38. The rest of the jr_* options (only the first 100 rows were shown in query 6)
+SELECT option_name, LEFT(option_value,120) value FROM wp_options
+WHERE option_name LIKE 'jr\_%' AND option_name <> 'jr_options'
+  AND option_name NOT REGEXP 'key|secret|token|password|api|email_body|_banner'
+ORDER BY option_name;
+
+-- 39. WP-cron hooks that are scheduled (run on the server; prints hook names only, no args)
+-- mysql -N -e "SELECT option_value FROM wp_options WHERE option_name='cron'" <db> | grep -oE 's:[0-9]+:"[a-z0-9_]+";a:1' | sed -E 's/.*"(.*)".*/\1/' | sort | uniq -c
+
+-- 40. Application attachments: are cover letters/CVs actually sent? (p2p meta keys, counts only)
+SELECT pm.meta_key, COUNT(*) n FROM wp_p2pmeta pm GROUP BY pm.meta_key ORDER BY n DESC;
+
+-- 41. Why jobs end: expiry/cancel reason values (first 40 chars, top 30)
+SELECT meta_key, LEFT(meta_value,40) reason, COUNT(*) n FROM wp_postmeta
+WHERE meta_key IN ('_jr_expired_reason','_jr_canceled_job')
+GROUP BY meta_key, reason ORDER BY n DESC LIMIT 30;
+
+-- 42. Pending and draft jobs by year and job type (does anything still wait for approval? are drafts recent?)
+SELECT YEAR(p.post_date) y, p.post_status, COALESCE(t.slug,'(none)') job_type, COUNT(*) n
+FROM wp_posts p
+LEFT JOIN wp_term_relationships r ON r.object_id=p.ID
+LEFT JOIN wp_term_taxonomy tt ON tt.term_taxonomy_id=r.term_taxonomy_id AND tt.taxonomy='job_type'
+LEFT JOIN wp_terms t ON t.term_id=tt.term_id
+WHERE p.post_type='job_listing' AND p.post_status IN ('pending','draft') AND (tt.taxonomy='job_type' OR tt.taxonomy IS NULL)
+GROUP BY y, p.post_status, job_type ORDER BY y DESC, n DESC;
+
+-- 43. Employer contact fields filled in, among users who logged in since 2023, by role (counts only)
+SELECT m.meta_key, CASE WHEN c.meta_value LIKE '%job_lister%' THEN 'lister' ELSE 'other' END role, COUNT(*) n
+FROM wp_usermeta m
+JOIN wp_usermeta l ON l.user_id=m.user_id AND l.meta_key='last_login' AND YEAR(l.meta_value)>=2023
+JOIN wp_usermeta c ON c.user_id=m.user_id AND c.meta_key='wp_capabilities'
+WHERE m.meta_key IN ('phone_number','job_title','physical_location','facebook','twitter','linkedin','instagram','youtube','wpseo_title','wpseo_metadesc')
+  AND m.meta_value <> ''
+GROUP BY m.meta_key, role ORDER BY m.meta_key;
+
+-- 44. Resumes created per year and status (impact of dropping resumes, decision 1)
+SELECT YEAR(post_date) y, post_status, COUNT(*) n FROM wp_posts
+WHERE post_type='resume' GROUP BY y, post_status ORDER BY y DESC;
+
+-- 45. Wordfence 2FA: how many users have it on? (count only)
+SELECT COUNT(*) users_with_2fa FROM wp_wfls_2fa_secrets;
+
+-- 46. What is the THANKSFROMYCV user meta? (values cut to 20 chars, counts)
+SELECT LEFT(meta_value,20) v, COUNT(*) n FROM wp_usermeta WHERE meta_key='THANKSFROMYCV' GROUP BY v;
+
+-- 47. Overseas / remote jobs (seed locations)
+SELECT YEAR(p.post_date) y, COUNT(*) n FROM wp_posts p JOIN wp_postmeta pm ON pm.post_id=p.ID AND pm.meta_key='_jr_address'
+WHERE p.post_type='job_listing' AND (pm.meta_value LIKE '%overseas%' OR pm.meta_value LIKE '%anywhere%' OR pm.meta_value LIKE '%remote%' OR pm.meta_value LIKE '%home%')
+GROUP BY y ORDER BY y DESC;
+
+-- 48. Featured-in-category use in the last 24 months (confirms dropping it for vwok)
+SELECT YEAR(p.post_date) y, COUNT(*) n FROM wp_posts p JOIN wp_postmeta pm ON pm.post_id=p.ID AND pm.meta_key='_jr_featured-cat' AND pm.meta_value<>''
+WHERE p.post_type='job_listing' AND p.post_date >= NOW() - INTERVAL 24 MONTH GROUP BY y;
