@@ -173,3 +173,4 @@ Not imported: applications/CVs, resumes, logs (order-log, job-alerts-log, resume
 - **Decision (19 Nov): seeker accounts kept and migrated** (same last_login cut-off as other users). MVP account: my applications, my alerts, profile basics.
 - **Decision (19 Nov): no seeker profiles in MVP; no saved jobs in MVP.** Future idea only: PJ-108 (private apply profile, or a professional page on a pacificjobs.com hub).
 - **Decision (19 Nov): English only.** No locales/translations in the MVP (as legacy; editors may write other languages in page content). Only cheap prep: UI strings in one place per site, html lang from a site setting.
+- **Decision (19 Nov): sign-in** = email (link + code in one email) + optional password (legacy WP passwords keep working via PJ-34, upgraded on first login); 90-day sessions; Google/Microsoft post-MVP; no Facebook. PJ-109.
