@@ -637,3 +637,26 @@ _No rows returned._
 | student.usp.ac.fj | 41 |
 | petsplit.com | 41 |
 | smilietoys.com | 40 |
+
+
+## 18. Analytics
+
+**Homepage scan** (`curl -s https://vanuatuwok.vu/ | grep -ioE 'gtag…|googletagmanager…|google-analytics…|plausible|matomo|fbq\(|clarity'`)
+
+```
+gtag.js) - Google Analytics -->
+googletagmanager.com/gtag/js?id=UA-114140337-1
+gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'UA-114140337-1');
+```
+
+Only Google Analytics, via a Universal Analytics ID (`UA-114140337-1`), injected by JobRoller's `jr_google_analytics` option (see section 6). Google stopped processing UA data in July 2023, so this tag is probably collecting nothing. No Plausible, Matomo, Meta Pixel or Clarity.
+
+**Active plugins** (names only)
+
+> WP-CLI isn't installed on the server, so this list comes from the `active_plugins` option (`SELECT option_value FROM wp_options WHERE option_name='active_plugins'`) instead of `wp plugin list --status=active`.
+
+appthemes-advanced-emails, appthemes-coupons, appthemes-xero-invoices, classic-editor, cloudflare, fxtender-pro, jobroller-extensions, multi-image-metabox, post-smtp, registration-honeypot, search-and-replace, updraftplus, user-switching, wordfence, wordpress-seo, wp-crontrol, wp-job-alerts, wp-job-reports, wp-organisations, wp-site-logs
+
+None of these is an analytics plugin.
