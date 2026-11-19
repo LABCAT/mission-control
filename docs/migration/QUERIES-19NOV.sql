@@ -65,7 +65,7 @@ FROM wp_term_taxonomy tt GROUP BY tt.taxonomy ORDER BY uses DESC;
 
 -- 11. Menus (header/footer/mobile) and their items
 SELECT t.name menu, p.post_title, pm.meta_value item_type
-FROM wp_terms t JOIN wp_term_taxonomy tt ON tt.term_id=t.term_id AND tt.taxonomy='nav_menu_item' OR (tt.term_id=t.term_id AND tt.taxonomy='nav_menu')
+FROM wp_terms t JOIN wp_term_taxonomy tt ON tt.term_id=t.term_id AND tt.taxonomy='nav_menu'
 JOIN wp_term_relationships r ON r.term_taxonomy_id=tt.term_taxonomy_id
 JOIN wp_posts p ON p.ID=r.object_id
 LEFT JOIN wp_postmeta pm ON pm.post_id=p.ID AND pm.meta_key='_menu_item_object'
