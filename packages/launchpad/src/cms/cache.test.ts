@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { cached, cacheTag, purgeTags, type CacheLike } from './cache'
+import { cached, cachedResponse, cacheTag, purgeTags, type CacheLike } from './cache'
 
 /** In-memory Cache API that honours `max-age` against the (fake) clock. */
 const memoryCache = () => {
@@ -25,6 +25,9 @@ const memoryCache = () => {
 
   return cache
 }
+
+const html = (body: string, headers: Record<string, string> = {}) =>
+  new Response(body, { headers: { 'content-type': 'text/html; charset=utf-8', ...headers }, status: 200 })
 
 beforeEach(() => vi.useFakeTimers({ now: new Date('2026-01-01T00:00:00Z') }))
 afterEach(() => vi.useRealTimers())
@@ -152,5 +155,83 @@ describe('tags', () => {
 
   it('purge with no cache available is a no-op', async () => {
     await expect(purgeTags(['t'])).resolves.toBeUndefined()
+  })
+})
+
+describe('cachedResponse', () => {
+  it('stores the whole page and serves it back without rendering again', async () => {
+    const cache = memoryCache()
+    const render = vi.fn(async () => html('<h1>Jobs</h1>'))
+
+    const first = await cachedResponse('vwok:html:/jobs', 300, render, { cache, tags: ['site:vwok:jobs'] })
+    const second = await cachedResponse('vwok:html:/jobs', 300, render, { cache, tags: ['site:vwok:jobs'] })
+
+    expect(await first.text()).toBe('<h1>Jobs</h1>')
+    expect(await second.text()).toBe('<h1>Jobs</h1>')
+    expect(second.headers.get('content-type')).toBe('text/html; charset=utf-8')
+    expect(render).toHaveBeenCalledTimes(1)
+  })
+
+  it('writes the ttl and the purge tag into the stored page', async () => {
+    const cache = memoryCache()
+    await cachedResponse('k', 300, async () => html('<p>hi</p>'), { cache, tags: ['site:vwok', 'site:vwok:jobs'] })
+
+    const entry = [...cache.store.entries()].find(([url]) => url.includes('/page/'))![1]
+    expect(entry.headers.get('cache-control')).toBe('public, max-age=300')
+    expect(entry.headers.get('cache-tag')).toBe('site:vwok,site:vwok:jobs')
+  })
+
+  it('expires the page after the ttl and renders again', async () => {
+    const cache = memoryCache()
+    let n = 0
+    const render = async () => html(`<p>${++n}</p>`)
+
+    expect(await (await cachedResponse('k', 300, render, { cache })).text()).toBe('<p>1</p>')
+    vi.advanceTimersByTime(299_000)
+    expect(await (await cachedResponse('k', 300, render, { cache })).text()).toBe('<p>1</p>')
+    vi.advanceTimersByTime(2_000)
+    expect(await (await cachedResponse('k', 300, render, { cache })).text()).toBe('<p>2</p>')
+  })
+
+  it('never stores a page that is not a 200, so a temporary error is not held for five minutes', async () => {
+    const cache = memoryCache()
+    const render = vi.fn(async () => new Response('boom', { status: 500 }))
+
+    expect((await cachedResponse('k', 300, render, { cache })).status).toBe(500)
+    expect((await cachedResponse('k', 300, render, { cache })).status).toBe(500)
+    expect(render).toHaveBeenCalledTimes(2)
+    expect([...cache.store.keys()].filter((url) => url.includes('/page/'))).toHaveLength(0)
+  })
+
+  it('purges with the page tag: the next request renders again', async () => {
+    const cache = memoryCache()
+    let n = 0
+    const render = async () => html(`<p>${++n}</p>`)
+
+    await cachedResponse('k', 300, render, { cache, tags: ['site:vwok:jobs'] })
+    await purgeTags(['site:vwok:jobs'], { cache })
+
+    expect(await (await cachedResponse('k', 300, render, { cache, tags: ['site:vwok:jobs'] })).text()).toBe(
+      '<p>2</p>',
+    )
+  })
+
+  it('renders every time when there is no cache or the ttl is not positive', async () => {
+    const render = vi.fn(async () => html('<p>x</p>'))
+
+    await cachedResponse('k', 300, render)
+    await cachedResponse('k', 0, render, { cache: memoryCache() })
+
+    expect(render).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not escape the cache namespace into another site', async () => {
+    const cache = memoryCache()
+    const render = vi.fn(async () => html('<p>x</p>'))
+
+    await cachedResponse('html:/jobs', 300, render, { cache, namespace: 'vwok' })
+    await cachedResponse('html:/jobs', 300, render, { cache, namespace: 'hub' })
+
+    expect(render).toHaveBeenCalledTimes(2)
   })
 })
