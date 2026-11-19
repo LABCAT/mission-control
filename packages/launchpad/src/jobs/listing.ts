@@ -509,11 +509,16 @@ export type LoadJobListingOptions = {
   tenant: SiteTenant
 }
 
-const facetsOf = async (cms: LoadJobListingOptions['cms']): Promise<ListingFacets> => {
+/**
+ * The tenant's taxonomies, in its own language: `name` is a localized field, so without `locale`
+ * a site whose default differs from Payload's gets another locale's labels in its filter bar.
+ */
+const facetsOf = async (cms: LoadJobListingOptions['cms'], locale: string): Promise<ListingFacets> => {
+  const query = { locale, sort: 'name' }
   const [categories, types, locations] = await Promise.all([
-    cms.findAll('job-categories', { sort: 'name' }),
-    cms.findAll('job-types', { sort: 'name' }),
-    cms.findAll('locations', { sort: 'name' }),
+    cms.findAll('job-categories', query),
+    cms.findAll('job-types', query),
+    cms.findAll('locations', query),
   ])
 
   return {
@@ -569,7 +574,8 @@ export const loadJobListing = async (options: LoadJobListingOptions): Promise<Jo
   } = options
   const basePath = options.basePath ?? '/jobs'
 
-  const facets = await facetsOf(cms)
+  const locale = resolveLocale(tenant)
+  const facets = await facetsOf(cms, locale)
   const definitions = jobFilterDefinitions(facets)
   // The same reading the cache key used, so the HTML stored there is the HTML this URL means.
   // `parseFilters` then drops a taxonomy slug this tenant does not have.
@@ -586,10 +592,13 @@ export const loadJobListing = async (options: LoadJobListingOptions): Promise<Jo
   const sort = ['-publishedAt', '-id']
   const page = query.page
 
-  let result = await cms.find('jobs', { depth: 2, limit: pageSize, page, sort, where })
+  // `locale` covers the job's localized fields: the title the card shows, and the title the
+  // keyword filter matches. Both must be in the tenant's language, not Payload's default.
+  const queryOptions = { depth: 2, limit: pageSize, locale, sort, where }
+  let result = await cms.find('jobs', { ...queryOptions, page })
   // `?page=99` on a two-page listing: serve the last page rather than an empty one.
   if (result.docs.length === 0 && result.totalDocs > 0 && page > result.totalPages) {
-    result = await cms.find('jobs', { depth: 2, limit: pageSize, page: result.totalPages, sort, where })
+    result = await cms.find('jobs', { ...queryOptions, page: result.totalPages })
   }
 
   const jobs = result.docs
@@ -604,7 +613,7 @@ export const loadJobListing = async (options: LoadJobListingOptions): Promise<Jo
       facets,
       filters,
       jobs,
-      locale: resolveLocale(tenant),
+      locale,
       lockedKeys: Object.keys(locked),
       page: result.page,
       pageSize,

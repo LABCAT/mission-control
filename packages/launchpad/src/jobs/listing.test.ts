@@ -90,7 +90,7 @@ type ListingCms = LoadJobListingOptions['cms']
  * between the real client's generics and a hand-written fake.
  */
 const fakeCms = (answer: (options: { page: number }) => CmsList<never>) => {
-  const findAll = vi.fn(async (collection: string) => {
+  const findAll = vi.fn(async (collection: string, _options: { locale?: string; sort?: string }) => {
     if (collection === 'job-categories') return facets.categories
     if (collection === 'job-types') return facets.types
     if (collection === 'locations') return facets.locations
@@ -522,6 +522,32 @@ describe('loadJobListing', () => {
         expect(result.view.filters[name]).toBe(value)
       }
     }
+  })
+
+  it('asks for every read in the tenant locale, so labels and titles are in its language', async () => {
+    // `title` and taxonomy `name` are localized fields. Omitting `locale` gives Payload's default,
+    // so a French site would show English labels and English job titles.
+    const { cms, findAll, find } = fakeCms(() => listOf([job()]))
+    const french: SiteTenant = { ...tenant, defaultLocale: 'fr' }
+
+    const result = await loadJobListing({ cms, now: NOW, search: '?q=chef', tenant: french })
+
+    if (!result.found) throw new Error('expected a view')
+    expect(result.view.locale).toBe('fr')
+    for (const call of findAll.mock.calls) {
+      expect(call[1]).toMatchObject({ locale: 'fr' })
+    }
+    expect(find.mock.calls[0]![1]).toMatchObject({ locale: 'fr' })
+  })
+
+  it('falls back to the tenant default when no locale is set, never to undefined', async () => {
+    const { cms, findAll, find } = fakeCms(() => listOf([job()]))
+    const plain: SiteTenant = { ...tenant, defaultLocale: null }
+
+    await loadJobListing({ cms, now: NOW, search: '', tenant: plain })
+
+    expect(findAll.mock.calls[0]![1]).toMatchObject({ locale: 'en' })
+    expect(find.mock.calls[0]![1]).toMatchObject({ locale: 'en' })
   })
 
   it('drops a job that cannot be rendered rather than failing the page', async () => {

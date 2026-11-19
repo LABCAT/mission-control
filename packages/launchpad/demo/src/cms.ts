@@ -19,10 +19,29 @@ export type DemoCollections = {
 
 export type DemoFindOptions = {
   limit?: number
+  locale?: string
   page?: number
   sort?: string | string[]
   where?: CmsWhere
 }
+
+/**
+ * Payload stores a localized field per locale. A demo row may write one as `{ en: 'Chef',
+ * fr: 'Cuisinier' }`; this picks the requested locale and falls back to `en`, then to any value.
+ * Anything else (a relationship, a slug) is returned as it is.
+ */
+const localize = (value: unknown, locale: string | undefined): unknown => {
+  if (!locale || typeof value !== 'object' || value === null || Array.isArray(value)) return value
+  if ('id' in value) return value
+
+  const byLocale = value as Record<string, unknown>
+  return byLocale[locale] ?? byLocale.en ?? Object.values(byLocale)[0]
+}
+
+const localizeDoc = (doc: Doc, locale: string | undefined): Doc =>
+  locale === undefined
+    ? doc
+    : (Object.fromEntries(Object.entries(doc).map(([key, value]) => [key, localize(value, locale)])) as Doc)
 
 const listed = (value: unknown): unknown[] => (Array.isArray(value) ? value : [value])
 
@@ -91,8 +110,10 @@ const sortRows = (rows: Doc[], sort: string | string[] | undefined): Doc[] => {
 
 /** A CMS over the demo's own rows. The listing cannot tell it from the real client. */
 export const createDemoCms = (collections: DemoCollections) => ({
-  findAll: async (collection: string, options?: { sort?: string }) =>
-    sortRows(collections[collection as keyof DemoCollections] ?? [], options?.sort),
+  findAll: async (collection: string, options?: { locale?: string; sort?: string }) =>
+    sortRows(collections[collection as keyof DemoCollections] ?? [], options?.sort).map((doc) =>
+      localizeDoc(doc, options?.locale),
+    ),
 
   find: async (collection: string, options: DemoFindOptions = {}) => {
     const rows = sortRows(
@@ -105,7 +126,7 @@ export const createDemoCms = (collections: DemoCollections) => ({
     const from = (page - 1) * limit
 
     return {
-      docs: rows.slice(from, from + limit),
+      docs: rows.slice(from, from + limit).map((doc) => localizeDoc(doc, options.locale)),
       hasNextPage: page < totalPages,
       hasPrevPage: page > 1,
       limit,

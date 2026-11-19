@@ -55,6 +55,18 @@ describe('demo CMS', () => {
     expect(live.docs.map((doc) => doc.id)).toEqual([2])
   })
 
+  it('resolves a localized field for the requested locale, as Payload does', async () => {
+    const rows = [{ id: 1, title: { en: 'Head Chef', fr: 'Chef de cuisine' } }, { id: 2, title: 'Clerk' }]
+    const local = createDemoCms({ 'job-categories': [], 'job-types': [], jobs: rows, locations: [] })
+
+    const french = await local.find('jobs', { locale: 'fr' })
+    const german = await local.find('jobs', { locale: 'de' })
+
+    expect(french.docs.map((doc) => doc.title)).toEqual(['Chef de cuisine', 'Clerk'])
+    // No translation, so the default locale answers rather than leaving the field blank.
+    expect(german.docs.map((doc) => doc.title)).toEqual(['Head Chef', 'Clerk'])
+  })
+
   it('refuses an operator it does not implement instead of silently matching nothing', async () => {
     await expect(cms.find('jobs', { where: { title: { near: 'chef' } } })).rejects.toThrow(/unsupported operator/)
   })
