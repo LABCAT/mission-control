@@ -699,3 +699,257 @@ WHERE option_name REGEXP 'tax|vat|gst|xero|axi_' AND option_name NOT REGEXP 'tok
 | axi_sales_tracking_category | none-selected |
 | axi_sales_tracking_option | none-selected |
 | wp_force_deactivated_plugins | a:0:{} |
+
+
+## 20. Uploads size
+
+`du -sh /var/www/www.vanuatuwok.vu/web/app/uploads`
+
+```
+4.6G	/var/www/www.vanuatuwok.vu/web/app/uploads
+```
+
+## 21. Post SMTP setup
+
+> The `postman_options` value was unserialized on the server and only these fields were printed. Passwords, OAuth client IDs/secrets and tokens were never read out.
+
+| setting | value |
+|---|---|
+| transport type | smtp |
+| auth type | oauth2 |
+| encryption | tls |
+| SMTP host | smtp.gmail.com |
+| port | 587 |
+| sender mailbox domain | ycv.vu |
+| envelope sender domain | ycv.vu |
+
+So mail goes out through Google Workspace (Gmail SMTP with OAuth2) on the ycv.vu domain.
+
+## 22. Locations used by jobs (top 60)
+
+```sql
+SELECT pm.meta_value, COUNT(*) n FROM wp_postmeta pm JOIN wp_posts p ON p.ID=pm.post_id
+WHERE p.post_type='job_listing' AND pm.meta_key='geo_short_address'
+GROUP BY pm.meta_value ORDER BY n DESC LIMIT 60;
+```
+
+> `geo_short_address` is free text, so the same place is spelled many ways (e.g. "Port Vila, Efate", "Efate,Port Vila", "Port Vila ,Efate"). The empty value is jobs with no address.
+
+| meta_value | n |
+|---|---|
+| Port Vila, Efate | 5015 |
+| Luganville, Espiritu Santo | 296 |
+| Tanna | 87 |
+| Vanuatu | 85 |
+| Efate | 77 |
+| Port Vila, Vanuatu | 61 |
+| Other | 35 |
+| Espiritu Santo | 33 |
+| Efate,Port Vila | 30 |
+| Isangel, Tanna | 30 |
+| Lenakel, Tanna | 27 |
+| Port Vila, Efate, Vanuatu | 21 |
+| Ambae | 15 |
+|  | 15 |
+| Santo | 15 |
+| Overseas | 14 |
+| Longana, Ambae | 14 |
+| Pentecost | 13 |
+| Malekula | 13 |
+| Efate and Santo | 12 |
+| Forari, Efate | 11 |
+| Lakatoro, Malekula | 10 |
+| Sola, Vanua Lava | 10 |
+| Luganville, Santo | 10 |
+| Maewo | 8 |
+| Malampa | 8 |
+| Sanma Province | 7 |
+| Port Vila | 7 |
+| Port Vila and Luganville | 5 |
+| Anywhere | 5 |
+| Tafea Province | 5 |
+| Torba | 5 |
+| No. 2, Port Vila, Vanuatu | 5 |
+| Australia | 4 |
+| Anywhere/Work From Home, Other | 4 |
+| Penama Province | 4 |
+| Loltong, Pentecost | 4 |
+| Tafea | 4 |
+| Santo &amp; Port Vila | 4 |
+| Isankel, Tanna | 3 |
+| Efate, Santo and Tanna | 3 |
+| Not Stated | 3 |
+| Shefa &amp; Sanma | 3 |
+| Tanna,Tafea | 3 |
+| Port Vila based with travel to the islands | 3 |
+| Luganville - SANTO | 3 |
+| Port Vila ,Efate | 3 |
+| Torba Province | 3 |
+| Fiji | 3 |
+| Lamap, Malekula | 3 |
+| Maewo, Vanuatu | 3 |
+| Luganville , Espiritu Santo | 3 |
+| Tanna,Isangel | 3 |
+| Port Vila, Santo and Tanna | 3 |
+| Remote | 3 |
+| Port Vila or Tanna | 3 |
+| Salili, Efate | 3 |
+| Reece Discomb Street, Nº 2 area, Port Vila, VANUATU | 3 |
+| Tanna, Vanuatu | 3 |
+| Pacific region | 3 |
+
+## 23. Job types, categories and salary bands
+
+```sql
+SELECT tt.taxonomy, t.name, t.slug, tt.parent, tt.count FROM wp_terms t
+JOIN wp_term_taxonomy tt ON tt.term_id=t.term_id
+WHERE tt.taxonomy IN ('job_type','job_cat','job_salary') ORDER BY tt.taxonomy, t.name;
+```
+
+> `count` is WordPress's term count, which only includes **published** jobs (26 live), so it's not historical usage. `parent` 84 (on "Board position" and "Internship") is not one of the terms listed here. The salary terms "000", "000 or more", "1" and "2" look like broken splits of comma-formatted ranges.
+
+| taxonomy | name | slug | parent | count |
+|---|---|---|---|---|
+| job_cat | Accounting | accounting | 0 | 1 |
+| job_cat | Agriculture, fishing &amp; forestry | agriculture-fishing-forestry | 0 | 1 |
+| job_cat | Architecture | architecture | 0 | 0 |
+| job_cat | Automotive | automotive | 0 | 1 |
+| job_cat | Banking, finance &amp; insurance | banking-finance-insurance | 0 | 0 |
+| job_cat | Construction &amp; roading | construction-roading | 0 | 0 |
+| job_cat | Customer service | customer-service | 0 | 0 |
+| job_cat | Domestic support | domestic-maintenance | 0 | 0 |
+| job_cat | Education | education | 0 | 4 |
+| job_cat | Engineering | engineering | 0 | 0 |
+| job_cat | Executive and general management | executive-and-general-management | 0 | 1 |
+| job_cat | Government &amp; council | government-council | 0 | 5 |
+| job_cat | Healthcare | healthcare | 0 | 0 |
+| job_cat | Hospitality &amp; Tourism | hospitality-tourism | 0 | 1 |
+| job_cat | HR &amp; Recruitment | hr-recruitment | 0 | 0 |
+| job_cat | IT | it | 0 | 1 |
+| job_cat | Legal | legal | 0 | 0 |
+| job_cat | Manufacturing &amp; Operations | manufacturing-operations | 0 | 1 |
+| job_cat | Marketing, Media &amp; Communications | marketing-media-communications | 0 | 1 |
+| job_cat | Non Government Organisation (NGO) | non-government-organisation-ngo | 0 | 1 |
+| job_cat | Office &amp; Administration | office-administration | 0 | 0 |
+| job_cat | Other | other | 0 | 4 |
+| job_cat | Property | property | 0 | 0 |
+| job_cat | Retail | retail | 0 | 0 |
+| job_cat | Sales | sales | 0 | 1 |
+| job_cat | Science &amp; Technology | science-technology | 0 | 0 |
+| job_cat | Sport | sport | 0 | 0 |
+| job_cat | Trades &amp; Services | trades-services | 0 | 0 |
+| job_cat | Transport &amp; Logistics | transport-logistics | 0 | 3 |
+| job_salary | 0 - 1,000,000 | 0-100000 | 0 | 8 |
+| job_salary | 000 | 000 | 0 | 0 |
+| job_salary | 000 or more | 000-or-more | 0 | 0 |
+| job_salary | 1 | 1 | 0 | 0 |
+| job_salary | 1,000,000-1,500,000 | 1000000-1500000 | 0 | 0 |
+| job_salary | 1,000,000-2,000,000 | 1000000-2000000 | 0 | 0 |
+| job_salary | 1,500,000 - 2,000,000 | 1500000-2000000 | 0 | 0 |
+| job_salary | 2 | 2 | 0 | 0 |
+| job_salary | 2,000,000 - 3,000,000 | 2000000-3000000 | 0 | 0 |
+| job_salary | 3,000,000 or more | 3000000-or-more | 0 | 0 |
+| job_salary | 4,000,000 or more | 4000000-or-more | 0 | 0 |
+| job_salary | 50,000 or more | 50000-or-more | 0 | 0 |
+| job_salary | 500,000 or more | 500000-or-more | 0 | 2 |
+| job_salary | 6,000,000 or more | 6000000-or-more | 0 | 1 |
+| job_salary | According to experience and qualification | according-to-experience-and-qualification | 0 | 3 |
+| job_salary | Not stated | not-stated | 0 | 11 |
+| job_salary | Unknown | unknown | 0 | 0 |
+| job_salary | Voluntary | voluntary | 0 | 1 |
+| job_type | Apprenticeship | apprenticeship | 0 | 0 |
+| job_type | Board position | board-position | 84 | 1 |
+| job_type | Casual | casual | 0 | 4 |
+| job_type | Contract | contract | 0 | 16 |
+| job_type | Full-Time | full-time | 0 | 17 |
+| job_type | Independant | independant | 0 | 0 |
+| job_type | Independent | independent | 0 | 0 |
+| job_type | Internship | internship-voluntary | 84 | 1 |
+| job_type | Not Stated | not-stated | 0 | 4 |
+| job_type | Part-Time | part-time | 0 | 4 |
+| job_type | Temporary | temporary | 0 | 0 |
+| job_type | Traineeship | traineeship | 0 | 0 |
+| job_type | Voluntary | voluntary | 0 | 2 |
+
+## 24. Alert and invoice-me values
+
+```sql
+SELECT meta_key, meta_value, COUNT(*) n FROM wp_usermeta
+WHERE meta_key IN ('jr_alert_status','can_pay_by_bank_transfer') GROUP BY meta_key, meta_value;
+```
+
+| meta_key | meta_value | n |
+|---|---|---|
+| can_pay_by_bank_transfer |  | 79 |
+| jr_alert_status | active | 248 |
+| jr_alert_status | inactive | 312 |
+
+## 25. Users the migration rule would keep
+
+> Rule: `last_login` in 2023 or later, OR authored a `job_listing`/`transaction` post dated 2022-01-01 or later, OR `jr_alert_status = 'active'`, OR has the administrator role. Counts only. Columns 2–5 overlap (a user can match several rules).
+
+```sql
+SELECT COUNT(*) AS users_kept,
+ SUM(r_login) AS by_login_2023plus, SUM(r_job) AS by_job_or_txn_2022plus,
+ SUM(r_alert) AS by_active_alert, SUM(r_admin) AS by_admin_role, (SELECT COUNT(*) FROM wp_users) AS users_total
+FROM (
+ SELECT u.ID,
+  EXISTS(SELECT 1 FROM wp_usermeta m WHERE m.user_id=u.ID AND m.meta_key='last_login' AND YEAR(m.meta_value)>=2023) r_login,
+  EXISTS(SELECT 1 FROM wp_posts p WHERE p.post_author=u.ID AND p.post_type IN ('job_listing','transaction') AND p.post_date>='2022-01-01') r_job,
+  EXISTS(SELECT 1 FROM wp_usermeta m WHERE m.user_id=u.ID AND m.meta_key='jr_alert_status' AND m.meta_value='active') r_alert,
+  EXISTS(SELECT 1 FROM wp_usermeta m WHERE m.user_id=u.ID AND m.meta_key='wp_capabilities' AND m.meta_value LIKE '%"administrator"%') r_admin
+ FROM wp_users u
+) x WHERE r_login OR r_job OR r_alert OR r_admin;
+```
+
+| users_kept | by_login_2023plus | by_job_or_txn_2022plus | by_active_alert | by_admin_role | users_total |
+|---|---|---|---|---|---|
+| 1817 | 1630 | 250 | 248 | 4 | 15844 |
+
+## 26. Menu items and their targets
+
+```sql
+SELECT t.name menu, p.menu_order, pm2.meta_value obj_id, pg.post_title, pm3.meta_value url
+FROM wp_terms t JOIN wp_term_taxonomy tt ON tt.term_id=t.term_id AND tt.taxonomy='nav_menu'
+JOIN wp_term_relationships r ON r.term_taxonomy_id=tt.term_taxonomy_id
+JOIN wp_posts p ON p.ID=r.object_id
+LEFT JOIN wp_postmeta pm2 ON pm2.post_id=p.ID AND pm2.meta_key='_menu_item_object_id'
+LEFT JOIN wp_posts pg ON pg.ID=pm2.meta_value
+LEFT JOIN wp_postmeta pm3 ON pm3.post_id=p.ID AND pm3.meta_key='_menu_item_url'
+ORDER BY t.name, p.menu_order;
+```
+
+> Rows with no `url` link to the WordPress page given by `obj_id`. "Jobs" is a custom `/jobs` link.
+
+| menu | menu_order | obj_id | post_title | url |
+|---|---|---|---|---|
+| Bottom menu | 1 | 36658 | Powered by Youth Challenge Vanuatu | https://www.ycv.vu |
+| Bottom menu | 2 | 19 | Password Reset |  |
+| Bottom menu | 3 | 13 | Submit Job |  |
+| Bottom menu | 4 | 16 | Login |  |
+| Main menu | 1 | 424 | Jobs | /jobs |
+| Main menu | 2 | 61 | Volunteering |  |
+| Main menu | 3 | 38 | For Employers |  |
+| Main menu | 4 | 23445 | Organisations |  |
+| Main menu | 5 | 3983 | About us |  |
+| Top menu | 1 | 655 | Contact us |  |
+
+## 27. Server cron and backups
+
+**`crontab -l`** (site user `vwok`): `no crontab for vwok`.
+
+System cron (`/etc/crontab`, `/etc/cron.d`) has only the Ubuntu defaults: the run-parts hourly/daily/weekly/monthly jobs, certbot renew, e2scrub and PHP session cleanup. Nothing calls `wp-cron.php`, and `DISABLE_WP_CRON` isn't set in the site's `.env`, so WP-Cron (job alerts, expiry, UpdraftPlus) runs on page visits. No secrets were in these files.
+
+**UpdraftPlus schedule**
+
+```sql
+SELECT option_name, option_value FROM wp_options WHERE option_name IN ('updraft_interval','updraft_interval_database');
+```
+
+| option_name | option_value |
+|---|---|
+| updraft_interval | daily |
+| updraft_interval_database | daily |
+
+Files and database backups are both scheduled daily. (Where they're stored was not checked.)
+
