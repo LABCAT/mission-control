@@ -359,48 +359,60 @@ export type ListingCacheOptions = {
 }
 
 /**
- * The highest page a key distinguishes. Twenty jobs a page makes this 10,000 jobs, far past any
- * real listing; beyond it every URL is the listing's last page, so they share one entry instead of
- * letting a stranger mint a million keys that all store the same HTML.
+ * The highest page the listing will serve. Twenty jobs a page makes this 10,000 jobs, far past any
+ * real listing, so the clamp costs nothing; without it every number would be its own cache key and
+ * a stranger could mint a million entries that all hold the last page.
  */
-const MAX_KEY_PAGE = 500
+const MAX_LISTING_PAGE = 500
 
-/** A taxonomy slug as a URL carries it; anything else cannot name a section, so it is not a key. */
+/** A taxonomy slug as a URL carries it; anything else cannot name a filter, so it is dropped. */
 const SLUG_PATTERN = /^[\w-]{1,64}$/
 const MAX_KEYWORD_LENGTH = 100
 
+/** One reading of a listing request: the filters it applies and the page it shows. */
+export type ListingQuery = { filters: FilterValues; page: number }
+
 /**
- * The filters a cache key keeps: the listing's own parameter names, in the order the form shows
- * them, with junk dropped. This runs before the CMS is asked anything, so a cache hit costs no
- * queries; it is deliberately stricter than `parseFilters`, because an unbounded value (any
- * string under any name) would let a stranger fill the cache with entries that all show the
- * same page.
+ * Read a listing request once, for both the cache key and the CMS query. Going through a single
+ * function is what keeps the two from disagreeing: a filter this drops is a filter the listing
+ * does not apply, and a page it clamps is the page the listing serves. If the key dropped
+ * something the query kept, a filtered response would be stored under a bare URL's key.
+ *
+ * Two values are settled here rather than later:
+ *
+ * - A keyword is cut to `MAX_KEYWORD_LENGTH`, so an enormous search is still a search rather than
+ *   a silent "show everything".
+ * - A page is clamped to `[1, MAX_LISTING_PAGE]`.
+ *
+ * Taxonomy membership is the one check this cannot make, because it needs the CMS. The loader
+ * then drops a slug the tenant does not have, so such a URL renders the unfiltered listing under
+ * its own key: correct, merely a wasted entry, and bounded by the slug shape.
  */
-const keyFilters = (search: null | string | URLSearchParams): FilterValues => {
+export const readListingQuery = (search: null | string | URLSearchParams): ListingQuery => {
   const params = typeof search === 'string' ? new URLSearchParams(search) : (search ?? new URLSearchParams())
-  const values: FilterValues = {}
+  const filters: FilterValues = {}
 
   for (const name of JOB_LISTING_FILTER_NAMES) {
     const value = params.get(name)?.trim()
     if (!value) continue
+
+    if (name === 'page') continue // read below, it is not a filter
     if (name === 'q') {
-      if (value.length <= MAX_KEYWORD_LENGTH) values[name] = value
-      continue
-    }
-    if (name === 'page') {
-      // Any number is a page; it is clamped below. Dropping a huge one instead would give it
-      // page 1's key while the loader renders the last page, which is the wrong HTML.
-      if (/^\d{1,12}$/.test(value)) values[name] = value
+      filters[name] = value.slice(0, MAX_KEYWORD_LENGTH)
       continue
     }
     if (name === VOLUNTARY_PARAM) {
-      if (/^\d$/.test(value)) values[name] = value
+      if (value === '1') filters[name] = value
       continue
     }
-    if (SLUG_PATTERN.test(value)) values[name] = value
+    if (SLUG_PATTERN.test(value)) filters[name] = value
   }
 
-  return values
+  const raw = params.get('page')?.trim() ?? ''
+  const requested = /^\d{1,12}$/.test(raw) ? Number(raw) : 1
+  const page = Math.min(Math.max(1, requested), MAX_LISTING_PAGE)
+
+  return { filters, page }
 }
 
 /**
@@ -415,14 +427,12 @@ export const listingCache = ({
   search,
   site,
 }: ListingCacheOptions): ListingCache => {
-  const values = keyFilters(search)
-  const requested = Number(values.page ?? '1')
-  const page = Number.isFinite(requested) ? Math.min(Math.max(1, Math.trunc(requested)), MAX_KEY_PAGE) : 1
+  const { filters, page } = readListingQuery(search)
 
   const params = new URLSearchParams()
   for (const name of JOB_LISTING_FILTER_NAMES) {
-    const value = values[name]
-    if (value && name !== 'page' && !lockedKeys.includes(name)) params.set(name, value)
+    const value = filters[name]
+    if (value && !lockedKeys.includes(name)) params.set(name, value)
   }
   if (page > 1) params.set('page', String(page))
 
@@ -561,18 +571,20 @@ export const loadJobListing = async (options: LoadJobListingOptions): Promise<Jo
 
   const facets = await facetsOf(cms)
   const definitions = jobFilterDefinitions(facets)
-  const { page: requestedPage, ...queryFilters } = parseFilters(search, definitions)
-  // `page` slices the listing rather than filtering it, so it is not a filter value: the form
-  // must not render it and the cache key carries its own.
-  const filters: FilterValues = { ...queryFilters, ...locked }
-  const requested = Number(requestedPage ?? '1')
+  // The same reading the cache key used, so the HTML stored there is the HTML this URL means.
+  // `parseFilters` then drops a taxonomy slug this tenant does not have.
+  const query = readListingQuery(search)
+  const filters: FilterValues = {
+    ...parseFilters(new URLSearchParams(query.filters), definitions),
+    ...locked,
+  }
 
   const missing = unknownSection(locked, facets)
   if (missing) return missing
 
   const where = listingWhere({ facets, filters, now })
   const sort = ['-publishedAt', '-id']
-  const page = Number.isFinite(requested) ? Math.max(1, Math.trunc(requested)) : 1
+  const page = query.page
 
   let result = await cms.find('jobs', { depth: 2, limit: pageSize, page, sort, where })
   // `?page=99` on a two-page listing: serve the last page rather than an empty one.

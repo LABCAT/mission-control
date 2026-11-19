@@ -399,7 +399,8 @@ describe('listingCache', () => {
   })
 
   it('drops a value that could not be a filter, so the cache cannot be filled with junk', () => {
-    expect(keyFor('?q=' + 'x'.repeat(500)).key).toBe('vwok:html:/jobs')
+    // A long keyword is cut, not dropped: dropping it would key the search as the bare listing.
+    expect(keyFor('?q=' + 'x'.repeat(500)).key).toBe(`vwok:html:/jobs?q=${'x'.repeat(100)}`)
     expect(keyFor('?category=%3Cscript%3E').key).toBe('vwok:html:/jobs')
     expect(keyFor('?page=abc').key).toBe('vwok:html:/jobs')
     // Past the last real page every number is the same listing, so it is one entry, not a million.
@@ -473,6 +474,54 @@ describe('loadJobListing', () => {
     if (!result.found) throw new Error('expected a view')
     expect(result.view.page).toBe(2)
     expect(find).toHaveBeenLastCalledWith('jobs', expect.objectContaining({ page: 2 }))
+  })
+
+  it('applies a long keyword instead of silently showing everything, as the cache key assumes', async () => {
+    // The regression: the key cut the keyword to 100 characters while the loader kept all 500, so
+    // a search was cached under the bare listing's key and every visitor got its results.
+    const { cms, find } = fakeCms(() => listOf([]))
+    const keyword = 'x'.repeat(500)
+
+    const result = await loadJobListing({ cms, now: NOW, search: `q=${keyword}`, tenant })
+
+    if (!result.found) throw new Error('expected a view')
+    expect(result.view.filters.q).toHaveLength(100)
+    const [, query] = find.mock.calls[0]! as unknown as [string, { where: unknown }]
+    expect(JSON.stringify(query.where)).toContain(`"like":"${'x'.repeat(100)}"`)
+  })
+
+  it('serves the page the cache key names, so a stored page is never the HTML of another', async () => {
+    // Either side clamping differently would store one page under another page's key.
+    const { cms, find } = fakeCms(() => listOf([job()], { limit: 20, page: 1, totalDocs: 5000 }))
+
+    await loadJobListing({ cms, now: NOW, search: '?page=999999999', tenant })
+
+    expect(find).toHaveBeenLastCalledWith('jobs', expect.objectContaining({ page: 500 }))
+  })
+
+  it('agrees with the cache key for the same URL, which is what keeps a hit correct', async () => {
+    const searches = ['', '?q=chef', '?q=' + 'y'.repeat(400), '?page=7', '?page=999999', '?category=trades&page=3']
+
+    for (const search of searches) {
+      const cache = listingCache({ basePath: '/jobs', search, site: 'vwok' })
+      const { cms, find } = fakeCms(() => listOf([job()], { limit: 20, page: 1, totalDocs: 5000 }))
+
+      const result = await loadJobListing({ cms, now: NOW, search, tenant })
+      if (!result.found) throw new Error('expected a view')
+
+      const [, query] = find.mock.calls[0]! as unknown as [string, { page: number }]
+      const keyPage = cache.key.includes('page=') ? Number(cache.key.split('page=')[1]) : 1
+
+      // The key's page is the page queried, unless the CMS answered a different one because the
+      // listing is shorter; here it holds 5,000 jobs, so the clamp is all that applies.
+      expect(keyPage).toBe(Math.min(query.page, 500))
+      // The key's filters are the filters the view carries.
+      const keyQuery = new URLSearchParams(cache.key.includes('?') ? cache.key.slice(cache.key.indexOf('?')) : '')
+      for (const [name, value] of keyQuery) {
+        if (name === 'page') continue
+        expect(result.view.filters[name]).toBe(value)
+      }
+    }
   })
 
   it('drops a job that cannot be rendered rather than failing the page', async () => {

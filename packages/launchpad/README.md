@@ -114,6 +114,12 @@ return serveJobListing({
 - The query is live jobs only: published and either not expired or with no expiry
   (`liveJobsWhere` in `packages/payload-jobs`). Voluntary jobs are left out unless `voluntary=1`
   or the section is itself a voluntary type.
+- `readListingQuery(search)` is the one reading of a request: it returns the filters and the page
+  number, and both the cache key and the CMS query come from it. That is what stops them
+  disagreeing — if the key dropped a filter the query kept, a filtered response would be stored
+  under a bare URL's key and served to everyone for five minutes. It cuts a keyword to 100
+  characters and clamps the page to 500 rather than dropping either, since a dropped value would
+  change what the URL means.
 - `listingCache({ basePath, lockedKeys, search, site })` gives the edge-cache identity: the key
   (`<site>:html:<path>?<canonical filters>`), the tags (`site:<slug>`, `site:<slug>:jobs`) and
   the TTL (300s). `serveJobListing` builds it from the request *before* it loads anything, so a
