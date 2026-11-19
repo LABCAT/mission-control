@@ -43,3 +43,8 @@ WHERE (option_name LIKE '%tax%' OR option_name LIKE '%vat%' OR option_name LIKE 
   AND option_name NOT LIKE '%token%' AND option_name NOT LIKE '%secret%' AND option_name NOT LIKE '%key%'
   AND option_name NOT LIKE '%password%' AND option_name NOT LIKE '%auth%' AND option_name NOT LIKE '%credential%';
 -- Before pasting the output anywhere, scan it for anything that looks like a key or token and remove it.
+
+-- 7. Is the legacy contact form page in use? (any row with post_status 'publish' = yes)
+SELECT p.ID, p.post_title, p.post_name, p.post_status
+FROM wp_posts p JOIN wp_postmeta m ON m.post_id = p.ID
+WHERE m.meta_key = '_wp_page_template' AND m.meta_value = 'tpl-contact.php';
