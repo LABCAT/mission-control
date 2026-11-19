@@ -167,3 +167,65 @@ GROUP BY y ORDER BY y DESC;
 -- 48. Featured-in-category use in the last 24 months (confirms dropping it for vwok)
 SELECT YEAR(p.post_date) y, COUNT(*) n FROM wp_posts p JOIN wp_postmeta pm ON pm.post_id=p.ID AND pm.meta_key='_jr_featured-cat' AND pm.meta_value<>''
 WHERE p.post_type='job_listing' AND p.post_date >= NOW() - INTERVAL 24 MONTH GROUP BY y;
+
+-- ===== Legacy code walk follow-ups (added 19 Nov, FEATURE-INVENTORY.md "Code walk: done") =====
+-- 49. Page templates in use on published pages (finds the RSS feed pages, /confirm/, contact, organisations, home)
+SELECT p.post_name, pm.meta_value template FROM wp_posts p
+JOIN wp_postmeta pm ON pm.post_id=p.ID AND pm.meta_key='_wp_page_template'
+WHERE p.post_type='page' AND p.post_status='publish' AND pm.meta_value NOT IN ('','default')
+ORDER BY template, p.post_name;
+
+-- 50. FXtender settings (which optional features are on). Keys/tokens and email addresses are masked; long text cut to 80 chars
+SELECT option_name,
+  CASE WHEN option_name REGEXP 'key|secret|token|api|password' THEN '[hidden]'
+       WHEN option_value LIKE '%@%' THEN '[email]'
+       ELSE LEFT(option_value,80) END value
+FROM wp_options WHERE option_name LIKE 'jr\_fx\_%' ORDER BY option_name;
+
+-- 51. Email template switches and subjects (Advanced Emails `_custom_*` and standalone `jr_nu_*`/`jr_new_ad_email`); no bodies, no addresses
+SELECT option_name, LEFT(option_value,80) value FROM wp_options
+WHERE (option_name LIKE '\_custom\_%' OR option_name IN ('jr_nu_custom_email','jr_nu_admin_email','jr_new_ad_email','jr_nu_email_type'))
+  AND option_name NOT LIKE '%\_body' AND option_name NOT LIKE '%from\_email'
+ORDER BY option_name;
+
+-- 52. Category custom forms: the forms and their categories, then which custom fields jobs actually filled (keys + counts only)
+SELECT p.ID, p.post_status, YEAR(p.post_date) y, GROUP_CONCAT(DISTINCT t.slug) categories
+FROM wp_posts p
+LEFT JOIN wp_term_relationships r ON r.object_id=p.ID
+LEFT JOIN wp_term_taxonomy tt ON tt.term_taxonomy_id=r.term_taxonomy_id AND tt.taxonomy='job_cat'
+LEFT JOIN wp_terms t ON t.term_id=tt.term_id
+WHERE p.post_type='custom-form' GROUP BY p.ID, p.post_status, y;
+SELECT pm.meta_key, COUNT(*) n, MAX(p.post_date) last_used FROM wp_postmeta pm JOIN wp_posts p ON p.ID=pm.post_id
+WHERE p.post_type='job_listing' AND pm.meta_key LIKE 'app\_%' AND pm.meta_value<>''
+GROUP BY pm.meta_key ORDER BY n DESC;
+
+-- 53. Jobs whose company name differs from the posting organisation's name (agency / "post for client" signal), by year; counts only
+SELECT YEAR(p.post_date) y,
+  SUM(c.meta_value = n.meta_value) same_as_org,
+  SUM(c.meta_value <> n.meta_value) differs,
+  COUNT(DISTINCT CASE WHEN c.meta_value <> n.meta_value THEN p.post_author END) orgs_with_differing_names
+FROM wp_posts p
+JOIN wp_postmeta c ON c.post_id=p.ID AND c.meta_key='_Company' AND c.meta_value<>''
+JOIN wp_usermeta n ON n.user_id=p.post_author AND n.meta_key='nickname'
+WHERE p.post_type='job_listing' AND p.post_status IN ('publish','expired')
+GROUP BY y ORDER BY y DESC;
+
+-- 54. Unconfirmed accounts (still holding a confirmation_key) by registration year: is email confirmation working?
+SELECT YEAR(u.user_registered) y, COUNT(*) registered, SUM(k.user_id IS NOT NULL) unconfirmed
+FROM wp_users u LEFT JOIN wp_usermeta k ON k.user_id=u.ID AND k.meta_key='confirmation_key'
+GROUP BY y ORDER BY y DESC;
+
+-- 55. Close dates employers choose (job duration in days) on jobs posted in the last 24 months
+SELECT CASE WHEN CAST(d.meta_value AS UNSIGNED) >= 45 THEN '45+' WHEN CAST(d.meta_value AS UNSIGNED) >= 30 THEN '30-44'
+            WHEN CAST(d.meta_value AS UNSIGNED) >= 14 THEN '14-29' ELSE '<14' END days, COUNT(*) n
+FROM wp_posts p JOIN wp_postmeta d ON d.post_id=p.ID AND d.meta_key='_jr_job_duration'
+WHERE p.post_type='job_listing' AND p.post_date >= NOW() - INTERVAL 24 MONTH
+GROUP BY days ORDER BY days;
+
+-- 56. Selected keys inside the serialised jr_options array (bool vs 'yes' matters for the theme's `== 'yes'` tests)
+SELECT k.name, REGEXP_SUBSTR(o.option_value, CONCAT('"', k.name, '";[^;]*;')) value
+FROM wp_options o
+JOIN (SELECT 'jr_ad_stats_all' name UNION ALL SELECT 'apply_reg_users_only' UNION ALL SELECT 'allow_job_comments'
+      UNION ALL SELECT 'plan_type' UNION ALL SELECT 'include_nowhere' UNION ALL SELECT 'jr_submit_how_to_apply_display'
+      UNION ALL SELECT 'jr_nu_admin_email' UNION ALL SELECT 'jr_new_ad_email' UNION ALL SELECT 'jr_nu_custom_email') k
+WHERE o.option_name='jr_options';
