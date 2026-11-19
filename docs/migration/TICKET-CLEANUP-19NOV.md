@@ -78,6 +78,8 @@ Rules kept: no status, dispatch_status, github_issue_number or assignee change o
 
 Tickets I read and left unchanged because they already match the decisions (or are in flight and consistent): PJ-94, PJ-110, PJ-111, PJ-112, PJ-76, PJ-79, PJ-95, PJ-97, PJ-100, PJ-101 (parked idea), PJ-106, PJ-108, PJ-69, PJ-72, PJ-74. PJ-36's prompt is outdated (pagination, /jobs/category/:slug) but the ticket is in progress: its description now says the decisions win.
 
+- Late decisions that arrived on `sprint/status` during the clean-up (org `approved` boolean, invoice parity / 'publish before payment') were appended as a 'LATE DECISIONS' block to the descriptions and prompts of PJ-23, PJ-31, PJ-32 and PJ-62.
+
 ## New ticket
 
 - PJ-115: payload-jobs: core vs add-on packages + plug points (high, Agent, blocked by PJ-80). Defines core vs add-ons (alerts, reports, Xero) vs generic packages, the plug points (collections, email events, report types, account tabs, checkout steps, payment provider, job lifecycle hooks), the per-tenant add-on switch, and extracts the PJ-26 alerts code into `packages/payload-jobs-alerts`. sort_order `b1Zzq`.
