@@ -48,3 +48,45 @@ WHERE (option_name LIKE '%tax%' OR option_name LIKE '%vat%' OR option_name LIKE 
 SELECT p.ID, p.post_title, p.post_name, p.post_status
 FROM wp_posts p JOIN wp_postmeta m ON m.post_id = p.ID
 WHERE m.meta_key = '_wp_page_template' AND m.meta_value = 'tpl-contact.php';
+
+-- ===== Import scope (added 19 Nov) =====
+-- 8. What content exists: counts per post type and status
+SELECT post_type, post_status, COUNT(*) n, MAX(post_date) latest
+FROM wp_posts GROUP BY post_type, post_status ORDER BY post_type, n DESC;
+
+-- 9. Blog posts and pages: are they current? (titles only)
+SELECT ID, post_type, post_title, post_name, post_status, post_date
+FROM wp_posts WHERE post_type IN ('post','page') AND post_status = 'publish'
+ORDER BY post_type, post_date DESC;
+
+-- 10. Taxonomies in use (incl. job_tag, job_salary, area-of-focus)
+SELECT tt.taxonomy, COUNT(*) terms, SUM(tt.count) uses
+FROM wp_term_taxonomy tt GROUP BY tt.taxonomy ORDER BY uses DESC;
+
+-- 11. Menus (header/footer/mobile) and their items
+SELECT t.name menu, p.post_title, pm.meta_value item_type
+FROM wp_terms t JOIN wp_term_taxonomy tt ON tt.term_id=t.term_id AND tt.taxonomy='nav_menu_item' OR (tt.term_id=t.term_id AND tt.taxonomy='nav_menu')
+JOIN wp_term_relationships r ON r.term_taxonomy_id=tt.term_taxonomy_id
+JOIN wp_posts p ON p.ID=r.object_id
+LEFT JOIN wp_postmeta pm ON pm.post_id=p.ID AND pm.meta_key='_menu_item_object'
+ORDER BY t.name, p.menu_order;
+
+-- 12. Organisation/user meta keys in use (keys + counts only, no values)
+SELECT meta_key, COUNT(*) n FROM wp_usermeta
+WHERE meta_key NOT LIKE '%session%' AND meta_key NOT LIKE '%capabilities%'
+GROUP BY meta_key ORDER BY n DESC;
+
+-- 13. Job meta keys in use (keys + counts only)
+SELECT pm.meta_key, COUNT(*) n FROM wp_postmeta pm JOIN wp_posts p ON p.ID=pm.post_id
+WHERE p.post_type='job_listing' GROUP BY pm.meta_key ORDER BY n DESC;
+
+-- 14. Job view counters: do they exist and are they recent?
+SELECT COUNT(*) jobs_with_views, SUM(postcount) total_views FROM wp_jr_counter_total;
+
+-- 15. Invoice-me customers (bank transfer allowed) and org page states
+SELECT meta_key, meta_value, COUNT(*) n FROM wp_usermeta
+WHERE meta_key IN ('can_pay_by_bank_transfer','enable_organisations_page','listing_request')
+GROUP BY meta_key, meta_value;
+
+-- 16. Comments (are any in use?)
+SELECT comment_type, comment_approved, COUNT(*) n FROM wp_comments GROUP BY comment_type, comment_approved;
