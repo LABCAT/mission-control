@@ -90,3 +90,7 @@ GROUP BY meta_key, meta_value;
 
 -- 16. Comments (are any in use?)
 SELECT comment_type, comment_approved, COUNT(*) n FROM wp_comments GROUP BY comment_type, comment_approved;
+
+-- 17. Email providers used (domain only, top 25) — decides Google/Microsoft login
+SELECT LOWER(SUBSTRING_INDEX(user_email,'@',-1)) domain, COUNT(*) n
+FROM wp_users GROUP BY domain ORDER BY n DESC LIMIT 25;
