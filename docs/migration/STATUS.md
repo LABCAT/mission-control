@@ -231,3 +231,4 @@ Not imported: applications/CVs, resumes, logs (order-log, job-alerts-log, resume
 - **Decision (19 Nov): RSS** not built until confirmed used (PJ-116, founder): Zapier / YCV newsletter / access logs. PJ-40 RSS part on hold.
 - **Decision (19 Nov): relisting kept** (parity): one-click relist of an expired/ended job, priced per plan (relist price, vwok = full price), new close date up to the plan max (45 days), goes through payment/approval like a new job. PJ-33.
 - **Decision (19 Nov): features catalogue** (user stories = acceptance criteria, tests tagged by story id, CI pass/fail per story, Google Sheet export for YCV). Start now; part of definition of done. PJ-117 (high).
+- **Decision (19 Nov): not imported:** Land Law Reforms (PDF link) and Organisation Competition (ended) pages → 410 Gone (PJ-42 map). The linked PDF stays available only if referenced elsewhere.
