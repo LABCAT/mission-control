@@ -160,7 +160,7 @@ Spend at 02:05 UTC: sub-sessions $8.04 (PJ-10 2.19, PJ-81 2.42, RCL-86 1.00, PJ-
 ## Import scope (19 Nov, from code review of the legacy repo; confirm with queries 8–16)
 Already planned (PJ-61..67): taxonomies + locations, active users + orgs + password hashes, media/logos/PDFs to R2, jobs (published + expired), plans/coupons/orders (24 months) + credits, alert subscribers, pages + site settings.
 Add / confirm:
-1. **Blog posts** (theme has a blog template) – import if any are recent (query 9).
+1. **Blog posts:** founder believes there are none; blog templates exist but look like leftovers. Not imported unless query 9 shows published posts.
 2. **Menus** (top, primary, footer) → CMS menus (query 11).
 3. **Extra taxonomies:** job_tag, job_salary (salary band filter), area-of-focus (org directory filter) (query 10).
 4. **Organisation fields:** org type, org size, cover image (profile_picture), logo, listing status (enable_organisations_page / listing_request) (queries 12, 15).
@@ -169,4 +169,4 @@ Add / confirm:
 7. **Xero invoice IDs** on orders (planned) – contacts are matched by name/email in the add-on.
 8. **Redirects:** every legacy URL (jobs, orgs/authors, taxonomies, pages, blog) → new URL (PJ-70 parity crawler).
 Not imported: applications/CVs, resumes, logs (order-log, job-alerts-log, resume-reminder-log), comments (unless query 16 shows real use), PayPal data.
-**Open question for founder:** legacy subscribes every new user to **MailChimp** on registration. Keep a MailChimp sync (add-on) or drop it?
+**MailChimp: dropped.** The code only runs if the registration form sends an `update_subscription` field, and no vwok form has it (a Do Good Jobs leftover). The hardcoded MailChimp key in the legacy repo should still be revoked.
