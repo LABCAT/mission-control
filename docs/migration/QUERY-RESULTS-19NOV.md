@@ -660,3 +660,42 @@ Only Google Analytics, via a Universal Analytics ID (`UA-114140337-1`), injected
 appthemes-advanced-emails, appthemes-coupons, appthemes-xero-invoices, classic-editor, cloudflare, fxtender-pro, jobroller-extensions, multi-image-metabox, post-smtp, registration-honeypot, search-and-replace, updraftplus, user-switching, wordfence, wordpress-seo, wp-crontrol, wp-job-alerts, wp-job-reports, wp-organisations, wp-site-logs
 
 None of these is an analytics plugin.
+
+
+## 19. Tax/VAT options
+
+```sql
+SELECT option_name, LEFT(option_value,300) FROM wp_options
+WHERE option_name REGEXP 'tax|vat|gst|xero|axi_' AND option_name NOT REGEXP 'token|secret|key|password|auth|credential';
+```
+
+> Removed before saving: one row whose value is the site's sender email address, and two rows whose values are Xero identifiers (UUIDs): `axi_tenant_id` and `axi_invoice_branding_template`. No tokens, keys or passwords were in the output. The REGEXP `vat` also matches `avatar`/`activated`, and `tax` matches the taxonomy settings, which is why those rows appear.
+
+| option_name | value |
+|---|---|
+| show_avatars | 1 |
+| avatar_rating | G |
+| avatar_default | mystery |
+| recently_activated | a:0:{} |
+| wordfenceActivated | 1 |
+| tax_charge | 0 |
+| jr_job_cat_tax_permalink | job-category |
+| jr_job_type_tax_permalink | job-type |
+| jr_job_tag_tax_permalink | job-tag |
+| jr_job_salary_tax_permalink | job-salary |
+| jr_fx_opt_jobs_lister_persistent_logo_gravatar | yes |
+| _custom_resume_subscription_activated_email | no |
+| _custom_resume_subscription_activated_from_name |  |
+| _custom_resume_subscription_activated_email_subject | Your resume access subscription to vanuatu wok is now active |
+| _custom_resume_subscription_activated_email_type | text/html |
+| _custom_resume_subscription_activated_email_body | Your resume access subscription has just been activated. You can now browse and view resumes on Vanuatu Wok |
+| axi_organisation | wokikik |
+| axi_payment_reconcilition_account_code | none-selected |
+| wpseo_taxonomy_meta | a:2:{s:8:"job_type";a:1:{i:87;a:2:{s:13:"wpseo_linkdex";s:2:"-2";s:19:"wpseo_content_score";s:2:"30";}}s:10:"job_salary";a:4:{i:158;a:2:{s:13:"wpseo_linkdex";s:1:"9";s:19:"wpseo_content_score";s:2:"30";}i:10;a:2:{s:13:"wpseo_linkdex";s:1:"9";s:19:"wpseo_content_score";s:2:"30";}i:173;a:2:{s:13:"wpse |
+| axi_payment_job_plan_account_code | 225 |
+| axi_payment_job_plan_addon_account_code | 226 |
+| axi_payment_discount_coupon_account_code | 227 |
+| axi_payment_invoice_due_date_duration | 14 |
+| axi_sales_tracking_category | none-selected |
+| axi_sales_tracking_option | none-selected |
+| wp_force_deactivated_plugins | a:0:{} |
