@@ -108,3 +108,15 @@ Spend at 02:05 UTC: sub-sessions $8.04 (PJ-10 2.19, PJ-81 2.42, RCL-86 1.00, PJ-
 - On resume, #62: Kinsho found (1) down() fails once expire-job-placements has run. Default: delete only the queued payload_jobs rows for that task, and make down() fail loudly with a clear message if log rows exist (job history is never deleted). (2) `order` is deferred to PJ-23: note it on the PR and in TASKS.md, and accept PJ-19 without it. Then merge.
 - 19 Nov 03:00: merged #62 (PJ-19 Jobs, migration, deploy OK); PJ-19 done. #63 kept (it fits the PJ-93 direction); OpenHands is merging main into it, then it gets merged. Cutover/decommission details (PJ-74/75) are the founder's own tasks, so no plan decision is needed from the orchestrator. Founder principle: the orchestrator decides operational calls itself and only asks about the most important decisions, one at a time, briefly.
 - **Founder principle (19 Nov): every business rule is a per-tenant setting, as flexible as possible, defaulting to vwok's current behaviour.** Example: when a paid job goes live (PJ-31/32).
+
+## Open product questions (asked one at a time; default = vwok legacy, made configurable)
+1. Recruitment agencies: can one account post jobs for several organisations? (PJ-18/29/82)
+2. Organisation team: multiple employer users per organisation, with invites? (PJ-29/82)
+3. Apply form: CV required? Keep "Apply with LinkedIn"? External apply URL / email-only option? (PJ-45)
+4. Listing filters and search: which filters (category, type, location, salary)? Keyword search? (PJ-36)
+5. Volunteer jobs: keep their separate listing page as in legacy? (PJ-36/56)
+6. Job duration and relist rules: fixed per plan, or chosen by the employer? (PJ-31/33)
+7. Credit packs: expiry and refunds when a job is cancelled? (PJ-24)
+8. Emails: the legacy set as-is, or trim it? (PJ-51)
+9. Home page content: what's on it beyond latest jobs? (PJ-39)
+10. Admin reports needed beyond jobs and orders by month? (PJ-53)
