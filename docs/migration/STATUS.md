@@ -203,3 +203,4 @@ Not imported: applications/CVs, resumes, logs (order-log, job-alerts-log, resume
 - **Decision (19 Nov, founder: very important): saved jobs in the MVP** + import legacy _starred_jobs (240 users). PJ-83/PJ-66.
 - **Decision (19 Nov): viewed jobs** via localStorage ('Viewed' label + recently viewed), no score impact. PJ-111.
 - **Decision (19 Nov): pricing.** 'Plans' block in payload-jobs core (data from plan records; Astro renderer exported by payload-jobs), placed on normal pages such as For Employers. Same rule for all job blocks (latest jobs, organisation directory, job search): payload-jobs; generic blocks: rocketship-payload.
+- **Decision (19 Nov): account deletion.** No self-service in MVP (legacy has none; Delete Me plugin not active). Privacy policy: email us. Admin 'delete user' action removes personal data, keeps orders/invoices (anonymised link). Add to PJ-89/PJ-93 scope.
