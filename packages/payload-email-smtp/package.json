@@ -1,0 +1,33 @@
+{
+  "name": "@mission-control/payload-email-smtp",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "payload": "4.0.0-beta.7"
+  },
+  "dependencies": {
+    "worker-mailer": "1.3.1"
+  },
+  "devDependencies": {
+    "payload": "4.0.0-beta.7",
+    "typescript": "6.0.3"
+  },
+  "description": "Payload email adapter and SMTP transport for Cloudflare Workers (STARTTLS and implicit TLS over cloudflare:sockets).",
+  "keywords": [
+    "payload",
+    "payload-email",
+    "cloudflare",
+    "workers",
+    "smtp",
+    "email"
+  ],
+  "sideEffects": false
+}
