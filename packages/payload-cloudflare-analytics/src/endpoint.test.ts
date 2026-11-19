@@ -17,16 +17,16 @@ const data: CloudflareAnalyticsData = {
 }
 
 const makeRequest = ({
+  collection = 'users',
   range = '7',
-  signedIn = true,
 }: {
+  collection?: null | string
   range?: string
-  signedIn?: boolean
 } = {}) =>
   ({
-    payload: {},
+    payload: { config: { admin: { user: 'users' } } },
     searchParams: new URLSearchParams(`range=${range}`),
-    user: signedIn ? { id: 1 } : null,
+    user: collection ? { collection, id: 1 } : null,
   }) as unknown as PayloadRequest
 
 const stubService = () => {
@@ -39,7 +39,7 @@ describe('endpoint access control', () => {
     const { load, service } = stubService()
     const endpoint = createAnalyticsEndpoint({ path: '/cloudflare-analytics', service })
 
-    const response = await endpoint.handler(makeRequest({ signedIn: false }))
+    const response = await endpoint.handler(makeRequest({ collection: null }))
 
     expect(response.status).toBe(401)
     expect(load).not.toHaveBeenCalled()
@@ -52,11 +52,24 @@ describe('endpoint access control', () => {
     const { load, service } = stubService()
     const endpoint = createAnalyticsEndpoint({ path: '/cloudflare-analytics', service })
 
-    const response = await endpoint.handler(makeRequest({ range: '30' }))
+    const response = await endpoint.handler(makeRequest({ collection: 'users', range: '30' }))
 
     expect(response.status).toBe(200)
     expect(load).toHaveBeenCalledWith({ range: 30, req: expect.anything() })
     await expect(response.json()).resolves.toEqual({ configured: true, data })
+  })
+
+  it('rejects a user from another auth collection without touching Cloudflare', async () => {
+    const { load, service } = stubService()
+    const endpoint = createAnalyticsEndpoint({ path: '/cloudflare-analytics', service })
+
+    const response = await endpoint.handler(makeRequest({ collection: 'site-members' }))
+
+    expect(response.status).toBe(403)
+    expect(load).not.toHaveBeenCalled()
+    await expect(response.json()).resolves.toEqual({
+      error: 'Admin access is required to view analytics.',
+    })
   })
 
   it('falls back to 7 days for an unsupported range', async () => {

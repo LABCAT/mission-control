@@ -4,6 +4,7 @@ import { CLOUDFLARE_ANALYTICS_CUSTOM_KEY, DEFAULT_ENDPOINT_PATH } from '../const
 import { parseAnalyticsRange } from '../query'
 import type { CloudflareAnalyticsService } from '../service'
 import type { AnalyticsLoadResult } from '../types'
+import { isAdminUser } from '../endpoint'
 import { AnalyticsPanel } from './AnalyticsPanel.client'
 
 const endpointUrl = (apiPath: string, endpointPath: string): string =>
@@ -27,7 +28,7 @@ export const CloudflareAnalyticsDashboard = async ({
 
   let initialResult: AnalyticsLoadResult = { configured: false }
   let initialError: string | undefined
-  if (service) {
+  if (service && isAdminUser(payload, user)) {
     try {
       // beforeDashboard components do not receive the Payload request. Rebuild the parts a
       // tenant resolver needs (signed-in user and request headers, including cookies); the

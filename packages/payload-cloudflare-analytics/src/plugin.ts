@@ -19,7 +19,8 @@ const normalizeEndpointPath = (path: string): string => {
 /**
  * Add Cloudflare Web Analytics to the Payload admin:
  *
- * - a read-only `GET /api/<endpointPath>` endpoint (signed-in admin users only),
+ * - a read-only `GET /api/<endpointPath>` endpoint (signed-in users from the admin user
+ *   collection only; other auth collections get 403),
  * - a dashboard component above the collection list, scoped by `resolveSiteTag`.
  *
  * The service is stored in the server-only `config.custom` object so the dashboard server

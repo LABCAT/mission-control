@@ -5,7 +5,7 @@ A [Payload](https://payloadcms.com) plugin that shows [Cloudflare Web Analytics]
 - Reads the Web Analytics (RUM) dataset `rumPageloadEventsAdaptiveGroups` through Cloudflare's GraphQL Analytics API.
 - Returns visits, page views, top 10 pages, top 10 referrer hosts and a daily series for 7 or 30 days.
 - Adds a dashboard component above the collection list with a 7/30-day toggle.
-- Adds a read-only `GET /api/cloudflare-analytics` endpoint, restricted to signed-in admin users.
+- Adds a read-only `GET /api/cloudflare-analytics` endpoint, restricted to signed-in users from the admin user collection (`admin.user`).
 - Resolves the site tag per tenant with `resolveSiteTag(req)`, so it works alongside the multi-tenant plugin.
 - Caches successful responses for one hour per Worker isolate.
 - Shows a "not set up" message instead of an error when the tenant has no site tag or the account/token is missing.
@@ -81,9 +81,10 @@ export default buildConfig({
 
 ## Endpoint
 
-`GET /api/cloudflare-analytics?range=7` (or `range=30`). Both the browser toggle and the server component's first render use the same loader and cache.
+`GET /api/cloudflare-analytics?range=7` (or `range=30`). Both the browser toggle and the server component's first render use the same loader and cache. The dashboard also renders numbers only for admin users; other users see the "not set up" state and make no Cloudflare request.
 
 - `401` when there is no signed-in user.
+- `403` when the signed-in user is from another auth collection (for example a front-end account user).
 - `200 { "configured": false }` when the tenant has no site tag or credentials are missing.
 - `200 { "configured": true, "data": { visits, pageViews, topPages, topReferrers, daily, range } }` on success.
 - `502 { "error": "Cloudflare analytics is unavailable right now." }` on an upstream failure.
