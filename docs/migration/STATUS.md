@@ -218,3 +218,4 @@ Not imported: applications/CVs, resumes, logs (order-log, job-alerts-log, resume
 - **Decision (19 Nov): monitoring, lean.** UptimeRobot free (5-min checks, email + app push to founder) on each site + CMS /admin health; errors via built-in Cloudflare Workers Logs/Observability. Sentry/Raygun only when there are more tenants (free tiers first). Principle: keep costs low ('lean, green, mean').
 - **Decision (19 Nov): caching.** Per-tenant KV version in cache key, bumped by CMS on change + hourly expiry; HTML edge 7 days, browser 60s, assets/images 1 year; directories cached too; nothing personal in cached HTML; /health uncached for UptimeRobot. PJ-41.
 - **Decision (19 Nov): signed-in state on cached pages** via hint cookie + /api/me self-correction; stale hint -> sign-in then back to /account. PJ-41/109/82.
+- **Decision (19 Nov): sessions** = 'Keep me signed in': 1 day unticked, 30 days rolling ticked; per-tenant settings (replaces 90 days). PJ-109.
