@@ -32,3 +32,11 @@ The agency model replaces "one account in several organisations". All of it is c
 - How are the legacy `job_lister` / `recruiter` users mapped (PJ-62)?
 
 Affects tickets: PJ-18 (organisations, merged), PJ-29 (sign-up), PJ-62 (import), PJ-81 (account roles, merged), PJ-82 (dashboard).
+
+## Founder notes (19 Nov) and revised answer
+1. **Site editor:** legacy `editor` only managed users (not content). For the MVP: drop the separate content Editor role. Site manager covers it. The role can be added later per site.
+2. **Agencies:** an agency IS its own organisation (type = agency). A client organisation can post jobs itself AND have agencies post other jobs for it.
+   - Agency jobs belong to the agency organisation (the agency pays and manages them) and optionally name a client: a link to an existing organisation, or free text, or "confidential".
+   - The client organisation's page can list jobs posted for it by agencies (configurable).
+   - No user needs to be in several organisations.
+   - Legacy `recruiter` users → members of an agency organisation.
