@@ -953,3 +953,176 @@ SELECT option_name, option_value FROM wp_options WHERE option_name IN ('updraft_
 
 Files and database backups are both scheduled daily. (Where they're stored was not checked.)
 
+
+## 28. Where the DB lives and how the import can reach it
+
+> Checked only; nothing changed. The DB host and user name are deliberately not written here.
+
+- **Not on localhost.** WordPress connects to MySQL **8.0.37 (Ubuntu 22.04)** on a separate server (`DB_HOST` is an IP in the same 170.64.x.x range as the web server, port 3306). No MySQL is running on the web server.
+- **Remote access: the port is open to the internet.** A TCP connect to port 3306 on the DB host succeeds from this computer as well as from the web server. The site's DB user is locked to the web server's IP (`'<user>'@'<web server IP>'`), so the login itself is restricted, but the port isn't firewalled. `bind-address` couldn't be read (MySQL runs on the other server). Worth closing whatever import route is chosen.
+- **Read-only user: unknown.** The site user has `ALL PRIVILEGES` on the site database only and can't read `mysql.user`, so it can't list other users. No read-only user is visible from the site's credentials. Creating one needs the DB server's admin.
+- **mysqldump: yes**, `/usr/bin/mysqldump` on the web server (MySQL client tools; no WP-CLI).
+
+## 29. Redirect/rewrite rules outside WordPress
+
+Web server is **Apache** (no nginx). Sites enabled: `000-default.conf`, `www.vanuatuwok.vu.conf`, `www.vanuatuwok.vu-le-ssl.conf`, plus two for `testing.vanuatuwok.vu`. No secrets in these lines.
+
+**`www.vanuatuwok.vu.conf` (port 80)**, `ServerName vanuatuwok.vu`, `ServerAlias www.vanuatuwok.vu`:
+
+```apache
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /
+    RewriteRule ^index.php$ - [L]
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule . /index.php [L]
+</IfModule>
+# HTTP -> HTTPS (certbot)
+RewriteCond %{SERVER_NAME} =www.vanuatuwok.vu [OR]
+RewriteCond %{SERVER_NAME} =vanuatuwok.vu
+RewriteRule ^ https://%{SERVER_NAME}%{REQUEST_URI} [END,NE,R=permanent]
+```
+
+**`www.vanuatuwok.vu-le-ssl.conf` (port 443)**: the same WordPress front-controller block, no other redirects.
+
+**`000-default.conf`**: catch-all for unknown hosts, `RewriteRule ^ - [R=404,L]`.
+
+**.htaccess files**: none in the web root. The ones that exist are in `uploads/wp-staging`, `uploads/at-logs` and plugin folders (Cloudflare, Wordfence), and only deny access or set MIME types; none redirect.
+
+So there are no custom URL redirects at the server level: apex ↔ www is not forced by Apache (WordPress's site URL does that), and every other redirect lives in WordPress or Cloudflare (DNS is on Cloudflare, see 34; Cloudflare page rules / redirect rules were not checked).
+
+## 30. Most-visited URLs, last 30 days
+
+**Not available.** The live log (`/var/log/apache2/www.vanuatuwok.vu.access.log`) can't be read by the `vwok` user (`Permission denied`), and `sudo` needs a password, which I didn't ask for. The only readable log, `~/access.log`, covers a few hours on 24 Feb 2025, so it isn't useful. Options: the founder runs the summary with sudo, or use Cloudflare's analytics (the domain is on Cloudflare).
+
+## 31. User roles
+
+```sql
+SELECT meta_value, COUNT(*) n FROM wp_usermeta
+WHERE meta_key='wp_capabilities' GROUP BY meta_value ORDER BY n DESC;
+```
+
+| role | users |
+|---|---|
+| job_lister | 11282 |
+| job_seeker | 4349 |
+| job_lister + upload_files | 207 |
+| administrator | 4 |
+| contributor | 1 |
+| editor | 1 |
+| **Total** | **15844** |
+
+## 32. Orders in the last 24 months, by month and status
+
+```sql
+SELECT DATE_FORMAT(post_date,'%Y-%m') m, post_status, COUNT(*) n
+FROM wp_posts WHERE post_type='transaction' AND post_date >= NOW() - INTERVAL 24 MONTH
+GROUP BY m, post_status ORDER BY m;
+```
+
+> Pivoted by status, with totals. `tr_completed` doesn't appear in this window (its last use was 2021, see section 8).
+
+| month | tr_pending | tr_activated | tr_failed | total |
+|---|---|---|---|---|
+| 2024-11 | 18 | 0 | 1 | 19 |
+| 2024-12 | 29 | 0 | 0 | 29 |
+| 2025-01 | 46 | 0 | 0 | 46 |
+| 2025-02 | 36 | 0 | 2 | 38 |
+| 2025-03 | 50 | 2 | 0 | 52 |
+| 2025-04 | 73 | 0 | 0 | 73 |
+| 2025-05 | 66 | 0 | 0 | 66 |
+| 2025-06 | 58 | 0 | 0 | 58 |
+| 2025-07 | 64 | 3 | 1 | 68 |
+| 2025-08 | 62 | 0 | 0 | 62 |
+| 2025-09 | 59 | 0 | 1 | 60 |
+| 2025-10 | 73 | 0 | 1 | 74 |
+| 2025-11 | 47 | 0 | 0 | 47 |
+| 2025-12 | 34 | 0 | 0 | 34 |
+| 2026-01 | 61 | 1 | 0 | 62 |
+| 2026-02 | 46 | 1 | 1 | 48 |
+| 2026-03 | 43 | 0 | 1 | 44 |
+| 2026-04 | 46 | 0 | 0 | 46 |
+| 2026-05 | 64 | 1 | 0 | 65 |
+| 2026-06 | 68 | 0 | 1 | 69 |
+| 2026-07 | 73 | 1 | 0 | 74 |
+| 2026-08 | 66 | 0 | 1 | 67 |
+| 2026-09 | 52 | 0 | 0 | 52 |
+| 2026-10 | 45 | 0 | 0 | 45 |
+| 2026-11 | 33 | 2 | 0 | 35 |
+| **Total** | **1312** | **11** | **10** | **1333** |
+
+## 33. Uploads breakdown
+
+`find <uploads> -type f | sed 's/.*\.//' | sort | uniq -c | sort -rn | head -20` (extensions lower-cased):
+
+| extension | files |
+|---|---|
+| png | 39976 |
+| jpg | 28479 |
+| pdf | 1104 |
+| jpeg | 579 |
+| gif | 181 |
+| webp | 52 |
+| bmp | 15 |
+| docx | 8 |
+| avif | 7 |
+| tif | 5 |
+| html | 3 |
+| htaccess | 3 |
+| php | 2 |
+| htm | 2 |
+| config | 2 |
+| xps | 1 |
+| rtf | 1 |
+| log | 1 |
+| cache | 1 |
+
+70,422 files in all (4.6 GB, section 20).
+
+**Size by folder**
+
+| folder | size | PDFs |
+|---|---|---|
+| company_logos | 3.0G | 390 (123 MB) |
+| 2022 | 288M | 180 (64 MB) |
+| 2023 | 228M | 115 (57 MB) |
+| 2026 | 216M | 77 (33 MB) |
+| 2024 | 205M | 67 (23 MB) |
+| 2019 | 194M | 61 (33 MB) |
+| 2021 | 163M | 76 (25 MB) |
+| 2020 | 151M | 44 (14 MB) |
+| 2025 | 147M | 89 (33 MB) |
+| 2018 | 78M | – |
+| at-logs | 2.5M | – |
+| uploaded_cvs | 1.2M | 1 |
+| wp-staging | 40K | – |
+
+Job PDFs are spread over the `YYYY/MM` media folders and `company_logos`, not one folder: **1,104 PDFs, 406 MB** in total. `company_logos` (3.0 GB) is most of the uploads. `uploaded_cvs` holds jobseeker CVs (personal data; contents not listed). The `.php`/`web.config` files are WP Staging's empty index/guard files; the two `.htm` files are media uploads in `2023/05` and `2025/09`.
+
+## 34. DNS and email auth
+
+Run from this computer with `nslookup`. Google site-verification values are shortened.
+
+```
+nslookup -type=NS vanuatuwok.vu
+vanuatuwok.vu  nameserver = dean.ns.cloudflare.com.
+vanuatuwok.vu  nameserver = mia.ns.cloudflare.com.
+
+nslookup -type=TXT vanuatuwok.vu
+vanuatuwok.vu  text = "google-site-verification=Cl4j…"
+
+nslookup -type=TXT _dmarc.vanuatuwok.vu
+** server can't find _dmarc.vanuatuwok.vu: NXDOMAIN
+
+nslookup -type=TXT ycv.vu
+ycv.vu  text = "v=spf1 +a +mx include:ycv.vu.spf.auto.dnssmarthost.net ~all"
+ycv.vu  text = "google-site-verification=v67T…"
+
+# extra, for context:
+nslookup -type=TXT _dmarc.ycv.vu
+_dmarc.ycv.vu  text = "v=DMARC1; p=none; aspf=r; adkim=r;"
+```
+
+- vanuatuwok.vu's DNS is on **Cloudflare**. It has no SPF or DMARC record, so it can't send mail as `@vanuatuwok.vu` in its current state.
+- The site sends as **ycv.vu** through Gmail SMTP (section 21). ycv.vu's SPF doesn't include `_spf.google.com`, so Gmail-sent mail can fail SPF and only passes DMARC if DKIM is signed for ycv.vu (DKIM selector not checked). DMARC is `p=none`, so failures aren't rejected.
