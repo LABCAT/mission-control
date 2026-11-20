@@ -357,6 +357,25 @@ describe('delete guard for documents applications point at', () => {
     expect(where[0]).toEqual({ or: [{ cv: { equals: 7 } }, { coverLetter: { equals: 7 } }] })
   })
 
+  it('can check the application files collection for an organisation @S-052', async () => {
+    const seen: unknown[] = []
+    const hook = blockDeleteWhileReferencedByApplications({
+      collection: APPLICATION_FILES_SLUG,
+      fields: ['organisation'],
+      label: 'organisation',
+    })
+    const req = {
+      payload: {
+        count: (args: { collection: string }) => {
+          seen.push(args.collection)
+          return Promise.resolve({ totalDocs: 1 })
+        },
+      },
+    }
+    await expect(Promise.resolve(hook({ id: 3, req } as never))).rejects.toThrow('1 application file ')
+    expect(seen).toEqual([APPLICATION_FILES_SLUG])
+  })
+
   it('allows the delete when no application uses it @S-052', async () => {
     await expect(run(0).result).resolves.toBeUndefined()
   })

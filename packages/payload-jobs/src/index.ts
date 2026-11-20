@@ -187,6 +187,16 @@ const withApplicationDeleteGuard = (
     beforeDelete: [
       ...(collection.hooks?.beforeDelete ?? []),
       blockDeleteWhileReferencedByApplications({ fields: [field], label }),
+      // A CV is uploaded before its application exists, so organisations also guard their files.
+      ...(field === 'organisation'
+        ? [
+            blockDeleteWhileReferencedByApplications({
+              collection: APPLICATION_FILES_SLUG,
+              fields: ['organisation'],
+              label,
+            }),
+          ]
+        : []),
     ],
   },
 })

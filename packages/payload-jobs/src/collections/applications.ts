@@ -129,24 +129,26 @@ export const applicationDeleteAccess =
  * point at the document. Payload has no per-field `onDelete`, so the guard lives in a hook.
  */
 export const blockDeleteWhileReferencedByApplications = ({
-  applicationsSlug = APPLICATIONS_SLUG,
+  collection = APPLICATIONS_SLUG,
   fields,
   label,
 }: {
-  applicationsSlug?: string
+  /** The collection holding the references. Defaults to applications. */
+  collection?: string
   fields: ('coverLetter' | 'cv' | 'job' | 'organisation')[]
   label: string
 }): CollectionBeforeDeleteHook =>
   async ({ id, req }) => {
     const { totalDocs } = await req.payload.count({
-      collection: applicationsSlug as CollectionSlug,
+      collection: collection as CollectionSlug,
       overrideAccess: true,
       req,
       where: { or: fields.map((field) => ({ [field]: { equals: id } })) },
     })
     if (totalDocs > 0) {
+      const what = collection === APPLICATION_FILES_SLUG ? 'application file' : 'application'
       throw new APIError(
-        `This ${label} is used by ${totalDocs} application${totalDocs === 1 ? '' : 's'} and cannot be deleted until they are removed.`,
+        `This ${label} is used by ${totalDocs} ${what}${totalDocs === 1 ? '' : 's'} and cannot be deleted until they are removed.`,
         409,
         undefined,
         true,
