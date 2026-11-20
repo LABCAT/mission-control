@@ -1367,7 +1367,8 @@ stories:
       - xero.paymentSync
     mvp: true
     status: planned
-    tests: []
+    tests:
+      - packages/payload-xero/src/payment-sync.test.ts
 
   - id: S-097
     area: Commerce
@@ -1685,7 +1686,8 @@ stories:
     steps:
       - "Add an island and a town, add a category, type and salary band."
       - "Try a duplicate slug in the same tenant."
-    expected: "Tree levels nest correctly, slugs are unique per tenant, and every taxonomy is editable in the admin."
+      - "Give a category the slug of a location or job type, or a reserved word such as page."
+    expected: "Tree levels nest correctly, slugs are unique per tenant across categories, locations (every level) and job types, reserved words are refused with a clear error, and every taxonomy is editable in the admin."
     settings:
       - locations.enabled
       - taxonomies.enabled
@@ -1694,6 +1696,7 @@ stories:
     tests:
       - packages/payload-jobs/src/collections/locations.test.ts
       - packages/payload-jobs/src/taxonomies.test.ts
+      - packages/payload-jobs/src/slug-rules.integration.test.ts
 
   - id: S-121
     area: Admin
@@ -2008,3 +2011,36 @@ stories:
     mvp: true
     status: planned
     tests: []
+
+  - id: S-144
+    area: Admin
+    role: site manager
+    story: "Every site starts with Home, About, Contact and Organisations, which a site manager can edit and unpublish but not delete."
+    steps:
+      - "Create a site and open its pages."
+      - "Rename the About page, unpublish Contact, then try to delete Organisations."
+    expected: "The four system pages exist and are published with an empty layout, URLs follow their role (home at /, organisations reserving /organisations/*), deleting one is refused with a message to unpublish, and only a super admin can change a role."
+    settings:
+      - pages.system
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/collections/pages.integration.test.ts
+      - packages/payload-jobs/src/system-pages.test.ts
+      - packages/payload-jobs/src/collections/pages-rules.test.ts
+
+  - id: S-145
+    area: Admin
+    role: site manager
+    story: "A site manager keeps one menu per location (top, primary, footer) with its links in a chosen order."
+    steps:
+      - "Add the primary menu with three items, reorder them, then add a footer menu."
+      - "Try a page item from another site, a second primary menu and a menu item with no link."
+    expected: "Items keep the order the site manager set, each location exists once per site, page items may only point at the site's own pages, and an unsafe or empty link is refused."
+    settings:
+      - site.menus
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/collections/pages.integration.test.ts
+      - packages/payload-jobs/src/collections/pages-rules.test.ts

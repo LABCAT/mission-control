@@ -62,18 +62,18 @@ export type SupportedTimezones =
   | 'Pacific/Fiji';
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "LexicalNodes_681D3B34".
+ * via the `definition` "LexicalNodes_F20892C1".
  */
-export type LexicalNodes_681D3B34 =
+export type LexicalNodes_F20892C1 =
   | SerializedTextNode
   | SerializedTabNode
   | SerializedLineBreakNode
-  | SerializedParagraphNode<LexicalNodes_681D3B34>
+  | SerializedParagraphNode<LexicalNodes_F20892C1>
   | SerializedHorizontalRuleNode
   | SerializedUploadNode<'media'>
   | SerializedUploadNode<'documents'>
   | SerializedUploadNode<'application-files'>
-  | SerializedQuoteNode<LexicalNodes_681D3B34>
+  | SerializedQuoteNode<LexicalNodes_F20892C1>
   | SerializedRelationshipNode<
       | 'users'
       | 'folders'
@@ -82,6 +82,8 @@ export type LexicalNodes_681D3B34 =
       | 'site-keys'
       | 'locations'
       | 'organisations'
+      | 'pages'
+      | 'menus'
       | 'alert-subscriptions'
       | 'job-categories'
       | 'job-types'
@@ -97,11 +99,11 @@ export type LexicalNodes_681D3B34 =
       | 'payload-preferences'
       | 'payload-migrations'
     >
-  | SerializedAutoLinkNode<LexicalNodes_681D3B34, LexicalLinkFields>
-  | SerializedLinkNode<LexicalNodes_681D3B34, LexicalLinkFields>
-  | SerializedListNode<LexicalNodes_681D3B34>
-  | SerializedListItemNode<LexicalNodes_681D3B34>
-  | SerializedHeadingNode<LexicalNodes_681D3B34>;
+  | SerializedAutoLinkNode<LexicalNodes_F20892C1, LexicalLinkFields>
+  | SerializedLinkNode<LexicalNodes_F20892C1, LexicalLinkFields>
+  | SerializedListNode<LexicalNodes_F20892C1>
+  | SerializedListItemNode<LexicalNodes_F20892C1>
+  | SerializedHeadingNode<LexicalNodes_F20892C1>;
 /**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "LexicalNodes_3DE324E4".
@@ -138,6 +140,8 @@ export interface Config {
     documents: Document;
     locations: Location;
     organisations: Organisation;
+    pages: Page;
+    menus: Menu;
     'alert-subscriptions': AlertSubscription;
     'job-categories': JobCategory;
     'job-types': JobType;
@@ -166,6 +170,8 @@ export interface Config {
     documents: DocumentsSelect<false> | DocumentsSelect<true>;
     locations: LocationsSelect<false> | LocationsSelect<true>;
     organisations: OrganisationsSelect<false> | OrganisationsSelect<true>;
+    pages: PagesSelect<false> | PagesSelect<true>;
+    menus: MenusSelect<false> | MenusSelect<true>;
     'alert-subscriptions': AlertSubscriptionsSelect<false> | AlertSubscriptionsSelect<true>;
     'job-categories': JobCategoriesSelect<false> | JobCategoriesSelect<true>;
     'job-types': JobTypesSelect<false> | JobTypesSelect<true>;
@@ -724,7 +730,6 @@ export interface FeatureBoxesBlock {
       label: string;
       href: string;
       variant?: ('primary' | 'secondary') | null;
-      id?: string | null;
     };
     id?: string | null;
   }[];
@@ -738,7 +743,7 @@ export interface FeatureBoxesBlock {
  */
 export interface RichTextBlock {
   heading?: string | null;
-  content: LexicalRichText<LexicalNodes_681D3B34>;
+  content: LexicalRichText<LexicalNodes_F20892C1>;
   id?: string | null;
   blockName?: string | null;
   blockType: 'rich-text';
@@ -759,7 +764,6 @@ export interface CardGridBlock {
       label: string;
       href: string;
       variant?: ('primary' | 'secondary') | null;
-      id?: string | null;
     };
     id?: string | null;
   }[];
@@ -794,7 +798,7 @@ export interface FaqBlock {
   heading?: string | null;
   items: {
     question: string;
-    answer: LexicalRichText<LexicalNodes_681D3B34>;
+    answer: LexicalRichText<LexicalNodes_F20892C1>;
     id?: string | null;
   }[];
   id?: string | null;
@@ -900,6 +904,126 @@ export interface Document {
   };
   focalX?: number | null;
   focalY?: number | null;
+}
+/**
+ * Content pages. Home, About, Contact and Organisations are created with the site; they can be unpublished but not deleted.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "pages".
+ */
+export interface Page {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  title: string;
+  /**
+   * The path on this site. Leave empty to derive it from the title. The home page has none.
+   */
+  slug?: string | null;
+  /**
+   * Marks a page the site structure relies on. Only a super admin can change it.
+   */
+  role?: ('home' | 'about' | 'contact' | 'organisations') | null;
+  /**
+   * The page this one sits under. Home and Organisations have no children.
+   */
+  parent?: (number | null) | Page;
+  /**
+   * The page body, built from blocks in the order shown.
+   */
+  layout?: (HeroBlock | FeatureBoxesBlock | RichTextBlock | CardGridBlock | CtaBlock | FaqBlock | BannerBlock)[] | null;
+  /**
+   * Overrides for the page metadata. Empty fields fall back to the title.
+   */
+  seo?: {
+    /**
+     * Browser tab and search result title.
+     */
+    title?: string | null;
+    /**
+     * Meta description, ideally 50 to 160 characters.
+     */
+    description?: string | null;
+    /**
+     * Open Graph image. Falls back to the site-wide default.
+     */
+    image?: (number | null) | Media;
+    /**
+     * Ask search engines not to index this page.
+     */
+    noIndex?: boolean | null;
+  };
+  /**
+   * WordPress post ID, so the importer can match an existing page.
+   */
+  legacyId?: number | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+  _status?: ('draft' | 'published') | null;
+}
+/**
+ * Site navigation: one menu per location, with items in display order. Drag the items to reorder them.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "menus".
+ */
+export interface Menu {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  /**
+   * Shown in the admin only, for example Main menu.
+   */
+  name: string;
+  /**
+   * Where the theme shows this menu. Each location has one menu per site.
+   */
+  location: 'top' | 'primary' | 'footer';
+  /**
+   * Menu items, in the order they appear. Drag to reorder.
+   */
+  items?:
+    | {
+        label: string;
+        /**
+         * Link to a page in this site, or to any allowed URL.
+         */
+        linkType?: ('page' | 'custom') | null;
+        /**
+         * The page to link to.
+         */
+        page?: (number | null) | Page;
+        /**
+         * For example /jobs, https://example.com or mailto:hello@example.com.
+         */
+        url?: string | null;
+        /**
+         * Open the link in a new tab. Use it for other sites.
+         */
+        newTab?: boolean | null;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * WordPress menu term ID, so the importer can match an existing menu.
+   */
+  legacyId?: number | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
 }
 /**
  * Job alert subscribers. They confirm by email and manage themselves through their link; staff only read this list.
@@ -1227,7 +1351,7 @@ export interface Job {
   publishedAt?: string | null;
   expiresAt?: string | null;
   organisation: number | Organisation;
-  description?: LexicalRichText<LexicalNodes_681D3B34> | null;
+  description?: LexicalRichText<LexicalNodes_F20892C1> | null;
   /**
    * An optional PDF of the full job description.
    */
@@ -1584,6 +1708,14 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'organisations';
         value: number | Organisation;
+      } | null)
+    | ({
+        relationTo: 'pages';
+        value: number | Page;
+      } | null)
+    | ({
+        relationTo: 'menus';
+        value: number | Menu;
       } | null)
     | ({
         relationTo: 'alert-subscriptions';
@@ -2072,6 +2204,56 @@ export interface OrganisationsSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "pages_select".
+ */
+export interface PagesSelect<T extends boolean = true> {
+  tenant?: T;
+  title?: T;
+  slug?: T;
+  role?: T;
+  parent?: T;
+  layout?: T | {};
+  seo?:
+    | T
+    | {
+        title?: T;
+        description?: T;
+        image?: T;
+        noIndex?: T;
+      };
+  legacyId?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+  _status?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "menus_select".
+ */
+export interface MenusSelect<T extends boolean = true> {
+  tenant?: T;
+  name?: T;
+  location?: T;
+  items?:
+    | T
+    | {
+        label?: T;
+        linkType?: T;
+        page?: T;
+        url?: T;
+        newTab?: T;
+        id?: T;
+      };
+  legacyId?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "alert-subscriptions_select".
  */
 export interface AlertSubscriptionsSelect<T extends boolean = true> {
@@ -2511,6 +2693,8 @@ export interface CollectionQueryWidget {
       | 'documents'
       | 'locations'
       | 'organisations'
+      | 'pages'
+      | 'menus'
       | 'alert-subscriptions'
       | 'job-categories'
       | 'job-types'
@@ -2553,6 +2737,8 @@ export interface ActivityWidget {
           | 'documents'
           | 'locations'
           | 'organisations'
+          | 'pages'
+          | 'menus'
           | 'alert-subscriptions'
           | 'job-categories'
           | 'job-types'
