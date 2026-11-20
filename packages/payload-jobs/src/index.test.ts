@@ -187,12 +187,26 @@ features: { applications: true, alerts: false, credits: true, coupons: false, pa
         'packages',
         'extras',
         'vouchers',
+        'content-pages',
+        'navigation',
       ]),
     )
     // The platform collections stay hidden, and no default slug leaks back in.
     expect(visible).not.toContain('tenants')
     expect(visible).not.toContain('subscribers')
-    for (const slug of ['jobs', 'organisations', 'locations', 'plans', 'add-ons', 'coupons']) {
+    for (const slug of [
+      'jobs',
+      'organisations',
+      'locations',
+      'plans',
+      'add-ons',
+      'coupons',
+      'pages',
+      'menus',
+      'job-categories',
+      'job-types',
+      'salary-bands',
+    ]) {
       expect(visible).not.toContain(slug)
     }
   })
