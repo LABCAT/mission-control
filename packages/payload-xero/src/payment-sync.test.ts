@@ -29,18 +29,28 @@ const invoice = (n: number, extra: Partial<XeroInvoice> = {}): XeroInvoice => ({
   ...extra,
 })
 
-const fakeStore = (orders: OpenInvoiceOrder[], flagged: Set<number | string> = new Set()) => {
+const fakeStore = (orders: OpenInvoiceOrder[], flagged: Set<number | string> = new Set(), trackOverdue = true) => {
   const calls = {
     cancelled: [] as (number | string)[],
     overdue: [] as [number | string, boolean][],
     paid: [] as [number | string, unknown][],
   }
   const store: InvoiceOrderStore = {
-    isFlaggedOverdue: (order) => flagged.has(order.orderId),
     listOpenOrders: async () => orders,
     markCancelled: async (order) => void calls.cancelled.push(order.orderId),
     markPaid: async (order, details) => void calls.paid.push([order.orderId, details]),
-    setOverdue: async (order, value) => void calls.overdue.push([order.orderId, value]),
+    ...(trackOverdue
+      ? {
+          overdue: {
+            isFlaggedOverdue: (order: OpenInvoiceOrder) => flagged.has(order.orderId),
+            setOverdue: async (order: OpenInvoiceOrder, value: boolean) => {
+              calls.overdue.push([order.orderId, value])
+              if (value) flagged.add(order.orderId)
+              else flagged.delete(order.orderId)
+            },
+          },
+        }
+      : {}),
   }
 
   return { calls, store }
@@ -187,19 +197,22 @@ describe('syncInvoicePayments @S-096', () => {
   })
 
   it('is idempotent: a second run over the same Xero data does not repeat the overdue flag', async () => {
-    const flagged = new Set<number | string>()
-    const { calls, store } = fakeStore(orders.slice(2, 3), flagged)
-    store.setOverdue = async (order, value) => {
-      calls.overdue.push([order.orderId, value])
-      if (value) flagged.add(order.orderId)
-      else flagged.delete(order.orderId)
-    }
+    const { calls, store } = fakeStore(orders.slice(2, 3))
     const fetch = xero([invoice(3, { DueDateString: '2026-11-01T00:00:00' })])
 
     await syncInvoicePayments({ ...api(fetch as never), now: NOW, store })
     await syncInvoicePayments({ ...api(fetch as never), now: NOW, store })
 
     expect(calls.overdue).toEqual([[3, true]])
+  })
+
+  it('never repeats the overdue update for a host that does not track the flag', async () => {
+    const { calls, store } = fakeStore(orders.slice(2, 3), new Set(), false)
+    const fetch = xero([invoice(3, { DueDateString: '2026-11-01T00:00:00' })])
+
+    await syncInvoicePayments({ ...api(fetch as never), now: NOW, store })
+
+    expect(calls.overdue).toEqual([])
   })
 
   it('clears the overdue flag when the invoice is no longer overdue', async () => {

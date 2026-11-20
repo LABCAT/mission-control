@@ -240,6 +240,8 @@ The plugin would watch `sourceCollection`, call `toInvoice`, create the draft in
 
 - `PAID` → `markPaid(order, { amountPaid, paidAt })`. Your app records the history event, sends the "order paid" email and releases any job waiting on payment.
 - `VOIDED` / `DELETED` → `markCancelled(order, invoice)`.
-- `AUTHORISED` past its due day with money owing → `setOverdue(order, true)` (and `false` once it is no longer overdue).
+- `AUTHORISED` past its due day with money owing → `overdue.setOverdue(order, true)` (and `false` once it is no longer overdue).
+
+Overdue tracking is optional but all-or-nothing: `overdue` carries both `isFlaggedOverdue` and `setOverdue`, because a setter with no way to read the current flag would fire on every run. Leave `overdue` out and the sync never touches that flag.
 
 It is read-only: it never creates a payment in Xero. Calls are batched (40 invoice IDs), spaced one second apart, and a 429 or 5xx is retried up to three times (honouring `Retry-After`). One failing order or organisation does not stop the rest. Register the task in `jobs.tasks` and run its queue from your scheduled handler: the task is scheduled on the `hourly` queue (`XERO_PAYMENT_SYNC_QUEUE`), so a queue no cron tick runs would never fire it.

@@ -77,6 +77,14 @@ export type PaidDetails = {
   paidAt: Date | null
 }
 
+/** Overdue tracking is all-or-nothing: a setter with no getter cannot tell what changed. */
+export type OverdueStore = {
+  /** Orders currently flagged overdue, so a later payment clears the flag. */
+  isFlaggedOverdue: (order: OpenInvoiceOrder) => boolean
+  /** Keep the admin "overdue" flag in step with Xero. Called only when the flag should change. */
+  setOverdue: (order: OpenInvoiceOrder, overdue: boolean) => Promise<void>
+}
+
 /**
  * How the sync reaches the host app's orders. The host decides what "paid" means for its jobs:
  * it appends the history event, sends the "order paid" email and releases any job waiting on
@@ -89,11 +97,7 @@ export type InvoiceOrderStore = {
   markCancelled: (order: OpenInvoiceOrder, invoice: XeroInvoice) => Promise<void>
   /** Order → Paid. */
   markPaid: (order: OpenInvoiceOrder, details: PaidDetails) => Promise<void>
-  /** Keep the admin "overdue" flag in step with Xero. Called only when the flag should change. */
-  setOverdue?: (order: OpenInvoiceOrder, overdue: boolean) => Promise<void>
-  /** Orders currently flagged overdue, so a later payment clears the flag. Optional. */
-  isFlaggedOverdue?: (order: OpenInvoiceOrder) => boolean
-}
+} & ({ overdue?: undefined } | { overdue: OverdueStore })
 
 export type SyncSleep = (ms: number) => Promise<void>
 
@@ -304,8 +308,9 @@ export const syncInvoicePayments = async ({
         const overdue = verdict === 'overdue'
         if (overdue) result.overdue += 1
 
-        if (store.setOverdue && (store.isFlaggedOverdue?.(order) ?? false) !== overdue) {
-          await store.setOverdue(order, overdue)
+        const tracking = store.overdue
+        if (tracking && tracking.isFlaggedOverdue(order) !== overdue) {
+          await tracking.setOverdue(order, overdue)
         }
       }
     } catch (error) {
