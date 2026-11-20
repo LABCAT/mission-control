@@ -21,7 +21,9 @@ import { heartbeatTask } from './jobs/heartbeat'
 import { Documents } from './collections/Documents'
 import { createMediaTransformers } from './media'
 import { r2Storage } from '@payloadcms/storage-r2'
-import { multiTenantOptions } from './tenancy'
+// mission-control: the resolved job-board slugs, shared with the plugin and the site-key allowlist
+import { payloadJobsCollectionOptions, payloadJobsCollectionSlugs } from './job-board-slugs'
+import { multiTenantOptionsFor } from './tenancy'
 // mission-control: generic page blocks (PJ-84). Registering them here lets page and
 // site-settings fields reference them by slug; the pages collection (PJ-103) offers them.
 import {
@@ -117,9 +119,12 @@ export default buildConfig({
     // binding in Workers, and fall back to an in-memory limiter in dev.
     payloadJobs({
       accountAuth: { rateLimiter: () => workerEnv?.ACCOUNT_RATE_LIMIT },
+      // mission-control: one resolved slug set, shared with the multi-tenant plugin below, so a
+      // renamed collection keeps its tenant scoping and site-key reads.
+      collections: payloadJobsCollectionOptions,
       tenancy: 'multi',
     }),
-    multiTenantPlugin(multiTenantOptions),
+    multiTenantPlugin(multiTenantOptionsFor(payloadJobsCollectionSlugs)),
   ],
   localization: {
     locales: [{ code: 'en', label: 'English' }],

@@ -2,6 +2,7 @@ import { getPayload } from 'payload'
 
 import { seedSystemPages } from '@mission-control/payload-jobs'
 
+import { payloadJobsCollectionSlugs } from '../job-board-slugs'
 import config from '../payload.config'
 
 if (process.env.SEED_PAGES_CONFIRM !== '1') {
@@ -34,7 +35,10 @@ try {
       continue
     }
 
-    const created = await seedSystemPages(payload, { tenantID: tenant.id })
+    const created = await seedSystemPages(payload, {
+      collectionSlug: payloadJobsCollectionSlugs.pages,
+      tenantID: tenant.id,
+    })
     console.log(`${tenant.slug}: ${created.length} page(s) created`)
   }
 } finally {
