@@ -27,7 +27,7 @@ const invalid = (field: string, part: 'address'): EmailSendError =>
  * field, never the address, so a rejected payload cannot be reflected back into logs or errors.
  */
 export const assertValidAddress = (value: MessageAddress, field: string): void => {
-  const { name, email } = parseAddress(value)
+  const { email } = parseAddress(value)
   if (hasControlCharacter(email) || INVALID_ADDR_SPEC.test(email)) throw invalid(field, 'address')
 
   const at = email.indexOf('@')
