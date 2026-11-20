@@ -62,17 +62,17 @@ export type SupportedTimezones =
   | 'Pacific/Fiji';
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "LexicalNodes_361F5CE2".
+ * via the `definition` "LexicalNodes_28A6D64E".
  */
-export type LexicalNodes_361F5CE2 =
+export type LexicalNodes_28A6D64E =
   | SerializedTextNode
   | SerializedTabNode
   | SerializedLineBreakNode
-  | SerializedParagraphNode<LexicalNodes_361F5CE2>
+  | SerializedParagraphNode<LexicalNodes_28A6D64E>
   | SerializedHorizontalRuleNode
   | SerializedUploadNode<'media'>
   | SerializedUploadNode<'documents'>
-  | SerializedQuoteNode<LexicalNodes_361F5CE2>
+  | SerializedQuoteNode<LexicalNodes_28A6D64E>
   | SerializedRelationshipNode<
       | 'users'
       | 'folders'
@@ -89,17 +89,18 @@ export type LexicalNodes_361F5CE2 =
       | 'add-ons'
       | 'jobs'
       | 'coupons'
+      | 'orders'
       | 'payload-kv'
       | 'payload-jobs'
       | 'payload-locked-documents'
       | 'payload-preferences'
       | 'payload-migrations'
     >
-  | SerializedAutoLinkNode<LexicalNodes_361F5CE2, LexicalLinkFields>
-  | SerializedLinkNode<LexicalNodes_361F5CE2, LexicalLinkFields>
-  | SerializedListNode<LexicalNodes_361F5CE2>
-  | SerializedListItemNode<LexicalNodes_361F5CE2>
-  | SerializedHeadingNode<LexicalNodes_361F5CE2>;
+  | SerializedAutoLinkNode<LexicalNodes_28A6D64E, LexicalLinkFields>
+  | SerializedLinkNode<LexicalNodes_28A6D64E, LexicalLinkFields>
+  | SerializedListNode<LexicalNodes_28A6D64E>
+  | SerializedListItemNode<LexicalNodes_28A6D64E>
+  | SerializedHeadingNode<LexicalNodes_28A6D64E>;
 /**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "LexicalNodes_3DE324E4".
@@ -144,6 +145,7 @@ export interface Config {
     'add-ons': AddOn;
     jobs: Job;
     coupons: Coupon;
+    orders: Order;
     'payload-kv': PayloadKv;
     'payload-jobs': PayloadJob;
     'payload-locked-documents': PayloadLockedDocument;
@@ -170,6 +172,7 @@ export interface Config {
     'add-ons': AddOnsSelect<false> | AddOnsSelect<true>;
     jobs: JobsSelect<false> | JobsSelect<true>;
     coupons: CouponsSelect<false> | CouponsSelect<true>;
+    orders: OrdersSelect<false> | OrdersSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-jobs': PayloadJobsSelect<false> | PayloadJobsSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
@@ -728,7 +731,7 @@ export interface FeatureBoxesBlock {
  */
 export interface RichTextBlock {
   heading?: string | null;
-  content: LexicalRichText<LexicalNodes_361F5CE2>;
+  content: LexicalRichText<LexicalNodes_28A6D64E>;
   id?: string | null;
   blockName?: string | null;
   blockType: 'rich-text';
@@ -784,7 +787,7 @@ export interface FaqBlock {
   heading?: string | null;
   items: {
     question: string;
-    answer: LexicalRichText<LexicalNodes_361F5CE2>;
+    answer: LexicalRichText<LexicalNodes_28A6D64E>;
     id?: string | null;
   }[];
   id?: string | null;
@@ -1217,7 +1220,7 @@ export interface Job {
   publishedAt?: string | null;
   expiresAt?: string | null;
   organisation: number | Organisation;
-  description?: LexicalRichText<LexicalNodes_361F5CE2> | null;
+  description?: LexicalRichText<LexicalNodes_28A6D64E> | null;
   /**
    * An optional PDF of the full job description.
    */
@@ -1307,6 +1310,153 @@ export interface Coupon {
   maxUses?: number | null;
   /**
    * WordPress post id, for the import.
+   */
+  legacyId?: number | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * Orders belong to an organisation. Their money is fixed; the history is append-only.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "orders".
+ */
+export interface Order {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  status: 'waiting_for_purchase' | 'pending' | 'invoiced' | 'paid' | 'cancelled' | 'failed';
+  /**
+   * Why the status changed. Saved in the history, not on the order.
+   */
+  statusNote?: string | null;
+  /**
+   * The organisation that owes and owns the order.
+   */
+  organisation: number | Organisation;
+  /**
+   * Fixed once the order is created.
+   */
+  plan?: (number | null) | Plan;
+  /**
+   * What the add-ons were sold as. Fixed once the order is created.
+   */
+  addOns?:
+    | {
+        addOn?: (number | null) | AddOn;
+        name: string;
+        key?: string | null;
+        placement?: string | null;
+        durationDays: number;
+        unitPrice: number;
+        amount: number;
+        included?: boolean | null;
+        id?: string | null;
+      }[]
+    | null;
+  coupon?: (number | null) | Coupon;
+  /**
+   * The code as applied, kept if the coupon is later changed.
+   */
+  couponCode?: string | null;
+  /**
+   * ISO 4217, e.g. VUV.
+   */
+  currency: string;
+  /**
+   * Before discounts.
+   */
+  subtotal: number;
+  /**
+   * Credits and coupon.
+   */
+  discount: number;
+  /**
+   * Sum of the tax lines.
+   */
+  tax: number;
+  /**
+   * What the organisation pays.
+   */
+  total: number;
+  /**
+   * Prices included tax, so the total does not add it.
+   */
+  taxInclusive?: boolean | null;
+  taxLines?:
+    | {
+        key: string;
+        name: string;
+        /**
+         * Basis points: 1500 is 15%.
+         */
+        rate: number;
+        xeroTaxType?: string | null;
+        net: number;
+        tax: number;
+        gross: number;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * The full quote the order was priced from (`snapshotQuote`).
+   */
+  quote?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  paymentMethod: 'invoice' | 'free' | 'credit';
+  /**
+   * The registered provider that collects the money: invoice.
+   */
+  paymentProvider?: string | null;
+  /**
+   * Set when the order is paid.
+   */
+  paidAt?: string | null;
+  /**
+   * Records in other systems, e.g. the Xero invoice. Kept once recorded.
+   */
+  externalRefs?:
+    | {
+        provider: string;
+        id: string | null;
+        url?: string | null;
+      }[]
+    | null;
+  /**
+   * The jobs this order pays for. Must be the organisation’s.
+   */
+  jobs?: (number | Job)[] | null;
+  /**
+   * Every change, oldest first. Nobody can edit it.
+   */
+  log?:
+    | {
+        at: string;
+        event: 'created' | 'status' | 'external-ref' | 'jobs' | 'organisation';
+        actor: 'system' | 'staff' | 'owner' | 'member';
+        by?: (number | null) | User;
+        from?: string | null;
+        to?: string | null;
+        note?: string | null;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * WordPress transaction id, for the import.
    */
   legacyId?: number | null;
   createdBy?: {
@@ -1521,6 +1671,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'coupons';
         value: number | Coupon;
+      } | null)
+    | ({
+        relationTo: 'orders';
+        value: number | Order;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -2158,6 +2312,79 @@ export interface CouponsSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "orders_select".
+ */
+export interface OrdersSelect<T extends boolean = true> {
+  tenant?: T;
+  status?: T;
+  statusNote?: T;
+  organisation?: T;
+  plan?: T;
+  addOns?:
+    | T
+    | {
+        addOn?: T;
+        name?: T;
+        key?: T;
+        placement?: T;
+        durationDays?: T;
+        unitPrice?: T;
+        amount?: T;
+        included?: T;
+        id?: T;
+      };
+  coupon?: T;
+  couponCode?: T;
+  currency?: T;
+  subtotal?: T;
+  discount?: T;
+  tax?: T;
+  total?: T;
+  taxInclusive?: T;
+  taxLines?:
+    | T
+    | {
+        key?: T;
+        name?: T;
+        rate?: T;
+        xeroTaxType?: T;
+        net?: T;
+        tax?: T;
+        gross?: T;
+        id?: T;
+      };
+  quote?: T;
+  paymentMethod?: T;
+  paymentProvider?: T;
+  paidAt?: T;
+  externalRefs?:
+    | T
+    | {
+        provider?: T;
+        id?: T;
+        url?: T;
+      };
+  jobs?: T;
+  log?:
+    | T
+    | {
+        at?: T;
+        event?: T;
+        actor?: T;
+        by?: T;
+        from?: T;
+        to?: T;
+        note?: T;
+        id?: T;
+      };
+  legacyId?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv_select".
  */
 export interface PayloadKvSelect<T extends boolean = true> {
@@ -2356,7 +2583,8 @@ export interface CollectionQueryWidget {
       | 'plans'
       | 'add-ons'
       | 'jobs'
-      | 'coupons';
+      | 'coupons'
+      | 'orders';
     where?:
       | {
           [k: string]: unknown;
@@ -2397,6 +2625,7 @@ export interface ActivityWidget {
           | 'add-ons'
           | 'jobs'
           | 'coupons'
+          | 'orders'
         )[]
       | null;
   };

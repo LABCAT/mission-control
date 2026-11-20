@@ -672,6 +672,40 @@ describe('coupons', () => {
   })
 })
 
+describe('orders', () => {
+  it('registers the orders collection with its tenant field @S-144', async () => {
+    const config = await buildConfig()
+    const orders = config.collections?.find((collection) => collection.slug === 'orders')
+
+    expect(orders).toBeDefined()
+    expect(orders?.fields.some((field) => 'name' in field && field.name === 'tenant')).toBe(true)
+  })
+
+  it('keeps orders out of reach for anonymous requests and site keys @S-144', async () => {
+    const config = await buildConfig()
+    const orders = config.collections?.find((candidate) => candidate.slug === 'orders')
+    const read = orders?.access?.read as (args: unknown) => Promise<unknown>
+
+    expect(await read({ req: requestFor(null), slug: 'orders' })).toBe(false)
+
+    const req = await siteKeyRequest({ key: 'sk_tenant', tenant: tenantA.id })
+
+    expect(await read({ req, slug: 'orders' })).toBe(false)
+  })
+
+  it('refuses to delete a tenant that has orders before anything else runs @S-144', async () => {
+    const config = await buildConfig()
+    const tenants = config.collections?.find((collection) => collection.slug === 'tenants')
+    const [first] = tenants?.hooks?.beforeDelete ?? []
+    const count = async () => ({ totalDocs: 2 })
+    const req = { payload: { collections: { orders: {} }, count } }
+
+    await expect(
+      (first as (args: unknown) => Promise<void>)({ collection: { slug: 'tenants' }, id: 1, req }),
+    ).rejects.toThrow()
+  })
+})
+
 describe('credential updates', () => {
   const target = { id: 20, email: 'b@example.com' }
 
@@ -782,9 +816,10 @@ describe('tenant deletion', () => {
     const config = await buildConfig()
     const tenants = config.collections?.find((collection) => collection.slug === 'tenants')
 
-    // The app's own hooks still run first; the plugin appends the subscription cleanup, so a
-    // subscriber's address and tokens cannot outlive the tenant as an orphaned row.
-    expect(tenants?.hooks?.beforeDelete?.slice(0, 2)).toEqual([
+    // The plugin's order guard runs first, so a tenant with orders is refused before anything is
+    // removed (PJ-23). The app's own hooks run next; the plugin appends the subscription cleanup,
+    // so a subscriber's address and tokens cannot outlive the tenant as an orphaned row.
+    expect(tenants?.hooks?.beforeDelete?.slice(1, 3)).toEqual([
       removeTenantMemberships,
       removeTenantSiteKeys,
     ])

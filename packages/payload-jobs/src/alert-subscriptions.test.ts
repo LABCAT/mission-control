@@ -140,8 +140,9 @@ describe('alert subscription collection config', () => {
     expect(withAlerts?.hooks?.beforeDelete).toEqual(
       expect.arrayContaining([removeTenantAlertSubscriptions]),
     )
-    // The host's own hook keeps running: the plugin appends, it does not replace.
-    expect(withAlerts?.hooks?.beforeDelete).toHaveLength(3)
+    // The host's own hook keeps running: the plugin adds the order guard (PJ-23) and appends the
+    // clean-ups, it does not replace.
+    expect(withAlerts?.hooks?.beforeDelete).toHaveLength(4)
 
     const withoutAlerts = await tenantsOf({ features: { alerts: false }, tenancy: 'multi' })
     expect(withoutAlerts?.hooks?.beforeDelete).not.toContain(removeTenantAlertSubscriptions)

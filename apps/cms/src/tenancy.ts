@@ -44,6 +44,9 @@ export const multiTenantOptions = {
     'alert-subscriptions': {},
     // mission-control: jobs read site keys themselves (published and expired only) (PJ-19).
     jobs: { accessResultOverride: denySeekerOnly(({ accessResult }) => accessResult) },
+    // mission-control: orders are private to the organisation and site managers, never readable
+    // with a site key; seekers are denied (PJ-23).
+    orders: { accessResultOverride: denySeekerOnly(({ accessResult }) => accessResult) },
   },
   tenantsArrayField: {
     rowFields: [

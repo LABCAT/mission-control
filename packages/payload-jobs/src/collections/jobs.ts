@@ -51,7 +51,8 @@ import { validateUrl } from './organisations'
  * drafts and pending jobs (through the /account API or REST); checkout, moderation and the
  * expiry task move them on (`job-status.ts`); staff can do everything.
  *
- * TODO(PJ-23): `order` (relationship to orders) once the orders collection exists.
+ * Orders point at their jobs (`orders.jobs`, PJ-23), not the other way round: a relisted job is
+ * paid for by more than one order.
  */
 
 export const JOBS_SLUG = 'jobs'

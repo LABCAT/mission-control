@@ -17,7 +17,7 @@ describe('payloadJobs', () => {
 
     // mission-control: the users collection is extended (legacy password support PJ-34,
     // organisation relation PJ-18), and locations (PJ-17), organisations (PJ-18), alerts
-    // (PJ-26), the taxonomies (PJ-16), plans (PJ-21) and coupons (PJ-22) are added.
+    // (PJ-26), the taxonomies (PJ-16), plans (PJ-21), coupons (PJ-22) and orders (PJ-23) are added.
     expect(result.collections?.map((collection) => collection.slug)).toEqual([
       'users',
       'locations',
@@ -28,6 +28,7 @@ describe('payloadJobs', () => {
       'add-ons',
       'jobs',
       'coupons',
+      'orders',
     ])
     expect(result.collections?.[0]?.fields.map((f) => ('name' in f ? f.name : null))).toContain(
       'legacyPasswordHash',
@@ -42,6 +43,7 @@ describe('payloadJobs', () => {
       payloadJobs: {
         enabled: true,
         features: { applications: true, alerts: true, credits: true, coupons: true },
+        paymentProviders: ['invoice'],
         tenancy: 'single',
       },
     })
@@ -61,9 +63,34 @@ describe('payloadJobs', () => {
       payloadJobs: {
         enabled: true,
         features: { applications: true, alerts: false, credits: true, coupons: false },
+        paymentProviders: ['invoice'],
         tenancy: 'single',
       },
     })
+  })
+
+  it('registers payment providers on top of invoice and checks them @S-144', async () => {
+    const result = await payloadJobs({ orders: { paymentProviders: [{ key: 'stripe', label: 'Card' }] } })(baseConfig)
+
+    const custom = result.custom as { payloadJobs: { paymentProviders: string[] } }
+    expect(custom.payloadJobs.paymentProviders).toEqual([
+      'invoice',
+      'stripe',
+    ])
+    await expect(
+      Promise.resolve().then(() =>
+        payloadJobs({ orders: { paymentProviders: [{ key: 'invoice', label: 'Again' }] } })(baseConfig),
+      ),
+    ).rejects.toThrow(/registered twice/)
+  })
+
+  it('keeps ordered organisations and jobs from being deleted @S-144', async () => {
+    const result = await payloadJobs()(baseConfig)
+    const hooksOf = (slug: string) =>
+      result.collections?.find((collection) => collection.slug === slug)?.hooks?.beforeDelete ?? []
+
+    expect(hooksOf('organisations')).toHaveLength(1)
+    expect(hooksOf('jobs')).toHaveLength(1)
   })
 
   it('adds coupons only when the feature is on', async () => {
@@ -109,6 +136,7 @@ const OVERRIDES = {
   jobs: { slug: 'vacancies' },
   jobTypes: { slug: 'employment-types' },
   locations: { slug: 'job-locations' },
+  orders: { slug: 'purchases' },
   organisations: { slug: 'employers' },
   plans: { slug: 'packages' },
   salaryBands: { slug: 'salaries' },
@@ -148,6 +176,7 @@ describe('collection slug overrides', () => {
       'extras',
       'vacancies',
       'vouchers',
+      'purchases',
     ])
 
     const targets = new Set(
@@ -155,11 +184,12 @@ describe('collection slug overrides', () => {
     )
 
     // No default plugin slug survives a rename, and each relation resolves to its new name.
-    for (const slug of ['locations', 'organisations', 'job-categories', 'job-types', 'salary-bands', 'plans', 'add-ons', 'jobs']) {
+    for (const slug of ['locations', 'organisations', 'job-categories', 'job-types', 'salary-bands', 'plans', 'add-ons', 'jobs', 'coupons']) {
       expect(targets).not.toContain(slug)
     }
     expect(targets).toEqual(
-      new Set(['job-locations', 'employers', 'categories', 'employment-types', 'salaries', 'packages', 'extras']),
+      // Orders relate to organisations, plans, add-ons, coupons, jobs and users.
+      new Set(['job-locations', 'employers', 'categories', 'employment-types', 'salaries', 'packages', 'extras', 'vouchers', 'vacancies', 'users']),
     )
 
     const users = result.collections?.find((collection) => collection.slug === 'users')
@@ -178,6 +208,7 @@ describe('collection slug overrides', () => {
       'subscribers',
       'vacancies',
       'vouchers',
+      'purchases',
     ])
   })
 

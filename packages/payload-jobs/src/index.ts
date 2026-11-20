@@ -22,6 +22,8 @@ import { withLegacyPasswords } from './legacy-password'
 import { tenantLocationSettings, type TenantLocationSource } from './location-settings'
 import { addOnCollection } from './add-ons'
 import { jobsCollection } from './collections/jobs'
+import { orderCollection, refuseDeleteWhileOrdered, type OrganisationOwnerCheck } from './orders'
+import { resolvePaymentProviders, type PaymentProviderDefinition } from './payment-providers'
 import { expireJobPlacementsTask, PLACEMENTS_FIELD } from './placements'
 import { planCollection, withPlanRestrictionGuards } from './plans'
 import {
@@ -44,6 +46,8 @@ export * from './email'
 export * from './legacy-password'
 export * from './location-settings'
 export * from './money'
+export * from './orders'
+export * from './payment-providers'
 export * from './slug-rules'
 export * from './add-ons'
 export * from './collections/jobs'
@@ -65,6 +69,23 @@ export * from './tenancy'
 
 export type TenancyMode = 'multi' | 'single'
 
+/** Add a delete guard so a document that orders point at is kept (PJ-23). */
+const withOrderDeleteGuard = (
+  collection: CollectionConfig,
+  field: 'jobs' | 'organisation',
+  noun: string,
+  ordersSlug: string,
+): CollectionConfig => ({
+  ...collection,
+  hooks: {
+    ...collection.hooks,
+    beforeDelete: [
+      refuseDeleteWhileOrdered({ field, noun, ordersSlug }),
+      ...(collection.hooks?.beforeDelete ?? []),
+    ],
+  },
+})
+
 /**
  * Every collection this plugin adds that belongs to a tenant, with the resolved slugs.
  * In `multi` mode the host must list each one in the multi-tenant plugin's `collections`,
@@ -83,6 +104,7 @@ export const payloadJobsTenantCollections = (
   slugs.alertSubscriptions,
   slugs.jobs,
   slugs.coupons,
+  slugs.orders,
 ]
 
 /**
@@ -114,6 +136,20 @@ export type PayloadJobsFeatures = {
   coupons?: boolean
 }
 
+/** Orders (PJ-23). Always on: every job board sells listings, even if all are free. */
+export type PayloadJobsOrdersOptions = {
+  /**
+   * Who owns an organisation, so they can answer a member's purchase request. Organisations
+   * have no owner role yet (PJ-29); until one is passed, site managers do it.
+   */
+  isOrganisationOwner?: OrganisationOwnerCheck
+  /**
+   * Payment providers beyond core's `invoice`, e.g. `{ key: 'stripe', label: 'Card' }` from a
+   * payment add-on. An order may only name a registered provider.
+   */
+  paymentProviders?: PaymentProviderDefinition[]
+}
+
 export type PayloadJobsOptions = {
   /**
    * Front-end account auth endpoints for the Astro sites (PJ-81), multi-tenant mode only.
@@ -136,6 +172,8 @@ export type PayloadJobsOptions = {
   enabled?: boolean
   /** Which job-board collections to enable. All default to true. */
   features?: PayloadJobsFeatures
+  /** Orders: organisation owners and payment providers (PJ-23). */
+  orders?: PayloadJobsOrdersOptions
   /** Slug of the host's upload collection for PDF job descriptions. Defaults to `documents`. */
   documentsSlug?: null | string
   /** Slug of the host's upload collection for organisation logos and covers. Defaults to `media`. */
@@ -178,13 +216,18 @@ const jobBoardCollections = (
     requireTenant: tenancy === 'multi',
     slug: slugs.locations,
   }),
-  organisationsCollection({
-    access: collections.organisations?.access,
-    locationsSlug: slugs.locations,
-    mediaSlug,
-    slug: slugs.organisations,
-    tenantScoped: tenancy === 'multi',
-  }),
+  withOrderDeleteGuard(
+    organisationsCollection({
+      access: collections.organisations?.access,
+      locationsSlug: slugs.locations,
+      mediaSlug,
+      slug: slugs.organisations,
+      tenantScoped: tenancy === 'multi',
+    }),
+    'organisation',
+    'organisation',
+    slugs.orders,
+  ),
   ...(features.alerts
     ? [
         alertSubscriptionCollection({
@@ -333,6 +376,9 @@ export const payloadJobs =
                 // Deleting a tenant must take its subscribers with it, not detach them.
                 // Coupons are removed too: the tenant foreign key would otherwise null them.
                 beforeDelete: [
+                  // Orders are kept for accounting: a tenant that has any can't be deleted, and
+                  // this runs before anything else is removed.
+                  refuseDeleteWhileOrdered({ field: 'tenant', noun: 'tenant', ordersSlug: slugs.orders }),
                   ...(collection.hooks?.beforeDelete ?? []),
                   ...(features.alerts
                     ? [
@@ -427,12 +473,23 @@ export const payloadJobs =
           ? 'documents'
           : null
         : options.documentsSlug
-    const jobs = jobsCollection({
+    const jobs = withOrderDeleteGuard(jobsCollection({
       access: collectionOptions.jobs?.access,
       documentsSlug,
       richTextDescription: Boolean(config.editor),
       slugs,
       tenantScoped: tenancy === 'multi',
+    }), 'jobs', 'job', slugs.orders)
+
+    // Orders go last, after coupons, so the existing compound index names keep their numbers.
+    const paymentProviders = resolvePaymentProviders(options.orders?.paymentProviders ?? [])
+    const orders = orderCollection({
+      access: collectionOptions.orders?.access,
+      isOrganisationOwner: options.orders?.isOrganisationOwner,
+      paymentProviders,
+      slugs,
+      tenantScoped: tenancy === 'multi',
+      usersSlug,
     })
 
     const jobsWithPlacements = [...(config.collections ?? []), jobs].find(
@@ -452,11 +509,16 @@ export const payloadJobs =
       ...config,
       // Plans before add-ons: Payload numbers compound index names in collection order, and
       // plans' existing `tenant_key_idx` must keep its name.
-      collections: [...(config.collections ?? []), ...taxonomies, plans, addOns, jobs, ...coupons],
+      collections: [...(config.collections ?? []), ...taxonomies, plans, addOns, jobs, ...coupons, orders],
       jobs: jobsConfig,
       custom: {
         ...config.custom,
-        payloadJobs: { enabled: true, tenancy, features },
+        payloadJobs: {
+          enabled: true,
+          features,
+          paymentProviders: paymentProviders.map((provider) => provider.key),
+          tenancy,
+        },
       },
     }
   }
