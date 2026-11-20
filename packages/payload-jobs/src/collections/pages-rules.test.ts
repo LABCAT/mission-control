@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
+const fieldMessages = (error: unknown): string =>
+  ((error as { data?: { errors?: { message: string }[] } }).data?.errors ?? [])
+    .map((fieldError) => fieldError.message)
+    .join(' | ')
+
 import { slugifyPageTitle, validatePageSlug } from './pages'
-import { validateMenuUrl } from './menus'
+import { menuItemsValid, validateMenuUrl } from './menus'
 
 describe('page slugs', () => {
   it('derives a slug from the title', () => {
@@ -49,5 +54,62 @@ describe('menu item URLs', () => {
   it('rejects protocol-relative URLs, which would leave the site', () => {
     expect(validateMenuUrl('//evil.example')).toMatch(/protocol-relative/)
     expect(validateMenuUrl('/\\evil.example')).toMatch(/protocol-relative/)
+  })
+})
+
+describe('menu item tenant check', () => {
+  // A REST update can move a menu to another site and leave the items out, so the stored page
+  // links survive untouched. The hook must check those items against the new site.
+  const run = async ({
+    data,
+    operation = 'update',
+    originalItems,
+  }: {
+    data: Record<string, unknown>
+    operation?: 'create' | 'update'
+    originalItems?: unknown[]
+  }) => {
+    const pages: Record<string, unknown> = { 1: { id: 1, tenant: 1 }, 2: { id: 2, tenant: 2 } }
+    const hook = menuItemsValid({ pagesSlug: 'pages' as never, tenantScoped: true })
+
+    const request = {
+      payload: {
+        findByID: async ({ id }: { id: number }) => pages[id] ?? null,
+      },
+    }
+
+    return hook({
+      data,
+      operation,
+      originalDoc: { id: 9, items: originalItems, tenant: 1 },
+      req: request,
+    } as never)
+  }
+
+  it('checks the stored items when an update moves the menu and leaves them out', async () => {
+    const error = await run({
+      data: { tenant: 2 },
+      originalItems: [{ label: 'About', linkType: 'page', page: 1 }],
+    }).catch((caught: unknown) => caught)
+
+    expect(fieldMessages(error)).toMatch(/belongs to another site/)
+  })
+
+  it('allows the move when the stored items already point at the new site', async () => {
+    await expect(
+      run({
+        data: { tenant: 2 },
+        originalItems: [{ label: 'About', linkType: 'page', page: 2 }],
+      }),
+    ).resolves.toBeDefined()
+  })
+
+  it('leaves the stored items alone when the tenant does not change', async () => {
+    await expect(
+      run({
+        data: { name: 'Renamed' },
+        originalItems: [{ label: 'About', linkType: 'page', page: 1 }],
+      }),
+    ).resolves.toBeDefined()
   })
 })

@@ -740,6 +740,39 @@ describe('menus', () => {
     ).rejects.toThrow()
   })
 
+  it('allows a move to another site when its items point at that site’s pages', async () => {
+    const theirPages = (
+      await harness.payload.find({
+        collection: 'pages',
+        depth: 0,
+        overrideAccess: true,
+        pagination: false,
+        where: { tenant: { equals: harness.tenantB.id } },
+      })
+    ).docs as unknown as StoredPage[]
+
+    const menu = await createMenu(
+      {
+        items: [{ label: 'Jobs', linkType: 'custom', url: '/jobs' }],
+        location: 'footer',
+        name: 'Footer',
+      },
+      harness.tenantA.id,
+    )
+
+    const moved = await harness.payload.update({
+      collection: 'menus',
+      data: {
+        items: [{ label: 'Their about', linkType: 'page', page: theirPages[0]!.id }],
+        tenant: harness.tenantB.id,
+      } as never,
+      id: menu.id,
+      user: harness.superAdmin as never,
+    })
+
+    expect(String((await readMenu(moved.id)).tenant)).toBe(String(harness.tenantB.id))
+  })
+
   it('keeps menus inside their own site', async () => {
     const { docs } = await harness.payload.find({
       collection: 'menus',

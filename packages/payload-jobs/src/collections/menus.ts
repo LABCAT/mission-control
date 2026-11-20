@@ -123,6 +123,20 @@ const itemFields = (pagesSlug: string): Field[] => [
   },
 ]
 
+const relationID = (value: unknown): number | string | null => {
+  if (value === null || value === undefined) return null
+  if (typeof value === 'object') return (value as { id?: number | string }).id ?? null
+  return value as number | string
+}
+
+/** True when an update names a different site than the stored document. */
+const tenantChanged = (data: Record<string, unknown> | undefined, originalDoc: unknown): boolean => {
+  if (!originalDoc || !data || !('tenant' in data)) return false
+  const before = relationID((originalDoc as { tenant?: unknown }).tenant)
+  const after = relationID(data.tenant)
+  return String(before) !== String(after)
+}
+
 /**
  * A page item must name a page, and a custom item a URL; the field's own `condition` only
  * hides the input. A page item's page must also belong to the menu's tenant: the admin picker
@@ -131,15 +145,15 @@ const itemFields = (pagesSlug: string): Field[] => [
 export const menuItemsValid =
   ({ pagesSlug, tenantScoped }: { pagesSlug: CollectionSlug; tenantScoped: boolean }): CollectionBeforeValidateHook =>
   async ({ data, operation, originalDoc, req }) => {
-    const items = Array.isArray(data?.items) ? data.items : undefined
-    if (!items) return data
+    const tenantID = relationID(data?.tenant ?? originalDoc?.tenant)
 
-    const tenantID = (() => {
-      const value = data?.tenant ?? originalDoc?.tenant
-      if (value === null || value === undefined) return null
-      if (typeof value === 'object') return (value as { id?: number | string }).id ?? null
-      return value as number | string
-    })()
+    const submitted = Array.isArray(data?.items) ? data.items : undefined
+    const current = Array.isArray(originalDoc?.items) ? originalDoc.items : undefined
+    // An update that moves the menu to another site keeps the stored items when it leaves them
+    // out, so those items' pages must be checked against the new site too.
+    const items =
+      submitted ?? (operation === 'update' && tenantChanged(data, originalDoc) ? current : undefined)
+    if (!items) return data
 
     const errors: { message: string; path: string }[] = []
 
@@ -148,12 +162,7 @@ export const menuItemsValid =
       const path = `items.${index}`
 
       if (row.linkType === 'page') {
-        const pageID =
-          row.page === null || row.page === undefined
-            ? null
-            : typeof row.page === 'object'
-              ? ((row.page as { id?: number | string }).id ?? null)
-              : row.page
+        const pageID = relationID(row.page)
 
         if (pageID === null) {
           errors.push({ message: 'Choose the page to link to', path: `${path}.page` })
@@ -177,15 +186,7 @@ export const menuItemsValid =
           continue
         }
 
-        const pageTenant = (page as { tenant?: unknown }).tenant
-        const pageTenantID =
-          pageTenant === null || pageTenant === undefined
-            ? null
-            : typeof pageTenant === 'object'
-              ? ((pageTenant as { id?: number | string }).id ?? null)
-              : pageTenant
-
-        if (String(pageTenantID) !== String(tenantID)) {
+        if (String(relationID((page as { tenant?: unknown }).tenant)) !== String(tenantID)) {
           errors.push({ message: 'The page belongs to another site', path: `${path}.page` })
         }
       } else if (!row.url?.trim()) {
@@ -196,8 +197,6 @@ export const menuItemsValid =
     if (errors.length > 0) {
       throw new ValidationError({ collection: MENUS_SLUG, errors, req })
     }
-
-    void operation
 
     return data
   }
