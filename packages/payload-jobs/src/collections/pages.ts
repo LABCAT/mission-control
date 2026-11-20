@@ -365,13 +365,12 @@ export const preventRoleChange: CollectionBeforeValidateHook = ({
 /**
  * A system page is unpublished, never deleted. Access control already refuses the request
  * from a user; this hook is what also holds for the local API, and it says what to do instead.
- * The tenant-delete cleanup removes a whole site's pages, so it passes the cleanup context.
+ * The tenant-delete cleanup removes a whole site's pages, so it passes the cleanup context;
+ * that context is the only way past this guard, so a page cannot be detached from its site
+ * and then deleted.
  */
 export const preventDeletingSystemPage =
-  (
-    collectionSlug: CollectionSlug,
-    { tenantScoped = true }: { tenantScoped?: boolean } = {},
-  ): CollectionBeforeDeleteHook =>
+  (collectionSlug: CollectionSlug): CollectionBeforeDeleteHook =>
   async ({ id, req }) => {
     if (req.context?.[SYSTEM_PAGE_CLEANUP_CONTEXT] === true) return
 
@@ -385,9 +384,7 @@ export const preventDeletingSystemPage =
       })
       .catch(() => null)) as PageData | null
 
-    // A page whose tenant is already gone is part of a deleted site, not a live system page.
     if (!page?.role) return
-    if (tenantScoped && idOf(page.tenant) === null) return
 
     throw systemPageError(
       `The ${page.role} page is a system page: unpublish it instead of deleting it`,
@@ -480,7 +477,7 @@ export const pagesCollection = ({
     },
   ],
   hooks: {
-    beforeDelete: [preventDeletingSystemPage(slug as CollectionSlug, { tenantScoped })],
+    beforeDelete: [preventDeletingSystemPage(slug as CollectionSlug)],
     beforeValidate: [
       preventRoleChange,
       ...(tenantScoped ? [uniqueSlugPerTenant(slug as CollectionSlug)] : []),

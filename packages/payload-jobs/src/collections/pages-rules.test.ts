@@ -5,8 +5,9 @@ const fieldMessages = (error: unknown): string =>
     .map((fieldError) => fieldError.message)
     .join(' | ')
 
-import { slugifyPageTitle, validatePageSlug } from './pages'
+import { preventDeletingSystemPage, slugifyPageTitle, validatePageSlug } from './pages'
 import { menuItemsValid, validateMenuUrl } from './menus'
+import { SYSTEM_PAGE_CLEANUP_CONTEXT } from '../system-pages'
 
 describe('page slugs', () => {
   it('derives a slug from the title', () => {
@@ -111,5 +112,43 @@ describe('menu item tenant check', () => {
         originalItems: [{ label: 'About', linkType: 'page', page: 1 }],
       }),
     ).resolves.toBeDefined()
+  })
+})
+
+describe('system page delete guard', () => {
+  const run = async ({
+    context,
+    page,
+  }: {
+    context?: Record<string, unknown>
+    page: Record<string, unknown> | null
+  }) =>
+    preventDeletingSystemPage('pages' as never)({
+      id: 1,
+      req: {
+        context,
+        payload: { findByID: async () => page },
+      },
+    } as never)
+
+  it('refuses a role page even when its tenant is null', async () => {
+    const error = await run({ page: { id: 1, role: 'contact', tenant: null } }).catch(
+      (caught: unknown) => caught,
+    )
+
+    expect(fieldMessages(error)).toMatch(/unpublish it instead of deleting it/)
+  })
+
+  it('lets the tenant cleanup through', async () => {
+    await expect(
+      run({
+        context: { [SYSTEM_PAGE_CLEANUP_CONTEXT]: true },
+        page: { id: 1, role: 'contact', tenant: 3 },
+      }),
+    ).resolves.toBeUndefined()
+  })
+
+  it('lets an ordinary page be deleted', async () => {
+    await expect(run({ page: { id: 1, role: null, tenant: 3 } })).resolves.toBeUndefined()
   })
 })

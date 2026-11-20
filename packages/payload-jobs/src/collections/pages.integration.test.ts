@@ -451,6 +451,21 @@ describe('system pages', () => {
       ).rejects.toThrow()
     })
 
+    it('refuses to detach a system page from its site', async () => {
+      const contact = (await pagesOf(harness.tenantA.id)).find((page) => page.role === 'contact')!
+
+      // Tenant is required, so a page cannot be orphaned and then deleted as "not a live
+      // system page". Clearing it is refused before the delete guard is even reached.
+      await expect(
+        harness.payload.update({
+          collection: 'pages',
+          data: { tenant: null } as never,
+          id: contact.id,
+          user: harness.superAdmin as never,
+        }),
+      ).rejects.toThrow(/Assigned Tenant|required/)
+    })
+
     it('allows deleting a normal page', async () => {
       const page = await createPage({ slug: 'temporary', title: 'Temporary' }, harness.tenantA.id)
 
