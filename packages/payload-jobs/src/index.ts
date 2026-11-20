@@ -12,7 +12,7 @@ import {
   organisationsCollection,
   withOrganisationField,
 } from './collections/organisations'
-import { COUPONS_SLUG, couponCollection } from './coupons'
+import { COUPONS_SLUG, couponCollection, removeTenantCoupons } from './coupons'
 import { withLegacyPasswords } from './legacy-password'
 import { addOnCollection, ADD_ONS_SLUG } from './add-ons'
 import { jobsCollection, JOBS_SLUG } from './collections/jobs'
@@ -220,12 +220,12 @@ export const payloadJobs =
               hooks: {
                 ...collection.hooks,
                 // Deleting a tenant must take its subscribers with it, not detach them.
-                beforeDelete: features.alerts
-                  ? [
-                      ...(collection.hooks?.beforeDelete ?? []),
-                      removeTenantAlertSubscriptions,
-                    ]
-                  : collection.hooks?.beforeDelete,
+                // Coupons are removed too: the tenant foreign key would otherwise null them.
+                beforeDelete: [
+                  ...(collection.hooks?.beforeDelete ?? []),
+                  ...(features.alerts ? [removeTenantAlertSubscriptions] : []),
+                  ...(features.coupons ? [removeTenantCoupons] : []),
+                ],
               },
             }
           }

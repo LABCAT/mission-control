@@ -15,6 +15,7 @@ import {
   validateCouponUseCount,
 } from './coupons'
 import { bootTestPayload, tenantIsolation, type TestHarness } from './test'
+import { removeTenantCoupons } from './coupons'
 
 const fieldNamed = (collection: CollectionConfig, name: string): Field => {
   const field = collection.fields.find(
@@ -632,4 +633,41 @@ describe('coupons in Postgres @S-037', () => {
 tenantIsolation({
   collection: couponCollection(),
   createData: () => ({ amount: 500, code: 'ISOLATION', discountType: 'flat' }),
+})
+
+describe('coupons when a tenant is deleted @S-037', () => {
+  let harness: TestHarness
+
+  beforeAll(async () => {
+    harness = await bootTestPayload({
+      collections: [couponCollection()],
+      tenantHooks: { beforeDelete: [removeTenantCoupons] },
+    })
+  })
+
+  afterAll(async () => {
+    if (harness) await harness.destroy()
+  })
+
+  it('deletes that tenant’s coupons instead of leaving them without a tenant', async () => {
+    const make = (tenant: number, code: string) =>
+      harness.payload.create({
+        collection: COUPONS_SLUG,
+        data: { amount: 100, code, discountType: 'flat', tenant } as never,
+        overrideAccess: true,
+      })
+    // A tenant of its own: the harness tenants have user memberships the host removes in a hook.
+    const doomed = (await harness.payload.create({
+      collection: 'tenants',
+      data: { name: 'Doomed', slug: `doomed-${Date.now()}` } as never,
+      overrideAccess: true,
+    })) as unknown as { id: number }
+    await make(doomed.id, 'GONE')
+    await make(harness.tenantB.id, 'STAYS')
+
+    await harness.payload.delete({ collection: 'tenants', id: doomed.id, overrideAccess: true })
+
+    const left = await harness.payload.find({ collection: COUPONS_SLUG, depth: 0, overrideAccess: true })
+    expect(left.docs.map((doc) => (doc as unknown as { code: string }).code)).toEqual(['STAYS'])
+  })
 })

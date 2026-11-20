@@ -2,6 +2,7 @@ import {
   ValidationError,
   type Access,
   type CollectionBeforeChangeHook,
+  type CollectionBeforeDeleteHook,
   type CollectionBeforeValidateHook,
   type CollectionConfig,
   type CollectionSlug,
@@ -139,6 +140,20 @@ export const uniqueCodePerTenant =
 
     return data
   }
+
+/**
+ * Deleting a tenant takes its coupons with it. The tenant foreign key is `ON DELETE SET NULL`,
+ * which would leave coupons that belong to no tenant (and that tenant admins cannot reach), so
+ * they are removed in the tenant's `beforeDelete`, as alert subscriptions are.
+ */
+export const removeTenantCoupons: CollectionBeforeDeleteHook = async ({ id, req }) => {
+  await req.payload.delete({
+    collection: COUPONS_SLUG,
+    overrideAccess: true,
+    req,
+    where: { tenant: { equals: id } },
+  })
+}
 
 /**
  * A multi-tenant coupon always keeps a tenant. Access cannot stop an update that sets `tenant`
