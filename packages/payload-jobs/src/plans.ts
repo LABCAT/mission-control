@@ -32,8 +32,13 @@ import {
   wholeNumber,
   type Validator,
 } from './catalog'
-import { ADD_ONS_SLUG } from './add-ons'
 import { PLAN_STATUSES, type PlanStatus } from './pricing'
+import {
+  DEFAULT_PAYLOAD_JOBS_SLUGS,
+  mergeCollectionAccess,
+  type CollectionAccess,
+  type PayloadJobsCollectionSlugs,
+} from './slugs'
 import { TAXONOMY_SLUG_PATTERN } from './taxonomies'
 
 /** The taxonomies a plan's restrictions point at (PJ-16). */
@@ -107,7 +112,10 @@ export const uniquePlanKeyPerTenant = (tenantScoped: boolean): CollectionBeforeV
  * checks.
  */
 export const planRestrictionsInTenant =
-  (tenantScoped: boolean): CollectionBeforeChangeHook =>
+  (
+    tenantScoped: boolean,
+    slugs: PayloadJobsCollectionSlugs = DEFAULT_PAYLOAD_JOBS_SLUGS,
+  ): CollectionBeforeChangeHook =>
   async ({ collection, data, originalDoc, req }) => {
     if (!tenantScoped) return data
 
@@ -117,8 +125,8 @@ export const planRestrictionsInTenant =
     const errors: { message: string; path: string }[] = []
 
     for (const [path, relationTo] of [
-      ['allowedJobTypes', PLAN_JOB_TYPES_SLUG],
-      ['allowedJobCategories', PLAN_JOB_CATEGORIES_SLUG],
+      ['allowedJobTypes', slugs.jobTypes],
+      ['allowedJobCategories', slugs.jobCategories],
     ] as const) {
       const ids = idsOf(data?.[path] ?? originalDoc?.[path])
       if (ids.length === 0) continue
@@ -143,7 +151,7 @@ export const planRestrictionsInTenant =
         errors.push({ message: 'Include each add-on once', path: 'includedAddOns' })
       } else {
         const { totalDocs } = await req.payload.count({
-          collection: ADD_ONS_SLUG as CollectionSlug,
+          collection: slugs.addOns as CollectionSlug,
           overrideAccess: true,
           req,
           where: { and: [{ id: { in: includedIDs } }, { tenant: { equals: tenantID } }] },
@@ -170,12 +178,12 @@ export const planRestrictionsInTenant =
 export const preventDeletingPlanRestriction =
   (
     field: 'allowedJobCategories' | 'allowedJobTypes',
-    { tenantScoped = true }: { tenantScoped?: boolean } = {},
+    { plansSlug = PLANS_SLUG, tenantScoped = true }: { plansSlug?: string; tenantScoped?: boolean } = {},
   ): CollectionBeforeDeleteHook =>
   async ({ id, req }) => {
     const uses: Where = { [field]: { in: [id] } }
     const { docs, totalDocs } = await req.payload.find({
-      collection: PLANS_SLUG as CollectionSlug,
+      collection: plansSlug as CollectionSlug,
       depth: 0,
       limit: 5,
       overrideAccess: true,
@@ -196,13 +204,23 @@ export const preventDeletingPlanRestriction =
 /** Add the delete guard to the taxonomies plans point at. Other collections pass through. */
 export const withPlanRestrictionGuards = (
   collections: CollectionConfig[],
-  { tenantScoped = true }: { tenantScoped?: boolean } = {},
+  {
+    jobCategoriesSlug = PLAN_JOB_CATEGORIES_SLUG,
+    jobTypesSlug = PLAN_JOB_TYPES_SLUG,
+    plansSlug = PLANS_SLUG,
+    tenantScoped = true,
+  }: {
+    jobCategoriesSlug?: string
+    jobTypesSlug?: string
+    plansSlug?: string
+    tenantScoped?: boolean
+  } = {},
 ): CollectionConfig[] =>
   collections.map((collection) => {
     const field =
-      collection.slug === PLAN_JOB_TYPES_SLUG
+      collection.slug === jobTypesSlug
         ? 'allowedJobTypes'
-        : collection.slug === PLAN_JOB_CATEGORIES_SLUG
+        : collection.slug === jobCategoriesSlug
           ? 'allowedJobCategories'
           : null
     if (!field) return collection
@@ -213,7 +231,7 @@ export const withPlanRestrictionGuards = (
         ...collection.hooks,
         beforeDelete: [
           ...(collection.hooks?.beforeDelete ?? []),
-          preventDeletingPlanRestriction(field, { tenantScoped }),
+          preventDeletingPlanRestriction(field, { plansSlug, tenantScoped }),
         ],
       },
     }
@@ -254,25 +272,34 @@ export const planFieldValidators = {
 } as const
 
 export type PlanCollectionOptions = {
+  /** Overrides the collection's default access, operation by operation. */
+  access?: CollectionAccess
   /** Single-tenant settings global that holds the currency. */
   settingsSlug?: string
+  /** Resolved collection slugs, so relationships and queries use the tenant's names. */
+  slugs?: PayloadJobsCollectionSlugs
   /** `false` in single-tenant mode, where there is no tenants collection. */
   tenantScoped?: boolean
   tenantsSlug?: string
 }
 
 export const planCollection = ({
+  access,
   settingsSlug = 'job-board-settings',
+  slugs = DEFAULT_PAYLOAD_JOBS_SLUGS,
   tenantScoped = true,
   tenantsSlug = 'tenants',
 }: PlanCollectionOptions = {}): CollectionConfig => ({
-  slug: PLANS_SLUG,
-  access: {
-    create: planCreateAccess(tenantScoped),
-    delete: planDeleteAccess,
-    read: planReadAccess(tenantScoped),
-    update: planUpdateAccess(tenantScoped),
-  },
+  slug: slugs.plans,
+  access: mergeCollectionAccess(
+    {
+      create: planCreateAccess(tenantScoped),
+      delete: planDeleteAccess,
+      read: planReadAccess(tenantScoped),
+      update: planUpdateAccess(tenantScoped),
+    },
+    access,
+  ),
   admin: {
     defaultColumns: ['name', 'price', 'currency', 'durationDays', 'jobCredits', 'status', 'sortOrder'],
     description:
@@ -378,7 +405,7 @@ export const planCollection = ({
         {
           name: 'addOn',
           type: 'relationship',
-          relationTo: ADD_ONS_SLUG,
+          relationTo: slugs.addOns as CollectionSlug,
           required: true,
         },
         {
@@ -406,14 +433,14 @@ export const planCollection = ({
         {
           name: 'allowedJobTypes',
           type: 'relationship',
-          relationTo: PLAN_JOB_TYPES_SLUG,
+          relationTo: slugs.jobTypes as CollectionSlug,
           hasMany: true,
           admin: { description: 'Only jobs of these types. Empty: any type.' },
         },
         {
           name: 'allowedJobCategories',
           type: 'relationship',
-          relationTo: PLAN_JOB_CATEGORIES_SLUG,
+          relationTo: slugs.jobCategories as CollectionSlug,
           hasMany: true,
           admin: {
             description: 'Only jobs whose every category is listed here. Empty: any category.',
@@ -455,7 +482,7 @@ export const planCollection = ({
     beforeChange: [
       planCurrencyFromTenant({ settingsSlug, tenantScoped, tenantsSlug }),
       taxRateKeyInTenant({ settingsSlug, tenantScoped, tenantsSlug }),
-      planRestrictionsInTenant(tenantScoped),
+      planRestrictionsInTenant(tenantScoped, slugs),
     ],
     beforeValidate: [uniquePlanKeyPerTenant(tenantScoped)],
   },

@@ -11,6 +11,12 @@ import {
 } from 'payload'
 
 import { getUserTenantIDsByRole, isSuperAdmin, type MissionControlUser } from './access'
+import {
+  DEFAULT_PAYLOAD_JOBS_SLUGS,
+  mergeCollectionAccess,
+  type CollectionAccess,
+  type PayloadJobsCollectionSlugs,
+} from './slugs'
 
 /**
  * Job alert subscriptions (PJ-26). Job seekers do not need an account: a subscription is an
@@ -36,11 +42,15 @@ export const ALERT_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/
 export const ALERT_READER_ROLES = ['tenant-admin'] as const
 
 /** The filters a subscription matches jobs on. Empty means "any"; they must be the tenant's. */
-export const ALERT_FILTER_FIELDS = [
-  { path: 'categories', relationTo: 'job-categories' },
-  { path: 'types', relationTo: 'job-types' },
-  { path: 'locations', relationTo: 'locations' },
-] as const satisfies { path: string; relationTo: CollectionSlug }[]
+export const alertFilterFields = (slugs: PayloadJobsCollectionSlugs = DEFAULT_PAYLOAD_JOBS_SLUGS) =>
+  [
+    { path: 'categories', relationTo: slugs.jobCategories as CollectionSlug },
+    { path: 'types', relationTo: slugs.jobTypes as CollectionSlug },
+    { path: 'locations', relationTo: slugs.locations as CollectionSlug },
+  ] as const satisfies { path: string; relationTo: CollectionSlug }[]
+
+/** The filter fields with the plugin's default slugs; the collection binds resolved ones. */
+export const ALERT_FILTER_FIELDS = alertFilterFields()
 
 export const KEYWORDS_MAX_LENGTH = 200
 
@@ -142,7 +152,10 @@ export const generateAlertTokensOnCreate: CollectionBeforeValidateHook = ({ data
  * this turns the raw index error into a field error the endpoint can answer with.
  */
 export const uniqueAlertEmailPerTenant =
-  (tenantScoped: boolean): CollectionBeforeValidateHook =>
+  (
+    tenantScoped: boolean,
+    collectionSlug = ALERT_SUBSCRIPTIONS_SLUG,
+  ): CollectionBeforeValidateHook =>
   async ({ data, originalDoc, req }) => {
     const email = normalizeAlertEmail(data?.email)
     if (!email) return data
@@ -154,7 +167,7 @@ export const uniqueAlertEmailPerTenant =
 
     const matchesEmail = { email: { equals: email } }
     const { docs } = await req.payload.find({
-      collection: ALERT_SUBSCRIPTIONS_SLUG,
+      collection: collectionSlug as CollectionSlug,
       depth: 0,
       limit: 2,
       overrideAccess: true,
@@ -168,7 +181,7 @@ export const uniqueAlertEmailPerTenant =
     const selfID = originalDoc?.id
     if (docs.some((doc) => selfID === undefined || String(doc.id) !== String(selfID))) {
       throw new ValidationError({
-        collection: ALERT_SUBSCRIPTIONS_SLUG,
+        collection: collectionSlug as CollectionSlug,
         errors: [
           { message: `${email} is already subscribed on this site`, path: 'email' },
         ],
@@ -190,18 +203,24 @@ const idsOf = (value: unknown): (number | string)[] =>
  * subscriber's address and bearer tokens alive with no tenant to scope or expire them by.
  * The same reason `site-keys` and user memberships are removed in a hook.
  */
-export const removeTenantAlertSubscriptions: CollectionBeforeDeleteHook = async ({ id, req }) => {
-  await req.payload.delete({
-    collection: ALERT_SUBSCRIPTIONS_SLUG,
-    overrideAccess: true,
-    req,
-    where: {
-      tenant: {
-        equals: id,
+export const removeTenantAlertSubscriptionsFor =
+  (collectionSlug = ALERT_SUBSCRIPTIONS_SLUG): CollectionBeforeDeleteHook =>
+  async ({ id, req }) => {
+    await req.payload.delete({
+      collection: collectionSlug as CollectionSlug,
+      overrideAccess: true,
+      req,
+      where: {
+        tenant: {
+          equals: id,
+        },
       },
-    },
-  })
-}
+    })
+  }
+
+/** Removes the default alert-subscriptions collection; the plugin binds a custom slug itself. */
+export const removeTenantAlertSubscriptions: CollectionBeforeDeleteHook =
+  removeTenantAlertSubscriptionsFor()
 
 /**
  * A subscription belongs to exactly one tenant, and its filters must be that tenant's: the
@@ -209,7 +228,10 @@ export const removeTenantAlertSubscriptions: CollectionBeforeDeleteHook = async 
  * another tenant's taxonomy or location.
  */
 export const alertSubscriptionTenantGuard =
-  (tenantScoped: boolean): CollectionBeforeChangeHook =>
+  (
+    tenantScoped: boolean,
+    slugs: PayloadJobsCollectionSlugs = DEFAULT_PAYLOAD_JOBS_SLUGS,
+  ): CollectionBeforeChangeHook =>
   async ({ collection, data, originalDoc, req }) => {
     if (!tenantScoped) return data
 
@@ -225,7 +247,7 @@ export const alertSubscriptionTenantGuard =
 
     const errors: { message: string; path: string }[] = []
 
-    for (const { path, relationTo } of ALERT_FILTER_FIELDS) {
+    for (const { path, relationTo } of alertFilterFields(slugs)) {
       const ids = idsOf(data?.[path] ?? originalDoc?.[path])
       if (ids.length === 0) continue
 
@@ -268,7 +290,7 @@ const validateToken = (value: unknown): string | true => {
   return 'Tokens are 43 URL-safe characters; generate one with generateAlertToken'
 }
 
-const fields = (tenantScoped: boolean): Field[] => [
+const fields = (tenantScoped: boolean, slugs: PayloadJobsCollectionSlugs): Field[] => [
   {
     name: 'email',
     type: 'email',
@@ -321,9 +343,9 @@ const fields = (tenantScoped: boolean): Field[] => [
       description: 'Words a job must mention, separated by spaces. Empty means any job.',
     },
   },
-  filterField('categories', 'job-categories', 'job categories'),
-  filterField('types', 'job-types', 'job types'),
-  filterField('locations', 'locations', 'locations'),
+  filterField('categories', slugs.jobCategories as CollectionSlug, 'job categories'),
+  filterField('types', slugs.jobTypes as CollectionSlug, 'job types'),
+  filterField('locations', slugs.locations as CollectionSlug, 'locations'),
   {
     name: 'lastSentAt',
     type: 'date',
@@ -343,6 +365,10 @@ const fields = (tenantScoped: boolean): Field[] => [
 ]
 
 export type AlertSubscriptionsOptions = {
+  /** Overrides the collection's default access, operation by operation. */
+  access?: CollectionAccess
+  /** Resolved collection slugs, so the filter relations use the tenant's names. */
+  slugs?: PayloadJobsCollectionSlugs
   /** Set to `false` in single-tenant mode, where there is no `tenants` collection. */
   tenantScoped?: boolean
 }
@@ -352,15 +378,20 @@ export type AlertSubscriptionsOptions = {
  * `tenant` field this collection's access and indexes rely on.
  */
 export const alertSubscriptionCollection = ({
+  access,
+  slugs = DEFAULT_PAYLOAD_JOBS_SLUGS,
   tenantScoped = true,
 }: AlertSubscriptionsOptions = {}): CollectionConfig => ({
-  slug: ALERT_SUBSCRIPTIONS_SLUG,
-  access: {
-    create: alertSubscriptionWriteAccess,
-    delete: alertSubscriptionWriteAccess,
-    read: alertSubscriptionReadAccess(tenantScoped),
-    update: alertSubscriptionWriteAccess,
-  },
+  slug: slugs.alertSubscriptions,
+  access: mergeCollectionAccess(
+    {
+      create: alertSubscriptionWriteAccess,
+      delete: alertSubscriptionWriteAccess,
+      read: alertSubscriptionReadAccess(tenantScoped),
+      update: alertSubscriptionWriteAccess,
+    },
+    access,
+  ),
   admin: {
     defaultColumns: ['email', 'confirmed', 'lastSentAt'],
     description:
@@ -368,14 +399,14 @@ export const alertSubscriptionCollection = ({
     group: 'Job board',
     useAsTitle: 'email',
   },
-  fields: fields(tenantScoped),
+  fields: fields(tenantScoped, slugs),
   hooks: {
-    beforeChange: [alertSubscriptionTenantGuard(tenantScoped)],
+    beforeChange: [alertSubscriptionTenantGuard(tenantScoped, slugs)],
     // Normalize before the uniqueness check, so it compares the form that will be stored.
     beforeValidate: [
       generateAlertTokensOnCreate,
       normalizeAlertSubscription,
-      uniqueAlertEmailPerTenant(tenantScoped),
+      uniqueAlertEmailPerTenant(tenantScoped, slugs.alertSubscriptions),
     ],
   },
   // One subscription per address per tenant. Tokens are unique on their own columns.

@@ -15,6 +15,10 @@ import * as migration_20261118_144548_add_ons from './20261118_144548_add_ons';
 import * as migration_20261118_150954_tax from './20261118_150954_tax';
 import * as migration_20261118_152848_alert_subscriptions from './20261118_152848_alert_subscriptions';
 import * as migration_20261118_154336_jobs from './20261118_154336_jobs';
+import * as migration_20261120_065125_coupons from './20261120_065125_coupons';
+import * as migration_20261120_105626_tags_drafts from './20261120_105626_tags_drafts';
+import * as migration_20261120_111524_remove_job_tags_areas from './20261120_111524_remove_job_tags_areas';
+import * as migration_20261120_122303_location_tree from './20261120_122303_location_tree';
 
 export const migrations = [
   {
@@ -100,6 +104,26 @@ export const migrations = [
   {
     up: migration_20261118_154336_jobs.up,
     down: migration_20261118_154336_jobs.down,
-    name: '20261118_154336_jobs'
+    name: '20261118_154336_jobs',
+  },
+  {
+    up: migration_20261120_065125_coupons.up,
+    down: migration_20261120_065125_coupons.down,
+    name: '20261120_065125_coupons',
+  },
+  {
+    up: migration_20261120_105626_tags_drafts.up,
+    down: migration_20261120_105626_tags_drafts.down,
+    name: '20261120_105626_tags_drafts',
+  },
+  {
+    up: migration_20261120_111524_remove_job_tags_areas.up,
+    down: migration_20261120_111524_remove_job_tags_areas.down,
+    name: '20261120_111524_remove_job_tags_areas',
+  },
+  {
+    up: migration_20261120_122303_location_tree.up,
+    down: migration_20261120_122303_location_tree.down,
+    name: '20261120_122303_location_tree'
   },
 ];

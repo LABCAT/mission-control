@@ -13,19 +13,19 @@ import {
   isSuperAdmin,
   type MissionControlUser,
 } from './access'
+import {
+  mergeCollectionAccess,
+  type CollectionAccess,
+  type PayloadJobsCollectionSlugs,
+} from './slugs'
 
 /**
- * Job-board taxonomies. They replace the WordPress term taxonomies `job_cat`, `job_type`,
- * `job_tag` and `job_salary`, plus the `area-of-focus` user taxonomy (see AUDIT.md).
+ * Job-board taxonomies. They replace the WordPress term taxonomies `job_cat`, `job_type`
+ * and `job_salary` (see AUDIT.md). `job_tag` and the `area-of-focus` user taxonomy are no
+ * longer imported; their collections were removed in PJ-80 because no terms exist.
  */
 
-export const TAXONOMY_SLUGS = [
-  'job-categories',
-  'job-types',
-  'job-tags',
-  'salary-bands',
-  'areas-of-focus',
-] as const
+export const TAXONOMY_SLUGS = ['job-categories', 'job-types', 'salary-bands'] as const
 
 export type TaxonomySlug = (typeof TAXONOMY_SLUGS)[number]
 
@@ -87,7 +87,7 @@ export const uniqueSlugPerTenant =
 
     const selfID = originalDoc?.id
     const { docs } = await req.payload.find({
-      collection: collectionSlug,
+      collection: collectionSlug as CollectionSlug,
       depth: 0,
       limit: 2,
       overrideAccess: true,
@@ -101,7 +101,7 @@ export const uniqueSlugPerTenant =
     const conflict = docs.some((doc) => selfID === undefined || String(doc.id) !== String(selfID))
     if (conflict) {
       throw new ValidationError({
-        collection: collectionSlug,
+        collection: collectionSlug as CollectionSlug,
         errors: [{ message: `Slug "${slug}" is already used in this tenant`, path: 'slug' }],
         req,
       })
@@ -111,12 +111,14 @@ export const uniqueSlugPerTenant =
   }
 
 type TaxonomyOptions = {
+  /** Overrides the collection's default access, operation by operation. */
+  access?: CollectionAccess
   /** Extra fields that only one taxonomy needs, such as `isVolunteer` on job types. */
   extraFields?: Field[]
   labels: { plural: string; singular: string }
   /** `false` drops the tenant scope, for single-tenant setups with no tenants collection. */
   tenantScoped?: boolean
-  slug: TaxonomySlug
+  slug: string
 }
 
 /**
@@ -124,18 +126,22 @@ type TaxonomyOptions = {
  * indexed optional `legacyId` for the WordPress import.
  */
 export const taxonomyCollection = ({
+  access,
   extraFields = [],
   labels,
   slug,
   tenantScoped = true,
 }: TaxonomyOptions): CollectionConfig => ({
   slug,
-  access: {
-    create: taxonomyWriteAccess,
-    delete: taxonomyWriteAccess,
-    read: taxonomyReadAccess,
-    update: taxonomyWriteAccess,
-  },
+  access: mergeCollectionAccess(
+    {
+      create: taxonomyWriteAccess,
+      delete: taxonomyWriteAccess,
+      read: taxonomyReadAccess,
+      update: taxonomyWriteAccess,
+    },
+    access,
+  ),
   admin: {
     defaultColumns: ['name', 'slug', 'legacyId'],
     group: 'Job board',
@@ -170,7 +176,7 @@ export const taxonomyCollection = ({
     ...extraFields,
   ],
   hooks: {
-    beforeValidate: [uniqueSlugPerTenant(slug)],
+    beforeValidate: [uniqueSlugPerTenant(slug as CollectionSlug)],
   },
   // The unique index spans the tenant, so the same slug may exist on two tenants.
   indexes: tenantScoped ? [{ fields: ['tenant', 'slug'], unique: true }] : [],
@@ -189,41 +195,48 @@ const isVolunteerField: Field = {
 }
 
 export type TaxonomyCollectionOptions = {
+  /** Access overrides keyed by taxonomy, applied on top of the defaults. */
+  access?: {
+    jobCategories?: CollectionAccess
+    jobTypes?: CollectionAccess
+    salaryBands?: CollectionAccess
+  }
+  /** Resolved collection slugs. Defaults to the plugin's own names. */
+  slugs?: Pick<PayloadJobsCollectionSlugs, 'jobCategories' | 'jobTypes' | 'salaryBands'>
   /** Set to `false` in single-tenant mode, where there is no `tenants` collection. */
   tenantScoped?: boolean
 }
 
 /**
- * The five job-board taxonomies. In multi-tenant mode the multi-tenant plugin scopes each one
+ * The three job-board taxonomies. In multi-tenant mode the multi-tenant plugin scopes each one
  * and adds the `tenant` field that the unique index relies on.
  */
 export const taxonomyCollections = ({
+  access = {},
+  slugs = {
+    jobCategories: 'job-categories',
+    jobTypes: 'job-types',
+    salaryBands: 'salary-bands',
+  },
   tenantScoped = true,
 }: TaxonomyCollectionOptions = {}): CollectionConfig[] => [
   taxonomyCollection({
+    access: access.jobCategories,
     labels: { plural: 'Job categories', singular: 'Job category' },
-    slug: 'job-categories',
+    slug: slugs.jobCategories,
     tenantScoped,
   }),
   taxonomyCollection({
+    access: access.jobTypes,
     extraFields: [isVolunteerField],
     labels: { plural: 'Job types', singular: 'Job type' },
-    slug: 'job-types',
+    slug: slugs.jobTypes,
     tenantScoped,
   }),
   taxonomyCollection({
-    labels: { plural: 'Job tags', singular: 'Job tag' },
-    slug: 'job-tags',
-    tenantScoped,
-  }),
-  taxonomyCollection({
+    access: access.salaryBands,
     labels: { plural: 'Salary bands', singular: 'Salary band' },
-    slug: 'salary-bands',
-    tenantScoped,
-  }),
-  taxonomyCollection({
-    labels: { plural: 'Areas of focus', singular: 'Area of focus' },
-    slug: 'areas-of-focus',
+    slug: slugs.salaryBands,
     tenantScoped,
   }),
 ]

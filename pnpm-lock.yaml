@@ -200,6 +200,22 @@ importers:
         specifier: 6.0.3
         version: 6.0.3
 
+  packages/payload-email-smtp:
+    dependencies:
+      worker-mailer:
+        specifier: 1.3.1
+        version: 1.3.1
+    devDependencies:
+      '@types/node':
+        specifier: 24.12.3
+        version: 24.12.3
+      payload:
+        specifier: 4.0.0-beta.7
+        version: 4.0.0-beta.7(graphql@16.15.0)(typescript@6.0.3)
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+
   packages/payload-jobs:
     dependencies:
       bcryptjs:
@@ -6190,6 +6206,9 @@ packages:
     resolution: {integrity: sha512-Tb2FUhB4vUsGQlfSquQLYkApkuPAFQXGFzxWKHHumVz2dK+X1RUm/HnID4+TfIGYJ1kTcwOaCk/buYCEJr6YjQ==}
     engines: {node: '>=20.11'}
     hasBin: true
+
+  worker-mailer@1.3.1:
+    resolution: {integrity: sha512-UglUq8iOtrSI0+OHOAS+pbhDgqz3JfasgseyGNZy1jnc951348GIRa/U9ZIJzMdqwrSaAZ1+ahpNEPJhac7zEQ==}
 
   workerd@1.20261101.1:
     resolution: {integrity: sha512-qHUIS4cmvhpAE7k2TW0ZktXj9KGDeoUvvLuqi5cSalCM6el5Q6IPuaup9XAC6zQq/xJUPHMG29ML93HuSDY2RQ==}
@@ -12492,6 +12511,8 @@ snapshots:
       isexe: 2.0.0
 
   why-is-node-running@3.2.1: {}
+
+  worker-mailer@1.3.1: {}
 
   workerd@1.20261101.1:
     optionalDependencies:

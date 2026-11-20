@@ -91,7 +91,12 @@ export type ListingJob = {
   expiresAt?: null | string
   id: number | string
   jobType?: null | number | { id: number; isVolunteer?: null | boolean; name?: null | string; slug?: null | string }
-  location?: null | number | { id: number; name?: null | string; slug?: null | string }
+  /** A job may name several locations; the card shows the first one. */
+  location?:
+    | null
+    | number
+    | { id: number; name?: null | string; slug?: null | string }
+    | (null | number | { id: number; name?: null | string; slug?: null | string })[]
   organisation?: null | number | { id: number; name?: null | string; slug?: null | string }
   slug?: null | string
   title?: null | string
@@ -251,7 +256,9 @@ export const toJobSummary = (job: ListingJob, hrefs: ListingHrefs = {}): JobSumm
   if (!title || !slug || !organisationName) return null
 
   const type = populated(job.jobType)
-  const location = populated(job.location)
+  const location = (Array.isArray(job.location) ? job.location : [job.location])
+    .map((value) => populated(value))
+    .find((value) => value !== null)
   const salary = job.displayedSalary?.trim()
 
   const organisationUrl = hrefs.organisation
