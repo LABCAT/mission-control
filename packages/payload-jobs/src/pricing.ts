@@ -554,6 +554,18 @@ const assertJobAllowed = (plan: QuotablePlan, job: Quote['job']): void => {
   }
 }
 
+/**
+ * Throw `PricingError` (`job-required`, `job-not-allowed`, `invalid-job`) unless the plan may be
+ * used for the job. The same rules `quote()` applies; the jobs collection checks them on save so
+ * a job never points at a plan it couldn't have bought.
+ */
+export const assertPlanAllowsJob = (
+  plan: Pick<QuotablePlan, 'allowedJobCategories' | 'allowedJobTypes' | 'isVolunteer' | 'name'>,
+  job: null | QuoteJob,
+): void => {
+  assertJobAllowed(plan as QuotablePlan, job ? normalizeJob(job) : null)
+}
+
 /** Mirrors `applyCoupon` (PJ-22): the same rejections, and the shared `percentOf` rounding. */
 const evaluateCoupon = (
   coupon: QuoteCouponTerms,

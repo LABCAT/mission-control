@@ -44,6 +44,10 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ?? '1x0000000000000000
       <Typography>
         <h1>Jobs in Vanuatu</h1>
         <p>{resultsSummary({ noun: 'jobs', page: current, pageSize, total: jobs.length })}</p>
+        <p>
+          This page shows each component by hand. The real listing, with its sections and the
+          edge cache, is <a href="/jobs">/jobs</a>.
+        </p>
       </Typography>
 
       <FilterBar

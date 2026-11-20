@@ -170,6 +170,21 @@ export const jobBoardTenantFields: Field[] = [
   },
   // Rates, inclusive/exclusive prices, rounding and Xero tax types (PJ-91). Off by default.
   tenantTaxField(showForSiteTenant),
+  // What happens to a job after checkout (PJ-32 applies it with `decidePublication`).
+  {
+    name: 'jobModeration',
+    type: 'select',
+    defaultValue: 'legacy',
+    options: [
+      { label: 'Old site rule: publish if approved, paid or on invoice, else review', value: 'legacy' },
+      { label: 'Review every job', value: 'review' },
+      { label: 'Publish every job straight away', value: 'auto' },
+    ],
+    admin: {
+      condition: showForSiteTenant,
+      description: 'Whether new jobs need an admin’s approval before they go live.',
+    },
+  },
   {
     name: 'emailFromName',
     type: 'text',

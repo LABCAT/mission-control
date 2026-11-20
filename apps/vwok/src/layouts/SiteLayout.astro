@@ -1,0 +1,32 @@
+---
+import BaseLayout from '@mission-control/launchpad/components/BaseLayout'
+
+import { siteTenant } from '../brand'
+
+type Props = {
+  title: string
+  description?: string
+  /** Path of this page on the site; the canonical URL is built from it. */
+  path?: string
+  /** Error pages and previews stay out of the index. */
+  noindex?: boolean
+}
+
+const { title, description, path, noindex } = Astro.props as Props
+const siteUrl = Astro.site ? Astro.site.origin : undefined
+---
+
+<BaseLayout
+  description={description}
+  noindex={noindex}
+  path={path}
+  siteUrl={siteUrl}
+  tenant={siteTenant}
+  title={title}
+>
+  <!-- The favicons are the legacy uploads, so tabs and home-screen icons keep the brand. -->
+  <link slot="head" href="/brand/icon-32.png" rel="icon" sizes="32x32" type="image/png" />
+  <link slot="head" href="/brand/icon-180.png" rel="icon" sizes="180x180" type="image/png" />
+  <link slot="head" href="/brand/icon-180.png" rel="apple-touch-icon" />
+  <slot />
+</BaseLayout>

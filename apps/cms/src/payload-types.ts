@@ -62,6 +62,47 @@ export type SupportedTimezones =
   | 'Pacific/Fiji';
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "LexicalNodes_0DF1558F".
+ */
+export type LexicalNodes_0DF1558F =
+  | SerializedTextNode
+  | SerializedTabNode
+  | SerializedLineBreakNode
+  | SerializedParagraphNode<LexicalNodes_0DF1558F>
+  | SerializedHorizontalRuleNode
+  | SerializedUploadNode<'media'>
+  | SerializedUploadNode<'documents'>
+  | SerializedQuoteNode<LexicalNodes_0DF1558F>
+  | SerializedRelationshipNode<
+      | 'users'
+      | 'folders'
+      | 'tags'
+      | 'tenants'
+      | 'site-keys'
+      | 'locations'
+      | 'organisations'
+      | 'alert-subscriptions'
+      | 'job-categories'
+      | 'job-types'
+      | 'job-tags'
+      | 'salary-bands'
+      | 'areas-of-focus'
+      | 'plans'
+      | 'add-ons'
+      | 'jobs'
+      | 'payload-kv'
+      | 'payload-jobs'
+      | 'payload-locked-documents'
+      | 'payload-preferences'
+      | 'payload-migrations'
+    >
+  | SerializedAutoLinkNode<LexicalNodes_0DF1558F, LexicalLinkFields>
+  | SerializedLinkNode<LexicalNodes_0DF1558F, LexicalLinkFields>
+  | SerializedListNode<LexicalNodes_0DF1558F>
+  | SerializedListItemNode<LexicalNodes_0DF1558F>
+  | SerializedHeadingNode<LexicalNodes_0DF1558F>;
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "LexicalNodes_3DE324E4".
  */
 export type LexicalNodes_3DE324E4 =
@@ -96,6 +137,7 @@ export interface Config {
     'areas-of-focus': AreasOfFocus;
     plans: Plan;
     'add-ons': AddOn;
+    jobs: Job;
     'payload-kv': PayloadKv;
     'payload-jobs': PayloadJob;
     'payload-locked-documents': PayloadLockedDocument;
@@ -122,6 +164,7 @@ export interface Config {
     'areas-of-focus': AreasOfFocusSelect<false> | AreasOfFocusSelect<true>;
     plans: PlansSelect<false> | PlansSelect<true>;
     'add-ons': AddOnsSelect<false> | AddOnsSelect<true>;
+    jobs: JobsSelect<false> | JobsSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-jobs': PayloadJobsSelect<false> | PayloadJobsSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
@@ -153,6 +196,7 @@ export interface Config {
   jobs: {
     tasks: {
       heartbeat: TaskHeartbeat;
+      'expire-job-placements': TaskExpireJobPlacements;
       inline: {
         input: unknown;
         output: unknown;
@@ -397,6 +441,10 @@ export interface Tenant {
      */
     exemptXeroTaxType?: string | null;
   };
+  /**
+   * Whether new jobs need an admin’s approval before they go live.
+   */
+  jobModeration?: ('legacy' | 'review' | 'auto') | null;
   emailFromName?: string | null;
   emailFromAddress?: string | null;
   /**
@@ -1048,6 +1096,77 @@ export interface AddOn {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "jobs".
+ */
+export interface Job {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  title: string;
+  /**
+   * Made from the title when left empty. Unique in the tenant.
+   */
+  slug?: string | null;
+  status: 'draft' | 'pending' | 'published' | 'expired' | 'cancelled';
+  publishedAt?: string | null;
+  expiresAt?: string | null;
+  organisation: number | Organisation;
+  description?: LexicalRichText<LexicalNodes_0DF1558F> | null;
+  /**
+   * An optional PDF of the full job description.
+   */
+  jobDescriptionPdf?: (number | null) | Document;
+  jobType?: (number | null) | JobType;
+  categories?: (number | JobCategory)[] | null;
+  tags?: (number | JobTag)[] | null;
+  salaryBand?: (number | null) | SalaryBand;
+  displayedSalary?: string | null;
+  /**
+   * Defaults to the organisation’s name.
+   */
+  companyName?: string | null;
+  companyUrl?: string | null;
+  howToApply?: string | null;
+  location?: (number | null) | Location;
+  address?: string | null;
+  applyOnline?: boolean | null;
+  /**
+   * Where online applications go. Empty: the organisation’s contacts.
+   */
+  applicationsRecipient?: string | null;
+  /**
+   * Set at checkout.
+   */
+  plan?: (number | null) | Plan;
+  /**
+   * Where this job is featured, and until when. Expired rows are removed daily.
+   */
+  placements?:
+    | {
+        placement: 'featured-in-listings' | 'featured-in-category';
+        addOn?: (number | null) | AddOn;
+        startsAt: string;
+        expiresAt: string;
+        id?: string | null;
+      }[]
+    | null;
+  views?: number | null;
+  /**
+   * WordPress post id, for the import.
+   */
+  legacyId?: number | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv".
  */
 export interface PayloadKv {
@@ -1124,7 +1243,7 @@ export interface PayloadJob {
     | {
         executedAt: string;
         completedAt: string;
-        taskSlug: 'inline' | 'heartbeat';
+        taskSlug: 'inline' | 'heartbeat' | 'expire-job-placements';
         taskID: string;
         input:
           | {
@@ -1155,13 +1274,13 @@ export interface PayloadJob {
           | boolean
           | null;
         parent?: {
-          taskSlug?: ('inline' | 'heartbeat') | null;
+          taskSlug?: ('inline' | 'heartbeat' | 'expire-job-placements') | null;
           taskID?: string | null;
         };
         id?: string | null;
       }[]
     | null;
-  taskSlug?: ('inline' | 'heartbeat') | null;
+  taskSlug?: ('inline' | 'heartbeat' | 'expire-job-placements') | null;
   queue?: string | null;
   waitUntil?: string | null;
   processingUntil?: string | null;
@@ -1247,6 +1366,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'add-ons';
         value: number | AddOn;
+      } | null)
+    | ({
+        relationTo: 'jobs';
+        value: number | Job;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -1572,6 +1695,7 @@ export interface TenantsSelect<T extends boolean = true> {
         defaultRateKey?: T;
         exemptXeroTaxType?: T;
       };
+  jobModeration?: T;
   emailFromName?: T;
   emailFromAddress?: T;
   adminEmail?: T;
@@ -1844,6 +1968,49 @@ export interface AddOnsSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "jobs_select".
+ */
+export interface JobsSelect<T extends boolean = true> {
+  tenant?: T;
+  title?: T;
+  slug?: T;
+  status?: T;
+  publishedAt?: T;
+  expiresAt?: T;
+  organisation?: T;
+  description?: T;
+  jobDescriptionPdf?: T;
+  jobType?: T;
+  categories?: T;
+  tags?: T;
+  salaryBand?: T;
+  displayedSalary?: T;
+  companyName?: T;
+  companyUrl?: T;
+  howToApply?: T;
+  location?: T;
+  address?: T;
+  applyOnline?: T;
+  applicationsRecipient?: T;
+  plan?: T;
+  placements?:
+    | T
+    | {
+        placement?: T;
+        addOn?: T;
+        startsAt?: T;
+        expiresAt?: T;
+        id?: T;
+      };
+  views?: T;
+  legacyId?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv_select".
  */
 export interface PayloadKvSelect<T extends boolean = true> {
@@ -2042,7 +2209,8 @@ export interface CollectionQueryWidget {
       | 'salary-bands'
       | 'areas-of-focus'
       | 'plans'
-      | 'add-ons';
+      | 'add-ons'
+      | 'jobs';
     where?:
       | {
           [k: string]: unknown;
@@ -2083,6 +2251,7 @@ export interface ActivityWidget {
           | 'areas-of-focus'
           | 'plans'
           | 'add-ons'
+          | 'jobs'
         )[]
       | null;
   };
@@ -2105,6 +2274,17 @@ export interface UploadDropzoneWidget {
 export interface TaskHeartbeat {
   input?: unknown;
   output?: unknown;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "TaskExpire-job-placements".
+ */
+export interface TaskExpireJobPlacements {
+  input?: unknown;
+  output: {
+    jobsUpdated?: number | null;
+    placementsRemoved?: number | null;
+  };
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -2163,6 +2343,62 @@ export interface SerializedParagraphNode<TChildren> extends SerializedLexicalEle
   type: 'paragraph';
   textFormat: number;
   textStyle: string;
+}
+
+export interface SerializedHorizontalRuleNode {
+  type: 'horizontalrule';
+  /** @deprecated Ignored when loading. Typed as required only to match Lexical's types: rich text sent through the API, CLI or MCP may not contain it. */
+  version: number;
+}
+
+export type SerializedUploadNode<TSlugs extends keyof Config['collections'], TFields = { [k: string]: unknown }> = {
+  type: 'upload';
+  format: LexicalElementFormat;
+  id: string;
+  /** @deprecated Ignored when loading. Typed as required only to match Lexical's types: rich text sent through the API, CLI or MCP may not contain it. */
+  version: number;
+  fields: TFields;
+} & {
+  [TSlug in TSlugs]: {
+    relationTo: TSlug;
+    value: Config['collections'][TSlug]['id'] | Config['collections'][TSlug];
+  };
+}[TSlugs];
+
+export interface SerializedQuoteNode<TChildren> extends SerializedLexicalElementBase<TChildren> {
+  type: 'quote';
+}
+
+export type SerializedRelationshipNode<TSlugs extends keyof Config['collections']> = {
+  type: 'relationship';
+  format: LexicalElementFormat;
+  /** @deprecated Ignored when loading. Typed as required only to match Lexical's types: rich text sent through the API, CLI or MCP may not contain it. */
+  version: number;
+} & {
+  [TSlug in TSlugs]: {
+    relationTo: TSlug;
+    value: Config['collections'][TSlug]['id'] | Config['collections'][TSlug];
+  };
+}[TSlugs];
+
+export interface LexicalLinkFields {
+  [k: string]: unknown;
+  doc?: {
+    relationTo: string;
+    value: Config['db']['defaultIDType'] | { [k: string]: unknown; id: Config['db']['defaultIDType'] };
+  } | null;
+  linkType: 'custom' | 'internal';
+  newTab: boolean;
+  url?: string;
+}
+export interface SerializedLinkNode<TChildren, TFields = LexicalLinkFields> extends SerializedLexicalElementBase<TChildren> {
+  type: 'link';
+  fields: TFields;
+  id?: string;
+}
+export interface SerializedAutoLinkNode<TChildren, TFields = LexicalLinkFields> extends SerializedLexicalElementBase<TChildren> {
+  type: 'autolink';
+  fields: TFields;
 }
 
 export interface SerializedListNode<TChildren> extends SerializedLexicalElementBase<TChildren> {

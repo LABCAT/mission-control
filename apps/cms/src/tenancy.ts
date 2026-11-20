@@ -40,6 +40,8 @@ export const multiTenantOptions = {
     // mission-control: alert subscribers are personal data (PJ-26). The collection's own access
     // already denies site keys, seekers and anonymous callers, so no override is needed here.
     'alert-subscriptions': {},
+    // mission-control: jobs read site keys themselves (published and expired only) (PJ-19).
+    jobs: { accessResultOverride: denySeekerOnly(({ accessResult }) => accessResult) },
   },
   tenantsArrayField: {
     rowFields: [

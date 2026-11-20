@@ -8,6 +8,7 @@
     ".": "./src/index.ts",
     "./components/*": "./src/components/*.astro",
     "./cms": "./src/cms/index.ts",
+    "./jobs": "./src/jobs/listing.ts",
     "./tenant/*": "./src/tenant/*.ts"
   },
   "scripts": {

@@ -140,8 +140,11 @@ Rules:
 - A placeholder home page.
 - Lighthouse CI (`@lhci/cli`) in CI (allowed) with performance, accessibility, best practices and SEO each at ≥ 0.98, plus a budget of under 50 KB total JavaScript.
 
-**PJ-13**
+**PJ-13** – done 2026-11-19
 - `apps/vwok`: same setup as the hub, Worker `mc-vwok`, Vanuatu Wok branding (green `#06914b`, red `#dd3333`, blue `#0066bf`, logo from the legacy uploads), and covered by Lighthouse CI.
+- Branding lives in `src/brand.ts` and reaches the page only as Rocketship `--rs-*` tokens through the launchpad `BaseLayout`; currency, timezone, locales and domains stay on the `vwok` tenant row.
+- `robots.txt` is per hostname: crawlable on `vanuatuwok.vu` and on loopback (so Lighthouse scores a crawlable page), `Disallow: /` on any Worker preview, which would otherwise be a duplicate of the live site.
+- The budget is `apps/vwok/lighthouserc.json` — every category at ≥ 0.98 and 50 KB of JavaScript — run by the `Lighthouse (vwok)` job against `astro preview`, which serves the built Worker. The site ships no client JavaScript at all today.
 
 **PJ-14**
 - Deploy all three Workers.
@@ -233,6 +236,7 @@ All Agent tasks except PJ-28. Each one is collection config, access control and 
   - employers can create jobs and update their own organisation's `draft`/`pending` jobs
   - tenant-admin/editor can do everything
 - Tests, including tenant isolation.
+- Deferred from PJ-19 (#62): `order` waits for the orders collection and is added in PJ-23. `createdBy` is not in #62 either; it follows with the order relationship.
 
 **PJ-20**
 - `pages`: `title`, `slug`, `content`, SEO group, `legacyId`.
@@ -249,6 +253,7 @@ All Agent tasks except PJ-28. Each one is collection config, access control and 
 **PJ-23**
 - `orders`: `organisation`, `plan`, `coupon`, `subtotal`, `discount`, `total`, `currency`, `status` (`pending` | `paid` | `cancelled` | `failed`), `paymentMethod` (`invoice` | `free` | `credit`), `jobs`, `xeroInvoiceId`, `xeroInvoiceUrl`, `log[]`, `legacyId`.
 - An employer can read their own organisation's orders.
+- Also adds `jobs.order` (and `jobs.createdBy`), deferred from PJ-19, with their migration. Like the other private job fields, they're readable only by staff and the owning organisation (`jobPrivateFieldRead`).
 - Access tests.
 
 **PJ-24**

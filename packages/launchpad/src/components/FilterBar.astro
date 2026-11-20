@@ -1,24 +1,17 @@
 ---
 import Button from '@labcat2020/rocketship/components/Button'
+import Checkbox from '@labcat2020/rocketship/components/Checkbox'
 import Field from '@labcat2020/rocketship/components/Field'
 import Input from '@labcat2020/rocketship/components/Input'
 import Label from '@labcat2020/rocketship/components/Label'
 import Select from '@labcat2020/rocketship/components/Select'
 
-import { hiddenFilterFields, type FilterDefinition, type FilterValues } from '../tenant/filters'
-
-export type FilterOption = { label: string; value: string }
-
-export type FilterControl =
-  | { label: string; name: string; placeholder?: string; type: 'search' | 'text' }
-  | {
-      label: string
-      name: string
-      options: readonly FilterOption[]
-      type: 'select'
-      /** The empty option that clears this filter, e.g. `All categories`. */
-      anyLabel?: string
-    }
+import {
+  hiddenFilterFields,
+  type FilterControl,
+  type FilterDefinition,
+  type FilterValues,
+} from '../tenant/filters'
 
 type Props = {
   /** URL the form GETs; the listing page itself. */
@@ -50,6 +43,8 @@ const controlNames = controls.map((control) => control.name)
 // so a simplified bar never silently drops a filter from someone's URL.
 const carried = definitions.length > 0 ? definitions : controlNames.map((name) => ({ name }))
 const hidden = hiddenFilterFields(values, carried, ['page', ...controlNames])
+const checked = (control: Extract<FilterControl, { type: 'checkbox' }>): boolean =>
+  values[control.name] === (control.value ?? '1')
 ---
 
 <form action={action} method="get" class:list={['lp-filters', className]} role="search">
@@ -62,24 +57,38 @@ const hidden = hiddenFilterFields(values, carried, ['page', ...controlNames])
     {
       controls.map((control) => (
         <Field>
-          <Label for={`filter-${control.name}`}>{control.label}</Label>
-          {control.type === 'select' ? (
-            <Select id={`filter-${control.name}`} name={control.name}>
-              <option value="">{control.anyLabel ?? 'All'}</option>
-              {control.options.map((option) => (
-                <option value={option.value} selected={values[control.name] === option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </Select>
+          {control.type === 'checkbox' ? (
+            <Field inline>
+              <Checkbox
+                id={`filter-${control.name}`}
+                name={control.name}
+                value={control.value ?? '1'}
+                checked={checked(control)}
+              />
+              <Label for={`filter-${control.name}`}>{control.label}</Label>
+            </Field>
           ) : (
-            <Input
-              id={`filter-${control.name}`}
-              name={control.name}
-              placeholder={control.placeholder}
-              type={control.type}
-              value={values[control.name] ?? undefined}
-            />
+            <>
+              <Label for={`filter-${control.name}`}>{control.label}</Label>
+              {control.type === 'select' ? (
+                <Select id={`filter-${control.name}`} name={control.name}>
+                  <option value="">{control.anyLabel ?? 'All'}</option>
+                  {control.options.map((option) => (
+                    <option value={option.value} selected={values[control.name] === option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </Select>
+              ) : (
+                <Input
+                  id={`filter-${control.name}`}
+                  name={control.name}
+                  placeholder={control.placeholder}
+                  type={control.type}
+                  value={values[control.name] ?? undefined}
+                />
+              )}
+            </>
           )}
         </Field>
       ))
