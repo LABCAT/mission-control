@@ -9,6 +9,7 @@ import {
   XeroPaymentSyncError,
   xeroPaymentSyncTask,
   XERO_PAYMENT_SYNC_CRON,
+  XERO_PAYMENT_SYNC_QUEUE,
   type InvoiceOrderStore,
   type OpenInvoiceOrder,
   type XeroInvoice,
@@ -246,13 +247,15 @@ describe('syncInvoicePayments @S-096', () => {
   })
 })
 
-describe('xeroPaymentSyncTask', () => {
-  it('is scheduled hourly with a six-field cron and a stable slug', () => {
+describe('xeroPaymentSyncTask @S-096', () => {
+  it('is scheduled hourly on the queue the CMS Worker runs', () => {
     const task = xeroPaymentSyncTask({ oauth: {}, orders: () => fakeStore([]).store })
 
     expect(task.slug).toBe('xero-payment-sync')
     expect(XERO_PAYMENT_SYNC_CRON.split(' ')).toHaveLength(6)
-    expect(task.schedule).toEqual([{ cron: XERO_PAYMENT_SYNC_CRON, queue: 'default' }])
+    // `apps/cms/src/jobs/runScheduled.ts` runs only `SCHEDULED_QUEUES`; anything else never fires.
+    expect(XERO_PAYMENT_SYNC_QUEUE).toBe('hourly')
+    expect(task.schedule).toEqual([{ cron: XERO_PAYMENT_SYNC_CRON, queue: 'hourly' }])
   })
 
   it('skips an organisation that never connected Xero', async () => {

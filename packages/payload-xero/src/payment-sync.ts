@@ -29,6 +29,8 @@ export const XERO_MAX_RETRY_WAIT_MS = 30_000
 /** Hourly, six fields with seconds first (Payload's scheduler). */
 export const XERO_PAYMENT_SYNC_CRON = '0 0 * * * *'
 export const XERO_PAYMENT_SYNC_TASK_SLUG = 'xero-payment-sync'
+/** The queue the CMS Worker actually runs each cron tick (see `apps/cms/src/jobs/runScheduled.ts`). */
+export const XERO_PAYMENT_SYNC_QUEUE = 'hourly'
 
 export type XeroPaymentSyncErrorCode = 'invoice_lookup_failed' | 'not_connected'
 
@@ -341,8 +343,9 @@ export const xeroPaymentSyncTask = (options: XeroPaymentSyncTaskOptions): TaskCo
 
   return {
     slug,
-    // mission-control: hourly, seconds first. The queue must also be run (see `autoRun`).
-    schedule: [{ cron: XERO_PAYMENT_SYNC_CRON, queue: 'default' }],
+    // mission-control: hourly, seconds first, and on the queue the Worker actually runs. A task on a
+    // queue no cron tick runs never fires, so keep this in step with `SCHEDULED_QUEUES`.
+    schedule: [{ cron: XERO_PAYMENT_SYNC_CRON, queue: XERO_PAYMENT_SYNC_QUEUE }],
     handler: async ({ req }: { req: { payload: Payload } }) => {
       const { payload } = req
       const rows = await payload.find({

@@ -242,4 +242,4 @@ The plugin would watch `sourceCollection`, call `toInvoice`, create the draft in
 - `VOIDED` / `DELETED` → `markCancelled(order, invoice)`.
 - `AUTHORISED` past its due day with money owing → `setOverdue(order, true)` (and `false` once it is no longer overdue).
 
-It is read-only: it never creates a payment in Xero. Calls are batched (40 invoice IDs), spaced one second apart, and a 429 or 5xx is retried up to three times (honouring `Retry-After`). One failing order or organisation does not stop the rest. Register the task in `jobs.tasks` and run the queue from your scheduled handler.
+It is read-only: it never creates a payment in Xero. Calls are batched (40 invoice IDs), spaced one second apart, and a 429 or 5xx is retried up to three times (honouring `Retry-After`). One failing order or organisation does not stop the rest. Register the task in `jobs.tasks` and run its queue from your scheduled handler: the task is scheduled on the `hourly` queue (`XERO_PAYMENT_SYNC_QUEUE`), so a queue no cron tick runs would never fire it.
