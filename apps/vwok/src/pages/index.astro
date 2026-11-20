@@ -1,0 +1,26 @@
+---
+import RenderBlocks from '@mission-control/rocketship-payload/astro/render-blocks'
+import Hero from '@mission-control/rocketship-payload/astro/hero'
+import type { HeroBlock } from '@mission-control/rocketship-payload/types'
+
+import SiteLayout from '../layouts/SiteLayout.astro'
+
+// mission-control: the home page renders the generic block package (PJ-84). PJ-39 will fill
+// these from site settings; the shell keeps the same copy until then.
+const blocks: HeroBlock[] = [
+  {
+    blockType: 'hero',
+    body: 'Vanuatu Wok is being rebuilt. Job listings, organisations and job alerts arrive in the next release; until then this page is the shell they will fill.',
+    heading: 'Find a job in Vanuatu',
+  },
+]
+const components = { hero: Hero }
+---
+
+<SiteLayout
+  description="Find a job in Vanuatu: vacancies from employers in Port Vila, Luganville and across the islands."
+  path="/"
+  title="Find a job in Vanuatu | Vanuatu Wok"
+>
+  <RenderBlocks blocks={blocks} components={components} />
+</SiteLayout>

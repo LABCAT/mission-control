@@ -45,11 +45,33 @@ timezone.
 | Component    | Built from                          | Notes                                       |
 | ------------ | ----------------------------------- | ------------------------------------------- |
 | `BaseLayout` | Rocketship styles, `Container`       | head, SEO meta, canonical/header/footer slots |
-| `JobCard`    | `Card`                               | salary and closing date in the tenant's settings |
+| `JobCard`    | `Card`                               | salary and closing date in the tenant's settings; reveals a "Viewed" pill |
 | `OrgCard`    | `Card`                               | logo, description, open job count            |
-| `FilterBar`  | `Field`, `Label`, `Input`, `Select`  | plain GET form, works without JavaScript     |
+| `FilterBar`  | `Field`, `Label`, `Input`, `Select`, `Checkbox` | plain GET form, works without JavaScript |
+| `JobsListing` | `Alert`, `Grid`, `Typography`       | listing body: heading, filters, cards, empty state |
+| `JobsPage`   | `BaseLayout`, `Container`            | whole `/jobs` page; filtered views are `noindex` |
 | `Turnstile`  | `Field`                              | the only client island; site key from env    |
+| `RecentlyViewed` | —                               | browser-local list, filled on idle           |
+| `JobViewTracker` | —                              | records the current job on a detail page     |
 | `Pagination` | —                                    | **temporary**; moves to Rocketship (RCL task) |
+
+## Viewed jobs (browser-local)
+
+`src/viewed-jobs` stores the last 20 viewed job ids in `localStorage` under `lp:viewed-jobs`,
+newest first. There is no server store and no account sync; every storage access is guarded, so
+private modes and cleared storage simply show no history. `record(jobId)`, `list(limit)` and
+`has(jobId)` are the whole API.
+
+Use `JobViewTracker` on a job detail page (pass the same id `JobCard` uses in `data-job-id`:
+the job's id, or its url). `JobCard` reserves the "Viewed" pill's space and reveals it on idle,
+so the label never shifts the layout. `RecentlyViewed` renders an empty hidden section and fills
+it on idle from `list(5)`. Give it one of:
+
+- `jobs`: `{ id, title, url }[]` already on the page (used as-is), or
+- `endpoint`: a URL that accepts `?ids=a,b,c` and returns the same array as JSON.
+
+The site app owns the endpoint; the component only documents the contract. Place the list where
+it can grow without moving content above it (for example, the last block on the page).
 
 `Pagination` is local on purpose: a pagination component is generic, so it belongs in
 Rocketship. When Rocketship releases one, delete `src/components/Pagination.astro`, import the
@@ -73,12 +95,73 @@ const orgs = await cached(`org:${site}:all`, 300, () => cms.findAll('organisatio
 - `findAll` is one request with `limit=0` (no pagination: listings show everything). Lists filter explicitly (e.g. live jobs: `where: { status: { equals: 'published' } }`); `findBySlug` adds no filter, so an expired job's page still resolves.
 - `cached(key, ttl, fn, { tags })` uses `caches.default`; with no cache it just calls `fn`. `purgeTags(tags)` bumps each tag's version. The Cache API is per data centre, so a purge reaches only the colo that runs it: PJ-41 needs a shared store or the zone purge API (entries already carry a `Cache-Tag` header). Put the site in the key; nothing here knows the tenant.
 
+## Job listing (`@mission-control/launchpad/jobs`)
+
+`/jobs` and its sections are rendered from a `JobListingView`: plain data the page draws, so
+nothing about the listing lives in a template.
+
+```ts
+import { jobListingRoute, serveJobListing } from '@mission-control/launchpad/jobs'
+
+// One route file serves /jobs, /jobs/category/:slug and /jobs/type/:slug.
+const route = jobListingRoute(Astro.url.pathname)
+if (!route) return new Response('Not found', { status: 404 })
+
+// Load, render, and hold the HTML at the edge for five minutes.
+return serveJobListing({
+  ...route, // { basePath, locked }
+  cms,
+  render: (view) => renderPage(view), // the site's `render` wrapper
+  search: Astro.url.search,
+  site: tenant.slug,
+  tenant,
+})
+```
+
+`jobListingRoute` is the only path-to-filter mapping; a site app does not repeat it. Both
+`/jobs` and `apps/hub`'s cross-tenant listing (PJ-43) dispatch through it.
+
+- Filters are `q`, `category`, `type`, `location` and `voluntary`. They live in the query string,
+  the form is a plain GET, and the voluntary checkbox sends nothing when unticked: the listing
+  works with no JavaScript, and a URL is a shareable set of results.
+- Each value is validated against the tenant's own taxonomy slugs (`FilterDefinition`), so a
+  hand-edited `?category=ceo` is dropped rather than sent to the CMS. A path slug the tenant does
+  not have (`/jobs/category/nope`) is `found: false`, which the route turns into a 404.
+- Twenty jobs a page. `?page=99` on a two-page listing serves the last page instead of an empty one.
+- Sections fix a filter in the path (`/jobs/category/:slug`, `/jobs/type/:slug`); the slug is not
+  repeated in the query string, and the filter form posts to `/jobs` so changing a control leaves
+  the section instead of half-applying it.
+- The query is live jobs only: published and either not expired or with no expiry
+  (`liveJobsWhere` in `packages/payload-jobs`). Voluntary jobs are left out unless `voluntary=1`
+  or the section is itself a voluntary type.
+- Every CMS read passes the tenant's locale (`resolveLocale`), because the job title and the
+  taxonomy names are localized fields: without it a site gets Payload's default language.
+- `readListingQuery(search)` is the one reading of a request: it returns the filters and the page
+  number, and both the cache key and the CMS query come from it. That is what stops them
+  disagreeing — if the key dropped a filter the query kept, a filtered response would be stored
+  under a bare URL's key and served to everyone for five minutes. It cuts a keyword to 100
+  characters and clamps the page to 500 rather than dropping either, since a dropped value would
+  change what the URL means.
+- `listingCache({ basePath, lockedKeys, search, site })` gives the edge-cache identity: the key
+  (`<site>:html:<path>?<canonical filters>`), the tags (`site:<slug>`, `site:<slug>:jobs`) and
+  the TTL (300s). `serveJobListing` builds it from the request *before* it loads anything, so a
+  hit answers without a CMS query. Unknown parameters (`utm_*`), a meaningless `?page=1`, a filter
+  the path already fixes and values that could not be a filter are dropped, so a stranger cannot
+  fill the cache with junk; two filter sets never share an entry. PJ-41 purges the tags; a 404 is
+  never cached.
+- A page that is not the one its URL names is not stored. A filter the tenant has no value for
+  (`?category=made-up`) and a page past the end both still render a correct page, but not *that*
+  URL's page: storing each made-up slug would waste an entry per slug. The view carries
+  `inexact` for this, and `serveJobListing` answers those with `Cache-Control: no-store`.
+
 ## Conventions
 
 - Zero client JavaScript by default. Only `Turnstile` ships a script, and only the forms that
-  include it. The component owns its own `cf-turnstile-response` field, so the widget is
-  rendered with `response-field: false`; otherwise the token would be posted twice. Its
-  no-JavaScript notice is a `<noscript>`, so it is invisible when the script works.
+  include it, plus the tiny browser-local viewed-jobs scripts on pages that use `JobCard`,
+  `JobViewTracker` or `RecentlyViewed`. The component owns its own `cf-turnstile-response`
+  field, so the widget is rendered with `response-field: false`; otherwise the token would be
+  posted twice. Its no-JavaScript notice is a `<noscript>`, so it is invisible when the script
+  works.
 - Money is an integer amount of minor units plus an ISO 4217 code, never a float.
 - A tenant's domain, currency, timezone, locale and colours are never hardcoded here.
 - Filter values come from the URL, so they are validated against `FilterDefinition` before

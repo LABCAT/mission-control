@@ -9,6 +9,7 @@ import {
   generateAlertToken,
   normalizeAlertEmail,
   normalizeAlertKeywords,
+  removeTenantAlertSubscriptions,
   uniqueAlertEmailPerTenant,
 } from './alert-subscriptions'
 import type { MissionControlUser } from './access'
@@ -119,6 +120,31 @@ describe('alert subscription collection config', () => {
 
   it('skips versions so Payload does not create _v tables', () => {
     expect(collection.versions).toBe(false)
+  })
+
+  it('removes a tenant’s subscriptions when the tenant is deleted', async () => {
+    const baseConfig = {
+      collections: [
+        { slug: 'users', fields: [], auth: { verify: true } },
+        { slug: 'tenants', fields: [], hooks: { beforeDelete: [() => undefined] } },
+      ],
+      secret: 'test',
+    } as never
+
+    const tenantsOf = async (options: Parameters<typeof payloadJobs>[0]) => {
+      const config = await payloadJobs(options)(baseConfig)
+      return config.collections?.find((candidate) => candidate.slug === 'tenants')
+    }
+
+    const withAlerts = await tenantsOf({ tenancy: 'multi' })
+    expect(withAlerts?.hooks?.beforeDelete).toEqual(
+      expect.arrayContaining([removeTenantAlertSubscriptions]),
+    )
+    // The host's own hook keeps running: the plugin appends, it does not replace.
+    expect(withAlerts?.hooks?.beforeDelete).toHaveLength(2)
+
+    const withoutAlerts = await tenantsOf({ features: { alerts: false }, tenancy: 'multi' })
+    expect(withoutAlerts?.hooks?.beforeDelete).not.toContain(removeTenantAlertSubscriptions)
   })
 })
 
@@ -273,7 +299,7 @@ const taxonomies = (): CollectionConfig[] => [
   locationsCollection({ requireTenant: true }),
 ]
 
-describe('alert subscriptions integration', () => {
+describe('alert subscriptions integration @S-084', () => {
   let harness: TestHarness
   let employerA: TestUser
   let editorA: TestUser
@@ -303,6 +329,8 @@ describe('alert subscriptions integration', () => {
   beforeEach(async () => {
     harness = await bootTestPayload({
       collections: [alertSubscriptionCollection(), ...taxonomies()],
+      // The plugin adds this to the host's tenants collection; the harness boots without it.
+      tenantHooks: { beforeDelete: [removeTenantAlertSubscriptions] },
     })
 
     employerA = await makeUser('employer', [{ role: 'employer', tenant: harness.tenantA.id }])
@@ -492,13 +520,26 @@ describe('alert subscriptions integration', () => {
       overrideAccess: true,
     })
 
-    await subscribe(Number(doomed.id), { email: 'doomed@example.invalid' })
+    const subscription = await subscribe(Number(doomed.id), { email: 'doomed@example.invalid' })
 
     await harness.payload.delete({
       collection: 'tenants',
       id: doomed.id,
       user: harness.superAdmin as never,
     })
+
+    // The row itself must be gone, not detached: `tenant_id` is nullable, so reading it back
+    // by id is what separates a cascade from an ON DELETE SET NULL that orphans the address
+    // and its tokens.
+    const readBack = await harness.payload
+      .findByID({
+        collection: ALERT_SUBSCRIPTIONS_SLUG,
+        id: subscription.id,
+        overrideAccess: true,
+      })
+      .catch(() => null)
+
+    expect(readBack).toBeNull()
 
     const { totalDocs } = await harness.payload.count({
       collection: ALERT_SUBSCRIPTIONS_SLUG,
