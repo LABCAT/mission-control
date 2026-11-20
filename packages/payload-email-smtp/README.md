@@ -66,6 +66,32 @@ smtpEmail({
 - Port 587 negotiates STARTTLS; port 465 with `secure: 'tls'` also works.
 - Workspace limits sending to about **2,000 messages per day per user**. Spread sends across users or request a limit increase from Google if you need more.
 
+### Google Workspace with XOAUTH2
+
+Reuse the existing Gmail OAuth client (client ID, client secret and refresh token) instead of an app password:
+
+```ts
+smtpEmail({
+  host: 'smtp.gmail.com',
+  port: 587,
+  secure: 'starttls',
+  username: 'billing@your-domain.com',
+  auth: 'xoauth2',
+  defaultFromAddress: 'billing@your-domain.com',
+  defaultFromName: 'Your Company',
+})
+```
+
+Set each secret with `wrangler secret put` (or the equivalent env var for your host). Never put them in code, config or the database:
+
+```bash
+wrangler secret put SMTP_OAUTH_CLIENT_ID
+wrangler secret put SMTP_OAUTH_CLIENT_SECRET
+wrangler secret put SMTP_OAUTH_REFRESH_TOKEN
+```
+
+The adapter exchanges the refresh token at `https://oauth2.googleapis.com/token` (override with `oauthTokenEndpoint`) for an access token, caches it in memory until about 60 seconds before it expires, then authenticates with SASL `XOAUTH2`. The secrets and the access token are never logged or included in errors. Use `oauthClientIdEnv`, `oauthClientSecretEnv` and `oauthRefreshTokenEnv` for different secret names.
+
 ## Options
 
 | Option | Default | |
@@ -73,16 +99,21 @@ smtpEmail({
 | `host` | `'smtp.gmail.com'` | SMTP host. |
 | `port` | `587` | SMTP port. Use `465` with `secure: 'tls'`. |
 | `secure` | `'starttls'` | `'starttls'` (upgrade on 587) or `'tls'` (implicit TLS on 465). |
-| `username` | | SMTP username. Without it SMTP counts as unconfigured. |
+| `username` | | SMTP username (the sending account). Without it SMTP counts as unconfigured. |
+| `auth` | `'password'` | `'password'` or `'xoauth2'`. |
 | `passwordEnv` | `'SMTP_PASSWORD'` | Env var / Worker secret holding the password. |
+| `oauthClientIdEnv` | `'SMTP_OAUTH_CLIENT_ID'` | XOAUTH2 client ID secret name. |
+| `oauthClientSecretEnv` | `'SMTP_OAUTH_CLIENT_SECRET'` | XOAUTH2 client secret name. |
+| `oauthRefreshTokenEnv` | `'SMTP_OAUTH_REFRESH_TOKEN'` | XOAUTH2 refresh token name. |
+| `oauthTokenEndpoint` | Google OAuth | Token endpoint override. |
 | `defaultFromAddress` / `defaultFromName` | `''` | Used when a message has no `from`; also what Payload uses for its auth emails. |
 | `transport` | | `'console'` forces the console transport: nothing is delivered. |
 
 ### Which transport runs
 
 1. `transport: 'console'` → console.
-2. `username` and the password secret present → SMTP.
-3. Missing either: outside Workers (Node, vitest) → console; inside Workers → throws.
+2. `username` and the configured secret(s) present (`SMTP_PASSWORD`, or the three OAuth secrets) → SMTP.
+3. Missing any: outside Workers (Node, vitest) → console; inside Workers → throws.
 
 The console transport logs that an email was not sent, never recipients, subject or body.
 
@@ -116,6 +147,8 @@ const messageId = await sendViaSmtp(
 
 `sendViaSmtp` returns the `Message-ID` header set on the message. SMTP servers report only success at the end of `DATA`; some return a queue id there, but `worker-mailer` does not expose it. This is the same contract as nodemailer's client-generated `info.messageId`.
 
+For XOAUTH2, pass `auth: 'xoauth2'` and `oauth: { clientId, clientSecret, refreshToken }` instead of `password`.
+
 ## Attachments
 
 Supply `content` inline (string, `ArrayBuffer`, or typed array; `encoding: 'base64'` for base64 strings) with `filename` and `contentType`. `path`/`href` attachments are rejected rather than silently dropped. `cid` inline parts are not supported by this transport and are ignored.
@@ -129,7 +162,7 @@ Supply `content` inline (string, `ArrayBuffer`, or typed array; `encoding: 'base
 
 ## Errors
 
-Failures throw `EmailSendError` with `provider: 'smtp' | 'adapter'`. Messages hold the server's response text only: they never include the password, recipients, subject or body. The library logger is disabled, and the password is redacted in both raw and base64 form in case a server echoes it.
+Failures throw `EmailSendError` with `provider: 'smtp' | 'adapter'`. Messages hold the server's response text only: they never include the password, OAuth client secret, refresh token, access token, recipients, subject or body. The library logger is disabled, and credentials are redacted in both raw and base64 form in case a server echoes them.
 
 ## Tests
 

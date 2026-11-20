@@ -43,11 +43,23 @@ const createConnection = (server) => {
     } else if (upper.startsWith('AUTH PLAIN')) {
       const encoded = line.slice('AUTH PLAIN'.length).trim()
       const password = Buffer.from(encoded, 'base64').toString('utf8').split('\0').pop()
+      server.authCommands.push(line)
       if (password === server.password) {
         reply('235 2.7.0 Authentication successful')
       } else {
         // Deliberately echo the credential to prove the client redacts it.
         reply(`535 5.7.8 Username and Password not accepted: ${password}`)
+      }
+    } else if (upper.startsWith('AUTH XOAUTH2')) {
+      const encoded = line.slice('AUTH XOAUTH2'.length).trim()
+      const decoded = Buffer.from(encoded, 'base64').toString('utf8')
+      const token = decoded.split('\x01')[1]?.replace(/^auth=Bearer /, '') ?? ''
+      server.authCommands.push(line)
+      if (server.xoauth2Token && token === server.xoauth2Token) {
+        reply('235 2.7.0 Accepted')
+      } else {
+        // Deliberately echo the token to prove the client redacts it.
+        reply(`535 5.7.8 Invalid credentials: ${token}`)
       }
     } else if (upper.startsWith('AUTH LOGIN')) {
       reply('535 5.7.8 Use AUTH PLAIN')

@@ -34,14 +34,32 @@ export type EmailMessageInput = {
 
 export type SmtpSecureTransport = 'starttls' | 'tls'
 
-/** Where and how to connect, and who to authenticate as. `password` is passed per call, never stored. */
+export type SmtpAuthMode = 'password' | 'xoauth2'
+
+/** Google OAuth credentials for XOAUTH2. Every value is read per send; none is stored by the adapter. */
+export type SmtpOauthConfig = {
+  clientId: string
+  clientSecret: string
+  refreshToken: string
+  /** Default `https://oauth2.googleapis.com/token`. */
+  tokenEndpoint?: string
+  /** Override `fetch` (proxy or tests). */
+  fetch?: typeof fetch
+}
+
+/** Where and how to connect, and who to authenticate as. Secrets are passed per call, never stored. */
 export type SmtpConfig = {
   host: string
   port: number
   /** `'starttls'` upgrades on 587; `'tls'` is implicit TLS on 465. */
   secure: SmtpSecureTransport
   username: string
-  password: string
+  /** Default `'password'`. */
+  auth?: SmtpAuthMode
+  /** Required for `auth: 'password'`. */
+  password?: string
+  /** Required for `auth: 'xoauth2'`. */
+  oauth?: SmtpOauthConfig
   fromAddress: string
   fromName?: string
 }
@@ -64,14 +82,18 @@ export type SmtpEnvelope = {
   attachments?: SmtpAttachment[]
 }
 
+/** Resolved credentials: the password, or a freshly refreshed XOAUTH2 access token. */
+export type SmtpCredentials =
+  | { type: 'password'; username: string; password: string }
+  | { type: 'xoauth2'; username: string; accessToken: string }
+
 /** Connection options for a transport, before library-specific wrapping. */
 export type SmtpConnectionOptions = {
   host: string
   port: number
   secure: boolean
   startTls: boolean
-  credentials: { username: string; password: string }
-  authType: readonly ('plain' | 'login' | 'cram-md5')[]
+  credentials: SmtpCredentials
 }
 
 /** Sends one already-mapped message. The default uses worker-mailer over `cloudflare:sockets`. */

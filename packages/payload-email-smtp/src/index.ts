@@ -11,9 +11,12 @@ export type {
   Recipients,
   SmtpAddress,
   SmtpAttachment,
+  SmtpAuthMode,
   SmtpConfig,
   SmtpConnectionOptions,
+  SmtpCredentials,
   SmtpEnvelope,
+  SmtpOauthConfig,
   SmtpSecureTransport,
   SmtpTransport,
 } from './types'
