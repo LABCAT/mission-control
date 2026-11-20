@@ -192,6 +192,43 @@ describe('system pages', () => {
       expect((await readPage(page.id)).slug).toBe('contact-the-team')
     })
 
+    it('keeps the organisations page on its reserved slug', async () => {
+      const organisations = (await pagesOf(harness.tenantA.id)).find(
+        (page) => page.role === 'organisations',
+      )!
+
+      const error = await harness.payload
+        .update({
+          collection: 'pages',
+          data: { slug: 'directory' } as never,
+          id: organisations.id,
+          user: harness.tenantAdminA as never,
+        })
+        .catch((caught: unknown) => caught)
+
+      expect(fieldMessages(error)).toMatch(/keeps its \/organisations address/)
+      expect((await readPage(organisations.id)).slug).toBe('organisations')
+    })
+
+    it('refuses a parent on the organisations page', async () => {
+      const about = (await pagesOf(harness.tenantA.id)).find((page) => page.role === 'about')!
+      const organisations = (await pagesOf(harness.tenantA.id)).find(
+        (page) => page.role === 'organisations',
+      )!
+
+      const error = await harness.payload
+        .update({
+          collection: 'pages',
+          data: { parent: about.id } as never,
+          id: organisations.id,
+          user: harness.tenantAdminA as never,
+        })
+        .catch((caught: unknown) => caught)
+
+      expect(fieldMessages(error)).toMatch(/organisations page cannot have a parent/)
+      expect((await readPage(organisations.id)).parent).toBeNull()
+    })
+
     it('refuses a parent on the home page', async () => {
       const about = (await pagesOf(harness.tenantA.id)).find((page) => page.role === 'about')!
       const home = (await pagesOf(harness.tenantA.id)).find((page) => page.role === 'home')!

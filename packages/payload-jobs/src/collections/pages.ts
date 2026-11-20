@@ -34,6 +34,9 @@ export const PAGES_SLUG = 'pages'
 /** Roles that write a site's pages. Employers and seekers do not. */
 export const PAGE_EDITOR_ROLES = ['tenant-admin', 'editor'] as const satisfies readonly TenantRole[]
 
+/** The organisations page owns the `/organisations` branch, so its address is fixed. */
+export const ORGANISATIONS_PAGE_SLUG = 'organisations'
+
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const MAX_SLUG_LENGTH = 120
 
@@ -225,10 +228,17 @@ export const pageUrlRules =
 
     if (role === 'home') {
       page.slug = null
-      if (idOf(page.parent ?? original?.parent) !== null) {
-        page.parent = null
-        errors.push({ message: 'The home page cannot have a parent', path: 'parent' })
+    } else if (role === 'organisations') {
+      // `/organisations/{slug}` belongs to organisation profiles, so the directory keeps its
+      // own address. Say so rather than silently overriding what the editor typed.
+      const submitted = typeof page.slug === 'string' ? page.slug.trim() : ''
+      if (submitted && submitted !== ORGANISATIONS_PAGE_SLUG) {
+        errors.push({
+          message: 'The organisations page keeps its /organisations address',
+          path: 'slug',
+        })
       }
+      page.slug = ORGANISATIONS_PAGE_SLUG
     } else {
       const given = hasKey(page, 'slug')
       const submitted = typeof page.slug === 'string' ? page.slug.trim() : ''
@@ -252,7 +262,11 @@ export const pageUrlRules =
 
     const parentID = idOf(hasKey(page, 'parent') ? page.parent : original?.parent)
     if (parentID !== null) {
-      if (selfID !== undefined && selfID !== null && String(parentID) === String(selfID)) {
+      if (role && PAGES_WITHOUT_CHILDREN.includes(role)) {
+        // home is `/` and organisations is `/organisations`, so neither can sit under a page.
+        page.parent = null
+        errors.push({ message: `The ${role} page cannot have a parent`, path: 'parent' })
+      } else if (selfID !== undefined && selfID !== null && String(parentID) === String(selfID)) {
         errors.push({ message: 'A page cannot be its own parent', path: 'parent' })
       } else if (
         selfID !== undefined &&
