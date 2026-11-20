@@ -58,7 +58,7 @@ const ascending = (ids: number[]): number[] => [...ids].sort((a, b) => a - b)
 
 type User = { collection: 'users'; id: number; role: 'user'; tenants: { role: string; tenant: number }[] }
 
-describe('plans', () => {
+describe('plans @S-092', () => {
   let harness: TestHarness
   let hub: TestTenant
   let noCurrency: TestTenant

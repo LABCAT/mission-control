@@ -18,7 +18,7 @@ const actor = fc.constantFrom<JobActor>('employer', 'staff', 'system')
 const NOW = new Date('2026-11-18T12:00:00.000Z')
 const DAY = 24 * 60 * 60 * 1000
 
-describe('job status machine', () => {
+describe('job status machine @S-033', () => {
   it('allows exactly the listed moves', () => {
     expect(JOB_TRANSITIONS).toEqual({
       cancelled: [],

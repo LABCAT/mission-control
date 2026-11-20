@@ -39,7 +39,7 @@ const limitedCollection = locationsCollection({
   requireTenant: true,
 })
 
-describe('locations collection', () => {
+describe('locations collection @S-120', () => {
   it('is registered by the plugin without touching the host collections', async () => {
     const config = await payloadJobs()(baseConfig)
 

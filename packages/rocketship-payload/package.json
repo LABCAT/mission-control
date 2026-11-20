@@ -1,0 +1,59 @@
+{
+  "name": "@mission-control/rocketship-payload",
+  "version": "0.0.0",
+  "private": false,
+  "type": "module",
+  "description": "Generic Payload blocks and Astro renderers on @labcat2020/rocketship",
+  "exports": {
+    ".": "./src/index.ts",
+    "./blocks": "./src/blocks/index.ts",
+    "./blocks/*": "./src/blocks/*.ts",
+    "./astro/*": "./src/astro/*.astro",
+    "./href": "./src/href.ts",
+    "./local-api": "./src/local-api.ts",
+    "./package.json": "./package.json",
+    "./render": "./src/render.ts",
+    "./richtext": "./src/richtext.ts",
+    "./types": "./src/types.ts"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "typecheck": "astro check",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "@labcat2020/rocketship": "0.3.0",
+    "@payloadcms/richtext-lexical": "4.0.0-beta.7",
+    "astro": "7.4.12",
+    "payload": "4.0.0-beta.7",
+    "sass": "1.108.2"
+  },
+  "peerDependenciesMeta": {
+    "@payloadcms/richtext-lexical": {
+      "optional": true
+    },
+    "payload": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@astrojs/check": "0.9.12",
+    "@labcat2020/rocketship": "0.3.0",
+    "@payloadcms/richtext-lexical": "4.0.0-beta.7",
+    "@types/react": "19.3.0",
+    "astro": "7.4.12",
+    "payload": "4.0.0-beta.7",
+    "sass": "1.108.2",
+    "typescript": "6.0.3",
+    "vitest": "5.1.0"
+  },
+  "engines": {
+    "node": ">=24.22.1"
+  },
+  "sideEffects": [
+    "**/*.css"
+  ]
+}

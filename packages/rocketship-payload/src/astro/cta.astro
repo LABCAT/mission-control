@@ -1,0 +1,46 @@
+---
+import Button from '@labcat2020/rocketship/components/Button'
+import Card from '@labcat2020/rocketship/components/Card'
+import Container from '@labcat2020/rocketship/components/Container'
+import Stack from '@labcat2020/rocketship/components/Stack'
+import Typography from '@labcat2020/rocketship/components/Typography'
+
+import './blocks.css'
+import { safeHref } from '../href'
+import type { CtaBlock } from '../types'
+
+type Props = {
+  block: CtaBlock
+}
+
+const { block } = Astro.props
+const links = (block.links ?? []).map((link) => ({ ...link, href: safeHref(link.href) }))
+---
+
+<section class="rp-block">
+  <Container size="wide">
+    <Card as="section" class="rp-cta">
+      <Stack gap="medium">
+        <Typography>
+          <h2>{block.heading}</h2>
+          {block.body && <p>{block.body}</p>}
+        </Typography>
+        {
+          links.length > 0 && (
+            <div class="rp-block__links">
+              {links.map((link) =>
+                link.href ? (
+                  <Button href={link.href} variant={link.variant ?? 'primary'}>
+                    {link.label}
+                  </Button>
+                ) : (
+                  <span class="rp-block__link">{link.label}</span>
+                ),
+              )}
+            </div>
+          )
+        }
+      </Stack>
+    </Card>
+  </Container>
+</section>

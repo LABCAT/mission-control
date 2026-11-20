@@ -42,7 +42,14 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm lint
-      - run: pnpm test
+      - name: Run tests
+        run: pnpm test --reporter=default --reporter=json --outputFile.json=test-results.json
+      # The features catalogue is the acceptance criteria: match the @S-NNN tags in test titles
+      # to stories and publish the per-story result. It fails the PR if an MVP story marked
+      # built has no test.
+      - name: Features catalogue report
+        if: always()
+        run: node scripts/features/report.mjs --results test-results.json >> "$GITHUB_STEP_SUMMARY"
       - run: pnpm --filter cms build
       - run: pnpm --filter @mission-control/launchpad build
       - run: pnpm --filter @mission-control/vwok build
