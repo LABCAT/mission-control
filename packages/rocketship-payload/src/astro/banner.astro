@@ -1,0 +1,74 @@
+---
+import './blocks.css'
+import { mediaFrom } from '../media'
+import type { BannerBlock } from '../types'
+
+type Props = {
+  block: BannerBlock
+}
+
+const { block } = Astro.props
+const desktop = mediaFrom(block.desktopImage)
+const mobile = mediaFrom(block.mobileImage) ?? desktop
+const alt = block.alt ?? desktop?.alt ?? ''
+const desktopRatio =
+  desktop?.width && desktop?.height ? `${desktop.width} / ${desktop.height}` : undefined
+const mobileRatio =
+  mobile?.width && mobile?.height ? `${mobile.width} / ${mobile.height}` : desktopRatio
+const style = [
+  desktopRatio && `--rp-banner-ratio: ${desktopRatio}`,
+  mobileRatio && `--rp-banner-ratio-mobile: ${mobileRatio}`,
+]
+  .filter(Boolean)
+  .join('; ')
+---
+
+{
+  desktop?.url && (
+    <Fragment>
+      {block.href ? (
+        <a
+          class="rp-banner rp-banner__link"
+          href={block.href}
+          rel={block.newTab ? 'noopener noreferrer' : undefined}
+          style={style || undefined}
+          target={block.newTab ? '_blank' : undefined}
+        >
+          <picture class="rp-banner__picture">
+            {mobile?.url && mobile.url !== desktop.url && (
+              <source media="(max-width: 47.99rem)" srcset={mobile.url} />
+            )}
+            <img
+              alt={alt}
+              class="rp-banner__img"
+              fetchpriority={block.priority ? 'high' : undefined}
+              height={desktop.height ?? undefined}
+              loading={block.priority ? 'eager' : 'lazy'}
+              sizes="100vw"
+              src={desktop.url}
+              width={desktop.width ?? undefined}
+            />
+          </picture>
+        </a>
+      ) : (
+        <div class="rp-banner" style={style || undefined}>
+          <picture class="rp-banner__picture">
+            {mobile?.url && mobile.url !== desktop.url && (
+              <source media="(max-width: 47.99rem)" srcset={mobile.url} />
+            )}
+            <img
+              alt={alt}
+              class="rp-banner__img"
+              fetchpriority={block.priority ? 'high' : undefined}
+              height={desktop.height ?? undefined}
+              loading={block.priority ? 'eager' : 'lazy'}
+              sizes="100vw"
+              src={desktop.url}
+              width={desktop.width ?? undefined}
+            />
+          </picture>
+        </div>
+      )}
+    </Fragment>
+  )
+}

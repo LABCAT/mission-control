@@ -1,0 +1,31 @@
+---
+import Container from '@labcat2020/rocketship/components/Container'
+import Stack from '@labcat2020/rocketship/components/Stack'
+import Typography from '@labcat2020/rocketship/components/Typography'
+
+import './blocks.css'
+import { lexicalToHtml } from '../richtext'
+import type { RichTextBlock } from '../types'
+
+type Props = {
+  block: RichTextBlock
+}
+
+const { block } = Astro.props
+const html = lexicalToHtml(block.content)
+---
+
+<section class="rp-block">
+  <Container size="content">
+    <Stack gap="medium">
+      {
+        block.heading && (
+          <Typography>
+            <h2>{block.heading}</h2>
+          </Typography>
+        )
+      }
+      <Typography html={html} />
+    </Stack>
+  </Container>
+</section>

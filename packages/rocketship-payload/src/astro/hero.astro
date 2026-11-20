@@ -1,0 +1,56 @@
+---
+import Button from '@labcat2020/rocketship/components/Button'
+import Container from '@labcat2020/rocketship/components/Container'
+import Stack from '@labcat2020/rocketship/components/Stack'
+import Typography from '@labcat2020/rocketship/components/Typography'
+
+import './blocks.css'
+import { mediaFrom } from '../media'
+import type { HeroBlock } from '../types'
+
+type Props = {
+  block: HeroBlock
+}
+
+const { block } = Astro.props
+const image = mediaFrom(block.image)
+const links = block.links ?? []
+---
+
+<section class="rp-block rp-hero">
+  <Container size="wide">
+    <div class:list={['rp-hero__grid', image?.url && 'rp-hero__grid--with-image']}>
+      <Stack gap="large">
+        {block.eyebrow && <p class="rp-hero__eyebrow">{block.eyebrow}</p>}
+        <Typography>
+          <h1>{block.heading}</h1>
+          {block.body && <p>{block.body}</p>}
+        </Typography>
+        {
+          links.length > 0 && (
+            <div class="rp-block__links">
+              {links.map((link) => (
+                <Button href={link.href} variant={link.variant ?? 'primary'}>
+                  {link.label}
+                </Button>
+              ))}
+            </div>
+          )
+        }
+      </Stack>
+      {
+        image?.url && (
+          <img
+            alt={image.alt ?? ''}
+            class="rp-hero__image"
+            fetchpriority="high"
+            height={image.height ?? undefined}
+            loading="eager"
+            src={image.url}
+            width={image.width ?? undefined}
+          />
+        )
+      }
+    </div>
+  </Container>
+</section>

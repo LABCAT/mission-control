@@ -1,0 +1,56 @@
+---
+import Card from '@labcat2020/rocketship/components/Card'
+import Container from '@labcat2020/rocketship/components/Container'
+import Grid from '@labcat2020/rocketship/components/Grid'
+import Stack from '@labcat2020/rocketship/components/Stack'
+import Typography from '@labcat2020/rocketship/components/Typography'
+
+import './blocks.css'
+import type { FeatureBoxesBlock } from '../types'
+
+type Props = {
+  block: FeatureBoxesBlock
+}
+
+const { block } = Astro.props
+const columns = block.items.length > 2 ? 3 : 2
+---
+
+<section class="rp-block">
+  <Container size="wide">
+    <Stack gap="large">
+      {
+        (block.heading || block.intro) && (
+          <Stack gap="small">
+            {block.heading && (
+              <Typography>
+                <h2>{block.heading}</h2>
+              </Typography>
+            )}
+            {block.intro && <p class="rp-block__intro">{block.intro}</p>}
+          </Stack>
+        )
+      }
+      <Grid columns={columns}>
+        {
+          block.items.map((item) => (
+            <Card as="article">
+              {item.icon && (
+                <span aria-hidden="true" class="rp-feature-box__icon">
+                  {item.icon}
+                </span>
+              )}
+              <h3 class="rs-card__title">{item.title}</h3>
+              {item.body && <p class="rs-card__description">{item.body}</p>}
+              {item.link && (
+                <a class="rs-card__link" href={item.link.href}>
+                  {item.link.label}
+                </a>
+              )}
+            </Card>
+          ))
+        }
+      </Grid>
+    </Stack>
+  </Container>
+</section>

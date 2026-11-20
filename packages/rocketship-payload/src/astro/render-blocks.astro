@@ -1,0 +1,23 @@
+---
+import { resolveBlocks } from '../render'
+import type { BlockComponentMap } from '../render'
+import type { BlockLike } from '../types'
+
+type Props = {
+  blocks?: null | readonly BlockLike[]
+  /** The renderers this site imports, keyed by Payload block slug. */
+  components: BlockComponentMap
+  /** Override the dev flag; defaults to Astro's. */
+  dev?: boolean
+}
+
+const { blocks, components, dev } = Astro.props
+const isDev = dev ?? import.meta.env.DEV
+const resolved = resolveBlocks(blocks, components, { dev: isDev })
+---
+
+{
+  resolved.map(({ block, Component }) => (
+    <Component block={block} />
+  ))
+}

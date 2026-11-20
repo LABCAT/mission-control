@@ -1,0 +1,66 @@
+---
+import Card from '@labcat2020/rocketship/components/Card'
+import Container from '@labcat2020/rocketship/components/Container'
+import Grid from '@labcat2020/rocketship/components/Grid'
+import Stack from '@labcat2020/rocketship/components/Stack'
+import Typography from '@labcat2020/rocketship/components/Typography'
+
+import './blocks.css'
+import { mediaFrom } from '../media'
+import type { CardGridBlock } from '../types'
+
+type Props = {
+  block: CardGridBlock
+}
+
+const { block } = Astro.props
+const columns = Number(block.columns ?? 3) as 2 | 3 | 4
+---
+
+<section class="rp-block">
+  <Container size="wide">
+    <Stack gap="large">
+      {
+        (block.heading || block.intro) && (
+          <Stack gap="small">
+            {block.heading && (
+              <Typography>
+                <h2>{block.heading}</h2>
+              </Typography>
+            )}
+            {block.intro && <p class="rp-block__intro">{block.intro}</p>}
+          </Stack>
+        )
+      }
+      <Grid columns={columns}>
+        {
+          block.cards.map((card) => {
+            const image = mediaFrom(card.image)
+            return (
+              <Card as="article">
+                {image?.url && (
+                  <img
+                    alt={image.alt ?? ''}
+                    class="rs-card__media"
+                    height={image.height ?? undefined}
+                    loading="lazy"
+                    slot="media"
+                    src={image.url}
+                    width={image.width ?? undefined}
+                  />
+                )}
+                <h3 class="rs-card__title">{card.title}</h3>
+                {card.body && <p class="rs-card__description">{card.body}</p>}
+                {card.link && (
+                  <a class="rs-card__link" href={card.link.href}>
+                    {card.link.label}
+                  </a>
+                )}
+              </Card>
+            )
+          })
+        }
+      </Grid>
+    </Stack>
+  </Container>
+</section>

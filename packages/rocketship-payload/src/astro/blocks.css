@@ -1,0 +1,95 @@
+/* Block chrome only. Every value is a Rocketship token; no tenant value is baked in here. */
+
+.rp-block {
+  padding-block: var(--rs-space-8);
+}
+
+.rp-block__heading {
+  margin: 0;
+}
+
+.rp-block__intro {
+  color: var(--rs-color-muted);
+  margin: 0;
+}
+
+.rp-block__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--rs-space-3);
+}
+
+.rp-hero__grid {
+  align-items: center;
+  display: grid;
+  gap: var(--rs-space-6);
+}
+
+.rp-hero__eyebrow {
+  color: var(--rs-color-muted);
+  font-size: var(--rs-font-size-sm);
+  font-weight: var(--rs-font-weight-semibold);
+  margin: 0;
+}
+
+.rp-hero__image {
+  border-radius: var(--rs-radius-md);
+  display: block;
+  height: auto;
+  inline-size: 100%;
+  object-fit: cover;
+}
+
+@media (min-width: 48rem) {
+  .rp-hero__grid--with-image {
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  }
+}
+
+.rp-feature-box__icon {
+  display: block;
+  font-size: var(--rs-font-size-2xl);
+  line-height: 1;
+}
+
+.rp-cta {
+  background: var(--rs-color-surface-elevated);
+}
+
+.rp-faq__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rs-space-2);
+}
+
+.rp-banner {
+  background: var(--rs-color-surface-elevated);
+}
+
+.rp-banner__link {
+  color: inherit;
+  display: block;
+}
+
+.rp-banner__link:focus-visible {
+  outline: 2px solid var(--rs-color-focus-ring);
+  outline-offset: 2px;
+}
+
+.rp-banner__picture {
+  display: block;
+}
+
+.rp-banner__img {
+  aspect-ratio: var(--rp-banner-ratio, auto);
+  display: block;
+  height: auto;
+  inline-size: 100%;
+  object-fit: cover;
+}
+
+@media (max-width: 47.99rem) {
+  .rp-banner__img {
+    aspect-ratio: var(--rp-banner-ratio-mobile, auto);
+  }
+}
