@@ -1126,3 +1126,710 @@ _dmarc.ycv.vu  text = "v=DMARC1; p=none; aspf=r; adkim=r;"
 
 - vanuatuwok.vu's DNS is on **Cloudflare**. It has no SPF or DMARC record, so it can't send mail as `@vanuatuwok.vu` in its current state.
 - The site sends as **ycv.vu** through Gmail SMTP (section 21). ycv.vu's SPF doesn't include `_spf.google.com`, so Gmail-sent mail can fail SPF and only passes DMARC if DKIM is signed for ycv.vu (DKIM selector not checked). DMARC is `p=none`, so failures aren't rejected.
+
+
+> Sections 36–59 were run on 20 Nov 2026 from `docs/migration/QUERIES-19NOV.sql` (query 35 skipped as asked), same read-only rules as above.
+
+## 36. Multiple locations per job: how are they stored? (sample of addresses with commas)
+
+> `_jr_address` is one free-text field; multiple locations are typed into it with commas, semicolons or "and". The empty-looking leading space on one row is in the data.
+
+| address | n |
+|---|---|
+| Port Vila, Efate | 4965 |
+| Luganville, Espiritu Santo | 295 |
+| Isangel, Tanna | 31 |
+| Efate,Port Vila | 28 |
+| Lenakel, Tanna | 26 |
+| Longana, Ambae | 14 |
+| Port Vila, Vanuatu | 13 |
+| Forari, Efate | 11 |
+| Sola, Vanua Lava | 10 |
+| Lakatoro, Malekula | 9 |
+| No. 2, Port Vila, Vanuatu | 5 |
+| Anywhere/Work From Home, Other | 4 |
+| Loltong, Pentecost | 4 |
+| Port Vila, Santo and Tanna | 3 |
+| Port vila ,Efate | 3 |
+| Efate , Mele | 3 |
+| Tanna,Tafea | 3 |
+| Lamap, Malekula | 3 |
+| Efate, Santo and Tanna | 3 |
+| Reece Discomb Street, Nº 2 area, Port Vila, VANUATU | 2 |
+| Efate,Santo | 2 |
+| Isankel, Tanna | 2 |
+| Efate,Mele | 2 |
+| Efate ,Tanna | 2 |
+| Efate, Santo | 2 |
+| Port Vila, Efate; South Pentecost | 2 |
+| Teouma Bay, Efate, Vanuatu | 2 |
+| Espritu, Port Vila and Luganville, Espiritu Santo | 2 |
+| Tafea,Shefa,Malampa,Penama,Sanma,Torba | 2 |
+| ANZ Vanuatu, Port Vila | 2 |
+
+## 37. Shortcodes / forms on published pages (no content, only the first shortcode name and length)
+
+| ID | post_type | post_name | first_shortcode | len |
+|---|---|---|---|---|
+| 3983 | page | about-us | NULL | 4882 |
+| 10649 | page | application-form | NULL | 256 |
+| 5 | page | blog | NULL | 0 |
+| 68 | page | confirm | NULL | 0 |
+| 655 | page | contact | NULL | 1396 |
+| 29301 | page | contact-2 | NULL | 0 |
+| 7 | page | dashboard | NULL | 0 |
+| 12 | page | edit-job | NULL | 0 |
+| 11 | page | edit-resume | NULL | 0 |
+| 38 | page | employers | [PDF | 5971 |
+| 1366 | page | home | NULL | 709 |
+| 73891 | page | home-2 | NULL | 0 |
+| 9 | page | job-date-archive | NULL | 0 |
+| 6510 | custom-form | job-description | NULL | 0 |
+| 168 | page | job-email-text | NULL | 178 |
+| 4 | page | jobs | NULL | 0 |
+| 33579 | page | land-law-reforms | NULL | 169 |
+| 16 | page | login | NULL | 0 |
+| 8 | page | my-profile | NULL | 0 |
+| 791 | page | no-resumes | NULL | 288 |
+| 29143 | page | organisation-competition | NULL | 796 |
+| 23445 | page | organisations | NULL | 267 |
+| 18 | page | password-recovery | NULL | 0 |
+| 19 | page | password-reset | NULL | 0 |
+| 14 | page | purchase-job-pack | NULL | 0 |
+| 15 | page | purchase-resume-subscription | NULL | 0 |
+| 17 | page | register | NULL | 0 |
+| 70 | page | resend-confirmation | NULL | 0 |
+| 357 | page | rss-feed | NULL | 0 |
+| 355 | page | rss-feed | NULL | 0 |
+| 2 | page | sample-page | NULL | 958 |
+| 206 | page | sign-up | NULL | 725 |
+| 13 | page | submit | NULL | 0 |
+| 10 | page | terms-conditions | NULL | 0 |
+| 61 | page | volunteer-jobs | NULL | 0 |
+
+## 38. The rest of the jr_* options (only the first 100 rows were shown in query 6)
+
+> All 189 rows are shown (more than the usual 100-row cap) because this query exists to show what query 6 cut off. Two rows whose value is the sender email address were removed.
+
+| option_name | value |
+|---|---|
+| jr_ad_stats_all | 1 |
+| jr_admin_security | edit_others_posts |
+| jr_allow_editing | 1 |
+| jr_allow_job_seekers | 1 |
+| jr_allow_recruiters |  |
+| jr_allow_relist | 1 |
+| jr_antispam_answer | hot |
+| jr_antispam_question | Is fire “<em>hot</em>” or “<em>cold</em>”? |
+| jr_bcc_apply_emails | 1 |
+| jr_captcha_application_form_enable | no |
+| jr_captcha_contact_forms_enable | no |
+| jr_captcha_enable | 1 |
+| jr_captcha_theme | light |
+| jr_careerjet_all_listings |  |
+| jr_careerjet_country | en_US |
+| jr_careerjet_dynamic_search_results |  |
+| jr_careerjet_front_page |  |
+| jr_careerjet_front_page_count | 5 |
+| jr_careerjet_frontpage_cache | 3600 |
+| jr_careerjet_jtypes_other | full-time\|f part-time\|p |
+| jr_careerjet_publisher_id |  |
+| jr_careerjet_results_position | after |
+| jr_careerjet_sort_order | relevance |
+| jr_child_theme | style-default.css |
+| jr_debug_mode |  |
+| jr_disable_blog |  |
+| jr_distance_unit | km |
+| jr_dynamic_search_results |  |
+| jr_editing_needs_approval |  |
+| jr_enable_log | 1 |
+| jr_enable_salary_field | 1 |
+| jr_enable_terms_conditions |  |
+| jr_expired_action | hide |
+| jr_expired_job_email_owner | 1 |
+| jr_facebook_id |  |
+| jr_featured_jobs_per_page |  |
+| jr_featured_jobs_sort | newest |
+| jr_feedburner_url |  |
+| jr_front_page_careerjet_queries | web designer\|f\|los angeles, CA web developer\|p\|los angeles, CA wordpress\|p\|los angeles, CA |
+| jr_front_page_indeed_queries | web designer\|US\|fulltime web developer\|US\|contract wordpress\|US\|parttime |
+| jr_front_page_linkedin_queries | web design\|f\|us web developer\|f wordpress\|p |
+| jr_front_page_simplyhired_queries | web designer\|full-time\|los angeles, CA web developer\|full-time wordpress\|part-time |
+| jr_fx_db_version | 1.0 |
+| jr_fx_int_jobs_free_offer |  |
+| jr_fx_int_jobs_max_duration | 45 |
+| jr_fx_int_jobs_min_auto_pub | 0 |
+| jr_fx_int_jobs_min_duration | 1 |
+| jr_fx_opt_integration_linkedin_profile | job_seeker |
+| jr_fx_opt_integration_linkedin_profile_job | no |
+| jr_fx_opt_integration_linkedin_profile_resume | yes |
+| jr_fx_opt_jobs_applications_dashboard | yes |
+| jr_fx_opt_jobs_applications_export | all |
+| jr_fx_opt_jobs_applications_monitor | yes |
+| jr_fx_opt_jobs_applications_names | yes |
+| jr_fx_opt_jobs_apply_button | always |
+| jr_fx_opt_jobs_apply_registered_email | yes |
+| jr_fx_opt_jobs_apply_visitors_redirect | yes |
+| jr_fx_opt_jobs_buttons | no |
+| jr_fx_opt_jobs_duration_field | all |
+| jr_fx_opt_jobs_duration_field_edit | all |
+| jr_fx_opt_jobs_free_offer_text | This a FREE job post. It will not be charged. |
+| jr_fx_opt_jobs_gmaps | yes |
+| jr_fx_opt_jobs_hide_pay_free_offer | no |
+| jr_fx_opt_jobs_lister_auto_complete | always |
+| jr_fx_opt_jobs_lister_persistent_logo | yes |
+| jr_fx_opt_jobs_lister_persistent_logo_gravatar | yes |
+| jr_fx_opt_jobs_optional_apply_online | yes |
+| jr_fx_opt_jobs_recipient_field | yes |
+| jr_fx_opt_jobs_recipient_field_roles | a:2:{i:0;s:13:"administrator";i:1;s:10:"job_lister";} |
+| jr_fx_opt_jobs_seeker_auto_complete | no |
+| jr_fx_opt_listings_logo | all |
+| jr_fx_opt_listings_logo_pos | right |
+| jr_fx_opt_listings_preview | no |
+| jr_fx_opt_listings_preview_cache_time | 7 |
+| jr_fx_opt_listings_preview_color | ui-tooltip-light |
+| jr_fx_opt_listings_preview_exclude |  |
+| jr_fx_opt_listings_preview_size | 45 |
+| jr_fx_opt_listings_preview_style | ui-tooltip-shadow |
+| jr_fx_opt_listings_preview_thumb | no |
+| jr_fx_opt_pack_resume_views_limit_show_list | yes |
+| jr_fx_opt_pack_resume_views_limit_unique | yes |
+| jr_fx_opt_resume_cv_download | no |
+| jr_fx_opt_resume_list_visibility | jobpack |
+| jr_fx_opt_resume_upload_cvs_max | 1 |
+| jr_fx_opt_resume_visibility | jobpack |
+| jr_fx_opt_resumes_noaccess_redirect | 791 |
+| jr_fx_opt_site_breadcrumbs | under |
+| jr_fx_opt_widget_facebook | yes |
+| jr_fx_opt_widget_google_plus_id |  |
+| jr_fx_opt_widget_youtube_id |  |
+| jr_fx_opt_widget_youtube_type | user |
+| jr_fx_text_email_signature |  |
+| jr_fx_text_integration_linkedin_color |  |
+| jr_fx_text_jobs_duration_caption | Please choose the duration of this job (in days). |
+| jr_fx_text_notice_min_auto_pub | You job was sent for approval. You have %publishedjobs% published jobs. You need a minimum of %minpublishedjobs% job(s) |
+| jr_gmaps_lang | en |
+| jr_gmaps_region | VU |
+| jr_google_analytics | <!-- Global site tag (gtag.js) - Google Analytics --> <script async src="https://www.googletagmanager.com/gtag/js?id=UA |
+| jr_html_allowed |  |
+| jr_indeed_all_listings |  |
+| jr_indeed_channel |  |
+| jr_indeed_front_page |  |
+| jr_indeed_front_page_count | 5 |
+| jr_indeed_frontpage_cache | 3600 |
+| jr_indeed_job_type_sponsored | job-featured |
+| jr_indeed_jtypes_other | full-time\|fulltime part-time\|parttime |
+| jr_indeed_publisher_id |  |
+| jr_indeed_results_position | after |
+| jr_indeed_site_type | relevance |
+| jr_indeed_sort_order | relevance |
+| jr_job_alerts | 1 |
+| jr_job_alerts_batch_size | 100 |
+| jr_job_alerts_cron | daily |
+| jr_job_alerts_email_subject | Vanuatu Wok - new job alerts |
+| jr_job_alerts_email_template | standard |
+| jr_job_alerts_email_type | text/html |
+| jr_job_alerts_feed |  |
+| jr_job_alerts_from_name | Vanuatu Wok |
+| jr_job_alerts_job_body | <b>%jobtitle%</b> // %company% %location% \| %jobtype% \| Job Category: %jobcat% Read more: <a href="%permalink%">%per |
+| jr_job_alerts_jobs_limit | 5 |
+| jr_job_cat_tax_permalink | job-category |
+| jr_job_permalink | jobs |
+| jr_job_salary_tax_permalink | job-salary |
+| jr_job_tag_tax_permalink | job-tag |
+| jr_job_type_tax_permalink | job-type |
+| jr_jobs_charge | 1 |
+| jr_jobs_default_expires | 45 |
+| jr_jobs_per_page | 20 |
+| jr_jobs_require_moderation |  |
+| jr_jobs_submit_text | Job listings start from Vt 4,000. All volunteer listings are FREE! |
+| jr_linkedin_all_listings |  |
+| jr_linkedin_country | us |
+| jr_linkedin_dynamic_search_results |  |
+| jr_linkedin_front_page |  |
+| jr_linkedin_front_page_count | 5 |
+| jr_linkedin_frontpage_cache | 3600 |
+| jr_linkedin_industry | 0 |
+| jr_linkedin_job_type_companies |  |
+| jr_linkedin_job_type_companies_css | job-key-companies |
+| jr_linkedin_job_type_sponsored_css | job-sponsored |
+| jr_linkedin_jtypes_other | full-time\|f part-time\|p temporary\|t |
+| jr_linkedin_results_position | after |
+| jr_linkedin_revoke | yes |
+| jr_linkedin_sort_order | rd |
+| jr_linkedin_visibility | all |
+| jr_logo_url | https://vanuatuwok.vu/app/uploads/2020/05/cropped-vanuatu-wok-logo.png |
+| jr_my_profile_button_text | Submit your CV, update your profile, and allow employers to find <em>you</em>! |
+| jr_new_ad_email |  |
+| jr_new_job_email_owner | 1 |
+| jr_nu_admin_email |  |
+| jr_nu_custom_email | 1 |
+| jr_nu_email_subject | Confirm your account with Vanuatu Wok |
+| jr_nu_email_type | text/plain |
+| jr_nu_from_name | Vanuatu Wok - Vanuatu Jobs |
+| jr_remove_admin_bar | 1 |
+| jr_remove_wp_generator | 1 |
+| jr_resume_listing_visibility | listers |
+| jr_resume_permalink | resumes |
+| jr_resume_require_subscription |  |
+| jr_resume_show_contact_form |  |
+| jr_resume_subscription_notice | Sorry, you do not have access to resumes. To access and/or view our resume database you must sign up as a job lister and |
+| jr_resume_visibility | listers |
+| jr_resumes_per_page | 20 |
+| jr_sharethis_id |  |
+| jr_show_empty_categories |  |
+| jr_show_filterbar | 1 |
+| jr_show_searchbar | 1 |
+| jr_show_sidebar | 1 |
+| jr_simplyhired_all_listings |  |
+| jr_simplyhired_country | us |
+| jr_simplyhired_domain_id |  |
+| jr_simplyhired_dynamic_search_results |  |
+| jr_simplyhired_front_page |  |
+| jr_simplyhired_front_page_count | 5 |
+| jr_simplyhired_frontpage_cache | 3600 |
+| jr_simplyhired_job_type_organic |  |
+| jr_simplyhired_job_type_paid |  |
+| jr_simplyhired_job_type_sponsored | job-featured |
+| jr_simplyhired_jtypes_other |  |
+| jr_simplyhired_onet_code |  |
+| jr_simplyhired_publisher_id |  |
+| jr_simplyhired_results_position | after |
+| jr_simplyhired_sort_order | rd |
+| jr_submit_cat_editable | 1 |
+| jr_submit_cat_required | 1 |
+| jr_submit_how_to_apply_display | 1 |
+| jr_submit_resume_button_text | Register as a Job Seeker to submit your Resume. |
+| jr_twitter_id |  |
+| jr_use_logo | yes |
+
+## 39. WP-cron hooks that are scheduled (run on the server; prints hook names only, no args)
+
+> Run on the server as `mysql -N … | grep … | sort | uniq -c` against the `cron` option, which prints hook names only.
+
+| hook | entries |
+|---|---|
+| app_order_processing | 1 |
+| appthemes_addons_mp_updates_check | 1 |
+| daily_resume_reminder_email | 1 |
+| delete_expired_transients | 1 |
+| jr_check_expired_subscriptions | 1 |
+| jr_check_jobs_expired | 1 |
+| jr_check_packs_expired | 1 |
+| jr_job_alerts | 1 |
+| jr_prune_expired_featured | 1 |
+| md_daily_job_alerts | 1 |
+| recovery_mode_clean_expired_keys | 1 |
+| updraft_backup | 1 |
+| updraft_backup_database | 1 |
+| updraftplus_clean_temporary_files | 1 |
+| wordfence_daily_cron | 1 |
+| wordfence_hourly_cron | 1 |
+| wp_privacy_delete_old_export_files | 1 |
+| wp_scheduled_auto_draft_delete | 1 |
+| wp_scheduled_delete | 1 |
+| wp_site_health_scheduled_check | 1 |
+| wp_update_plugins | 1 |
+| wp_update_themes | 1 |
+| wp_update_user_counts | 1 |
+| wp_version_check | 1 |
+| wpseo_permalink_structure_check | 1 |
+
+## 40. Application attachments: are cover letters/CVs actually sent? (p2p meta keys, counts only)
+
+| meta_key | n |
+|---|---|
+| type | 7361 |
+| price | 7361 |
+| date | 622 |
+| date_online_form | 622 |
+| application_type | 622 |
+| attached_resume | 622 |
+| linked_resume | 622 |
+| uploaded_resume | 622 |
+| uploaded_cover_letter | 622 |
+
+## 41. Why jobs end: expiry/cancel reason values (first 40 chars, top 30)
+
+| meta_key | reason | n |
+|---|---|---|
+| _jr_expired_reason | job_has_expired_cron | 4127 |
+| _jr_canceled_job | user_canceled | 98 |
+| _jr_canceled_job | user_ended | 80 |
+| _jr_expired_reason | user_ended | 80 |
+| _jr_expired_reason | user_canceled | 77 |
+| _jr_canceled_job | order_failed | 49 |
+| _jr_expired_reason | order_failed | 32 |
+| _jr_canceled_job | admin_cancelled | 1 |
+| _jr_expired_reason | admin_cancelled | 1 |
+
+## 42. Pending and draft jobs by year and job type (does anything still wait for approval? are drafts recent?)
+
+| y | post_status | job_type | n |
+|---|---|---|---|
+| 2026 | draft | (none) | 114 |
+| 2026 | draft | full-time | 35 |
+| 2026 | draft | contract | 16 |
+| 2026 | draft | part-time | 3 |
+| 2026 | pending | (none) | 2 |
+| 2026 | draft | independent | 2 |
+| 2026 | pending | contract | 1 |
+| 2026 | draft | independant | 1 |
+| 2025 | draft | (none) | 129 |
+| 2025 | draft | full-time | 54 |
+| 2025 | draft | contract | 10 |
+| 2025 | pending | (none) | 4 |
+| 2025 | pending | full-time | 2 |
+| 2024 | draft | (none) | 120 |
+| 2024 | draft | full-time | 51 |
+| 2024 | draft | contract | 10 |
+| 2024 | draft | part-time | 2 |
+| 2024 | draft | temporary | 1 |
+| 2024 | draft | not-stated | 1 |
+| 2023 | draft | (none) | 116 |
+| 2023 | draft | full-time | 37 |
+| 2023 | draft | contract | 27 |
+| 2023 | draft | part-time | 3 |
+| 2023 | pending | (none) | 2 |
+| 2023 | pending | full-time | 1 |
+| 2023 | draft | traineeship | 1 |
+| 2022 | draft | (none) | 134 |
+| 2022 | draft | full-time | 59 |
+| 2022 | draft | contract | 16 |
+| 2022 | draft | part-time | 2 |
+| 2022 | pending | (none) | 1 |
+| 2022 | pending | contract | 1 |
+| 2021 | draft | (none) | 156 |
+| 2021 | draft | full-time | 54 |
+| 2021 | draft | contract | 19 |
+| 2021 | draft | not-stated | 11 |
+| 2021 | draft | part-time | 7 |
+| 2021 | draft | voluntary | 1 |
+| 2020 | draft | (none) | 103 |
+| 2020 | draft | full-time | 43 |
+| 2020 | draft | part-time | 10 |
+| 2020 | draft | contract | 4 |
+| 2020 | draft | not-stated | 2 |
+| 2020 | draft | casual | 1 |
+| 2019 | draft | (none) | 2 |
+| 2019 | draft | full-time | 1 |
+
+## 43. Employer contact fields filled in, among users who logged in since 2023, by role (counts only)
+
+| meta_key | role | n |
+|---|---|---|
+| job_title | lister | 35 |
+| phone_number | lister | 29 |
+| physical_location | lister | 2 |
+
+## 44. Resumes created per year and status (impact of dropping resumes, decision 1)
+
+| y | post_status | n |
+|---|---|---|
+| 2026 | private | 40 |
+| 2026 | publish | 26 |
+| 2025 | private | 33 |
+| 2025 | publish | 17 |
+| 2024 | private | 43 |
+| 2024 | publish | 21 |
+| 2023 | private | 29 |
+| 2023 | publish | 16 |
+| 2022 | private | 26 |
+| 2022 | publish | 20 |
+| 2021 | private | 33 |
+| 2021 | publish | 15 |
+| 2020 | private | 44 |
+| 2020 | publish | 22 |
+| 2019 | private | 41 |
+| 2019 | publish | 42 |
+| 2018 | private | 36 |
+| 2018 | publish | 22 |
+
+## 45. Wordfence 2FA: how many users have it on? (count only)
+
+> Wordfence 2FA table exists but no user has 2FA enabled.
+
+| users_with_2fa |
+|---|
+| 0 |
+
+## 46. What is the THANKSFROMYCV user meta? (values cut to 20 chars, counts)
+
+| v | n |
+|---|---|
+| 1 | 4 |
+
+## 47. Overseas / remote jobs (seed locations)
+
+| y | n |
+|---|---|
+| 2026 | 2 |
+| 2025 | 4 |
+| 2024 | 7 |
+| 2023 | 12 |
+| 2022 | 7 |
+| 2021 | 3 |
+| 2018 | 2 |
+
+## 48. Featured-in-category use in the last 24 months (confirms dropping it for vwok)
+
+| y | n |
+|---|---|
+| 2026 | 3 |
+
+## 49. Page templates in use on published pages (finds the RSS feed pages, /confirm/, contact, organisations, home)
+
+| post_name | template |
+|---|---|
+| rss-feed | feeds/paid-jobs-feed.php |
+| rss-feed | feeds/voluntary-jobs-feed.php |
+| jobs | home-page-job-listings.php |
+| confirm | includes/confirm.php |
+| resend-confirmation | includes/resend-confirmation.php |
+| home-2 | index.php |
+| organisations | organisations-holder-page.php |
+| blog | tpl-blog.php |
+| contact-2 | tpl-contact.php |
+| dashboard | tpl-dashboard.php |
+| edit-job | tpl-edit-job.php |
+| edit-resume | tpl-edit-resume.php |
+| job-date-archive | tpl-jobs-by-date.php |
+| login | tpl-login.php |
+| password-recovery | tpl-password-recovery.php |
+| password-reset | tpl-password-reset.php |
+| my-profile | tpl-profile.php |
+| purchase-job-pack | tpl-purchase-pack.php |
+| purchase-resume-subscription | tpl-purchase-resume-subscription.php |
+| register | tpl-registration.php |
+| submit | tpl-submit.php |
+| terms-conditions | tpl-terms-conditions.php |
+| home | vantage-home-page.php |
+| volunteer-jobs | volunteer-job-listings.php |
+
+## 50. FXtender settings (which optional features are on). Keys/tokens and email addresses are masked; long text cut to 80 chars
+
+> Masking as written in the query: the LinkedIn key shows as `[hidden]`; no value contained `@`.
+
+| option_name | value |
+|---|---|
+| jr_fx_db_version | 1.0 |
+| jr_fx_int_jobs_free_offer |  |
+| jr_fx_int_jobs_max_duration | 45 |
+| jr_fx_int_jobs_min_auto_pub | 0 |
+| jr_fx_int_jobs_min_duration | 1 |
+| jr_fx_opt_integration_linkedin_profile | job_seeker |
+| jr_fx_opt_integration_linkedin_profile_job | no |
+| jr_fx_opt_integration_linkedin_profile_resume | yes |
+| jr_fx_opt_jobs_applications_dashboard | yes |
+| jr_fx_opt_jobs_applications_export | all |
+| jr_fx_opt_jobs_applications_monitor | yes |
+| jr_fx_opt_jobs_applications_names | yes |
+| jr_fx_opt_jobs_apply_button | always |
+| jr_fx_opt_jobs_apply_registered_email | yes |
+| jr_fx_opt_jobs_apply_visitors_redirect | yes |
+| jr_fx_opt_jobs_buttons | no |
+| jr_fx_opt_jobs_duration_field | all |
+| jr_fx_opt_jobs_duration_field_edit | all |
+| jr_fx_opt_jobs_free_offer_text | This a FREE job post. It will not be charged. |
+| jr_fx_opt_jobs_gmaps | yes |
+| jr_fx_opt_jobs_hide_pay_free_offer | no |
+| jr_fx_opt_jobs_lister_auto_complete | always |
+| jr_fx_opt_jobs_lister_persistent_logo | yes |
+| jr_fx_opt_jobs_lister_persistent_logo_gravatar | yes |
+| jr_fx_opt_jobs_optional_apply_online | yes |
+| jr_fx_opt_jobs_recipient_field | yes |
+| jr_fx_opt_jobs_recipient_field_roles | a:2:{i:0;s:13:"administrator";i:1;s:10:"job_lister";} |
+| jr_fx_opt_jobs_seeker_auto_complete | no |
+| jr_fx_opt_listings_logo | all |
+| jr_fx_opt_listings_logo_pos | right |
+| jr_fx_opt_listings_preview | no |
+| jr_fx_opt_listings_preview_cache_time | 7 |
+| jr_fx_opt_listings_preview_color | ui-tooltip-light |
+| jr_fx_opt_listings_preview_exclude |  |
+| jr_fx_opt_listings_preview_size | 45 |
+| jr_fx_opt_listings_preview_style | ui-tooltip-shadow |
+| jr_fx_opt_listings_preview_thumb | no |
+| jr_fx_opt_pack_resume_views_limit_show_list | yes |
+| jr_fx_opt_pack_resume_views_limit_unique | yes |
+| jr_fx_opt_resume_cv_download | no |
+| jr_fx_opt_resume_list_visibility | jobpack |
+| jr_fx_opt_resume_upload_cvs_max | 1 |
+| jr_fx_opt_resume_visibility | jobpack |
+| jr_fx_opt_resumes_noaccess_redirect | 791 |
+| jr_fx_opt_site_breadcrumbs | under |
+| jr_fx_opt_widget_facebook | yes |
+| jr_fx_opt_widget_google_plus_id |  |
+| jr_fx_opt_widget_youtube_id |  |
+| jr_fx_opt_widget_youtube_type | user |
+| jr_fx_text_email_signature |  |
+| jr_fx_text_integration_linkedin_color |  |
+| jr_fx_text_integration_linkedin_key | [hidden] |
+| jr_fx_text_jobs_duration_caption | Please choose the duration of this job (in days). |
+| jr_fx_text_notice_min_auto_pub | You job was sent for approval. You have %publishedjobs% published jobs. You need |
+
+## 51. Email template switches and subjects (Advanced Emails `_custom_*` and standalone `jr_nu_*`/`jr_new_ad_email`); no bodies, no addresses
+
+| option_name | value |
+|---|---|
+| _custom_disable_job_pending_email | no |
+| _custom_job_approved_email | yes |
+| _custom_job_approved_email_subject | [%blogname%] Job approved and Invoice link for %jobname% |
+| _custom_job_approved_email_type | text/html |
+| _custom_job_approved_from_name | Vanuatu Wok YCV |
+| _custom_job_expired_email | yes |
+| _custom_job_expired_email_subject | Your Job listing has expired + your feedback |
+| _custom_job_expired_email_type | text/html |
+| _custom_job_expired_from_name | Vanuatu Wok |
+| _custom_job_expiring_email | yes |
+| _custom_job_expiring_email_subject | [%blogname%] Your Job listing expires soon |
+| _custom_job_expiring_email_type | text/html |
+| _custom_job_expiring_from_name | Vanuatu Wok |
+| _custom_job_pending_email | yes |
+| _custom_job_pending_email_subject | [%blogname%] Job pending approval |
+| _custom_job_pending_email_type | text/html |
+| _custom_job_pending_from_name | Vanuatu Wok |
+| _custom_reply_to_resume_email | no |
+| _custom_reply_to_resume_email_subject |  |
+| _custom_reply_to_resume_email_type | text/html |
+| _custom_reply_to_resume_from_name |  |
+| _custom_resume_reminder_email | no |
+| _custom_resume_reminder_email_subject |  |
+| _custom_resume_reminder_from_name |  |
+| _custom_resume_subscription_activated_email | no |
+| _custom_resume_subscription_activated_email_subject | Your resume access subscription to vanuatu wok is now active |
+| _custom_resume_subscription_activated_email_type | text/html |
+| _custom_resume_subscription_activated_from_name |  |
+| _custom_resume_subscription_expired_email | no |
+| _custom_resume_subscription_expired_email_subject |  |
+| _custom_resume_subscription_expired_email_type | text/html |
+| _custom_resume_subscription_expired_from_name |  |
+| _custom_volunteer_job_approved_email | yes |
+| _custom_volunteer_job_approved_email_subject | [%blogname%] Volunteer Job approved for %jobname% |
+| _custom_volunteer_job_approved_email_type | text/html |
+| _custom_volunteer_job_approved_from_name | Vanuatu Wok YCV |
+| jr_new_ad_email |  |
+| jr_nu_admin_email |  |
+| jr_nu_custom_email | 1 |
+| jr_nu_email_type | text/plain |
+
+## 52. Category custom forms: the forms and their categories, then which custom fields jobs actually filled (keys + counts only)
+
+**Statement 1**
+
+| ID | post_status | y | categories |
+|---|---|---|---|
+| 6510 | publish | 2018 | accounting,agriculture-fishing-forestry,architecture,automotive,banking-finance-insurance,construction-roading,customer-service,domestic-maintenance,education,engineering,executive-and-general-management,government-council,healthcare,hospitality-tourism,hr-recruitment,it,legal,manufacturing-operatio… |
+
+**Statement 2**
+
+> No job has any `app_*` custom field filled in, so the category custom form is unused.
+
+_No rows returned._
+
+## 53. Jobs whose company name differs from the posting organisation's name (agency / "post for client" signal), by year; counts only
+
+| y | same_as_org | differs | orgs_with_differing_names |
+|---|---|---|---|
+| 2026 | 55 | 510 | 29 |
+| 2025 | 71 | 547 | 32 |
+| 2024 | 103 | 502 | 28 |
+| 2023 | 101 | 580 | 34 |
+| 2022 | 150 | 578 | 29 |
+| 2021 | 85 | 672 | 32 |
+| 2020 | 70 | 465 | 31 |
+| 2019 | 109 | 548 | 37 |
+| 2018 | 46 | 448 | 30 |
+
+## 54. Unconfirmed accounts (still holding a confirmation_key) by registration year: is email confirmation working?
+
+| y | registered | unconfirmed |
+|---|---|---|
+| 2026 | 951 | 286 |
+| 2025 | 1017 | 391 |
+| 2024 | 5056 | 4219 |
+| 2023 | 1575 | 1204 |
+| 2022 | 2453 | 2102 |
+| 2021 | 2632 | 2191 |
+| 2020 | 844 | 242 |
+| 2019 | 773 | 211 |
+| 2018 | 543 | 113 |
+| 2017 | 3 | 0 |
+
+## 55. Close dates employers choose (job duration in days) on jobs posted in the last 24 months
+
+| days | n |
+|---|---|
+| <14 | 634 |
+| 14-29 | 550 |
+| 30-44 | 187 |
+| 45+ | 37 |
+
+## 56. Selected keys inside the serialised jr_options array (bool vs 'yes' matters for the theme's `== 'yes'` tests)
+
+> `b:1` / `b:0` are PHP booleans, `s:N:"…"` strings, inside the serialized `jr_options` array.
+
+| name | value |
+|---|---|
+| jr_ad_stats_all | "jr_ad_stats_all";b:1; |
+| apply_reg_users_only | "apply_reg_users_only";b:1; |
+| allow_job_comments | "allow_job_comments";b:0; |
+| plan_type | "plan_type";s:4:"pack"; |
+| include_nowhere | "include_nowhere";b:0; |
+| jr_submit_how_to_apply_display | "jr_submit_how_to_apply_display";b:1; |
+| jr_nu_admin_email | "jr_nu_admin_email";s:3:"yes"; |
+| jr_new_ad_email | "jr_new_ad_email";b:0; |
+| jr_nu_custom_email | "jr_nu_custom_email";b:1; |
+
+## 57. Are resumes actually viewed? Resume page views are recorded only for viewers who can open them
+
+| created | post_status | resumes | viewed_at_least_once | total_views | max_views |
+|---|---|---|---|---|---|
+| 2018 | private | 36 | 7 | 9 | 2 |
+| 2018 | publish | 22 | 22 | 64 | 7 |
+| 2019 | private | 41 | 1 | 3 | 3 |
+| 2019 | publish | 42 | 41 | 92 | 10 |
+| 2020 | private | 44 | 1 | 1 | 1 |
+| 2020 | publish | 22 | 22 | 47 | 5 |
+| 2021 | private | 33 | 2 | 2 | 1 |
+| 2021 | publish | 15 | 15 | 32 | 5 |
+| 2022 | private | 26 | 0 | 0 | 0 |
+| 2022 | publish | 20 | 20 | 48 | 9 |
+| 2023 | private | 29 | 0 | 0 | 0 |
+| 2023 | publish | 16 | 5 | 9 | 3 |
+| 2024 | private | 43 | 0 | 0 | 0 |
+| 2024 | publish | 21 | 9 | 12 | 3 |
+| 2025 | private | 33 | 0 | 0 | 0 |
+| 2025 | publish | 17 | 2 | 6 | 3 |
+| 2026 | private | 40 | 0 | 0 | 0 |
+| 2026 | publish | 26 | 2 | 3 | 2 |
+
+## 58. Recent daily resume views (if the daily table keeps history): views per month
+
+| m | views | resumes |
+|---|---|---|
+| 2026-10 | 2 | 1 |
+| 2026-07 | 8 | 8 |
+| 2026-05 | 4 | 2 |
+| 2026-04 | 1 | 1 |
+| 2025-11 | 3 | 1 |
+| 2025-08 | 2 | 2 |
+| 2025-02 | 1 | 1 |
+| 2024-10 | 4 | 4 |
+| 2024-09 | 7 | 6 |
+| 2024-08 | 3 | 1 |
+| 2024-07 | 1 | 1 |
+
+## 59. Do admins post jobs for other organisations? Jobs authored by administrator/editor accounts, by year (counts only)
+
+| y | jobs |
+|---|---|
+| 2018 | 322 |
+| 2019 | 356 |
+| 2020 | 332 |
+| 2021 | 450 |
+| 2022 | 405 |
+| 2023 | 389 |
+| 2024 | 357 |
+| 2025 | 402 |
+| 2026 | 370 |
+
