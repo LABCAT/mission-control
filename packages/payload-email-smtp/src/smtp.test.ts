@@ -382,6 +382,92 @@ describe('sendViaSmtp with XOAUTH2', () => {
   })
 })
 
+describe('address validation', () => {
+  const injectionAddresses = ['a@b.com\r\nRSET', 'a@b.com\nDATA'] as const
+  const addressFields = ['to', 'cc', 'bcc', 'from'] as const
+
+  for (const auth of ['password', 'xoauth2'] as const) {
+    for (const field of addressFields) {
+      for (const address of injectionAddresses) {
+        it(`rejects ${field} injection on ${auth}: ${JSON.stringify(address)}`, async () => {
+          const server = resetServer()
+          const fetchMock = vi.fn(async () => tokenResponse())
+          const message: EmailMessageInput = { from: 'sender@example.com', to: 'recipient@example.com', text: 'hello' }
+          ;(message as Record<string, unknown>)[field] = address
+
+          const error = await caught(
+            sendViaSmtp(auth === 'xoauth2' ? oauthConfig(fetchMock as typeof fetch) : config(), message),
+          )
+
+          expect(error).toBeInstanceOf(EmailSendError)
+          expect(error.provider).toBe('smtp')
+          expect(error.message).toContain(`\`${field}\``)
+          expect(error.message).not.toContain('a@b.com')
+          expect(error.message).not.toContain('RSET')
+          expect(error.message).not.toContain('DATA')
+          expect(server.commands).toHaveLength(0)
+          expect(server.authCommands).toHaveLength(0)
+          expect(server.recipients).toHaveLength(0)
+          expect(server.messageIds).toHaveLength(0)
+          if (auth === 'xoauth2') expect(fetchMock).not.toHaveBeenCalled()
+        })
+      }
+    }
+  }
+
+  it('strips CR/LF from a display name so it cannot add a header', () => {
+    const envelope = mapToSmtpEnvelope(config(), {
+      from: { name: 'Evil\r\nBcc: victim@example.com', address: 'sender@example.com' },
+      to: { name: 'Bob\nX: y', address: 'recipient@example.com' },
+      text: 'hello',
+    })
+    expect(envelope.from.name).toBe('Evil Bcc: victim@example.com')
+    expect(envelope.to[0]?.name).toBe('Bob X: y')
+    expect(JSON.stringify(envelope)).not.toMatch(/\\r|\\n/)
+  })
+
+  it('strips CR/LF from the subject, custom headers and attachment names', () => {
+    const envelope = mapToSmtpEnvelope(config(), {
+      to: 'recipient@example.com',
+      subject: 'Hello\r\nBcc: victim@example.com',
+      headers: { 'X-Tag': 'a\r\nBcc: victim@example.com', 'Message-ID': '<id@x>\r\nBcc: v@x.com' },
+      attachments: [{ filename: 'a\r\nb.txt', content: 'x', contentType: 'text/plain\r\nBcc: v@x.com' }],
+      text: 'hello',
+    })
+    const json = JSON.stringify(envelope)
+    expect(envelope.subject).toBe('Hello Bcc: victim@example.com')
+    expect(envelope.headers['X-Tag']).toBe('a Bcc: victim@example.com')
+    expect(json).not.toMatch(/\\r|\\n/)
+  })
+
+  it('rejects a custom header name that is not a valid token', () => {
+    expect(() =>
+      mapToSmtpEnvelope(config(), { to: 'recipient@example.com', headers: { 'X-A\r\nBcc': 'v' }, text: 'x' }),
+    ).toThrow(/invalid header name/)
+  })
+
+  it('does not put CR/LF from a subject or display name on the wire', async () => {
+    const server = resetServer()
+    await sendViaSmtp(config(), {
+      from: { name: 'Evil\r\nBcc: v@example.com', address: 'sender@example.com' },
+      to: 'recipient@example.com',
+      subject: 'Hello\r\nBcc: v@example.com',
+      text: 'hello',
+    })
+    expect(server.recipients).toEqual(['RCPT TO: <recipient@example.com>'])
+    expect(server.messageIds).toHaveLength(1)
+  })
+
+  it('still sends a message with valid addresses and display names', async () => {
+    const server = resetServer()
+    await sendViaSmtp(config(), {
+      to: { name: 'Ünicode Name', address: 'recipient@example.com' },
+      text: 'hello',
+    })
+    expect(server.messageIds).toHaveLength(1)
+  })
+})
+
 describe('smtpEmail adapter', () => {
   it('logs without recipients, subject or body when SMTP is unconfigured outside Workers', async () => {
     const { info, payload: p } = payload()

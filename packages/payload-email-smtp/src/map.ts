@@ -1,4 +1,4 @@
-import { toSmtpAddress } from './address'
+import { assertValidAddress, sanitizeHeaderValue, toSmtpAddress } from './address'
 import { toBase64, toBytes } from './bytes'
 import { encodeHeader } from './encoding'
 import { EmailSendError } from './errors'
@@ -13,6 +13,8 @@ import type {
   SmtpEnvelope,
 } from './types'
 
+const HEADER_NAME = /^[\w!#$%&'*+.^`|~-]+$/
+
 const mapAddress = (value: MessageAddress): SmtpAddress => {
   const address = toSmtpAddress(value)
   return address.name ? { name: encodeHeader(address.name), email: address.email } : address
@@ -21,14 +23,21 @@ const mapAddress = (value: MessageAddress): SmtpAddress => {
 const mapRecipients = (value: Recipients | undefined): SmtpAddress[] =>
   value === undefined ? [] : (Array.isArray(value) ? value : [value]).map(mapAddress)
 
+const assertValidRecipients = (value: Recipients | undefined, field: string): void => {
+  if (value === undefined) return
+  for (const address of Array.isArray(value) ? value : [value]) assertValidAddress(address, field)
+}
+
 const mapAttachment = (attachment: EmailAttachmentInput): SmtpAttachment => {
   if (attachment.path !== undefined || attachment.href !== undefined) {
     throw new EmailSendError('adapter', 'attachments must carry inline `content`; `path`/`href` are not supported')
   }
   return {
-    filename: attachment.filename ?? 'attachment',
+    filename: sanitizeHeaderValue(attachment.filename ?? 'attachment') || 'attachment',
     content: toBase64(toBytes(attachment)),
-    ...(attachment.contentType ? { mimeType: attachment.contentType } : {}),
+    ...(attachment.contentType && sanitizeHeaderValue(attachment.contentType)
+      ? { mimeType: sanitizeHeaderValue(attachment.contentType) }
+      : {}),
   }
 }
 
@@ -52,10 +61,12 @@ const normalizeMessageId = (headers: Record<string, string>, domain: string): Re
   let messageId: string | undefined
   for (const [key, value] of Object.entries(headers)) {
     if (key.toLowerCase() === 'message-id') {
-      if (!messageId && value) messageId = value
+      const clean = sanitizeHeaderValue(value)
+      if (!messageId && clean) messageId = clean
       continue
     }
-    normalized[key] = value
+    if (!HEADER_NAME.test(key)) throw new EmailSendError('smtp', 'invalid header name')
+    normalized[key] = sanitizeHeaderValue(value)
   }
   normalized['Message-ID'] = messageId ?? `<${crypto.randomUUID()}@${domain}>`
   return normalized
@@ -69,12 +80,18 @@ const normalizeMessageId = (headers: Record<string, string>, domain: string): Re
  * `info.messageId`, which is also client-generated.
  */
 export const mapToSmtpEnvelope = (config: SmtpConfig, message: EmailMessageInput): SmtpEnvelope => {
-  const from = mapAddress(
+  const fromValue =
     message.from ?? {
       ...(config.fromName ? { name: config.fromName } : {}),
       address: config.fromAddress,
-    },
-  )
+    }
+  assertValidAddress(fromValue, 'from')
+  assertValidRecipients(message.to, 'to')
+  assertValidRecipients(message.cc, 'cc')
+  assertValidRecipients(message.bcc, 'bcc')
+  if (message.replyTo !== undefined) assertValidAddress(message.replyTo, 'replyTo')
+
+  const from = mapAddress(fromValue)
   const headers = normalizeMessageId({ ...message.headers }, messageIdDomain(from))
   return {
     from,
@@ -82,7 +99,7 @@ export const mapToSmtpEnvelope = (config: SmtpConfig, message: EmailMessageInput
     ...(message.cc !== undefined ? { cc: mapRecipients(message.cc) } : {}),
     ...(message.bcc !== undefined ? { bcc: mapRecipients(message.bcc) } : {}),
     ...(message.replyTo !== undefined ? { reply: mapAddress(message.replyTo) } : {}),
-    subject: encodeHeader(message.subject ?? ''),
+    subject: encodeHeader(sanitizeHeaderValue(message.subject ?? '')),
     ...(typeof message.text === 'string' ? { text: message.text } : {}),
     ...(typeof message.html === 'string' ? { html: message.html } : {}),
     headers,
