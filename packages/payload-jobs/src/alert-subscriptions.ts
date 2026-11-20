@@ -2,6 +2,7 @@ import {
   ValidationError,
   type Access,
   type CollectionBeforeChangeHook,
+  type CollectionBeforeDeleteHook,
   type CollectionBeforeValidateHook,
   type CollectionConfig,
   type CollectionSlug,
@@ -182,6 +183,25 @@ const idsOf = (value: unknown): (number | string)[] =>
   (Array.isArray(value) ? value : [])
     .map((entry) => tenantIDOf(entry))
     .filter((id): id is number | string => id !== null)
+
+/**
+ * Delete a tenant's subscriptions before the tenant row goes. The tenant relationship is
+ * nullable, so Postgres only detaches the rows (ON DELETE SET NULL) and they would keep a
+ * subscriber's address and bearer tokens alive with no tenant to scope or expire them by.
+ * The same reason `site-keys` and user memberships are removed in a hook.
+ */
+export const removeTenantAlertSubscriptions: CollectionBeforeDeleteHook = async ({ id, req }) => {
+  await req.payload.delete({
+    collection: ALERT_SUBSCRIPTIONS_SLUG,
+    overrideAccess: true,
+    req,
+    where: {
+      tenant: {
+        equals: id,
+      },
+    },
+  })
+}
 
 /**
  * A subscription belongs to exactly one tenant, and its filters must be that tenant's: the
