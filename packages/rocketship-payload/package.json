@@ -9,6 +9,7 @@
     "./blocks": "./src/blocks/index.ts",
     "./blocks/*": "./src/blocks/*.ts",
     "./astro/*": "./src/astro/*.astro",
+    "./href": "./src/href.ts",
     "./local-api": "./src/local-api.ts",
     "./package.json": "./package.json",
     "./render": "./src/render.ts",

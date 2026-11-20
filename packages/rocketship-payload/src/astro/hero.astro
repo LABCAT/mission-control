@@ -5,6 +5,7 @@ import Stack from '@labcat2020/rocketship/components/Stack'
 import Typography from '@labcat2020/rocketship/components/Typography'
 
 import './blocks.css'
+import { safeHref } from '../href'
 import { mediaFrom } from '../media'
 import type { HeroBlock } from '../types'
 
@@ -14,7 +15,7 @@ type Props = {
 
 const { block } = Astro.props
 const image = mediaFrom(block.image)
-const links = block.links ?? []
+const links = (block.links ?? []).map((link) => ({ ...link, href: safeHref(link.href) }))
 ---
 
 <section class="rp-block rp-hero">
@@ -29,11 +30,15 @@ const links = block.links ?? []
         {
           links.length > 0 && (
             <div class="rp-block__links">
-              {links.map((link) => (
-                <Button href={link.href} variant={link.variant ?? 'primary'}>
-                  {link.label}
-                </Button>
-              ))}
+              {links.map((link) =>
+                link.href ? (
+                  <Button href={link.href} variant={link.variant ?? 'primary'}>
+                    {link.label}
+                  </Button>
+                ) : (
+                  <span class="rp-block__link">{link.label}</span>
+                ),
+              )}
             </div>
           )
         }

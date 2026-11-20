@@ -1,4 +1,4 @@
-import type { Block } from 'payload'
+import type { Block, TextField } from 'payload'
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -11,6 +11,7 @@ import {
   heroBlock,
   richTextBlock,
 } from './blocks'
+import { hrefField } from './blocks/shared'
 
 const fieldNamed = (block: Block, name: string) =>
   block.fields.find((field) => 'name' in field && field.name === name)
@@ -69,6 +70,60 @@ describe('block configs', () => {
       relationTo: 'uploads',
       type: 'upload',
     })
+  })
+
+  it('rejects unsafe link destinations in the field config', () => {
+    const validate = hrefField().validate as unknown as (
+      value: unknown,
+      options: unknown,
+    ) => string | true
+
+    for (const value of [
+      'javascript:alert(1)',
+      'JaVaScRiPt:alert(1)',
+      ' javascript:alert(1)',
+      'java\tscript:alert(1)',
+      'java\nscript:alert(1)',
+      'data:text/html,<script>alert(1)</script>',
+      'vbscript:msgbox(1)',
+      '//evil.com',
+    ]) {
+      expect(validate(value, {})).toEqual(expect.stringContaining('http'))
+    }
+  })
+
+  it('accepts safe link destinations in the field config', () => {
+    const validate = hrefField().validate as unknown as (
+      value: unknown,
+      options: unknown,
+    ) => string | true
+
+    for (const value of [
+      '/jobs',
+      '#top',
+      '?q=vanuatu',
+      'https://example.com',
+      'mailto:jobs@example.com',
+      'tel:+6781234567',
+    ]) {
+      expect(validate(value, {})).toBe(true)
+    }
+  })
+
+  it('trims a stored href before validation', () => {
+    const hook = hrefField().hooks?.beforeValidate?.[0] as unknown as (args: {
+      value: unknown
+    }) => unknown
+
+    expect(hook({ value: '  /jobs  ' })).toBe('/jobs')
+  })
+
+  it('keeps the banner link optional', () => {
+    const field = fieldNamed(bannerBlock(), 'href') as TextField
+    const validate = field.validate as unknown as (value: unknown, options: unknown) => string | true
+
+    expect(field).toMatchObject({ required: false, type: 'text' })
+    expect(validate('', {})).toBe(true)
   })
 
   it('caps the site-settings header banner at one banner', () => {

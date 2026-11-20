@@ -1,4 +1,24 @@
-import type { Field } from 'payload'
+import type { Field, TextField, TextFieldSingleValidation } from 'payload'
+
+import { safeHref } from '../href'
+
+const HREF_MESSAGE =
+  'Use a relative path starting with "/", an anchor (#), a query (?), or an http, https, mailto or tel link.'
+
+/** A link destination field with the same URL policy as the renderers. */
+export const hrefField = ({ required = true }: { required?: boolean } = {}): TextField => ({
+  name: 'href',
+  type: 'text',
+  required,
+  hooks: {
+    beforeValidate: [({ value }) => (typeof value === 'string' ? value.trim() : value)],
+  },
+  validate: ((value) => {
+    if (value === null || value === undefined) return true
+    if (typeof value === 'string' && value.trim() === '') return true
+    return safeHref(value) ? true : HREF_MESSAGE
+  }) satisfies TextFieldSingleValidation,
+})
 
 /** The fields of one button/link, shared by the hero, cards, feature boxes and CTA. */
 export const linkFields: Field[] = [
@@ -7,11 +27,7 @@ export const linkFields: Field[] = [
     type: 'text',
     required: true,
   },
-  {
-    name: 'href',
-    type: 'text',
-    required: true,
-  },
+  hrefField(),
   {
     name: 'variant',
     type: 'select',

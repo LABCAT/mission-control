@@ -19,6 +19,11 @@
   gap: var(--rs-space-3);
 }
 
+.rp-block__link,
+.rp-link-text {
+  color: var(--rs-color-muted);
+}
+
 .rp-hero__grid {
   align-items: center;
   display: grid;

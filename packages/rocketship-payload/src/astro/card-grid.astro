@@ -6,6 +6,7 @@ import Stack from '@labcat2020/rocketship/components/Stack'
 import Typography from '@labcat2020/rocketship/components/Typography'
 
 import './blocks.css'
+import { safeHref } from '../href'
 import { mediaFrom } from '../media'
 import type { CardGridBlock } from '../types'
 
@@ -36,6 +37,7 @@ const columns = Number(block.columns ?? 3) as 2 | 3 | 4
         {
           block.cards.map((card) => {
             const image = mediaFrom(card.image)
+            const href = card.link ? safeHref(card.link.href) : null
             return (
               <Card as="article">
                 {image?.url && (
@@ -51,11 +53,14 @@ const columns = Number(block.columns ?? 3) as 2 | 3 | 4
                 )}
                 <h3 class="rs-card__title">{card.title}</h3>
                 {card.body && <p class="rs-card__description">{card.body}</p>}
-                {card.link && (
-                  <a class="rs-card__link" href={card.link.href}>
-                    {card.link.label}
-                  </a>
-                )}
+                {card.link &&
+                  (href ? (
+                    <a class="rs-card__link" href={href}>
+                      {card.link.label}
+                    </a>
+                  ) : (
+                    <span class="rp-link-text">{card.link.label}</span>
+                  ))}
               </Card>
             )
           })

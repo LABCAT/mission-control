@@ -6,6 +6,7 @@ import Stack from '@labcat2020/rocketship/components/Stack'
 import Typography from '@labcat2020/rocketship/components/Typography'
 
 import './blocks.css'
+import { safeHref } from '../href'
 import type { CtaBlock } from '../types'
 
 type Props = {
@@ -13,7 +14,7 @@ type Props = {
 }
 
 const { block } = Astro.props
-const links = block.links ?? []
+const links = (block.links ?? []).map((link) => ({ ...link, href: safeHref(link.href) }))
 ---
 
 <section class="rp-block">
@@ -27,11 +28,15 @@ const links = block.links ?? []
         {
           links.length > 0 && (
             <div class="rp-block__links">
-              {links.map((link) => (
-                <Button href={link.href} variant={link.variant ?? 'primary'}>
-                  {link.label}
-                </Button>
-              ))}
+              {links.map((link) =>
+                link.href ? (
+                  <Button href={link.href} variant={link.variant ?? 'primary'}>
+                    {link.label}
+                  </Button>
+                ) : (
+                  <span class="rp-block__link">{link.label}</span>
+                ),
+              )}
             </div>
           )
         }

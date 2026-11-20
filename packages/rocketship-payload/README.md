@@ -156,6 +156,9 @@ throwing.
 
 ## Notes
 
+- Link destinations are validated in the Payload field and again in every renderer: relative
+  paths starting with `/` (but not `//`), `#` anchors, `?` queries, and `http:`, `https:`,
+  `mailto:` or `tel:` only. An unsafe value renders its label as plain text, never an `href`.
 - No block fetches data. The site loads the document, then passes its blocks to `RenderBlocks`.
 - No tenant values (currency, timezone, labels, domain) live here.
 - The `banner` renderer sets width/height and an aspect ratio from the image metadata, so the

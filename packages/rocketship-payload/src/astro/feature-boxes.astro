@@ -6,6 +6,7 @@ import Stack from '@labcat2020/rocketship/components/Stack'
 import Typography from '@labcat2020/rocketship/components/Typography'
 
 import './blocks.css'
+import { safeHref } from '../href'
 import type { FeatureBoxesBlock } from '../types'
 
 type Props = {
@@ -33,22 +34,28 @@ const columns = block.items.length > 2 ? 3 : 2
       }
       <Grid columns={columns}>
         {
-          block.items.map((item) => (
-            <Card as="article">
-              {item.icon && (
-                <span aria-hidden="true" class="rp-feature-box__icon">
-                  {item.icon}
-                </span>
-              )}
-              <h3 class="rs-card__title">{item.title}</h3>
-              {item.body && <p class="rs-card__description">{item.body}</p>}
-              {item.link && (
-                <a class="rs-card__link" href={item.link.href}>
-                  {item.link.label}
-                </a>
-              )}
-            </Card>
-          ))
+          block.items.map((item) => {
+            const href = item.link ? safeHref(item.link.href) : null
+            return (
+              <Card as="article">
+                {item.icon && (
+                  <span aria-hidden="true" class="rp-feature-box__icon">
+                    {item.icon}
+                  </span>
+                )}
+                <h3 class="rs-card__title">{item.title}</h3>
+                {item.body && <p class="rs-card__description">{item.body}</p>}
+                {item.link &&
+                  (href ? (
+                    <a class="rs-card__link" href={href}>
+                      {item.link.label}
+                    </a>
+                  ) : (
+                    <span class="rp-link-text">{item.link.label}</span>
+                  ))}
+              </Card>
+            )
+          })
         }
       </Grid>
     </Stack>

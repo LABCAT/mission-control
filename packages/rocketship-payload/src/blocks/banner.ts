@@ -1,6 +1,6 @@
 import type { Block, BlocksField, CollectionSlug } from 'payload'
 
-import type { MediaBlockOptions } from './shared'
+import { hrefField, type MediaBlockOptions } from './shared'
 
 export const bannerBlock = ({ mediaSlug = 'media' }: MediaBlockOptions = {}): Block => ({
   slug: 'banner',
@@ -25,8 +25,7 @@ export const bannerBlock = ({ mediaSlug = 'media' }: MediaBlockOptions = {}): Bl
       admin: { description: 'Overrides the image alt text.' },
     },
     {
-      name: 'href',
-      type: 'text',
+      ...hrefField({ required: false }),
       admin: { description: 'Optional link target for the whole banner.' },
     },
     {

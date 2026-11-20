@@ -6,7 +6,8 @@ export default defineConfig({
       {
         test: {
           name: 'unit',
-          // Astro components need Astro's Vite plugin, which only the launchpad project loads.
+          // Astro components need Astro's Vite plugin, which the launchpad and
+          // rocketship-payload projects load.
           include: [
             'packages/*/src/**/*.test.ts',
             'apps/*/src/**/*.test.ts',
@@ -14,10 +15,11 @@ export default defineConfig({
             'scripts/**/*.test.ts', // mission-control: features catalogue report
             'tools/*/src/**/*.test.ts', // mission-control: include tools/
           ],
-          exclude: ['packages/launchpad/**'],
+          exclude: ['packages/launchpad/**', 'packages/rocketship-payload/**'],
         },
       },
       './packages/launchpad',
+      './packages/rocketship-payload',
     ],
     // The Postgres harness pushes a schema per boot against one TEST_DATABASE_URL; run files
     // one at a time, and allow a boot (schema pull + push) more than the 10s default.

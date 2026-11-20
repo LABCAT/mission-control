@@ -1,5 +1,6 @@
 ---
 import './blocks.css'
+import { safeHref } from '../href'
 import { mediaFrom } from '../media'
 import type { BannerBlock } from '../types'
 
@@ -11,6 +12,7 @@ const { block } = Astro.props
 const desktop = mediaFrom(block.desktopImage)
 const mobile = mediaFrom(block.mobileImage) ?? desktop
 const alt = block.alt ?? desktop?.alt ?? ''
+const href = safeHref(block.href)
 const desktopRatio =
   desktop?.width && desktop?.height ? `${desktop.width} / ${desktop.height}` : undefined
 const mobileRatio =
@@ -26,10 +28,10 @@ const style = [
 {
   desktop?.url && (
     <Fragment>
-      {block.href ? (
+      {href ? (
         <a
           class="rp-banner rp-banner__link"
-          href={block.href}
+          href={href}
           rel={block.newTab ? 'noopener noreferrer' : undefined}
           style={style || undefined}
           target={block.newTab ? '_blank' : undefined}
