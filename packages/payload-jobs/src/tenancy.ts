@@ -1,6 +1,7 @@
 import type { Field, GlobalConfig } from 'payload'
 
 import { authenticatedAccess, superAdminAccess } from './access'
+import { tenantTaxField } from './tax-settings'
 
 // Current ISO 4217 list one from SIX (the maintenance agency), fetched 2026-11-06.
 const ISO_4217_CODES = new Set(
@@ -166,6 +167,23 @@ export const jobBoardTenantFields: Field[] = [
     },
     validate: (value: null | string | undefined, options: ValidationOptions) =>
       requiredUnlessAggregate(value, options, 'Tax label is required'),
+  },
+  // Rates, inclusive/exclusive prices, rounding and Xero tax types (PJ-91). Off by default.
+  tenantTaxField(showForSiteTenant),
+  // What happens to a job after checkout (PJ-32 applies it with `decidePublication`).
+  {
+    name: 'jobModeration',
+    type: 'select',
+    defaultValue: 'legacy',
+    options: [
+      { label: 'Old site rule: publish if approved, paid or on invoice, else review', value: 'legacy' },
+      { label: 'Review every job', value: 'review' },
+      { label: 'Publish every job straight away', value: 'auto' },
+    ],
+    admin: {
+      condition: showForSiteTenant,
+      description: 'Whether new jobs need an admin’s approval before they go live.',
+    },
   },
   {
     name: 'emailFromName',

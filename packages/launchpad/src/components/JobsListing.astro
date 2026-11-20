@@ -1,0 +1,95 @@
+---
+/**
+ * The job listing body: heading, filter bar, job cards, pagination and the empty state. It
+ * renders from a `JobListingView` and owns no data fetching, so every site app and the demo
+ * compose the same page.
+ *
+ * The filter form is a plain GET form, so it works without JavaScript; `voluntary` is a
+ * checkbox, which sends nothing when unticked, so it needs no script to stay off.
+ */
+import Alert from '@labcat2020/rocketship/components/Alert'
+import Grid from '@labcat2020/rocketship/components/Grid'
+import Typography from '@labcat2020/rocketship/components/Typography'
+
+import FilterBar from './FilterBar.astro'
+import JobCard from './JobCard.astro'
+import Pagination from './Pagination.astro'
+import { jobFilterControls, type JobListingView } from '../jobs/listing'
+
+type Props = {
+  view: JobListingView
+  title: string
+  /** Sentence under the heading that says what the view lists. */
+  description?: string
+  /** Heading for the "clear filters" link target; the bare listing by default. */
+  clearHref?: string
+  timezone?: null | string
+  emptyMessage?: string
+  noResultsMessage?: string
+}
+
+const {
+  view,
+  title,
+  description,
+  clearHref = '/jobs',
+  timezone,
+  emptyMessage = 'No jobs are listed yet.',
+  noResultsMessage = 'No jobs match these filters.',
+} = Astro.props as Props
+
+const { filters: values } = view
+const controls = jobFilterControls(view.facets)
+
+// A query-string filter is switched on, so offer a way back to the unfiltered listing. The
+// section's own slug does not count: it is in the path, not something the visitor chose here.
+const clear = view.hasActiveFilters ? clearHref : undefined
+---
+
+<section class="lp-listing">
+  <Typography>
+    <h1>{title}</h1>
+    {description && <p>{description}</p>}
+    <p class="lp-listing__summary">{view.summary}</p>
+  </Typography>
+
+  <FilterBar
+    action={view.formAction}
+    clearHref={clear}
+    controls={controls}
+    definitions={view.definitions}
+    values={values}
+  />
+
+  {
+    view.total === 0 ? (
+      <Alert role="status" variant="info">
+        <p>{view.hasActiveFilters ? noResultsMessage : emptyMessage}</p>
+      </Alert>
+    ) : (
+      <Grid as="ul" columns={2}>
+        {view.jobs.map((job) => (
+          <li>
+            <JobCard job={job} locale={view.locale} timezone={timezone ?? undefined} />
+          </li>
+        ))}
+      </Grid>
+    )
+  }
+
+  <Pagination href={view.href} page={view.page} totalPages={view.totalPages} />
+</section>
+
+<style>
+  /* Composition only: every visual comes from Rocketship components and the --rs-* tokens. */
+  .lp-listing {
+    display: flex;
+    flex-direction: column;
+    gap: var(--rs-space-6);
+  }
+
+  .lp-listing__summary {
+    color: var(--rs-color-muted);
+    margin: 0;
+  }
+</style>

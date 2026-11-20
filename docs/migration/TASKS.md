@@ -140,8 +140,11 @@ Rules:
 - A placeholder home page.
 - Lighthouse CI (`@lhci/cli`) in CI (allowed) with performance, accessibility, best practices and SEO each at ≥ 0.98, plus a budget of under 50 KB total JavaScript.
 
-**PJ-13**
+**PJ-13** – done 2026-11-19
 - `apps/vwok`: same setup as the hub, Worker `mc-vwok`, Vanuatu Wok branding (green `#06914b`, red `#dd3333`, blue `#0066bf`, logo from the legacy uploads), and covered by Lighthouse CI.
+- Branding lives in `src/brand.ts` and reaches the page only as Rocketship `--rs-*` tokens through the launchpad `BaseLayout`; currency, timezone, locales and domains stay on the `vwok` tenant row.
+- `robots.txt` is per hostname: crawlable on `vanuatuwok.vu` and on loopback (so Lighthouse scores a crawlable page), `Disallow: /` on any Worker preview, which would otherwise be a duplicate of the live site.
+- The budget is `apps/vwok/lighthouserc.json` — every category at ≥ 0.98 and 50 KB of JavaScript — run by the `Lighthouse (vwok)` job against `astro preview`, which serves the built Worker. The site ships no client JavaScript at all today.
 
 **PJ-14**
 - Deploy all three Workers.
@@ -181,12 +184,18 @@ All Agent tasks except PJ-28. Each one is collection config, access control and 
 - Each has `name` (localized), a unique `slug` per tenant, and `legacyId`.
 - Public read; tenant-admin/editor write.
 
-**PJ-17**
-- `locations`: `name`, `slug`, `kind` (region, island or town), `parent`.
-- A seed script for Vanuatu built from `efate/_dev/js/modules/regions-and-towns.js`, plus an "Overseas" entry.
-- Test that the seed parses.
+**PJ-17** – done 2026-11-14
+- `locations`: `name`, `slug`, `kind` (region, island or town), `parent`, `legacyId`.
+- Public read; tenant-admin/editor write. Slug is unique per tenant (`validateSlug` plus a
+  `(tenant, slug)` unique index added in multi-tenant mode).
+- A parent must be broader than its child (region ← island ← town), which keeps the tree
+  acyclic; a parent in another tenant is rejected.
+- The seed mirrors the legacy picker (`island → town`, no province level) and adds the
+  `Overseas` and `Other` catch-alls. Run it with `SEED_LOCATIONS_CONFIRM=1 pnpm seed:locations <tenant-slug>`
+  in `apps/cms`; it names one tenant on purpose (the tree is Vanuatu data, not tenant
+  configuration), refuses an aggregate tenant, and is idempotent.
 
-**PJ-18**
+**PJ-18** – done 2026-11-18
 - `organisations`:
   - `name`, `slug`, `type` (business, government, NFP, consultant, recruiter, social enterprise), `size`, `areasOfFocus`
   - `logo` and `cover`, `website`, socials, `phone`, `location`, `about`
@@ -195,6 +204,24 @@ All Agent tasks except PJ-28. Each one is collection config, access control and 
   - `approved` (bool), `legacyId`
 - Users get `organisation` (relation).
 - Employers can edit their own organisation, but not the admin-only fields.
+- The employer profile is a document, not user meta: `users.organisation` replaces the WordPress
+  `job_lister` meta. A later task can let several accounts share one organisation.
+- Access: super admin all; tenant-admin/editor read and write in their tenants; an employer reads
+  and updates only their own organisation (`create`/`delete` are staff-only, so PJ-29 creates the
+  pair with `overrideAccess`); seekers nothing; an anonymous site key reads only `approved`
+  organisations whose page is enabled — its tenant's, or every tenant for an aggregate key.
+  `approved`, `pageEnabled` and the billing fields use field-level access, so an employer's write
+  to them is dropped rather than honoured. This is why `organisations` is deliberately absent
+  from `site-keys.ts`'s allowlist: its own filter is narrower.
+- Slug is unique per tenant (`validateTaxonomySlug` plus a `(tenant, slug)` unique index); `website`
+  and the socials must be full `http(s)` URLs.
+- Tenant is sticky: only a tenant admin of both the tenant an organisation leaves and the one it
+  joins may move it. Relations to media, locations and areas of focus must belong to the same
+  tenant.
+- Deviation from WordPress: `size` and `type` are URL-safe enum values rather than display
+  strings, and the legacy `enable_organisations_page` flag becomes two fields — an employer asks
+  (`listingRequested`), a tenant admin approves (`approved`) and turns the page on (`pageEnabled`).
+  The legacy `nickname` is `slug`.
 
 **PJ-19**
 - `jobs`:
@@ -209,6 +236,7 @@ All Agent tasks except PJ-28. Each one is collection config, access control and 
   - employers can create jobs and update their own organisation's `draft`/`pending` jobs
   - tenant-admin/editor can do everything
 - Tests, including tenant isolation.
+- Deferred from PJ-19 (#62): `order` waits for the orders collection and is added in PJ-23. `createdBy` is not in #62 either; it follows with the order relationship.
 
 **PJ-20**
 - `pages`: `title`, `slug`, `content`, SEO group, `legacyId`.
@@ -225,6 +253,7 @@ All Agent tasks except PJ-28. Each one is collection config, access control and 
 **PJ-23**
 - `orders`: `organisation`, `plan`, `coupon`, `subtotal`, `discount`, `total`, `currency`, `status` (`pending` | `paid` | `cancelled` | `failed`), `paymentMethod` (`invoice` | `free` | `credit`), `jobs`, `xeroInvoiceId`, `xeroInvoiceUrl`, `log[]`, `legacyId`.
 - An employer can read their own organisation's orders.
+- Also adds `jobs.order` (and `jobs.createdBy`), deferred from PJ-19, with their migration. Like the other private job fields, they're readable only by staff and the owning organisation (`jobPrivateFieldRead`).
 - Access tests.
 
 **PJ-24**

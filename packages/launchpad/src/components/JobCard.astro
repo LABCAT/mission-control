@@ -1,0 +1,116 @@
+---
+import Card from '@labcat2020/rocketship/components/Card'
+
+import { formatDate } from '../tenant/date'
+import { formatMoney } from '../tenant/money'
+import type { JobSummary } from '../types'
+
+type Props = {
+  job: JobSummary
+  /** Tenant locale, for money and dates. */
+  locale?: string
+  /** Tenant timezone, for dates. */
+  timezone?: string
+  /** Labels in the tenant's language. */
+  closesLabel?: string
+  featuredLabel?: string
+  volunteerLabel?: string
+}
+
+const {
+  job,
+  locale = 'en',
+  timezone,
+  closesLabel = 'Closes',
+  featuredLabel = 'Featured',
+  volunteerLabel = 'Voluntary',
+} = Astro.props as Props
+
+const salary = job.salary
+  ? formatMoney(
+      { amountMinor: job.salary.amountMinor, currency: job.salary.currency },
+      { locale, minorUnits: job.salary.minorUnits ?? undefined },
+    )
+  : undefined
+
+const salaryLabel =
+  salary && job.salary?.period ? `${salary} / ${job.salary.period}` : (salary ?? job.displayedSalary ?? undefined)
+const closes = job.closes ? formatDate(job.closes, { locale, timezone }) : undefined
+---
+
+<Card as="article">
+  <h3 class="rs-card__title">
+    <a class="rs-card__link" href={job.url}>{job.title}</a>
+  </h3>
+  <p class="lp-job__org">
+    {job.organisation.url ? (
+      <a class="lp-job__org-link" href={job.organisation.url}>{job.organisation.name}</a>
+    ) : (
+      job.organisation.name
+    )}
+  </p>
+  {job.summary && <p class="rs-card__description">{job.summary}</p>}
+  <ul class="lp-job__tags">
+    {job.location && <li class="lp-job__tag">{job.location}</li>}
+    {job.jobType && <li class="lp-job__tag">{job.jobType}</li>}
+    {job.isVolunteer && <li class="lp-job__tag lp-job__tag--accent">{volunteerLabel}</li>}
+    {job.featured && <li class="lp-job__tag lp-job__tag--accent">{featuredLabel}</li>}
+  </ul>
+  {
+    (salaryLabel || closes) && (
+      <ul class="lp-job__facts">
+        {salaryLabel && <li>{salaryLabel}</li>}
+        {closes && (
+          <li>
+            {closesLabel} {closes}
+          </li>
+        )}
+      </ul>
+    )
+  }
+</Card>
+
+<style>
+  /* Composition only: everything visual comes from Card and the --rs-* tokens. */
+  .lp-job__org {
+    color: var(--rs-color-muted);
+    margin: 0;
+  }
+
+  .lp-job__org-link {
+    color: inherit;
+  }
+
+  .lp-job__facts {
+    color: var(--rs-color-muted);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--rs-space-3);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .lp-job__tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--rs-space-2);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .lp-job__tag {
+    background: var(--rs-color-surface-elevated);
+    border-radius: var(--rs-radius-pill);
+    color: var(--rs-color-fg);
+    font-size: var(--rs-font-size-sm);
+    padding-block: var(--rs-space-1);
+    padding-inline: var(--rs-space-2);
+  }
+
+  .lp-job__tag--accent {
+    background: var(--rs-color-accent);
+    color: var(--rs-color-accent-contrast);
+  }
+</style>

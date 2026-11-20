@@ -1,0 +1,115 @@
+/**
+ * Integer money helpers shared by the pricing engine (`quote`) and coupons (`applyCoupon`).
+ *
+ * Every amount is a whole number of the tenant currency's minor units: VUV has 0 decimals, so
+ * 500 is Vt 500, while NZD has 2, so 500 is $5.00. No floating-point money is ever stored or
+ * returned. The only rounding in the system happens in `percentOf`, so a percentage gives the
+ * same result wherever it is applied.
+ */
+
+export class MoneyError extends RangeError {
+  constructor(message: string) {
+    super(message)
+    this.name = 'MoneyError'
+  }
+}
+
+/** True for a whole number of minor units, 0 or more, that is exact in a JS number. */
+export const isMinorUnits = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+
+/** Throw unless `value` is a whole number of minor units, 0 or more. */
+export function assertMinorUnits(value: unknown, label: string): asserts value is number {
+  if (!isMinorUnits(value)) {
+    throw new MoneyError(`${label} must be a whole number of minor units, 0 or more`)
+  }
+}
+
+/** Add minor-unit amounts, throwing instead of losing precision past Number.MAX_SAFE_INTEGER. */
+export const sumMinorUnits = (values: readonly number[]): number => {
+  let total = 0
+
+  for (const value of values) {
+    assertMinorUnits(value, 'amount')
+    total += value
+    if (!Number.isSafeInteger(total)) throw new MoneyError('total is too large to represent exactly')
+  }
+
+  return total
+}
+
+/**
+ * `percent`% of `amount`, rounded to the nearest minor unit with halves rounded up
+ * (Vt 25 at 10% is Vt 3; $0.05 at 50% is $0.03).
+ *
+ * BigInt keeps the arithmetic exact for every safe integer, and it matches
+ * `Math.round((amount * percent) / 100)` wherever that float expression is exact. Coupons and
+ * the pricing engine must both use this, so a discount never differs by a minor unit between
+ * the checkout and the invoice.
+ */
+export const percentOf = (amount: number, percent: number): number => {
+  assertMinorUnits(amount, 'amount')
+  if (!Number.isInteger(percent) || percent < 0 || percent > 100) {
+    throw new MoneyError('percent must be a whole number from 0 to 100')
+  }
+
+  return mulDivHalfUp(amount, percent, 100)
+}
+
+/**
+ * `amount × numerator ÷ denominator`, rounded to the nearest minor unit with halves rounded up.
+ * Exact for every safe amount (BigInt). This is the one rounding rule: `percentOf` and tax both
+ * use it, so a coupon, a tax line and an invoice never disagree by a minor unit.
+ */
+export const mulDivHalfUp = (amount: number, numerator: number, denominator: number): number => {
+  assertMinorUnits(amount, 'amount')
+  if (!Number.isSafeInteger(numerator) || numerator < 0) {
+    throw new MoneyError('numerator must be a whole number, 0 or more')
+  }
+  if (!Number.isSafeInteger(denominator) || denominator < 1) {
+    throw new MoneyError('denominator must be a whole number, 1 or more')
+  }
+
+  const den = BigInt(denominator)
+  const result = (BigInt(amount) * BigInt(numerator) * 2n + den) / (2n * den)
+  if (result > BigInt(Number.MAX_SAFE_INTEGER)) throw new MoneyError('result is too large to represent exactly')
+  return Number(result)
+}
+
+/**
+ * Split `total` minor units across `weights` in proportion, so the parts are whole, never
+ * negative, and add up to `total` exactly (largest remainder; ties go to the earlier part).
+ * All-zero weights give everything to nothing: every part is 0 and `total` must be 0.
+ */
+export const allocateProportionally = (total: number, weights: readonly number[]): number[] => {
+  assertMinorUnits(total, 'total')
+  for (const weight of weights) assertMinorUnits(weight, 'weight')
+
+  const sum = weights.reduce((acc, weight) => acc + BigInt(weight), 0n)
+  if (sum === 0n) {
+    if (total !== 0) throw new MoneyError('cannot allocate a non-zero total over zero weights')
+    return weights.map(() => 0)
+  }
+
+  const big = BigInt(total)
+  const floors = weights.map((weight) => (big * BigInt(weight)) / sum)
+  const remainders = weights.map((weight, index) => ({
+    index,
+    remainder: (big * BigInt(weight)) % sum,
+  }))
+  let left = big - floors.reduce((acc, part) => acc + part, 0n)
+
+  // Hand out what is left one unit at a time, largest remainder first, earlier index on ties.
+  // Sorts a copy; `toSorted` is ES2023, past this package's lib.
+  // oxlint-disable-next-line unicorn/no-array-sort
+  const order = [...remainders].sort((a, b) =>
+    a.remainder === b.remainder ? a.index - b.index : a.remainder > b.remainder ? -1 : 1,
+  )
+  for (const { index } of order) {
+    if (left === 0n) break
+    floors[index] += 1n
+    left -= 1n
+  }
+
+  return floors.map(Number)
+}

@@ -1,7 +1,9 @@
 import type { Config } from 'payload'
 import { describe, expect, it } from 'vitest'
 
-import { payloadJobs } from './index'
+import { ALERT_SUBSCRIPTIONS_SLUG } from './alert-subscriptions'
+import { EXPIRE_PLACEMENTS_TASK, payloadJobs } from './index'
+import { TAXONOMY_SLUGS } from './taxonomies'
 
 const baseConfig = {
   collections: [{ slug: 'users', fields: [] }],
@@ -13,8 +15,27 @@ describe('payloadJobs', () => {
   it('keeps the existing config collections and custom keys when it registers itself', async () => {
     const result = await payloadJobs()(baseConfig)
 
-    expect(result.collections?.[0]).toEqual(baseConfig.collections?.[0])
-    expect(result.collections?.map((collection) => collection.slug)).toEqual(['users', 'coupons'])
+    // mission-control: the users collection is extended (legacy password support PJ-34,
+    // organisation relation PJ-18), and locations (PJ-17), organisations (PJ-18), alerts
+    // (PJ-26), the taxonomies (PJ-16), plans (PJ-21) and coupons (PJ-22) are added.
+    expect(result.collections?.map((collection) => collection.slug)).toEqual([
+      'users',
+      'locations',
+      'organisations',
+      ALERT_SUBSCRIPTIONS_SLUG,
+      ...TAXONOMY_SLUGS,
+      'plans',
+      'add-ons',
+      'jobs',
+      'coupons',
+    ])
+    expect(result.collections?.[0]?.fields.map((f) => ('name' in f ? f.name : null))).toContain(
+      'legacyPasswordHash',
+    )
+    expect(result.collections?.[0]?.fields.map((f) => ('name' in f ? f.name : null))).toContain(
+      'organisation',
+    )
+    expect(result.collections?.[0]?.hooks?.beforeOperation).toHaveLength(1)
     expect(result.globals?.[0]?.slug).toBe('job-board-settings')
     expect(result.custom).toEqual({
       existing: true,
@@ -51,5 +72,29 @@ describe('payloadJobs', () => {
 
     expect(on.collections?.map((collection) => collection.slug)).toContain('coupons')
     expect(off.collections?.map((collection) => collection.slug)).not.toContain('coupons')
+  })
+
+  it('adds jobs with placements, and the daily task that expires them, keeping host tasks', async () => {
+    const taskSlugs = (config: Config) => (config.jobs?.tasks ?? []).map((task) => task.slug)
+    const withHostTask = {
+      ...baseConfig,
+      jobs: { tasks: [{ handler: () => ({ output: {} }), slug: 'heartbeat' }] },
+    } as unknown as Config
+
+    const result = await payloadJobs()(withHostTask)
+    const jobs = result.collections?.find((collection) => collection.slug === 'jobs')
+
+    expect(jobs?.fields.some((field) => 'name' in field && field.name === 'placements')).toBe(true)
+    expect(taskSlugs(result)).toEqual(['heartbeat', EXPIRE_PLACEMENTS_TASK])
+  })
+
+  it('uses a rich-text job description only when the host has an editor', async () => {
+    const description = async (config: Config) =>
+      (await payloadJobs()(config)).collections
+        ?.find((collection) => collection.slug === 'jobs')
+        ?.fields.find((field) => 'name' in field && field.name === 'description')?.type
+
+    expect(await description(baseConfig)).toBe('textarea')
+    expect(await description({ ...baseConfig, editor: {} } as unknown as Config)).toBe('richText')
   })
 })

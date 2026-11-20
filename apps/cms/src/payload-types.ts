@@ -62,6 +62,47 @@ export type SupportedTimezones =
   | 'Pacific/Fiji';
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "LexicalNodes_0DF1558F".
+ */
+export type LexicalNodes_0DF1558F =
+  | SerializedTextNode
+  | SerializedTabNode
+  | SerializedLineBreakNode
+  | SerializedParagraphNode<LexicalNodes_0DF1558F>
+  | SerializedHorizontalRuleNode
+  | SerializedUploadNode<'media'>
+  | SerializedUploadNode<'documents'>
+  | SerializedQuoteNode<LexicalNodes_0DF1558F>
+  | SerializedRelationshipNode<
+      | 'users'
+      | 'folders'
+      | 'tags'
+      | 'tenants'
+      | 'site-keys'
+      | 'locations'
+      | 'organisations'
+      | 'alert-subscriptions'
+      | 'job-categories'
+      | 'job-types'
+      | 'job-tags'
+      | 'salary-bands'
+      | 'areas-of-focus'
+      | 'plans'
+      | 'add-ons'
+      | 'jobs'
+      | 'payload-kv'
+      | 'payload-jobs'
+      | 'payload-locked-documents'
+      | 'payload-preferences'
+      | 'payload-migrations'
+    >
+  | SerializedAutoLinkNode<LexicalNodes_0DF1558F, LexicalLinkFields>
+  | SerializedLinkNode<LexicalNodes_0DF1558F, LexicalLinkFields>
+  | SerializedListNode<LexicalNodes_0DF1558F>
+  | SerializedListItemNode<LexicalNodes_0DF1558F>
+  | SerializedHeadingNode<LexicalNodes_0DF1558F>;
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "LexicalNodes_3DE324E4".
  */
 export type LexicalNodes_3DE324E4 =
@@ -86,7 +127,17 @@ export interface Config {
     tenants: Tenant;
     'site-keys': SiteKey;
     documents: Document;
-    coupons: Coupon;
+    locations: Location;
+    organisations: Organisation;
+    'alert-subscriptions': AlertSubscription;
+    'job-categories': JobCategory;
+    'job-types': JobType;
+    'job-tags': JobTag;
+    'salary-bands': SalaryBand;
+    'areas-of-focus': AreasOfFocus;
+    plans: Plan;
+    'add-ons': AddOn;
+    jobs: Job;
     'payload-kv': PayloadKv;
     'payload-jobs': PayloadJob;
     'payload-locked-documents': PayloadLockedDocument;
@@ -103,7 +154,17 @@ export interface Config {
     tenants: TenantsSelect<false> | TenantsSelect<true>;
     'site-keys': SiteKeysSelect<false> | SiteKeysSelect<true>;
     documents: DocumentsSelect<false> | DocumentsSelect<true>;
-    coupons: CouponsSelect<false> | CouponsSelect<true>;
+    locations: LocationsSelect<false> | LocationsSelect<true>;
+    organisations: OrganisationsSelect<false> | OrganisationsSelect<true>;
+    'alert-subscriptions': AlertSubscriptionsSelect<false> | AlertSubscriptionsSelect<true>;
+    'job-categories': JobCategoriesSelect<false> | JobCategoriesSelect<true>;
+    'job-types': JobTypesSelect<false> | JobTypesSelect<true>;
+    'job-tags': JobTagsSelect<false> | JobTagsSelect<true>;
+    'salary-bands': SalaryBandsSelect<false> | SalaryBandsSelect<true>;
+    'areas-of-focus': AreasOfFocusSelect<false> | AreasOfFocusSelect<true>;
+    plans: PlansSelect<false> | PlansSelect<true>;
+    'add-ons': AddOnsSelect<false> | AddOnsSelect<true>;
+    jobs: JobsSelect<false> | JobsSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-jobs': PayloadJobsSelect<false> | PayloadJobsSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
@@ -135,6 +196,7 @@ export interface Config {
   jobs: {
     tasks: {
       heartbeat: TaskHeartbeat;
+      'expire-job-placements': TaskExpireJobPlacements;
       inline: {
         input: unknown;
         output: unknown;
@@ -170,10 +232,15 @@ export interface User {
   role: 'super-admin' | 'user';
   firstName?: string | null;
   lastName?: string | null;
+  legacyPasswordHash?: string | null;
+  /**
+   * The organisation this employer belongs to.
+   */
+  organisation?: (number | null) | Organisation;
   tenants?:
     | {
         tenant: number | Tenant;
-        role: 'tenant-admin' | 'editor' | 'employer';
+        role: 'tenant-admin' | 'editor' | 'employer' | 'seeker';
         id?: string | null;
       }[]
     | null;
@@ -193,6 +260,8 @@ export interface User {
   salt?: string | null;
   hash?: string | null;
   resetPasswordRequestedAt?: string | null;
+  _verified?: boolean | null;
+  _verificationToken?: string | null;
   loginAttempts?: number | null;
   lockUntil?: string | null;
   sessions?:
@@ -206,6 +275,87 @@ export interface User {
     | null;
   password?: string | null;
   collection: 'users';
+}
+/**
+ * Employer profiles. An employer edits their own; tenant admins approve them and set billing.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "organisations".
+ */
+export interface Organisation {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  name: string;
+  /**
+   * Used in the organisation page URL. Unique within the tenant.
+   */
+  slug: string;
+  type?: ('business' | 'government' | 'nfp' | 'consultant' | 'recruiter' | 'social-enterprise') | null;
+  size?: ('1-10' | '11-50' | '51-200' | '201-500' | '500-plus') | null;
+  /**
+   * From the tenant’s areas of focus. The directory filter uses these.
+   */
+  areasOfFocus?: (number | AreasOfFocus)[] | null;
+  about?: string | null;
+  /**
+   * Shown in the directory and on the organisation page.
+   */
+  logo?: (number | null) | Media;
+  /**
+   * Wide banner at the top of the organisation page.
+   */
+  cover?: (number | null) | Media;
+  website?: string | null;
+  phone?: string | null;
+  /**
+   * The tenant’s location tree, not a free-text address.
+   */
+  location?: (number | null) | Location;
+  socials?: {
+    facebook?: string | null;
+    instagram?: string | null;
+    linkedin?: string | null;
+    x?: string | null;
+    youtube?: string | null;
+  };
+  /**
+   * The employer has asked for a public page. The admin is notified.
+   */
+  listingRequested?: boolean | null;
+  /**
+   * Set by a tenant admin. Unapproved organisations cannot publish jobs.
+   */
+  approved?: boolean | null;
+  /**
+   * Set by a tenant admin. The public page and directory entry go live.
+   */
+  pageEnabled?: boolean | null;
+  /**
+   * Known customers pay by invoice instead of at checkout.
+   */
+  canPayByInvoice?: boolean | null;
+  /**
+   * Receives invoices. Falls back to the account email when empty.
+   */
+  billingEmail?: string | null;
+  /**
+   * Xero contact for this organisation, used by invoice orders.
+   */
+  xeroContactCode?: string | null;
+  /**
+   * WordPress user id of the legacy employer, for the import.
+   */
+  legacyId?: number | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -257,6 +407,44 @@ export interface Tenant {
    * Shown on prices and invoices, for example VAT.
    */
   taxLabel?: string | null;
+  /**
+   * Tax on plans and add-ons. Off until turned on; the label above is shown on prices and invoices.
+   */
+  tax?: {
+    enabled?: boolean | null;
+    /**
+     * On: prices include tax. Off: tax is added on top of prices.
+     */
+    pricesIncludeTax?: boolean | null;
+    rounding: 'invoice' | 'line';
+    rates?:
+      | {
+          key: string;
+          name: string;
+          /**
+           * Basis points: 1500 is 15%.
+           */
+          rate: number;
+          /**
+           * Xero tax type, e.g. OUTPUT.
+           */
+          xeroTaxType?: string | null;
+          id?: string | null;
+        }[]
+      | null;
+    /**
+     * The rate for plans and add-ons that name none.
+     */
+    defaultRateKey?: string | null;
+    /**
+     * Xero tax type for tax-exempt lines, e.g. EXEMPTOUTPUT.
+     */
+    exemptXeroTaxType?: string | null;
+  };
+  /**
+   * Whether new jobs need an admin’s approval before they go live.
+   */
+  jobModeration?: ('legacy' | 'review' | 'auto') | null;
   emailFromName?: string | null;
   emailFromAddress?: string | null;
   /**
@@ -444,6 +632,59 @@ export interface Tag {
   _h_titlePath?: string | null;
 }
 /**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "areas-of-focus".
+ */
+export interface AreasOfFocus {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  name: string;
+  /**
+   * Used in listing URLs and filters. Unique within the tenant.
+   */
+  slug: string;
+  /**
+   * WordPress term id, for the import.
+   */
+  legacyId?: number | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "locations".
+ */
+export interface Location {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  name: string;
+  slug: string;
+  kind: 'region' | 'island' | 'town';
+  parent?: (number | null) | Location;
+  /**
+   * WordPress id, so the importer can match an existing location.
+   */
+  legacyId?: number | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
  * Keys public sites use to read their own tenant. The raw key is shown once.
  *
  * This interface was referenced by `Config`'s JSON-Schema
@@ -517,33 +758,398 @@ export interface Document {
   focalY?: number | null;
 }
 /**
+ * Job alert subscribers. They confirm by email and manage themselves through their link; staff only read this list.
+ *
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "coupons".
+ * via the `definition` "alert-subscriptions".
  */
-export interface Coupon {
+export interface AlertSubscription {
   id: number;
   tenant?: (number | null) | Tenant;
   /**
-   * Saved in uppercase. Unique within the tenant, for example LINKPS.
+   * Stored lowercase. The subscriber confirms it before any alert is sent.
    */
-  code: string;
-  discountType: 'flat' | 'percent';
+  email: string;
   /**
-   * Flat: minor units of the tenant currency, so 500 is Vt 500. Percentage: a whole percentage, so 10 is 10%.
+   * Set when the subscriber follows the double opt-in link. Only confirmed subscribers get alerts.
    */
-  amount: number;
+  confirmed?: boolean | null;
+  confirmToken?: string | null;
+  manageToken?: string | null;
   /**
-   * An inactive coupon is kept but cannot be applied.
+   * Words a job must mention, separated by spaces. Empty means any job.
+   */
+  keywords?: string | null;
+  /**
+   * Only jobs in these job categories. Empty means any.
+   */
+  categories?: (number | JobCategory)[] | null;
+  /**
+   * Only jobs in these job types. Empty means any.
+   */
+  types?: (number | JobType)[] | null;
+  /**
+   * Only jobs in these locations. Empty means any.
+   */
+  locations?: (number | Location)[] | null;
+  /**
+   * When the daily digest last went out. The next digest starts from here.
+   */
+  lastSentAt?: string | null;
+  /**
+   * WordPress user id for the alert meta, so the importer can match it.
+   */
+  legacyId?: number | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "job-categories".
+ */
+export interface JobCategory {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  name: string;
+  /**
+   * Used in listing URLs and filters. Unique within the tenant.
+   */
+  slug: string;
+  /**
+   * WordPress term id, for the import.
+   */
+  legacyId?: number | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "job-types".
+ */
+export interface JobType {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  name: string;
+  /**
+   * Used in listing URLs and filters. Unique within the tenant.
+   */
+  slug: string;
+  /**
+   * WordPress term id, for the import.
+   */
+  legacyId?: number | null;
+  /**
+   * Volunteer job types are kept out of the main listing and can be posted for free.
+   */
+  isVolunteer?: boolean | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "job-tags".
+ */
+export interface JobTag {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  name: string;
+  /**
+   * Used in listing URLs and filters. Unique within the tenant.
+   */
+  slug: string;
+  /**
+   * WordPress term id, for the import.
+   */
+  legacyId?: number | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "salary-bands".
+ */
+export interface SalaryBand {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  name: string;
+  /**
+   * Used in listing URLs and filters. Unique within the tenant.
+   */
+  slug: string;
+  /**
+   * WordPress term id, for the import.
+   */
+  legacyId?: number | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * What employers buy. Archive a plan to stop selling it; past orders keep what they bought.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "plans".
+ */
+export interface Plan {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  name: string;
+  /**
+   * Stable identifier used by seeds and imports, e.g. regular-listing. Unique in the tenant.
+   */
+  key: string;
+  description?: string | null;
+  /**
+   * Whole minor units of the tenant currency: 2500 is Vt 2,500, or $25.00 in NZD.
+   */
+  price: number;
+  /**
+   * Copied from the tenant when the plan is saved.
+   */
+  currency?: string | null;
+  /**
+   * How long each listing stays live, in days.
+   */
+  durationDays: number;
+  /**
+   * 1 for a single listing; more for a pack.
+   */
+  jobCredits: number;
+  /**
+   * Days until unused credits from this plan expire. Empty: they never expire.
+   */
+  creditExpiryDays?: number | null;
+  /**
+   * A job credit from a pack can pay for this plan. Only applies to single-listing plans.
+   */
+  acceptsCredits?: boolean | null;
+  /**
+   * Never taxed, whatever the tenant’s rates.
+   */
+  taxExempt?: boolean | null;
+  /**
+   * One of the tenant’s tax rate keys. Empty: the tenant’s default rate.
+   */
+  taxRateKey?: string | null;
+  /**
+   * Add-ons that come with this plan at no extra charge.
+   */
+  includedAddOns?:
+    | {
+        addOn: number | AddOn;
+        /**
+         * Days the add-on lasts. Empty: the add-on’s own duration.
+         */
+        durationDays?: number | null;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * Only for voluntary jobs (a job type marked as volunteer).
+   */
+  isVolunteer?: boolean | null;
+  /**
+   * Only jobs of these types. Empty: any type.
+   */
+  allowedJobTypes?: (number | JobType)[] | null;
+  /**
+   * Only jobs whose every category is listed here. Empty: any category.
+   */
+  allowedJobCategories?: (number | JobCategory)[] | null;
+  /**
+   * Archived plans can no longer be bought. Past orders are not affected.
+   */
+  status: 'active' | 'archived';
+  /**
+   * Lower numbers are shown first.
+   */
+  sortOrder?: number | null;
+  /**
+   * WordPress pricing-plan post id, for the import.
+   */
+  legacyId?: number | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * Extras on a listing, such as featuring it. Mark one inactive to stop selling it; past orders keep what they bought.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "add-ons".
+ */
+export interface AddOn {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  name: string;
+  /**
+   * Stable identifier used by seeds and imports, e.g. enhanced. Unique in the tenant.
+   */
+  key: string;
+  description?: string | null;
+  /**
+   * Whole minor units of the tenant currency: 2500 is Vt 2,500, or $25.00 in NZD.
+   */
+  price: number;
+  /**
+   * Copied from the tenant when the add-on is saved.
+   */
+  currency?: string | null;
+  /**
+   * How long the add-on lasts on a job, in days.
+   */
+  durationDays: number;
+  /**
+   * Never taxed, whatever the tenant’s rates.
+   */
+  taxExempt?: boolean | null;
+  /**
+   * One of the tenant’s tax rate keys. Empty: the tenant’s default rate.
+   */
+  taxRateKey?: string | null;
+  /**
+   * Where the add-on shows the job.
+   */
+  placement: 'featured-in-listings' | 'featured-in-category';
+  /**
+   * Other add-ons this one gives for free, each for its own duration.
+   */
+  grants?:
+    | {
+        addOn: number | AddOn;
+        durationDays: number;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * Inactive add-ons can no longer be bought. Plans and grants that give them still do.
    */
   active?: boolean | null;
   /**
-   * How many orders have used the coupon. Only order processing changes it; other writes keep the stored value.
+   * Lower numbers are shown first.
    */
-  useCount: number;
+  sortOrder?: number | null;
   /**
-   * Leave empty for unlimited uses.
+   * WordPress id, for the import, when there is one.
    */
-  maxUses?: number | null;
+  legacyId?: number | null;
+  /**
+   * The JobRoller job meta key this replaces, e.g. _jr_featured-listings, for the import.
+   */
+  legacyKey?: string | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "jobs".
+ */
+export interface Job {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  title: string;
+  /**
+   * Made from the title when left empty. Unique in the tenant.
+   */
+  slug?: string | null;
+  status: 'draft' | 'pending' | 'published' | 'expired' | 'cancelled';
+  publishedAt?: string | null;
+  expiresAt?: string | null;
+  organisation: number | Organisation;
+  description?: LexicalRichText<LexicalNodes_0DF1558F> | null;
+  /**
+   * An optional PDF of the full job description.
+   */
+  jobDescriptionPdf?: (number | null) | Document;
+  jobType?: (number | null) | JobType;
+  categories?: (number | JobCategory)[] | null;
+  tags?: (number | JobTag)[] | null;
+  salaryBand?: (number | null) | SalaryBand;
+  displayedSalary?: string | null;
+  /**
+   * Defaults to the organisation’s name.
+   */
+  companyName?: string | null;
+  companyUrl?: string | null;
+  howToApply?: string | null;
+  location?: (number | null) | Location;
+  address?: string | null;
+  applyOnline?: boolean | null;
+  /**
+   * Where online applications go. Empty: the organisation’s contacts.
+   */
+  applicationsRecipient?: string | null;
+  /**
+   * Set at checkout.
+   */
+  plan?: (number | null) | Plan;
+  /**
+   * Where this job is featured, and until when. Expired rows are removed daily.
+   */
+  placements?:
+    | {
+        placement: 'featured-in-listings' | 'featured-in-category';
+        addOn?: (number | null) | AddOn;
+        startsAt: string;
+        expiresAt: string;
+        id?: string | null;
+      }[]
+    | null;
+  views?: number | null;
   /**
    * WordPress post id, for the import.
    */
@@ -637,7 +1243,7 @@ export interface PayloadJob {
     | {
         executedAt: string;
         completedAt: string;
-        taskSlug: 'inline' | 'heartbeat';
+        taskSlug: 'inline' | 'heartbeat' | 'expire-job-placements';
         taskID: string;
         input:
           | {
@@ -668,13 +1274,13 @@ export interface PayloadJob {
           | boolean
           | null;
         parent?: {
-          taskSlug?: ('inline' | 'heartbeat') | null;
+          taskSlug?: ('inline' | 'heartbeat' | 'expire-job-placements') | null;
           taskID?: string | null;
         };
         id?: string | null;
       }[]
     | null;
-  taskSlug?: ('inline' | 'heartbeat') | null;
+  taskSlug?: ('inline' | 'heartbeat' | 'expire-job-placements') | null;
   queue?: string | null;
   waitUntil?: string | null;
   processingUntil?: string | null;
@@ -722,8 +1328,48 @@ export interface PayloadLockedDocument {
         value: number | Document;
       } | null)
     | ({
-        relationTo: 'coupons';
-        value: number | Coupon;
+        relationTo: 'locations';
+        value: number | Location;
+      } | null)
+    | ({
+        relationTo: 'organisations';
+        value: number | Organisation;
+      } | null)
+    | ({
+        relationTo: 'alert-subscriptions';
+        value: number | AlertSubscription;
+      } | null)
+    | ({
+        relationTo: 'job-categories';
+        value: number | JobCategory;
+      } | null)
+    | ({
+        relationTo: 'job-types';
+        value: number | JobType;
+      } | null)
+    | ({
+        relationTo: 'job-tags';
+        value: number | JobTag;
+      } | null)
+    | ({
+        relationTo: 'salary-bands';
+        value: number | SalaryBand;
+      } | null)
+    | ({
+        relationTo: 'areas-of-focus';
+        value: number | AreasOfFocus;
+      } | null)
+    | ({
+        relationTo: 'plans';
+        value: number | Plan;
+      } | null)
+    | ({
+        relationTo: 'add-ons';
+        value: number | AddOn;
+      } | null)
+    | ({
+        relationTo: 'jobs';
+        value: number | Job;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -797,6 +1443,8 @@ export interface UsersSelect<T extends boolean = true> {
   role?: T;
   firstName?: T;
   lastName?: T;
+  legacyPasswordHash?: T;
+  organisation?: T;
   tenants?:
     | T
     | {
@@ -814,6 +1462,8 @@ export interface UsersSelect<T extends boolean = true> {
   salt?: T;
   hash?: T;
   resetPasswordRequestedAt?: T;
+  _verified?: T;
+  _verificationToken?: T;
   loginAttempts?: T;
   lockUntil?: T;
   sessions?:
@@ -1027,6 +1677,25 @@ export interface TenantsSelect<T extends boolean = true> {
       };
   defaultLocale?: T;
   taxLabel?: T;
+  tax?:
+    | T
+    | {
+        enabled?: T;
+        pricesIncludeTax?: T;
+        rounding?: T;
+        rates?:
+          | T
+          | {
+              key?: T;
+              name?: T;
+              rate?: T;
+              xeroTaxType?: T;
+              id?: T;
+            };
+        defaultRateKey?: T;
+        exemptXeroTaxType?: T;
+      };
+  jobModeration?: T;
   emailFromName?: T;
   emailFromAddress?: T;
   adminEmail?: T;
@@ -1087,16 +1756,253 @@ export interface DocumentsSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "coupons_select".
+ * via the `definition` "locations_select".
  */
-export interface CouponsSelect<T extends boolean = true> {
+export interface LocationsSelect<T extends boolean = true> {
   tenant?: T;
-  code?: T;
-  discountType?: T;
-  amount?: T;
+  name?: T;
+  slug?: T;
+  kind?: T;
+  parent?: T;
+  legacyId?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "organisations_select".
+ */
+export interface OrganisationsSelect<T extends boolean = true> {
+  tenant?: T;
+  name?: T;
+  slug?: T;
+  type?: T;
+  size?: T;
+  areasOfFocus?: T;
+  about?: T;
+  logo?: T;
+  cover?: T;
+  website?: T;
+  phone?: T;
+  location?: T;
+  socials?:
+    | T
+    | {
+        facebook?: T;
+        instagram?: T;
+        linkedin?: T;
+        x?: T;
+        youtube?: T;
+      };
+  listingRequested?: T;
+  approved?: T;
+  pageEnabled?: T;
+  canPayByInvoice?: T;
+  billingEmail?: T;
+  xeroContactCode?: T;
+  legacyId?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "alert-subscriptions_select".
+ */
+export interface AlertSubscriptionsSelect<T extends boolean = true> {
+  tenant?: T;
+  email?: T;
+  confirmed?: T;
+  confirmToken?: T;
+  manageToken?: T;
+  keywords?: T;
+  categories?: T;
+  types?: T;
+  locations?: T;
+  lastSentAt?: T;
+  legacyId?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "job-categories_select".
+ */
+export interface JobCategoriesSelect<T extends boolean = true> {
+  tenant?: T;
+  name?: T;
+  slug?: T;
+  legacyId?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "job-types_select".
+ */
+export interface JobTypesSelect<T extends boolean = true> {
+  tenant?: T;
+  name?: T;
+  slug?: T;
+  legacyId?: T;
+  isVolunteer?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "job-tags_select".
+ */
+export interface JobTagsSelect<T extends boolean = true> {
+  tenant?: T;
+  name?: T;
+  slug?: T;
+  legacyId?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "salary-bands_select".
+ */
+export interface SalaryBandsSelect<T extends boolean = true> {
+  tenant?: T;
+  name?: T;
+  slug?: T;
+  legacyId?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "areas-of-focus_select".
+ */
+export interface AreasOfFocusSelect<T extends boolean = true> {
+  tenant?: T;
+  name?: T;
+  slug?: T;
+  legacyId?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "plans_select".
+ */
+export interface PlansSelect<T extends boolean = true> {
+  tenant?: T;
+  name?: T;
+  key?: T;
+  description?: T;
+  price?: T;
+  currency?: T;
+  durationDays?: T;
+  jobCredits?: T;
+  creditExpiryDays?: T;
+  acceptsCredits?: T;
+  taxExempt?: T;
+  taxRateKey?: T;
+  includedAddOns?:
+    | T
+    | {
+        addOn?: T;
+        durationDays?: T;
+        id?: T;
+      };
+  isVolunteer?: T;
+  allowedJobTypes?: T;
+  allowedJobCategories?: T;
+  status?: T;
+  sortOrder?: T;
+  legacyId?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "add-ons_select".
+ */
+export interface AddOnsSelect<T extends boolean = true> {
+  tenant?: T;
+  name?: T;
+  key?: T;
+  description?: T;
+  price?: T;
+  currency?: T;
+  durationDays?: T;
+  taxExempt?: T;
+  taxRateKey?: T;
+  placement?: T;
+  grants?:
+    | T
+    | {
+        addOn?: T;
+        durationDays?: T;
+        id?: T;
+      };
   active?: T;
-  useCount?: T;
-  maxUses?: T;
+  sortOrder?: T;
+  legacyId?: T;
+  legacyKey?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "jobs_select".
+ */
+export interface JobsSelect<T extends boolean = true> {
+  tenant?: T;
+  title?: T;
+  slug?: T;
+  status?: T;
+  publishedAt?: T;
+  expiresAt?: T;
+  organisation?: T;
+  description?: T;
+  jobDescriptionPdf?: T;
+  jobType?: T;
+  categories?: T;
+  tags?: T;
+  salaryBand?: T;
+  displayedSalary?: T;
+  companyName?: T;
+  companyUrl?: T;
+  howToApply?: T;
+  location?: T;
+  address?: T;
+  applyOnline?: T;
+  applicationsRecipient?: T;
+  plan?: T;
+  placements?:
+    | T
+    | {
+        placement?: T;
+        addOn?: T;
+        startsAt?: T;
+        expiresAt?: T;
+        id?: T;
+      };
+  views?: T;
   legacyId?: T;
   createdBy?: T;
   updatedBy?: T;
@@ -1286,7 +2192,25 @@ export interface CollectionsWidget {
 export interface CollectionQueryWidget {
   data?: {
     title?: string | null;
-    relatedCollection: 'users' | 'media' | 'folders' | 'tags' | 'tenants' | 'site-keys' | 'documents' | 'coupons';
+    relatedCollection:
+      | 'users'
+      | 'media'
+      | 'folders'
+      | 'tags'
+      | 'tenants'
+      | 'site-keys'
+      | 'documents'
+      | 'locations'
+      | 'organisations'
+      | 'alert-subscriptions'
+      | 'job-categories'
+      | 'job-types'
+      | 'job-tags'
+      | 'salary-bands'
+      | 'areas-of-focus'
+      | 'plans'
+      | 'add-ons'
+      | 'jobs';
     where?:
       | {
           [k: string]: unknown;
@@ -1309,7 +2233,27 @@ export interface CollectionQueryWidget {
 export interface ActivityWidget {
   data?: {
     excludedCollections?:
-      ('users' | 'media' | 'folders' | 'tags' | 'tenants' | 'site-keys' | 'documents' | 'coupons')[] | null;
+      | (
+          | 'users'
+          | 'media'
+          | 'folders'
+          | 'tags'
+          | 'tenants'
+          | 'site-keys'
+          | 'documents'
+          | 'locations'
+          | 'organisations'
+          | 'alert-subscriptions'
+          | 'job-categories'
+          | 'job-types'
+          | 'job-tags'
+          | 'salary-bands'
+          | 'areas-of-focus'
+          | 'plans'
+          | 'add-ons'
+          | 'jobs'
+        )[]
+      | null;
   };
   width: 'small' | 'medium' | 'large' | 'x-large' | 'full';
 }
@@ -1330,6 +2274,17 @@ export interface UploadDropzoneWidget {
 export interface TaskHeartbeat {
   input?: unknown;
   output?: unknown;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "TaskExpire-job-placements".
+ */
+export interface TaskExpireJobPlacements {
+  input?: unknown;
+  output: {
+    jobsUpdated?: number | null;
+    placementsRemoved?: number | null;
+  };
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1388,6 +2343,62 @@ export interface SerializedParagraphNode<TChildren> extends SerializedLexicalEle
   type: 'paragraph';
   textFormat: number;
   textStyle: string;
+}
+
+export interface SerializedHorizontalRuleNode {
+  type: 'horizontalrule';
+  /** @deprecated Ignored when loading. Typed as required only to match Lexical's types: rich text sent through the API, CLI or MCP may not contain it. */
+  version: number;
+}
+
+export type SerializedUploadNode<TSlugs extends keyof Config['collections'], TFields = { [k: string]: unknown }> = {
+  type: 'upload';
+  format: LexicalElementFormat;
+  id: string;
+  /** @deprecated Ignored when loading. Typed as required only to match Lexical's types: rich text sent through the API, CLI or MCP may not contain it. */
+  version: number;
+  fields: TFields;
+} & {
+  [TSlug in TSlugs]: {
+    relationTo: TSlug;
+    value: Config['collections'][TSlug]['id'] | Config['collections'][TSlug];
+  };
+}[TSlugs];
+
+export interface SerializedQuoteNode<TChildren> extends SerializedLexicalElementBase<TChildren> {
+  type: 'quote';
+}
+
+export type SerializedRelationshipNode<TSlugs extends keyof Config['collections']> = {
+  type: 'relationship';
+  format: LexicalElementFormat;
+  /** @deprecated Ignored when loading. Typed as required only to match Lexical's types: rich text sent through the API, CLI or MCP may not contain it. */
+  version: number;
+} & {
+  [TSlug in TSlugs]: {
+    relationTo: TSlug;
+    value: Config['collections'][TSlug]['id'] | Config['collections'][TSlug];
+  };
+}[TSlugs];
+
+export interface LexicalLinkFields {
+  [k: string]: unknown;
+  doc?: {
+    relationTo: string;
+    value: Config['db']['defaultIDType'] | { [k: string]: unknown; id: Config['db']['defaultIDType'] };
+  } | null;
+  linkType: 'custom' | 'internal';
+  newTab: boolean;
+  url?: string;
+}
+export interface SerializedLinkNode<TChildren, TFields = LexicalLinkFields> extends SerializedLexicalElementBase<TChildren> {
+  type: 'link';
+  fields: TFields;
+  id?: string;
+}
+export interface SerializedAutoLinkNode<TChildren, TFields = LexicalLinkFields> extends SerializedLexicalElementBase<TChildren> {
+  type: 'autolink';
+  fields: TFields;
 }
 
 export interface SerializedListNode<TChildren> extends SerializedLexicalElementBase<TChildren> {

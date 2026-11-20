@@ -5,7 +5,16 @@ import * as migration_20261105_223955_multi_tenancy from './20261105_223955_mult
 import * as migration_20261107_120535_tenancy_modes from './20261107_120535_tenancy_modes';
 import * as migration_20261109_171926_site_keys from './20261109_171926_site_keys';
 import * as migration_20261118_013433_media_documents_r2 from './20261118_013433_media_documents_r2';
-import * as migration_20261118_023507_coupons from './20261118_023507_coupons';
+import * as migration_20261118_021548_legacy_password_hash from './20261118_021548_legacy_password_hash';
+import * as migration_20261118_044335_account_auth from './20261118_044335_account_auth';
+import * as migration_20261118_053124_job_taxonomies from './20261118_053124_job_taxonomies';
+import * as migration_20261118_095105_locations from './20261118_095105_locations';
+import * as migration_20261118_103105_plans from './20261118_103105_plans';
+import * as migration_20261118_112249_organisations from './20261118_112249_organisations';
+import * as migration_20261118_144548_add_ons from './20261118_144548_add_ons';
+import * as migration_20261118_150954_tax from './20261118_150954_tax';
+import * as migration_20261118_152848_alert_subscriptions from './20261118_152848_alert_subscriptions';
+import * as migration_20261118_154336_jobs from './20261118_154336_jobs';
 
 export const migrations = [
   {
@@ -41,11 +50,56 @@ export const migrations = [
   {
     up: migration_20261118_013433_media_documents_r2.up,
     down: migration_20261118_013433_media_documents_r2.down,
-    name: '20261118_013433_media_documents_r2'
+    name: '20261118_013433_media_documents_r2',
   },
   {
-    up: migration_20261118_023507_coupons.up,
-    down: migration_20261118_023507_coupons.down,
-    name: '20261118_023507_coupons'
+    up: migration_20261118_021548_legacy_password_hash.up,
+    down: migration_20261118_021548_legacy_password_hash.down,
+    name: '20261118_021548_legacy_password_hash',
+  },
+  {
+    up: migration_20261118_044335_account_auth.up,
+    down: migration_20261118_044335_account_auth.down,
+    name: '20261118_044335_account_auth',
+  },
+  {
+    up: migration_20261118_053124_job_taxonomies.up,
+    down: migration_20261118_053124_job_taxonomies.down,
+    name: '20261118_053124_job_taxonomies',
+  },
+  {
+    up: migration_20261118_095105_locations.up,
+    down: migration_20261118_095105_locations.down,
+    name: '20261118_095105_locations',
+  },
+  {
+    up: migration_20261118_103105_plans.up,
+    down: migration_20261118_103105_plans.down,
+    name: '20261118_103105_plans',
+  },
+  {
+    up: migration_20261118_112249_organisations.up,
+    down: migration_20261118_112249_organisations.down,
+    name: '20261118_112249_organisations',
+  },
+  {
+    up: migration_20261118_144548_add_ons.up,
+    down: migration_20261118_144548_add_ons.down,
+    name: '20261118_144548_add_ons',
+  },
+  {
+    up: migration_20261118_150954_tax.up,
+    down: migration_20261118_150954_tax.down,
+    name: '20261118_150954_tax',
+  },
+  {
+    up: migration_20261118_152848_alert_subscriptions.up,
+    down: migration_20261118_152848_alert_subscriptions.down,
+    name: '20261118_152848_alert_subscriptions',
+  },
+  {
+    up: migration_20261118_154336_jobs.up,
+    down: migration_20261118_154336_jobs.down,
+    name: '20261118_154336_jobs'
   },
 ];

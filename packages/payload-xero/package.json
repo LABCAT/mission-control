@@ -1,0 +1,29 @@
+{
+  "name": "@mission-control/payload-xero",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "payload": "4.0.0-beta.7"
+  },
+  "devDependencies": {
+    "@payloadcms/db-postgres": "4.0.0-beta.7",
+    "@payloadcms/plugin-multi-tenant": "4.0.0-beta.7",
+    "payload": "4.0.0-beta.7",
+    "typescript": "6.0.3"
+  },
+  "description": "Xero invoicing plugin for Payload: settings collection, encrypted OAuth tokens, contacts and AES-GCM token helpers.",
+  "keywords": [
+    "payload",
+    "payload-plugin",
+    "xero"
+  ],
+  "sideEffects": false
+}

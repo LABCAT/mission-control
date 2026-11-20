@@ -1,0 +1,37 @@
+{
+  "name": "@mission-control/launchpad",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Astro theme for Mission Control job boards, built on @labcat2020/rocketship",
+  "exports": {
+    ".": "./src/index.ts",
+    "./components/*": "./src/components/*.astro",
+    "./cms": "./src/cms/index.ts",
+    "./jobs": "./src/jobs/listing.ts",
+    "./tenant/*": "./src/tenant/*.ts"
+  },
+  "scripts": {
+    "build": "astro build --root demo",
+    "dev": "astro dev --root demo",
+    "typecheck": "astro check",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@labcat2020/rocketship": "0.3.0"
+  },
+  "peerDependencies": {
+    "astro": "7.4.12",
+    "sass": "1.108.2"
+  },
+  "devDependencies": {
+    "@astrojs/check": "0.9.12",
+    "astro": "7.4.12",
+    "sass": "1.108.2",
+    "typescript": "6.0.3",
+    "vitest": "5.1.0"
+  },
+  "engines": {
+    "node": ">=24.22.1"
+  }
+}
