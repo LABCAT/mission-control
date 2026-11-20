@@ -108,7 +108,7 @@ payloadJobs({
 })
 ```
 
-Defaults stay as the table above, so an existing installation needs no migration to keep them.
+Keeping the defaults in the table above needs no migration. Choosing a slug before your first schema migration needs nothing extra, but renaming one on an installation that already has the tables changes the schema: generate and apply your own app migration for it.
 `jobsSlug` still works for older configs; `collections.jobs.slug` takes the same slot.
 
 ## Access overrides

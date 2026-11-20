@@ -34,7 +34,11 @@ export type PayloadJobsCollectionsOptions = Partial<
 /** The resolved slug for each collection the plugin adds. */
 export type PayloadJobsCollectionSlugs = Record<PayloadJobsCollectionKey, string>
 
-/** Defaults, matching the mission-control installation. Overriding one requires no migration. */
+/**
+ * Defaults, matching the mission-control installation. Choosing a slug before an app's first
+ * schema migration needs nothing extra. Renaming one on an installation that already has the
+ * tables changes the schema, so the app must generate and apply its own migration for it.
+ */
 export const DEFAULT_PAYLOAD_JOBS_SLUGS: PayloadJobsCollectionSlugs = {
   addOns: 'add-ons',
   alertSubscriptions: 'alert-subscriptions',
