@@ -64,22 +64,19 @@ export async function up({ db, payload, req }: MigrateUpArgs): Promise<void> {
   	"users_id" integer
   );
   
-  -- mission-control: the three NOT NULL references restrict deletion instead of the generated
-  -- SET NULL, which would fail on the NOT NULL column: a job, organisation or CV file in use
-  -- cannot be deleted until its applications are removed (retention, PJ-88).
   ALTER TABLE "tenants" ADD COLUMN "account_required_to_apply" boolean DEFAULT false;
   ALTER TABLE "payload_locked_documents_rels" ADD COLUMN "application_files_id" integer;
   ALTER TABLE "payload_locked_documents_rels" ADD COLUMN "applications_id" integer;
   ALTER TABLE "application_files" ADD CONSTRAINT "application_files_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE set null ON UPDATE no action;
-  ALTER TABLE "application_files" ADD CONSTRAINT "application_files_organisation_id_organisations_id_fk" FOREIGN KEY ("organisation_id") REFERENCES "public"."organisations"("id") ON DELETE restrict ON UPDATE no action;
+  ALTER TABLE "application_files" ADD CONSTRAINT "application_files_organisation_id_organisations_id_fk" FOREIGN KEY ("organisation_id") REFERENCES "public"."organisations"("id") ON DELETE set null ON UPDATE no action;
   ALTER TABLE "application_files" ADD CONSTRAINT "application_files_applicant_id_users_id_fk" FOREIGN KEY ("applicant_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;
   ALTER TABLE "application_files_rels" ADD CONSTRAINT "application_files_rels_parent_fk" FOREIGN KEY ("parent_id") REFERENCES "public"."application_files"("id") ON DELETE cascade ON UPDATE no action;
   ALTER TABLE "application_files_rels" ADD CONSTRAINT "application_files_rels_users_fk" FOREIGN KEY ("users_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;
   ALTER TABLE "applications" ADD CONSTRAINT "applications_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE set null ON UPDATE no action;
-  ALTER TABLE "applications" ADD CONSTRAINT "applications_job_id_jobs_id_fk" FOREIGN KEY ("job_id") REFERENCES "public"."jobs"("id") ON DELETE restrict ON UPDATE no action;
+  ALTER TABLE "applications" ADD CONSTRAINT "applications_job_id_jobs_id_fk" FOREIGN KEY ("job_id") REFERENCES "public"."jobs"("id") ON DELETE set null ON UPDATE no action;
   ALTER TABLE "applications" ADD CONSTRAINT "applications_organisation_id_organisations_id_fk" FOREIGN KEY ("organisation_id") REFERENCES "public"."organisations"("id") ON DELETE set null ON UPDATE no action;
   ALTER TABLE "applications" ADD CONSTRAINT "applications_applicant_id_users_id_fk" FOREIGN KEY ("applicant_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;
-  ALTER TABLE "applications" ADD CONSTRAINT "applications_cv_id_application_files_id_fk" FOREIGN KEY ("cv_id") REFERENCES "public"."application_files"("id") ON DELETE restrict ON UPDATE no action;
+  ALTER TABLE "applications" ADD CONSTRAINT "applications_cv_id_application_files_id_fk" FOREIGN KEY ("cv_id") REFERENCES "public"."application_files"("id") ON DELETE set null ON UPDATE no action;
   ALTER TABLE "applications" ADD CONSTRAINT "applications_cover_letter_id_application_files_id_fk" FOREIGN KEY ("cover_letter_id") REFERENCES "public"."application_files"("id") ON DELETE set null ON UPDATE no action;
   ALTER TABLE "applications_rels" ADD CONSTRAINT "applications_rels_parent_fk" FOREIGN KEY ("parent_id") REFERENCES "public"."applications"("id") ON DELETE cascade ON UPDATE no action;
   ALTER TABLE "applications_rels" ADD CONSTRAINT "applications_rels_users_fk" FOREIGN KEY ("users_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;
