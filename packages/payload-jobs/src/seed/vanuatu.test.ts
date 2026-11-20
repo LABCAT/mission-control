@@ -62,6 +62,17 @@ describe('Vanuatu location seed', () => {
     expect(seeds.filter((seed) => seed.slug === 'other')).toHaveLength(1)
   })
 
+  it('seeds Nationwide and Remote / anywhere as childless roots', () => {
+    expect(bySlug.get('nationwide')).toEqual({
+      depth: 0,
+      name: 'Nationwide',
+      parentSlug: null,
+      slug: 'nationwide',
+    })
+    expect(bySlug.get('remote-anywhere')).toMatchObject({ depth: 0, parentSlug: null })
+    expect(seeds.some((seed) => seed.parentSlug === 'nationwide')).toBe(false)
+  })
+
   it('hangs every legacy town off the island the picker lists it under', () => {
     for (const [legacyKey, towns] of Object.entries(LEGACY_REGIONS_AND_TOWNS)) {
       const root = bySlug.get(legacyKey.toLowerCase().replace(/\s+/g, '-'))

@@ -19,6 +19,9 @@ export type LocationSeed = {
  * like the islands; the duplicate children they list (the key repeated as its own town) are
  * dropped.
  */
+/** Top-level places that are not islands; `Overseas` and `Other` come from the legacy picker. */
+const NATIONWIDE_ROOTS: readonly string[] = ['Nationwide', 'Remote / anywhere']
+
 const rootDepth = 0
 const childDepth = 1
 
@@ -39,6 +42,10 @@ export const parseVanuatuLocations = (
 
     return slug
   }
+
+  // 20 Nov decision: jobs can name places that are not on an island. These roots sit beside the
+  // islands so the type-ahead offers them like any other location.
+  for (const name of NATIONWIDE_ROOTS) add(name, rootDepth, null)
 
   for (const [legacyKey, towns] of Object.entries(regionsAndTowns)) {
     // The catch-alls are roots too; the collection no longer stores a kind, so the tree shape
