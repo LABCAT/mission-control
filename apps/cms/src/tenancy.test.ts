@@ -7,6 +7,7 @@ import {
   hashSiteKey,
   PAYLOAD_JOBS_TENANT_COLLECTIONS,
   payloadJobs,
+  removeTenantAlertSubscriptions,
   type MissionControlUser,
 } from '@mission-control/payload-jobs'
 
@@ -14,7 +15,7 @@ import { Documents } from './collections/Documents'
 import { Folders } from './collections/Folders'
 import { Media } from './collections/Media'
 import { Tags } from './collections/Tags'
-import { removeTenantMemberships, Tenants } from './collections/Tenants'
+import { removeTenantMemberships, removeTenantSiteKeys, Tenants } from './collections/Tenants'
 import {
   ensureFirstUserIsSuperAdmin,
   preventTenantAdminCredentialChanges,
@@ -781,6 +782,19 @@ describe('tenant deletion', () => {
         data: { tenants: [{ role: 'editor', tenant: 2 }] },
       }),
     ])
+  })
+
+  it('deletes the tenant’s alert subscriptions before the tenant itself', async () => {
+    const config = await buildConfig()
+    const tenants = config.collections?.find((collection) => collection.slug === 'tenants')
+
+    // The app's own hooks still run first; the plugin appends the subscription cleanup, so a
+    // subscriber's address and tokens cannot outlive the tenant as an orphaned row.
+    expect(tenants?.hooks?.beforeDelete?.slice(0, 2)).toEqual([
+      removeTenantMemberships,
+      removeTenantSiteKeys,
+    ])
+    expect(tenants?.hooks?.beforeDelete).toContain(removeTenantAlertSubscriptions)
   })
 })
 

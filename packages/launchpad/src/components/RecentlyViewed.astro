@@ -1,0 +1,139 @@
+---
+/**
+ * "Recently viewed" is browser-local: it reads ids written by `src/viewed-jobs` and fills an
+ * empty container when the browser is idle. The server renders the container empty and hidden,
+ * so a visitor with no history (or no JavaScript) never sees a placeholder.
+ *
+ * The component needs a title and url for each id. Give it one of these:
+ *
+ * - `jobs`: entries already on the page, used as-is.
+ * - `endpoint`: a URL that accepts `?ids=a,b,c` and returns `{ id, title, url }[]` as JSON.
+ *
+ * `jobs` wins when both are set. Nothing here fetches on the server; the endpoint is the site
+ * app's job, and this component documents the contract rather than building it.
+ */
+type RecentlyViewedJob = {
+  id: string
+  title: string
+  url: string
+}
+
+type Props = {
+  /** Jobs already on this page, so the list needs no request. */
+  jobs?: RecentlyViewedJob[]
+  /** JSON endpoint returning `RecentlyViewedJob[]` for `?ids=`. Ignored when `jobs` is set. */
+  endpoint?: string
+  /** How many entries to show. The stored history is capped at 20 by the module. */
+  limit?: number
+  /** Heading, in the tenant's language. */
+  label?: string
+}
+
+const { jobs, endpoint, limit = 5, label = 'Recently viewed' } = Astro.props as Props
+
+// The JSON sits in the page and must not be able to close its own <script> element.
+const jobsJson = jobs ? JSON.stringify(jobs).replace(/</g, '\\u003c') : undefined
+---
+
+<section
+  class="lp-recently-viewed"
+  data-endpoint={endpoint}
+  data-limit={limit}
+  data-recently-viewed
+  hidden
+>
+  <h2 class="lp-recently-viewed__title">{label}</h2>
+  <ul class="lp-recently-viewed__list" data-recently-viewed-list></ul>
+  {
+    jobsJson && (
+      <script type="application/json" data-recently-viewed-jobs set:html={jobsJson} is:inline>
+      </script>
+    )
+  }
+</section>
+
+<script>
+  import { list } from '../viewed-jobs'
+  import { whenIdle } from '../viewed-jobs/idle'
+
+  type RecentlyViewedJob = { id: string; title: string; url: string }
+
+  const section = document.querySelector<HTMLElement>('[data-recently-viewed]')
+  const listElement = section?.querySelector<HTMLUListElement>('[data-recently-viewed-list]')
+
+  const jobsOnPage = (): RecentlyViewedJob[] => {
+    const node = section?.querySelector<HTMLScriptElement>('[data-recently-viewed-jobs]')
+    if (!node?.textContent) return []
+
+    try {
+      const parsed: unknown = JSON.parse(node.textContent)
+      return Array.isArray(parsed) ? (parsed as RecentlyViewedJob[]) : []
+    } catch {
+      return []
+    }
+  }
+
+  const jobsFromEndpoint = async (endpoint: string, ids: string[]): Promise<RecentlyViewedJob[]> => {
+    try {
+      const url = new URL(endpoint, location.href)
+      url.searchParams.set('ids', ids.join(','))
+      const response = await fetch(url)
+      if (!response.ok) return []
+
+      const parsed: unknown = await response.json()
+      return Array.isArray(parsed) ? (parsed as RecentlyViewedJob[]) : []
+    } catch {
+      return []
+    }
+  }
+
+  const fill = async (): Promise<void> => {
+    if (!section || !listElement) return
+
+    const parsedLimit = Number(section.dataset.limit ?? '5')
+    const ids = list(parsedLimit)
+    if (ids.length === 0) return
+
+    const jobs = jobsOnPage()
+    let entries = jobs
+    if (entries.length === 0 && section.dataset.endpoint) {
+      entries = await jobsFromEndpoint(section.dataset.endpoint, ids)
+    }
+
+    const byId = new Map(entries.map((job) => [String(job.id), job]))
+    const fragment = document.createDocumentFragment()
+
+    for (const id of ids) {
+      const job = byId.get(id)
+      if (!job) continue
+
+      const item = document.createElement('li')
+      const link = document.createElement('a')
+      link.href = job.url
+      link.textContent = job.title
+      item.append(link)
+      fragment.append(item)
+    }
+
+    if (!fragment.childNodes.length) return
+    listElement.append(fragment)
+    section.hidden = false
+  }
+
+  if (section && listElement) whenIdle(fill)
+</script>
+
+<style>
+  .lp-recently-viewed__title {
+    font-size: var(--rs-font-size-lg);
+    margin: 0 0 var(--rs-space-2);
+  }
+
+  .lp-recently-viewed__list {
+    display: grid;
+    gap: var(--rs-space-2);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+</style>

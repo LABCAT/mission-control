@@ -14,7 +14,8 @@
   },
   "dependencies": {
     "@labcat2020/rocketship": "0.3.0",
-    "@mission-control/launchpad": "workspace:*"
+    "@mission-control/launchpad": "workspace:*",
+    "@mission-control/rocketship-payload": "workspace:*"
   },
   "devDependencies": {
     "@astrojs/check": "0.9.12",
