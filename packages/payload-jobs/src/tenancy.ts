@@ -1,6 +1,7 @@
 import type { Field, GlobalConfig } from 'payload'
 
 import { authenticatedAccess, superAdminAccess } from './access'
+import { tenantLocationFields } from './location-settings'
 import { tenantTaxField } from './tax-settings'
 
 // Current ISO 4217 list one from SIX (the maintenance agency), fetched 2026-11-06.
@@ -168,6 +169,8 @@ export const jobBoardTenantFields: Field[] = [
     validate: (value: null | string | undefined, options: ValidationOptions) =>
       requiredUnlessAggregate(value, options, 'Tax label is required'),
   },
+  // Generic location tree: the tenant names its levels and may cap the depth (PJ-99).
+  ...tenantLocationFields(showForSiteTenant),
   // Rates, inclusive/exclusive prices, rounding and Xero tax types (PJ-91). Off by default.
   tenantTaxField(showForSiteTenant),
   // What happens to a job after checkout (PJ-32 applies it with `decidePublication`).

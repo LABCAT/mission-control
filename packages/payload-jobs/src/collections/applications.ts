@@ -203,6 +203,8 @@ export type ApplicationsCollectionOptions = {
   filesSlug?: string
   /** Slug of the jobs collection. Defaults to `jobs`. */
   jobsSlug?: string
+  /** Slug of the organisations collection. Defaults to `organisations`. */
+  organisationsSlug?: string
   tenantScoped: boolean
 }
 
@@ -210,6 +212,7 @@ export const applicationsCollection = ({
   applicantsSlug = 'users',
   filesSlug = APPLICATION_FILES_SLUG,
   jobsSlug = JOBS_SLUG,
+  organisationsSlug = ORGANISATIONS_SLUG,
   tenantScoped,
 }: ApplicationsCollectionOptions): CollectionConfig => ({
   slug: APPLICATIONS_SLUG,
@@ -229,7 +232,7 @@ export const applicationsCollection = ({
       // Denormalised from the job on the server: access is decided by it.
       name: 'organisation',
       type: 'relationship',
-      relationTo: ORGANISATIONS_SLUG as CollectionSlug,
+      relationTo: organisationsSlug as CollectionSlug,
       index: true,
       admin: { description: 'Copied from the job. Not editable.', readOnly: true },
     },
@@ -294,9 +297,11 @@ export const validateApplicationFileSize: CollectionBeforeValidateHook = ({ data
  */
 export const applicationFilesCollection = ({
   applicantsSlug = 'users',
+  organisationsSlug = ORGANISATIONS_SLUG,
   tenantScoped,
 }: {
   applicantsSlug?: null | string
+  organisationsSlug?: string
   tenantScoped: boolean
 }): CollectionConfig => ({
   slug: APPLICATION_FILES_SLUG,
@@ -311,7 +316,7 @@ export const applicationFilesCollection = ({
     {
       name: 'organisation',
       type: 'relationship',
-      relationTo: ORGANISATIONS_SLUG as CollectionSlug,
+      relationTo: organisationsSlug as CollectionSlug,
       index: true,
       required: true,
       admin: { readOnly: true },

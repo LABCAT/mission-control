@@ -1,12 +1,13 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
+import { tenantLocationFields, tenantLocationSettings, type TenantLocationSource } from '../location-settings'
 import { parseVanuatuLocations, seedVanuatuLocations } from '../seed/vanuatu'
 import { bootTestPayload, type TestHarness } from '../test'
 import { locationsCollection } from './locations'
 
 type Stored = {
+  depth: null | number
   id: number | string
-  kind: string
   parent: null | number | string
   slug: string
   tenant: number | string
@@ -41,7 +42,34 @@ describe('locations tree', () => {
 
   beforeAll(async () => {
     harness = await bootTestPayload({
-      collections: [locationsCollection({ requireTenant: true })],
+      collections: [
+        locationsCollection({
+          limits: async ({ data, req }) => {
+            const ref = data.tenant
+            const tenantID = ref && typeof ref === 'object' ? ref.id : ref
+            if (tenantID === null || tenantID === undefined) return null
+
+            const tenant = await req.payload.findByID({
+              collection: 'tenants',
+              depth: 0,
+              id: tenantID,
+              overrideAccess: true,
+              req,
+            })
+
+            return tenantLocationSettings(tenant as TenantLocationSource)
+          },
+          requireTenant: true,
+        }),
+      ],
+      tenantData: (which) =>
+        which === 'A'
+          ? { locationLevels: [{ label: 'Island' }, { label: 'Town' }], locationMaxDepth: 1 }
+          : {
+              locationLevels: [{ label: 'Region' }, { label: 'City' }, { label: 'Suburb' }],
+              locationMaxDepth: 2,
+            },
+      tenantFields: tenantLocationFields(),
     })
   })
 
@@ -57,71 +85,107 @@ describe('locations tree', () => {
     if (harness) await harness.destroy()
   })
 
-  it('accepts region → island → town and keeps the parent link', async () => {
-    const region = await create({ kind: 'region', name: 'Shefa', slug: 'shefa' }, harness.tenantA.id)
-    const island = await create(
-      { kind: 'island', name: 'Efate', parent: region.id, slug: 'efate' },
-      harness.tenantA.id,
+  it('takes any depth and computes it from the parent chain', async () => {
+    const region = await create({ name: 'Shefa', slug: 'shefa' }, harness.tenantB.id, harness.tenantAdminB)
+    const city = await create(
+      { name: 'Efate', parent: region.id, slug: 'efate' },
+      harness.tenantB.id,
+      harness.tenantAdminB,
     )
-    const town = await create(
-      { kind: 'town', name: 'Port Vila', parent: island.id, slug: 'port-vila' },
-      harness.tenantA.id,
-    )
-
-    expect((await readBack(island.id)).parent).toBe(region.id)
-    expect((await readBack(town.id)).parent).toBe(island.id)
-  })
-
-  it('rejects a town under a town so the tree stays three levels', async () => {
-    const region = await create({ kind: 'region', name: 'Tafea', slug: 'tafea' }, harness.tenantA.id)
-    const island = await create(
-      { kind: 'island', name: 'Tanna', parent: region.id, slug: 'tanna' },
-      harness.tenantA.id,
-    )
-    const town = await create(
-      { kind: 'town', name: 'Lenakel', parent: island.id, slug: 'lenakel' },
-      harness.tenantA.id,
-    )
-
-    await expect(
-      create({ kind: 'town', name: 'Isangel', parent: town.id, slug: 'isangel' }, harness.tenantA.id),
-    ).rejects.toThrow()
-  })
-
-  it('rejects a region with a parent and an island under a town', async () => {
-    const region = await create(
-      { kind: 'region', name: 'Malampa', slug: 'malampa' },
-      harness.tenantA.id,
-    )
-    const island = await create(
-      { kind: 'island', name: 'Malekula', parent: region.id, slug: 'malekula' },
-      harness.tenantA.id,
-    )
-    const town = await create(
-      { kind: 'town', name: 'Lakatoro', parent: island.id, slug: 'lakatoro' },
-      harness.tenantA.id,
-    )
-
-    await expect(
-      create({ kind: 'region', name: 'Sanma', parent: region.id, slug: 'sanma' }, harness.tenantA.id),
-    ).rejects.toThrow()
-
-    await expect(
-      create({ kind: 'island', name: 'Ambae', parent: town.id, slug: 'ambae' }, harness.tenantA.id),
-    ).rejects.toThrow()
-  })
-
-  it('rejects a parent that belongs to another tenant', async () => {
-    const foreign = await create(
-      { kind: 'region', name: 'Torba', slug: 'torba' },
+    const suburb = await create(
+      { name: 'Port Vila', parent: city.id, slug: 'port-vila' },
       harness.tenantB.id,
       harness.tenantAdminB,
     )
 
+    expect((await readBack(region.id)).depth).toBe(0)
+    expect(await readBack(city.id)).toMatchObject({ depth: 1, parent: region.id })
+    expect(await readBack(suburb.id)).toMatchObject({ depth: 2, parent: city.id })
+  })
+
+  it('recomputes the depth of every descendant when a branch is moved', async () => {
+    const top = await create({ name: 'Tafea', slug: 'tafea' }, harness.tenantB.id, harness.tenantAdminB)
+    const mid = await create(
+      { name: 'Tanna', parent: top.id, slug: 'tanna' },
+      harness.tenantB.id,
+      harness.tenantAdminB,
+    )
+    const leaf = await create(
+      { name: 'Lenakel', parent: mid.id, slug: 'lenakel' },
+      harness.tenantB.id,
+      harness.tenantAdminB,
+    )
+    expect((await readBack(leaf.id)).depth).toBe(2)
+
+    // Move the middle branch to the top: it becomes a root and its child moves up with it.
+    await harness.payload.update({
+      collection: 'locations',
+      data: { parent: null } as never,
+      id: mid.id,
+      user: harness.tenantAdminB as never,
+    })
+
+    expect((await readBack(mid.id)).depth).toBe(0)
+    expect((await readBack(leaf.id)).depth).toBe(1)
+
+    // And back under the top: both go down again.
+    await harness.payload.update({
+      collection: 'locations',
+      data: { parent: top.id } as never,
+      id: mid.id,
+      user: harness.tenantAdminB as never,
+    })
+
+    expect((await readBack(mid.id)).depth).toBe(1)
+    expect((await readBack(leaf.id)).depth).toBe(2)
+  })
+
+  it('names the levels and caps the depth per tenant', async () => {
+    const tenantA = (await harness.payload.findByID({
+      collection: 'tenants',
+      depth: 0,
+      id: harness.tenantA.id,
+      overrideAccess: true,
+    })) as TenantLocationSource
+    const tenantB = (await harness.payload.findByID({
+      collection: 'tenants',
+      depth: 0,
+      id: harness.tenantB.id,
+      overrideAccess: true,
+    })) as TenantLocationSource
+
+    expect(tenantLocationSettings(tenantA)).toEqual({ levels: ['Island', 'Town'], maxDepth: 1 })
+    expect(tenantLocationSettings(tenantB)).toEqual({
+      levels: ['Region', 'City', 'Suburb'],
+      maxDepth: 2,
+    })
+
+    // Tenant A names Island → Town, so a third level is refused with those names.
+    const island = await create({ name: 'Tafea', slug: 'tafea' }, harness.tenantA.id)
+    const town = await create(
+      { name: 'Tanna', parent: island.id, slug: 'tanna' },
+      harness.tenantA.id,
+    )
+
     const error = await create(
-      { kind: 'island', name: 'Gaua', parent: foreign.id, slug: 'gaua' },
+      { name: 'Lenakel', parent: town.id, slug: 'lenakel' },
       harness.tenantA.id,
     ).then(
+      () => null,
+      (reason: unknown) => reason,
+    )
+
+    expect(fieldMessages(error)).toBe('This tenant allows at most 2 location levels (Island → Town)')
+  })
+
+  it('rejects a parent that belongs to another tenant', async () => {
+    const foreign = await create(
+      { name: 'Torba', slug: 'torba' },
+      harness.tenantB.id,
+      harness.tenantAdminB,
+    )
+
+    const error = await create({ name: 'Gaua', parent: foreign.id, slug: 'gaua' }, harness.tenantA.id).then(
       () => null,
       (reason: unknown) => reason,
     )
@@ -129,13 +193,56 @@ describe('locations tree', () => {
     expect(fieldMessages(error)).toMatch(/another tenant/)
   })
 
-  it('allows one slug per tenant but not twice inside a tenant', async () => {
-    await create({ kind: 'town', name: 'Luganville', slug: 'luganville' }, harness.tenantA.id)
-
-    const error = await create(
-      { kind: 'town', name: 'Luganville', slug: 'luganville' },
+  it('rejects moving a location under one of its own descendants', async () => {
+    const root = await create({ name: 'Malampa', slug: 'malampa' }, harness.tenantA.id)
+    const child = await create(
+      { name: 'Malekula', parent: root.id, slug: 'malekula' },
       harness.tenantA.id,
-    ).then(
+    )
+
+    const error = await harness.payload
+      .update({
+        collection: 'locations',
+        data: { parent: child.id } as never,
+        id: root.id,
+        user: harness.tenantAdminA as never,
+      })
+      .then(
+        () => null,
+        (reason: unknown) => reason,
+      )
+
+    expect(fieldMessages(error)).toBe('A location cannot sit under one of its own descendants')
+  })
+
+  it('rechecks the parent when an update never submits it', async () => {
+    const root = await create({ name: 'Sanma', slug: 'sanma' }, harness.tenantA.id)
+    const child = await create(
+      { name: 'Espiritu Santo', parent: root.id, slug: 'espiritu-santo' },
+      harness.tenantA.id,
+    )
+
+    // Moving the child to tenant B leaves its stored parent in tenant A. The request never
+    // mentions `parent`, so only the collection hook can catch it.
+    const error = await harness.payload
+      .update({
+        collection: 'locations',
+        data: { tenant: harness.tenantB.id } as never,
+        id: child.id,
+        overrideAccess: true,
+      })
+      .then(
+        () => null,
+        (reason: unknown) => reason,
+      )
+
+    expect(fieldMessages(error)).toMatch(/another tenant/)
+  })
+
+  it('allows one slug per tenant but not twice inside a tenant', async () => {
+    await create({ name: 'Luganville', slug: 'luganville' }, harness.tenantA.id)
+
+    const error = await create({ name: 'Luganville', slug: 'luganville' }, harness.tenantA.id).then(
       () => null,
       (reason: unknown) => reason,
     )
@@ -143,7 +250,7 @@ describe('locations tree', () => {
 
     await expect(
       create(
-        { kind: 'town', name: 'Luganville', slug: 'luganville' },
+        { name: 'Luganville', slug: 'luganville' },
         harness.tenantB.id,
         harness.tenantAdminB,
       ),
@@ -154,7 +261,7 @@ describe('locations tree', () => {
     const error = await harness.payload
       .create({
         collection: 'locations',
-        data: { kind: 'region', name: 'No tenant', slug: 'no-tenant' } as never,
+        data: { name: 'No tenant', slug: 'no-tenant' } as never,
         overrideAccess: true,
       })
       .then(
@@ -166,15 +273,12 @@ describe('locations tree', () => {
   })
 
   it('rejects a tenantless child even below a real parent', async () => {
-    const parent = await create(
-      { kind: 'region', name: 'Penama', slug: 'penama' },
-      harness.tenantA.id,
-    )
+    const parent = await create({ name: 'Penama', slug: 'penama' }, harness.tenantA.id)
 
     const error = await harness.payload
       .create({
         collection: 'locations',
-        data: { kind: 'island', name: 'Ambae', parent: parent.id, slug: 'ambae' } as never,
+        data: { name: 'Ambae', parent: parent.id, slug: 'ambae' } as never,
         overrideAccess: true,
       })
       .then(
@@ -185,38 +289,8 @@ describe('locations tree', () => {
     expect(fieldMessages(error)).toBe('A location must belong to a tenant')
   })
 
-  it('rejects an update whose new kind leaves the stored parent invalid', async () => {
-    const region = await create(
-      { kind: 'region', name: 'Tafea', slug: 'tafea-update' },
-      harness.tenantA.id,
-    )
-    const island = await create(
-      { kind: 'island', name: 'Erromango', parent: region.id, slug: 'erromango' },
-      harness.tenantA.id,
-    )
-
-    // The request never mentions `parent`, so only the collection hook can catch the region
-    // that is about to keep an island's parent.
-    const error = await harness.payload
-      .update({
-        collection: 'locations',
-        data: { kind: 'region' } as never,
-        id: island.id,
-        user: harness.tenantAdminA as never,
-      })
-      .then(
-        () => null,
-        (reason: unknown) => reason,
-      )
-
-    expect(fieldMessages(error)).toBe('A region cannot have a parent')
-  })
-
   it('rejects a slug that is not already a slug', async () => {
-    const error = await create(
-      { kind: 'region', name: 'Port Vila', slug: 'Port Vila' },
-      harness.tenantA.id,
-    ).then(
+    const error = await create({ name: 'Port Vila', slug: 'Port Vila' }, harness.tenantA.id).then(
       () => null,
       (reason: unknown) => reason,
     )
@@ -225,12 +299,6 @@ describe('locations tree', () => {
   })
 
   it('shows a tenant admin only their own tenant’s locations', async () => {
-    await create(
-      { kind: 'region', name: 'Shefa', slug: 'shefa' },
-      harness.tenantB.id,
-      harness.tenantAdminB,
-    )
-
     const { docs } = await harness.payload.find({
       collection: 'locations',
       depth: 0,
@@ -274,7 +342,7 @@ describe('locations tree', () => {
       expect(docs).toHaveLength(expected.length)
     })
 
-    it('links every seeded location to a parent of the expected kind', async () => {
+    it('keeps the legacy picker’s two levels: island roots and their towns', async () => {
       const { docs } = await harness.payload.find({
         collection: 'locations',
         depth: 0,
@@ -288,22 +356,23 @@ describe('locations tree', () => {
       for (const doc of docs) {
         const stored = doc as unknown as Stored
 
-        // Only towns are leaves; islands and regions are roots in the legacy picker's shape.
-        if (stored.kind !== 'town') {
-          expect(stored.parent, `${stored.slug} should be a root`).toBeNull()
+        // Only towns are leaves: the seed writes two levels.
+        if (stored.depth === 1) {
+          const parent = byID.get(String(stored.parent))
+          expect(parent, `${stored.slug} has no parent`).toBeDefined()
+          expect(parent?.depth).toBe(0)
           continue
         }
 
-        const parent = byID.get(String(stored.parent))
-        expect(parent, `${stored.slug} has no parent`).toBeDefined()
-        expect(['island', 'region']).toContain(parent?.kind)
+        expect(stored.depth, `${stored.slug} should be a root`).toBe(0)
+        expect(stored.parent).toBeNull()
       }
 
-      const roots = docs
-        .filter((doc) => (doc as unknown as Stored).kind === 'region')
-        .map((doc) => (doc as unknown as Stored).slug)
-      expect(roots).toHaveLength(2)
-      expect(roots).toEqual(expect.arrayContaining(['other', 'overseas']))
+      const roots = docs.filter((doc) => (doc as unknown as Stored).depth === 0)
+      const rootSlugs = roots.map((doc) => (doc as unknown as Stored).slug)
+      expect(roots).toHaveLength(expected.filter((seed) => seed.parentSlug === null).length)
+      expect(rootSlugs).toEqual(expect.arrayContaining(['other', 'overseas']))
+      expect(docs.every((doc) => ((doc as unknown as Stored).depth ?? -1) <= 1)).toBe(true)
     })
 
     it('seeds into one tenant only', async () => {

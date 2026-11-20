@@ -548,7 +548,8 @@ stories:
       - plans.coupons
     mvp: true
     status: planned
-    tests: []
+    tests:
+      - packages/payload-jobs/src/coupons.test.ts
 
   - id: S-038
     area: Job posting

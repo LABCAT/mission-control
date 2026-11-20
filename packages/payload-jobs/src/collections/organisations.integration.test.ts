@@ -472,9 +472,9 @@ describe('organisations integration', () => {
   })
 
   it('rejects a relation from another tenant', async () => {
-    const otherArea = await harness.payload.create({
-      collection: 'areas-of-focus',
-      data: { name: 'Marine', slug: 'marine', tenant: harness.tenantB.id } as never,
+    const otherTown = await harness.payload.create({
+      collection: 'locations',
+      data: { kind: 'town', name: 'Luganville', slug: 'luganville', tenant: harness.tenantB.id } as never,
       overrideAccess: true,
     })
 
@@ -482,22 +482,17 @@ describe('organisations integration', () => {
       .create({
         collection: 'organisations',
         data: {
-          ...organisationData({ areasOfFocus: [otherArea.id], slug: 'cross-tenant' }),
+          ...organisationData({ location: otherTown.id, slug: 'cross-tenant' }),
           tenant: harness.tenantA.id,
         } as never,
         overrideAccess: true,
       })
       .catch((thrown: unknown) => thrown)
 
-    expect(JSON.stringify(error)).toMatch(/areas of focus/)
+    expect(JSON.stringify(error)).toMatch(/location/)
   })
 
   it('accepts the same relations inside the tenant', async () => {
-    const area = await harness.payload.create({
-      collection: 'areas-of-focus',
-      data: { name: 'Youth', slug: 'youth', tenant: harness.tenantA.id } as never,
-      overrideAccess: true,
-    })
     const town = await harness.payload.create({
       collection: 'locations',
       data: {
@@ -512,7 +507,7 @@ describe('organisations integration', () => {
     const created = await harness.payload.create({
       collection: 'organisations',
       data: {
-        ...organisationData({ areasOfFocus: [area.id], location: town.id, slug: 'related' }),
+        ...organisationData({ location: town.id, slug: 'related' }),
         tenant: harness.tenantA.id,
       } as never,
       overrideAccess: true,
