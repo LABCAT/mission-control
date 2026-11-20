@@ -1,6 +1,5 @@
 import {
   createSiteKeyAccessOverride,
-  resolvePayloadJobsSlugs,
   type PayloadJobsCollectionSlugs,
 } from '@mission-control/payload-jobs'
 
@@ -29,5 +28,3 @@ export const siteKeyAllowedCollections = (slugs: PayloadJobsCollectionSlugs) =>
 
 export const siteKeyAccessOverrideFor = (slugs: PayloadJobsCollectionSlugs) =>
   createSiteKeyAccessOverride({ allowedCollections: siteKeyAllowedCollections(slugs) })
-
-export const siteKeyAccessOverride = siteKeyAccessOverrideFor(resolvePayloadJobsSlugs())
