@@ -21,6 +21,7 @@ import * as migration_20261120_111524_remove_job_tags_areas from './20261120_111
 import * as migration_20261120_122303_location_tree from './20261120_122303_location_tree';
 import * as migration_20261120_151343_pages_menus from './20261120_151343_pages_menus';
 import * as migration_20261120_203257_applications from './20261120_203257_applications';
+import * as migration_20261120_230226_account_import_fields from './20261120_230226_account_import_fields';
 
 export const migrations = [
   {
@@ -136,6 +137,11 @@ export const migrations = [
   {
     up: migration_20261120_203257_applications.up,
     down: migration_20261120_203257_applications.down,
-    name: '20261120_203257_applications'
+    name: '20261120_203257_applications',
+  },
+  {
+    up: migration_20261120_230226_account_import_fields.up,
+    down: migration_20261120_230226_account_import_fields.down,
+    name: '20261120_230226_account_import_fields'
   },
 ];
