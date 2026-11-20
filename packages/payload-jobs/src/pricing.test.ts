@@ -11,6 +11,7 @@ import {
   type QuoteArgs,
   type QuoteCouponTerms,
 } from './pricing'
+import type { TaxSettings } from './tax'
 
 // Amounts up to 10^12 minor units: far beyond any real price, still well inside safe integers
 // even when several are summed.
@@ -317,7 +318,7 @@ const enhanced: QuotableAddOn = {
   price: 2000,
 }
 
-describe('quote examples', () => {
+describe('quote examples @S-093', () => {
   it('prices a Vatu listing with an add-on and a 10% coupon', () => {
     const result = quote({
       addOns: [enhanced],
@@ -333,6 +334,7 @@ describe('quote examples', () => {
       addOns: [
         {
           durationDays: 30,
+          grantedBy: null,
           name: 'Enhanced',
           placement: 'featured-in-listings',
           ref: { id: 'enhanced', key: null, legacyId: null },
@@ -639,5 +641,228 @@ describe('plan restrictions (examples)', () => {
     expect(codeOf(() => quote({ job: { categories: 'ngo' as never }, plan: vatu() }))).toBe('invalid-job')
     expect(codeOf(() => quote({ job: { type: {} as never }, plan: vatu() }))).toBe('invalid-job')
     expect(codeOf(() => quote({ job: { type: 1.5 }, plan: vatu() }))).toBe('invalid-job')
+  })
+})
+
+describe('add-on grants', () => {
+  const premium: QuotableAddOn = {
+    active: true,
+    currency: 'VUV',
+    durationDays: 14,
+    grants: [{ addOn: enhanced, durationDays: 30 }],
+    id: 'premium',
+    name: 'Premium',
+    placement: 'featured-in-category',
+    price: 5000,
+  }
+
+  it('gives Premium’s 30 days of Enhanced for free, recorded as a grant', () => {
+    const result = quote({ addOns: [premium], plan: vatu() })
+
+    expect(result.total).toBe(10000)
+    expect(result.lines.map((line) => line.name)).toEqual(['Regular listing', 'Premium'])
+    expect(result.entitlements.addOns).toEqual([
+      {
+        durationDays: 14,
+        grantedBy: null,
+        name: 'Premium',
+        placement: 'featured-in-category',
+        ref: { id: 'premium', key: null, legacyId: null },
+        source: 'purchase',
+      },
+      {
+        durationDays: 30,
+        grantedBy: { id: 'premium', key: null, legacyId: null },
+        name: 'Enhanced',
+        placement: 'featured-in-listings',
+        ref: { id: 'enhanced', key: null, legacyId: null },
+        source: 'grant',
+      },
+    ])
+  })
+
+  it('follows grants from add-ons a plan includes, resolving ids from the catalog', () => {
+    const premiumByID = { ...premium, grants: [{ addOn: 'enhanced', durationDays: 30 }] }
+    const plan = vatu({ includedAddOns: [{ addOn: 'premium' }] })
+
+    const result = quote({ addOnCatalog: [enhanced, premiumByID], plan })
+
+    expect(result.total).toBe(5000)
+    expect(result.entitlements.addOns.map((row) => [row.ref.id, row.source, row.durationDays])).toEqual([
+      ['premium', 'plan', 14],
+      ['enhanced', 'grant', 30],
+    ])
+  })
+
+  it('refuses an add-on given by id that is not in the catalog', () => {
+    expect(codeOf(() => quote({ plan: vatu({ includedAddOns: [{ addOn: 'premium' }] }) }))).toBe(
+      'invalid-add-on',
+    )
+    expect(
+      codeOf(() =>
+        quote({ addOns: [{ ...premium, grants: [{ addOn: 'ghost', durationDays: 30 }] }], plan: vatu() }),
+      ),
+    ).toBe('invalid-add-on')
+  })
+
+  it('cuts grant cycles instead of looping, and never grants the root to itself', () => {
+    const a = { ...enhanced, grants: [] as { addOn: string; durationDays: number }[], id: 'a', name: 'A' }
+    const b = { ...enhanced, grants: [{ addOn: 'c', durationDays: 5 }], id: 'b', name: 'B' }
+    const c = { ...enhanced, grants: [{ addOn: 'a', durationDays: 5 }, { addOn: 'b', durationDays: 5 }], id: 'c', name: 'C' }
+    a.grants = [{ addOn: 'b', durationDays: 5 }]
+
+    const result = quote({ addOnCatalog: [a, b, c], addOns: [a], plan: vatu() })
+
+    expect(result.entitlements.addOns.map((row) => [row.ref.id, row.source])).toEqual([
+      ['a', 'purchase'],
+      ['b', 'grant'],
+      ['c', 'grant'],
+    ])
+  })
+
+  it('honours grants of add-ons that are no longer sold, but not other currencies or bad durations', () => {
+    const retired = { ...premium, grants: [{ addOn: { ...enhanced, active: false }, durationDays: 30 }] }
+    expect(quote({ addOns: [retired], plan: vatu() }).entitlements.addOns).toHaveLength(2)
+
+    expect(
+      codeOf(() =>
+        quote({
+          addOns: [{ ...premium, grants: [{ addOn: { ...enhanced, currency: 'NZD' }, durationDays: 30 }] }],
+          plan: vatu(),
+        }),
+      ),
+    ).toBe('currency-mismatch')
+    expect(
+      codeOf(() => quote({ addOns: [{ ...premium, grants: [{ addOn: enhanced, durationDays: 0 }] }], plan: vatu() })),
+    ).toBe('invalid-add-on')
+  })
+
+  it('never charges for a grant (property)', () => {
+    const chain = fc.array(fc.record({ durationDays: days, price: money }), { minLength: 1, maxLength: 5 })
+
+    fc.assert(
+      fc.property(fc.integer({ min: 0, max: 1_000_000 }), chain, fc.boolean(), (planPrice, links, cyclic) => {
+        // A chain of add-ons, each granting the next; optionally the last grants the first.
+        const ids = links.map((_, index) => `g${index}`)
+        const catalog: QuotableAddOn[] = links.map((link, index) => ({
+          active: true,
+          currency: 'VUV',
+          durationDays: link.durationDays,
+          grants:
+            index + 1 < links.length
+              ? [{ addOn: ids[index + 1], durationDays: link.durationDays }]
+              : cyclic
+                ? [{ addOn: ids[0], durationDays: link.durationDays }]
+                : [],
+          id: ids[index],
+          name: ids[index],
+          placement: 'featured-in-listings',
+          price: link.price,
+        }))
+
+        const result = quote({ addOnCatalog: catalog, addOns: [catalog[0]], plan: vatu({ price: planPrice }) })
+
+        expect(result.subtotal).toBe(planPrice + links[0].price)
+        expect(result.entitlements.addOns.map((row) => row.ref.id)).toEqual(ids)
+        expect(result.entitlements.addOns.slice(1).every((row) => row.source === 'grant')).toBe(true)
+      }),
+    )
+  })
+})
+
+const vatSettings = (overrides: Partial<TaxSettings> = {}): TaxSettings => ({
+  defaultRateKey: 'vat',
+  enabled: true,
+  exemptXeroTaxType: 'EXEMPTOUTPUT',
+  label: 'VAT',
+  pricesIncludeTax: false,
+  rates: [{ key: 'vat', name: 'VAT', rate: 1500, xeroTaxType: 'OUTPUT' }],
+  rounding: 'invoice',
+  ...overrides,
+})
+
+describe('quote with tax', () => {
+  it('adds exclusive VAT after the coupon, line by line', () => {
+    const result = quote({
+      addOns: [enhanced],
+      coupon: { amount: 10, discountType: 'percent' },
+      plan: vatu(),
+      tax: vatSettings(),
+    })
+
+    // 7000 subtotal, 700 coupon spread 500/200, 15% on 6300 = 945.
+    expect(result.lines.map((line) => [line.discount, line.net, line.tax, line.gross])).toEqual([
+      [500, 4500, 675, 5175],
+      [200, 1800, 270, 2070],
+    ])
+    expect(result.tax).toMatchObject({ enabled: true, gross: 7245, label: 'VAT', net: 6300, tax: 945 })
+    expect(result.total).toBe(7245)
+  })
+
+  it('carves inclusive VAT out of the price without changing what is paid', () => {
+    const result = quote({ plan: vatu({ price: 5750 }), tax: vatSettings({ pricesIncludeTax: true }) })
+
+    expect(result.total).toBe(5750)
+    expect(result.tax).toMatchObject({ net: 5000, tax: 750 })
+  })
+
+  it('charges no tax on what a credit pays, nor on exempt add-ons', () => {
+    const result = quote({
+      addOns: [{ ...enhanced, taxExempt: true }],
+      availableCredits: 1,
+      plan: vatu(),
+      tax: vatSettings(),
+    })
+
+    expect(result.lines.map((line) => [line.tax, line.xeroTaxType])).toEqual([
+      [0, 'OUTPUT'],
+      [0, 'EXEMPTOUTPUT'],
+    ])
+    expect(result.total).toBe(2000)
+  })
+
+  it('refuses a payable total too large to represent exactly', () => {
+    const huge = vatu({ price: Number.MAX_SAFE_INTEGER })
+    const allTax = vatSettings({ rates: [{ key: 'vat', name: 'VAT', rate: 10_000 }] })
+
+    expect(codeOf(() => quote({ plan: huge, tax: allTax }))).toBe('invalid-tax')
+    expect(quote({ plan: huge, tax: { ...allTax, pricesIncludeTax: true } }).total).toBe(Number.MAX_SAFE_INTEGER)
+  })
+
+  it('refuses a plan naming a rate the tenant does not have', () => {
+    expect(codeOf(() => quote({ plan: vatu({ taxRateKey: 'ghost' }), tax: vatSettings() }))).toBe('invalid-tax')
+    expect(codeOf(() => quote({ plan: vatu(), tax: vatSettings({ rates: [] }) }))).toBe('invalid-tax')
+  })
+
+  it('keeps every money invariant with any tax settings (property)', () => {
+    const taxArb = fc.record({
+      enabled: fc.boolean(),
+      pricesIncludeTax: fc.boolean(),
+      rate: fc.integer({ min: 0, max: 5000 }),
+      rounding: fc.constantFrom('invoice' as const, 'line' as const),
+    })
+
+    fc.assert(
+      fc.property(argsArb, taxArb, ({ ...args }, { enabled, pricesIncludeTax, rate, rounding }) => {
+        const tax = vatSettings({ enabled, pricesIncludeTax, rates: [{ key: 'vat', name: 'VAT', rate }], rounding })
+        const result = quote({ ...args, tax })
+        const untaxed = quote(args)
+
+        expect(result.lines.reduce((acc, line) => acc + line.discount, 0)).toBe(result.discount)
+        expect(result.lines.reduce((acc, line) => acc + line.gross, 0)).toBe(result.total)
+        expect(result.tax.net + result.tax.tax).toBe(result.total)
+        for (const line of result.lines) {
+          expect(line.amount - line.discount).toBe(pricesIncludeTax ? line.gross : line.net)
+          expect(line.discount).toBeLessThanOrEqual(line.amount)
+        }
+        // Prices, discounts and coupons don't depend on tax; only the total can grow by it.
+        expect(result.discount).toBe(untaxed.discount)
+        expect(result.subtotal).toBe(untaxed.subtotal)
+        expect(result.total).toBe(
+          enabled && !pricesIncludeTax ? untaxed.total + result.tax.tax : untaxed.total,
+        )
+        if (!enabled) expect(result.tax.tax).toBe(0)
+      }),
+    )
   })
 })

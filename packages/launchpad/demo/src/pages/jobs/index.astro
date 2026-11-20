@@ -1,0 +1,20 @@
+---
+/**
+ * `/jobs` in the demo. A site app serves this with `serveJobListing` at request time (it also
+ * holds the HTML at the edge); the demo calls the same loader against an in-memory CMS and
+ * renders the view, so the filters and the live-jobs rule are the production ones.
+ */
+import JobsPage from '../../../../src/components/JobsPage.astro'
+import { demoListing } from '../../listing'
+import { tenant } from '../../data'
+
+const view = await demoListing({ basePath: '/jobs', search: Astro.url.search })
+---
+
+<JobsPage
+  description="Jobs in Vanuatu, from every employer on the site."
+  path="/jobs"
+  tenant={tenant}
+  title="Jobs in Vanuatu"
+  view={view}
+/>

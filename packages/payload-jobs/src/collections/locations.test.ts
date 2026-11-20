@@ -1,6 +1,7 @@
 import type { CollectionConfig, Config } from 'payload'
 import { describe, expect, it } from 'vitest'
 
+import { ALERT_SUBSCRIPTIONS_SLUG } from '../alert-subscriptions'
 import { payloadJobs } from '../index'
 import { TAXONOMY_SLUGS } from '../taxonomies'
 import {
@@ -22,15 +23,20 @@ const fieldNamed = (name: string) =>
 
 const requestFor = (user: unknown) => ({ req: { user } }) as never
 
-describe('locations collection', () => {
+describe('locations collection @S-120', () => {
   it('is registered by the plugin without touching the host collections', async () => {
     const config = await payloadJobs()(baseConfig)
 
     expect(config.collections?.map((collection) => collection.slug)).toEqual([
       'users',
       'locations',
+      'organisations',
+      ALERT_SUBSCRIPTIONS_SLUG,
       ...TAXONOMY_SLUGS,
       'plans',
+      'add-ons',
+      'jobs',
+      'coupons',
     ])
     expect(Locations.slug).toBe('locations')
     expect(Locations.versions).toBe(false)

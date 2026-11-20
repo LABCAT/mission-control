@@ -1,0 +1,136 @@
+---
+import Button from '@labcat2020/rocketship/components/Button'
+import Container from '@labcat2020/rocketship/components/Container'
+import Grid from '@labcat2020/rocketship/components/Grid'
+import Stack from '@labcat2020/rocketship/components/Stack'
+import Typography from '@labcat2020/rocketship/components/Typography'
+
+import BaseLayout from '../../../src/components/BaseLayout.astro'
+import FilterBar from '../../../src/components/FilterBar.astro'
+import JobCard from '../../../src/components/JobCard.astro'
+import OrgCard from '../../../src/components/OrgCard.astro'
+import Pagination from '../../../src/components/Pagination.astro'
+import RecentlyViewed from '../../../src/components/RecentlyViewed.astro'
+import Turnstile from '../../../src/components/Turnstile.astro'
+import { hasActiveFilters, parseFilters } from '../../../src/tenant/filters'
+import { resultsSummary } from '../../../src/tenant/pagination'
+import { definitions, jobs, organisations, tenant } from '../data'
+
+const search = new URL(Astro.request.url).search
+const values = parseFilters(search, definitions)
+const page = Number(values.page ?? '1')
+const pageSize = 2
+const totalPages = Math.max(1, Math.ceil(jobs.length / pageSize))
+const current = Math.min(Math.max(Math.trunc(page), 1), totalPages)
+
+const visible = jobs.slice((current - 1) * pageSize, current * pageSize)
+
+const href = (target: number): string => {
+  if (target === 1) return '/jobs'
+  return `/jobs?${new URLSearchParams({ ...values, page: String(target) }).toString()}`
+}
+
+const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ?? '1x00000000000000000000AA'
+
+// The list only needs title and url; the ids match JobCard's data-job-id.
+const recentlyViewedJobs = jobs.map((job) => ({
+  id: String(job.id ?? job.url),
+  title: job.title,
+  url: job.url,
+}))
+---
+
+<BaseLayout
+  description="Jobs in Vanuatu, from every employer on the site."
+  path="/jobs"
+  siteUrl={new URL(Astro.request.url).origin}
+  tenant={tenant}
+  title="Jobs | Vanuatu Wok"
+>
+  <Container size="wide">
+    <Stack gap="large">
+      <Typography>
+        <h1>Jobs in Vanuatu</h1>
+        <p>{resultsSummary({ noun: 'jobs', page: current, pageSize, total: jobs.length })}</p>
+        <p>
+          This page shows each component by hand. The real listing, with its sections and the
+          edge cache, is <a href="/jobs">/jobs</a>.
+        </p>
+      </Typography>
+
+      <FilterBar
+        action="/jobs"
+        clearHref={hasActiveFilters(values) ? '/jobs' : undefined}
+        definitions={definitions}
+        values={values}
+        controls={[
+          { label: 'Keywords', name: 'q', placeholder: 'Chef, driver…', type: 'search' },
+          {
+            anyLabel: 'All categories',
+            label: 'Category',
+            name: 'category',
+            options: [
+              { label: 'Hospitality', value: 'hospitality' },
+              { label: 'Trades', value: 'trades' },
+            ],
+            type: 'select',
+          },
+          {
+            anyLabel: 'All locations',
+            label: 'Location',
+            name: 'location',
+            options: [
+              { label: 'Port Vila', value: 'port-vila' },
+              { label: 'Luganville', value: 'luganville' },
+            ],
+            type: 'select',
+          },
+        ]}
+      />
+
+      <Grid as="ul" columns={2}>
+        {
+          visible.map((job) => (
+            <li>
+              <JobCard job={job} locale="en" timezone={tenant.timezone ?? undefined} />
+            </li>
+          ))
+        }
+      </Grid>
+
+      <Pagination href={href} page={current} totalPages={totalPages} />
+
+      <Typography>
+        <h2>Organisations</h2>
+      </Typography>
+      <Grid as="ul" columns={3}>
+        {
+          organisations.map((org) => (
+            <li>
+              <OrgCard org={org} />
+            </li>
+          ))
+        }
+      </Grid>
+
+      <Typography>
+        <h2>Create a job alert</h2>
+        <p>Turnstile is the only island on this page.</p>
+      </Typography>
+      <form action="/alerts" method="post">
+        <Stack gap="small">
+          <Turnstile action="alerts" language="en" siteKey={siteKey} />
+          <Button type="submit">Subscribe</Button>
+        </Stack>
+      </form>
+    </Stack>
+  </Container>
+
+  {/*
+    Last block on the page: when it appears on idle it only extends the document, so nothing
+    already in the viewport moves (CLS stays 0). A site app can also pass `endpoint` instead.
+  */}
+  <Container size="wide">
+    <RecentlyViewed jobs={recentlyViewedJobs} />
+  </Container>
+</BaseLayout>

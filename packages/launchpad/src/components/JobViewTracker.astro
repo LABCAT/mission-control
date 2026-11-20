@@ -1,0 +1,25 @@
+---
+/**
+ * Include this on a job detail page. It records the job in the visitor's browser-local viewed
+ * history once the page is idle, so the "Viewed" label and "Recently viewed" list can find it.
+ * The component renders only a hidden marker; the id is read from it by the inline script.
+ */
+type Props = {
+  /** The same id `JobCard` puts in `data-job-id`: the job's id, or its url. */
+  jobId: number | string
+}
+
+const { jobId } = Astro.props as Props
+---
+
+<span data-viewed-job-id={String(jobId)} hidden></span>
+
+<script>
+  import { record } from '../viewed-jobs'
+  import { whenIdle } from '../viewed-jobs/idle'
+
+  const marker = document.querySelector<HTMLElement>('[data-viewed-job-id]')
+  const jobId = marker?.dataset.viewedJobId
+
+  if (jobId) whenIdle(() => record(jobId))
+</script>

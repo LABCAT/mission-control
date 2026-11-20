@@ -1,0 +1,154 @@
+---
+import '@labcat2020/rocketship/styles'
+
+import Container from '@labcat2020/rocketship/components/Container'
+
+import { brandingStyleAttribute } from '../tenant/branding'
+import { resolveLocale } from '../tenant/locale'
+import { seoMeta } from '../tenant/seo'
+import type { SiteTenant } from '../tenant/types'
+
+type Props = {
+  tenant: SiteTenant
+  title: string
+  description?: string
+  /** Path of this page on the site; the canonical URL is built from it. */
+  path?: string
+  /** Absolute origin for this deployment: the tenant's domain or the Worker route. */
+  siteUrl?: string
+  /** Keep search results, filtered listings and error pages out of the index. */
+  noindex?: boolean
+  /** Absolute URL of the social sharing image. */
+  image?: string
+  /** Structured data for this page, rendered as JSON-LD in the head. */
+  jsonLd?: Record<string, unknown>
+}
+
+const { tenant, title, description, path, siteUrl, noindex, image, jsonLd } = Astro.props as Props
+
+const meta = seoMeta({ description, noindex, path, siteUrl, title })
+const branding = brandingStyleAttribute(tenant.branding)
+const locale = resolveLocale(tenant)
+
+// JSON-LD must not be able to close its own <script> element.
+const jsonLdText = jsonLd ? JSON.stringify(jsonLd).replace(/</g, '\\u003c') : undefined
+---
+
+<!doctype html>
+<html lang={locale} style={branding}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{meta.title}</title>
+    {meta.description && <meta name="description" content={meta.description} />}
+    {meta.noindex && <meta name="robots" content="noindex, follow" />}
+    {
+      Astro.slots.has('canonical') ? (
+        <slot name="canonical" />
+      ) : (
+        <link rel="canonical" href={meta.canonical} />
+      )
+    }
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content={tenant.name} />
+    <meta property="og:title" content={meta.title} />
+    <meta property="og:url" content={meta.canonical} />
+    {meta.description && <meta property="og:description" content={meta.description} />}
+    {image && <meta property="og:image" content={image} />}
+    <meta name="twitter:card" content={image ? 'summary_large_image' : 'summary'} />
+    {
+      jsonLdText && (
+        <script type="application/ld+json" set:html={jsonLdText} is:inline>
+        </script>
+      )
+    }
+    <slot name="head" />
+  </head>
+  <body>
+    <a class="lp-skip" href="#main">Skip to content</a>
+    <header class="lp-header">
+      {
+        Astro.slots.has('header') ? (
+          <slot name="header" />
+        ) : (
+          <Container size="wide">
+            <a class="lp-brand" href="/">
+              {tenant.branding?.logo?.url ? (
+                <img
+                  alt={tenant.branding.logo.alt ?? tenant.name}
+                  height={tenant.branding.logo.height ?? undefined}
+                  src={tenant.branding.logo.url}
+                  width={tenant.branding.logo.width ?? undefined}
+                />
+              ) : (
+                tenant.name
+              )}
+            </a>
+          </Container>
+        )
+      }
+    </header>
+    <main id="main">
+      <slot />
+    </main>
+    <footer class="lp-footer">
+      {
+        Astro.slots.has('footer') ? (
+          <slot name="footer" />
+        ) : (
+          <Container size="wide">
+            <p class="lp-footer__copy">
+              &copy; {new Date().getFullYear()}
+              {' '}
+              {tenant.name}
+            </p>
+          </Container>
+        )
+      }
+    </footer>
+  </body>
+</html>
+
+<style>
+  /* Layout chrome only. Colours come from Rocketship tokens, never from the tenant directly. */
+  .lp-skip {
+    background: var(--rs-color-surface);
+    border-radius: var(--rs-radius-sm);
+    inset-block-start: var(--rs-space-2);
+    inset-inline-start: var(--rs-space-2);
+    padding: var(--rs-space-2) var(--rs-space-3);
+    position: absolute;
+    transform: translateY(-200%);
+    z-index: 10;
+  }
+
+  .lp-skip:focus-visible {
+    outline: 2px solid var(--rs-color-focus-ring);
+    transform: none;
+  }
+
+  .lp-header {
+    border-block-end: 1px solid var(--rs-color-border);
+    padding-block: var(--rs-space-3);
+  }
+
+  .lp-brand {
+    align-items: center;
+    color: var(--rs-color-fg);
+    display: inline-flex;
+    font-size: var(--rs-font-size-lg);
+    font-weight: var(--rs-font-weight-semibold);
+    text-decoration: none;
+  }
+
+  .lp-footer {
+    border-block-start: 1px solid var(--rs-color-border);
+    color: var(--rs-color-muted);
+    margin-block-start: var(--rs-space-8);
+    padding-block: var(--rs-space-6);
+  }
+
+  .lp-footer__copy {
+    margin: 0;
+  }
+</style>

@@ -1,5 +1,6 @@
 import { postgresAdapter } from '@payloadcms/db-postgres'
 import { multiTenantPlugin } from '@payloadcms/plugin-multi-tenant'
+import { lexicalEditor } from '@payloadcms/richtext-lexical'
 import {
   buildConfig,
   getPayload,
@@ -37,7 +38,7 @@ export type TestHarness = {
   tenantB: TestTenant
 }
 
-const tenantsCollection = (extraFields: Field[]): CollectionConfig => ({
+const tenantsCollection = (extraFields: Field[], hooks?: CollectionConfig['hooks']): CollectionConfig => ({
   slug: 'tenants',
   admin: { useAsTitle: 'name' },
   access: {
@@ -46,6 +47,7 @@ const tenantsCollection = (extraFields: Field[]): CollectionConfig => ({
     read: authenticatedAccess,
     update: superAdminAccess,
   },
+  ...(hooks ? { hooks } : {}),
   fields: [
     { name: 'name', type: 'text', required: true },
     { name: 'slug', type: 'text', required: true, unique: true, index: true },
@@ -54,7 +56,7 @@ const tenantsCollection = (extraFields: Field[]): CollectionConfig => ({
   versions: false,
 })
 
-const Users: CollectionConfig = {
+const Users = (extraFields: Field[] = []): CollectionConfig => ({
   slug: 'users',
   admin: { useAsTitle: 'email' },
   auth: true,
@@ -73,9 +75,10 @@ const Users: CollectionConfig = {
       options: globalRoleOptions,
       saveToJWT: true,
     },
+    ...extraFields,
   ],
   versions: false,
-}
+})
 
 type BootTestPayloadArgs = {
   /** Tenant-scoped collections under test, scoped by the multi-tenant plugin. */
@@ -88,6 +91,10 @@ type BootTestPayloadArgs = {
   tenantData?: (which: 'A' | 'B') => Record<string, unknown>
   /** Extra fields on the tenants collection. */
   tenantFields?: Field[]
+  /** Extra hooks on the tenants collection, e.g. the plugin's tenant-delete cleanup. */
+  tenantHooks?: CollectionConfig['hooks']
+  /** Extra fields on the users collection, e.g. `organisation` (PJ-18). */
+  userFields?: Field[]
 }
 
 let bootCount = 0
@@ -108,6 +115,8 @@ export const bootTestPayload = async ({
   globalCollections = [],
   tenantData = () => ({}),
   tenantFields = [],
+  tenantHooks,
+  userFields = [],
 }: BootTestPayloadArgs): Promise<TestHarness> => {
   const testDatabaseUrl = databaseUrl ?? process.env.TEST_DATABASE_URL
 
@@ -127,7 +136,9 @@ export const bootTestPayload = async ({
     admin: { user: 'users' },
     auth: { passwordHashIterations: 100000 },
     secret: 'test-secret',
-    collections: [Users, tenantsCollection(tenantFields), ...globalCollections, ...collections],
+    collections: [Users(userFields), tenantsCollection(tenantFields, tenantHooks), ...globalCollections, ...collections],
+    // Jobs have a rich-text description; the CMS uses Lexical, so the harness does too.
+    editor: lexicalEditor(),
     db: postgresAdapter({
       pool: {
         connectionString: testDatabaseUrl,

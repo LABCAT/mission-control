@@ -42,8 +42,77 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm lint
-      - run: pnpm test
+      - name: Run tests
+        run: pnpm test --reporter=default --reporter=json --outputFile.json=test-results.json
+      # The features catalogue is the acceptance criteria: match the @S-NNN tags in test titles
+      # to stories and publish the per-story result. It fails the PR if an MVP story marked
+      # built has no test.
+      - name: Features catalogue report
+        if: always()
+        run: node scripts/features/report.mjs --results test-results.json >> "$GITHUB_STEP_SUMMARY"
       - run: pnpm --filter cms build
+      - run: pnpm --filter @mission-control/launchpad build
+      - run: pnpm --filter @mission-control/vwok build
+
+  # The performance budget from PJ-12/PJ-13: Lighthouse runs against the built Worker in Chromium
+  # and fails the PR if a page drops below 0.98 on any category or ships over 50 KB of JS.
+  lighthouse-vwok:
+    name: Lighthouse (vwok)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # The script builds, then audits the build through `astro preview`, which serves the
+      # Cloudflare adapter's Worker entry — so it measures what Cloudflare serves, not a dev server.
+      - run: pnpm --filter @mission-control/vwok lighthouse
+      - name: Upload the Lighthouse report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-vwok
+          path: apps/vwok/.lighthouseci/
+          # `.lighthouseci` starts with a dot, and the action skips hidden files by default.
+          include-hidden-files: true
+          if-no-files-found: ignore
+
+  # Runtime evidence for the theme: the build job proves the demo's HTML exists, this loads it
+  # in a real browser and checks the page renders with the tenant tokens in effect.
+  launchpad-smoke:
+    name: Launchpad smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @mission-control/launchpad build
+      - name: Install Playwright
+        working-directory: ${{ runner.temp }}
+        run: |
+          npm init -y > /dev/null
+          npm install --no-audit --no-fund playwright@1.64.1
+          npx playwright install --with-deps chromium
+      - name: Load the demo in Chromium
+        env:
+          SMOKE_SCREENSHOT: ${{ runner.temp }}/launchpad-smoke.png
+        run: |
+          cp .github/scripts/launchpad-smoke.mjs "$RUNNER_TEMP/"
+          node "$RUNNER_TEMP/launchpad-smoke.mjs" packages/launchpad/demo/dist
+      - name: Upload screenshot
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: launchpad-smoke
+          path: ${{ runner.temp }}/launchpad-smoke.png
+          if-no-files-found: ignore
 
   # A down() that no longer matches its up() only shows up on a rollback, which nothing else
   # runs. This job migrates a disposable Postgres up, rolls every migration back, and

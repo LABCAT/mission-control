@@ -1,0 +1,2 @@
+# Lighthouse CI writes its reports here (the CI job uploads the HTML report as an artifact).
+.lighthouseci/

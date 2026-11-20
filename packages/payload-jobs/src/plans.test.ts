@@ -1,6 +1,7 @@
 import type { CollectionConfig, Field, PayloadRequest } from 'payload'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
+import { addOnCollection } from './add-ons'
 import { planCollection, PLANS_SLUG, withPlanRestrictionGuards } from './plans'
 import { PlanSeedError, planSeedProblems, seedPlans, type PlanSeed } from './plans-seed'
 import { quote, snapshotQuote, type QuotablePlan } from './pricing'
@@ -34,9 +35,11 @@ const planData = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 })
 
-/** Plans relate to job types and categories, so every boot includes the taxonomies. */
-const taxonomies = (): CollectionConfig[] =>
-  withPlanRestrictionGuards(taxonomyCollections({ tenantScoped: true }))
+/** Plans relate to job types, categories and add-ons, so every boot includes them. */
+const taxonomies = (): CollectionConfig[] => [
+  ...withPlanRestrictionGuards(taxonomyCollections({ tenantScoped: true })),
+  addOnCollection(),
+]
 
 tenantIsolation({
   boot: { tenantData, tenantFields },
@@ -55,7 +58,7 @@ const ascending = (ids: number[]): number[] => [...ids].sort((a, b) => a - b)
 
 type User = { collection: 'users'; id: number; role: 'user'; tenants: { role: string; tenant: number }[] }
 
-describe('plans', () => {
+describe('plans @S-092', () => {
   let harness: TestHarness
   let hub: TestTenant
   let noCurrency: TestTenant
@@ -597,7 +600,7 @@ describe('plans', () => {
       const tenant = await makeTenant({ currency: 'VUV', name: 'Seeded' })
 
       const first = await seedPlans({ payload: harness.payload, plans: seed, tenantID: tenant.id })
-      expect(first).toEqual({ created: ['single', 'pack'], deferred: [], existing: [] })
+      expect(first).toEqual({ created: ['single', 'pack'], existing: [] })
 
       const { docs } = await harness.payload.find({
         collection: PLANS_SLUG,
@@ -612,7 +615,7 @@ describe('plans', () => {
       })
 
       const second = await seedPlans({ payload: harness.payload, plans: seed, tenantID: tenant.id })
-      expect(second).toEqual({ created: [], deferred: [], existing: ['single', 'pack'] })
+      expect(second).toEqual({ created: [], existing: ['single', 'pack'] })
 
       const after = await harness.payload.find({
         collection: PLANS_SLUG,
@@ -635,23 +638,61 @@ describe('plans', () => {
       })
 
       const result = await seedPlans({ payload: harness.payload, plans: seed, tenantID: tenant.id })
-      expect(result).toEqual({ created: ['single'], deferred: [], existing: ['pack'] })
+      expect(result).toEqual({ created: ['single'], existing: ['pack'] })
     })
 
-    it('defers plans with included add-ons until add-ons exist (PJ-87)', async () => {
-      const tenant = await makeTenant({ currency: 'VUV', name: 'Deferred' })
+    it('creates a plan with its included add-on, resolved by key in the tenant', async () => {
+      const tenant = await makeTenant({ currency: 'VUV', name: 'With add-on' })
+      const enhanced = (await harness.payload.create({
+        collection: 'add-ons',
+        data: {
+          durationDays: 30,
+          key: 'enhanced',
+          name: 'Enhanced',
+          placement: 'featured-in-listings',
+          price: 2000,
+          tenant: tenant.id,
+        },
+        overrideAccess: true,
+      })) as { id: number }
       const withAddOn: PlanSeed = {
         ...seed[0],
-        includedAddOns: [{ addOnKey: 'enhanced', durationDays: 30 }],
+        includedAddOns: [{ addOnKey: 'enhanced', durationDays: 14 }],
         key: 'enhanced-listing',
       }
 
-      const result = await seedPlans({
-        payload: harness.payload,
-        plans: [seed[0], withAddOn],
-        tenantID: tenant.id,
+      const result = await seedPlans({ payload: harness.payload, plans: [withAddOn], tenantID: tenant.id })
+      expect(result).toEqual({ created: ['enhanced-listing'], existing: [] })
+
+      const { docs } = await harness.payload.find({
+        collection: PLANS_SLUG,
+        depth: 0,
+        overrideAccess: true,
+        where: { tenant: { equals: tenant.id } },
       })
-      expect(result).toEqual({ created: ['single'], deferred: ['enhanced-listing'], existing: [] })
+      expect(docs[0]).toMatchObject({ includedAddOns: [{ addOn: enhanced.id, durationDays: 14 }] })
+    })
+
+    it('refuses the whole seed when an included add-on is not in the tenant', async () => {
+      const tenant = await makeTenant({ currency: 'VUV', name: 'No add-ons' })
+
+      await expect(
+        seedPlans({
+          payload: harness.payload,
+          plans: [
+            { ...seed[0], key: 'fine' },
+            { ...seed[0], includedAddOns: [{ addOnKey: 'enhanced' }], key: 'enhanced-listing' },
+          ],
+          tenantID: tenant.id,
+        }),
+      ).rejects.toThrow(/no add-on "enhanced"/)
+
+      const { totalDocs } = await harness.payload.count({
+        collection: PLANS_SLUG,
+        overrideAccess: true,
+        where: { tenant: { equals: tenant.id } },
+      })
+      expect(totalDocs).toBe(0)
     })
 
     it('checks every field before writing, so a bad entry never leaves a partial seed', async () => {
@@ -749,7 +790,6 @@ describe('plans', () => {
       expect(planSeedProblems([volunteer])).toEqual([])
       expect(await seedPlans({ payload: harness.payload, plans: [volunteer], tenantID: tenant.id })).toEqual({
         created: ['volunteer'],
-        deferred: [],
         existing: [],
       })
       const { docs } = await harness.payload.find({

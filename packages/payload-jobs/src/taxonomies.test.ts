@@ -28,7 +28,7 @@ const userWith = (
 const argsFor = (user: MissionControlUser | null, data?: Record<string, unknown>) =>
   ({ data, req: { user } }) as unknown as AccessArgs
 
-describe('taxonomy collection config', () => {
+describe('taxonomy collection config @S-120', () => {
   const collections = taxonomyCollections()
   const bySlug = new Map(collections.map((collection) => [collection.slug, collection]))
 

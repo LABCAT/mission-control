@@ -114,7 +114,7 @@ describe('site key resolution', () => {
   })
 })
 
-describe('site key access override', () => {
+describe('site key access override @S-011', () => {
   it('leaves requests without a key unchanged', async () => {
     const { find, req } = requestFor({})
 

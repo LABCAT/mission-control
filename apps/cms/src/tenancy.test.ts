@@ -7,6 +7,7 @@ import {
   hashSiteKey,
   PAYLOAD_JOBS_TENANT_COLLECTIONS,
   payloadJobs,
+  removeTenantAlertSubscriptions,
   type MissionControlUser,
 } from '@mission-control/payload-jobs'
 
@@ -14,7 +15,7 @@ import { Documents } from './collections/Documents'
 import { Folders } from './collections/Folders'
 import { Media } from './collections/Media'
 import { Tags } from './collections/Tags'
-import { removeTenantMemberships, Tenants } from './collections/Tenants'
+import { removeTenantMemberships, removeTenantSiteKeys, Tenants } from './collections/Tenants'
 import {
   ensureFirstUserIsSuperAdmin,
   preventTenantAdminCredentialChanges,
@@ -515,6 +516,168 @@ describe('plans (PJ-21)', () => {
   })
 })
 
+describe('alert subscriptions (PJ-26)', () => {
+  const seekerA: TestUser = {
+    id: 31,
+    collection: 'users',
+    role: 'user',
+    tenants: [{ role: 'seeker', tenant: tenantA }],
+  }
+
+  it('registers the collection and scopes reads to the tenant admin', async () => {
+    const config = await buildConfig()
+    const alerts = config.collections?.find(
+      (collection) => collection.slug === 'alert-subscriptions',
+    )
+
+    expect(alerts?.fields.some((field) => 'name' in field && field.name === 'tenant')).toBe(true)
+    expect(await collectionAccess(config, 'read', 'alert-subscriptions', tenantAdminA)).toEqual({
+      tenant: { in: [tenantA.id] },
+    })
+    // The plugin's own tenant constraint sits in front of the collection's read access.
+    expect(await baseAccess(config, 'read', 'alert-subscriptions', tenantAdminA)).toEqual({
+      tenant: { in: [tenantA.id] },
+    })
+    // Editors and seekers never see the subscriber list.
+    const editorA: TestUser = {
+      id: 32,
+      collection: 'users',
+      role: 'user',
+      tenants: [{ role: 'editor', tenant: tenantA }],
+    }
+    expect(await collectionAccess(config, 'read', 'alert-subscriptions', editorA)).toBe(false)
+    expect(await collectionAccess(config, 'read', 'alert-subscriptions', seekerA)).toBe(false)
+  })
+
+  it('rejects anonymous and site-key writes, so subscribers use their token links', async () => {
+    const config = await buildConfig()
+    const req = await siteKeyRequest({ key: 'sk_tenant', tenant: tenantA.id })
+
+    expect(await collectionAccess(config, 'create', 'alert-subscriptions', tenantAdminA)).toBe(
+      false,
+    )
+    expect(await collectionAccessWithReq(config, 'read', 'alert-subscriptions', req)).toBe(false)
+    expect(await collectionAccessWithReq(config, 'create', 'alert-subscriptions', req)).toBe(false)
+  })
+})
+
+describe('organisations (PJ-18)', () => {
+  const employerA: TestUser = {
+    id: 40,
+    collection: 'users',
+    role: 'user',
+    tenants: [{ role: 'employer', tenant: tenantA }],
+    organisation: 5,
+  }
+  const seekerA: TestUser = {
+    id: 41,
+    collection: 'users',
+    role: 'user',
+    tenants: [{ role: 'seeker', tenant: tenantA }],
+    organisation: 5,
+  }
+
+  it('registers organisations with the multi-tenant plugin and a tenant field', async () => {
+    const config = await buildConfig()
+    const organisations = config.collections?.find((collection) => collection.slug === 'organisations')
+
+    expect(organisations?.fields.some((field) => 'name' in field && field.name === 'tenant')).toBe(
+      true,
+    )
+    expect(PAYLOAD_JOBS_TENANT_COLLECTIONS).toContain('organisations')
+  })
+
+  it('adds the organisation relation to users', async () => {
+    const config = await buildConfig()
+    const users = config.collections?.find((collection) => collection.slug === 'users')
+
+    expect(users?.fields.some((field) => 'name' in field && field.name === 'organisation')).toBe(true)
+  })
+
+  it('scopes staff reads to their tenant and an employer to their own organisation', async () => {
+    const config = await buildConfig()
+
+    expect(await collectionAccess(config, 'read', 'organisations', tenantAdminA)).toEqual({
+      and: [{ tenant: { in: [tenantA.id] } }, { tenant: { in: [tenantA.id] } }],
+    })
+    // The employer clause carries its own tenant check: the plugin's filter includes every
+    // membership, seeker included, so the link alone must not open a profile.
+    expect(await collectionAccess(config, 'read', 'organisations', employerA)).toEqual({
+      and: [
+        { and: [{ id: { equals: 5 } }, { tenant: { in: [tenantA.id] } }] },
+        { tenant: { in: [tenantA.id] } },
+      ],
+    })
+    expect(await collectionAccess(config, 'read', 'organisations', seekerA)).toBe(false)
+    expect(await collectionAccess(config, 'read', 'organisations', null)).toBe(false)
+  })
+
+  it('lets a site key read only approved, page-enabled organisations of its tenant', async () => {
+    const config = await buildConfig()
+    const req = await siteKeyRequest({ key: 'sk_tenant', tenant: tenantA.id })
+    ;(req.payload.collections as Record<string, unknown>)['site-keys'] = {}
+
+    // An anonymous request carries no tenant scope, so the plugin leaves the collection's own
+    // filter alone; the filter already pins the site key's tenant and the published state.
+    expect(await collectionAccessWithReq(config, 'read', 'organisations', req)).toEqual({
+      and: [
+        { tenant: { equals: tenantA.id } },
+        { and: [{ approved: { equals: true } }, { pageEnabled: { equals: true } }] },
+      ],
+    })
+  })
+
+  it('lets an employer update only their own organisation and never delete one', async () => {
+    const config = await buildConfig()
+
+    expect(await collectionAccess(config, 'update', 'organisations', employerA)).toEqual({
+      and: [
+        { and: [{ id: { equals: 5 } }, { tenant: { in: [tenantA.id] } }] },
+        { tenant: { in: [tenantA.id] } },
+      ],
+    })
+    expect(await collectionAccess(config, 'delete', 'organisations', employerA)).toBe(false)
+    expect(await collectionAccess(config, 'delete', 'organisations', tenantAdminA)).toEqual({
+      and: [{ tenant: { in: [tenantA.id] } }, { tenant: { in: [tenantA.id] } }],
+    })
+  })
+})
+
+describe('coupons', () => {
+  it('registers the coupons collection with its tenant field', async () => {
+    const config = await buildConfig()
+    const coupons = config.collections?.find((collection) => collection.slug === 'coupons')
+
+    expect(coupons).toBeDefined()
+    expect(coupons?.fields.some((field) => 'name' in field && field.name === 'tenant')).toBe(true)
+  })
+
+  it('scopes coupon reads to the tenants on the user', async () => {
+    const config = await buildConfig()
+
+    expect(await collectionAccess(config, 'read', 'coupons', tenantAdminA)).toEqual({
+      tenant: { in: [tenantA.id] },
+    })
+    expect(await collectionAccess(config, 'read', 'coupons', tenantAdminB)).toEqual({
+      tenant: { in: [tenantB.id] },
+    })
+    // Super admins are not constrained to a tenant.
+    expect(await collectionAccess(config, 'read', 'coupons', superAdmin)).toBe(true)
+  })
+
+  it('keeps coupons out of reach for anonymous requests and site keys', async () => {
+    const config = await buildConfig()
+    const coupons = config.collections?.find((candidate) => candidate.slug === 'coupons')
+    const read = coupons?.access?.read as (args: unknown) => Promise<unknown>
+
+    expect(await read({ req: requestFor(null), slug: 'coupons' })).toBe(false)
+
+    const req = await siteKeyRequest({ key: 'sk_tenant', tenant: tenantA.id })
+
+    expect(await read({ req, slug: 'coupons' })).toBe(false)
+  })
+})
+
 describe('credential updates', () => {
   const target = { id: 20, email: 'b@example.com' }
 
@@ -619,6 +782,19 @@ describe('tenant deletion', () => {
         data: { tenants: [{ role: 'editor', tenant: 2 }] },
       }),
     ])
+  })
+
+  it('deletes the tenant’s alert subscriptions before the tenant itself', async () => {
+    const config = await buildConfig()
+    const tenants = config.collections?.find((collection) => collection.slug === 'tenants')
+
+    // The app's own hooks still run first; the plugin appends the subscription cleanup, so a
+    // subscriber's address and tokens cannot outlive the tenant as an orphaned row.
+    expect(tenants?.hooks?.beforeDelete?.slice(0, 2)).toEqual([
+      removeTenantMemberships,
+      removeTenantSiteKeys,
+    ])
+    expect(tenants?.hooks?.beforeDelete).toContain(removeTenantAlertSubscriptions)
   })
 })
 

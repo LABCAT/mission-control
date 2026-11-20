@@ -10,7 +10,12 @@ import * as migration_20261118_044335_account_auth from './20261118_044335_accou
 import * as migration_20261118_053124_job_taxonomies from './20261118_053124_job_taxonomies';
 import * as migration_20261118_095105_locations from './20261118_095105_locations';
 import * as migration_20261118_103105_plans from './20261118_103105_plans';
-import * as migration_20261118_110701_tags_drafts from './20261118_110701_tags_drafts';
+import * as migration_20261118_112249_organisations from './20261118_112249_organisations';
+import * as migration_20261118_144548_add_ons from './20261118_144548_add_ons';
+import * as migration_20261118_150954_tax from './20261118_150954_tax';
+import * as migration_20261118_152848_alert_subscriptions from './20261118_152848_alert_subscriptions';
+import * as migration_20261118_154336_jobs from './20261118_154336_jobs';
+import * as migration_20261120_065125_coupons from './20261120_065125_coupons';
 
 export const migrations = [
   {
@@ -74,8 +79,33 @@ export const migrations = [
     name: '20261118_103105_plans',
   },
   {
-    up: migration_20261118_110701_tags_drafts.up,
-    down: migration_20261118_110701_tags_drafts.down,
-    name: '20261118_110701_tags_drafts'
+    up: migration_20261118_112249_organisations.up,
+    down: migration_20261118_112249_organisations.down,
+    name: '20261118_112249_organisations',
+  },
+  {
+    up: migration_20261118_144548_add_ons.up,
+    down: migration_20261118_144548_add_ons.down,
+    name: '20261118_144548_add_ons',
+  },
+  {
+    up: migration_20261118_150954_tax.up,
+    down: migration_20261118_150954_tax.down,
+    name: '20261118_150954_tax',
+  },
+  {
+    up: migration_20261118_152848_alert_subscriptions.up,
+    down: migration_20261118_152848_alert_subscriptions.down,
+    name: '20261118_152848_alert_subscriptions',
+  },
+  {
+    up: migration_20261118_154336_jobs.up,
+    down: migration_20261118_154336_jobs.down,
+    name: '20261118_154336_jobs',
+  },
+  {
+    up: migration_20261120_065125_coupons.up,
+    down: migration_20261120_065125_coupons.down,
+    name: '20261120_065125_coupons'
   },
 ];

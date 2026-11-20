@@ -23,15 +23,28 @@ export const multiTenantOptions = {
     locations: { accessResultOverride: tenantContentOverride },
     media: { accessResultOverride: tenantContentOverride },
     tags: { accessResultOverride: tenantContentOverride },
+    // mission-control: coupons are private to tenant members and not readable with a site
+    // key; seekers are denied (PJ-22).
+    coupons: { accessResultOverride: denySeekerOnly(({ accessResult }) => accessResult) },
     // mission-control: job-board taxonomies (PJ-16).
     'areas-of-focus': { accessResultOverride: tenantContentOverride },
     'job-categories': { accessResultOverride: tenantContentOverride },
     'job-tags': { accessResultOverride: tenantContentOverride },
     'job-types': { accessResultOverride: tenantContentOverride },
     'salary-bands': { accessResultOverride: tenantContentOverride },
+    // mission-control: organisations read site keys themselves (approved, page-enabled ones
+    // only), so they skip the generic site key override; seekers are denied (PJ-18).
+    organisations: { accessResultOverride: denySeekerOnly(({ accessResult }) => accessResult) },
     // mission-control: plans read site keys themselves (active plans only), so they skip the
     // generic site key override; seekers are denied (PJ-21).
     plans: { accessResultOverride: denySeekerOnly(({ accessResult }) => accessResult) },
+    // mission-control: add-ons, like plans, read site keys themselves (on-sale only) (PJ-87).
+    'add-ons': { accessResultOverride: denySeekerOnly(({ accessResult }) => accessResult) },
+    // mission-control: alert subscribers are personal data (PJ-26). The collection's own access
+    // already denies site keys, seekers and anonymous callers, so no override is needed here.
+    'alert-subscriptions': {},
+    // mission-control: jobs read site keys themselves (published and expired only) (PJ-19).
+    jobs: { accessResultOverride: denySeekerOnly(({ accessResult }) => accessResult) },
   },
   tenantsArrayField: {
     rowFields: [

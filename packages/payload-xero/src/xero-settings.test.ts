@@ -54,6 +54,31 @@ describe('collection config', () => {
     expect(custom.indexes).toContainEqual({ fields: ['organisation'], unique: true })
     expect(custom.versions).toBe(false)
   })
+
+  it('keeps the token group hidden and carries the refresh lease columns', () => {
+    const tokens = TenantSettings.fields.find((field) => 'name' in field && field.name === 'tokens')
+
+    expect(tokens).toMatchObject({ admin: { hidden: true }, type: 'group' })
+    expect(
+      tokens && 'fields' in tokens && tokens.fields.map((field) => 'name' in field && field.name),
+    ).toEqual(
+      expect.arrayContaining([
+        'accessToken',
+        'expiresAt',
+        'refreshToken',
+        'scope',
+        // The single-flight refresh lease: one request owns the row while it refreshes.
+        'refreshLockToken',
+        'refreshLockedUntil',
+      ]),
+    )
+
+    const access = (tokens as { access?: Record<string, unknown> } | undefined)?.access ?? {}
+    for (const operation of ['create', 'read', 'update'] as const) {
+      expect(access[operation]).toBeTypeOf('function')
+      expect((access[operation] as () => boolean)()).toBe(false)
+    }
+  })
 })
 
 describe('unique violation mapping', () => {
