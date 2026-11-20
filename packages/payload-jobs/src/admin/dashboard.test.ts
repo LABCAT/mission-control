@@ -14,6 +14,7 @@ import {
   loadSiteManagerDashboard,
 } from './dashboard'
 import { JOBS_SLUG, jobsCollection } from '../collections/jobs'
+import { resolvePayloadJobsSlugs } from '../slugs'
 import { locationsCollection } from '../collections/locations'
 import { organisationsCollection } from '../collections/organisations'
 
@@ -24,17 +25,22 @@ const tenantFields: Field[] = [
 ]
 
 /** A stand-in for PJ-31's orders, only carrying what the dashboard reads. */
-const Orders: CollectionConfig = {
-  slug: ORDERS_SLUG,
+const ordersStandIn = ({
+  organisationsSlug = 'organisations',
+  slug = ORDERS_SLUG,
+}: { organisationsSlug?: string; slug?: string } = {}): CollectionConfig => ({
+  slug,
   admin: { useAsTitle: 'id' },
   fields: [
-    { name: 'organisation', type: 'relationship', relationTo: 'organisations' },
+    { name: 'organisation', type: 'relationship', relationTo: organisationsSlug },
     { name: 'status', type: 'text' },
     { name: 'total', type: 'number' },
     { name: 'currency', type: 'text' },
   ],
   versions: false,
-}
+})
+
+const Orders = ordersStandIn()
 
 describe('site manager dashboard @S-117', () => {
   let harness: TestHarness
@@ -191,5 +197,80 @@ describe('dashboard money', () => {
 
   it('refuses an amount without an ISO currency code', () => {
     expect(() => formatMinorUnits(100, { currency: 'dollars' })).toThrow(TypeError)
+  })
+})
+
+describe('site manager dashboard with renamed collections @S-117', () => {
+  let harness: TestHarness
+  let pendingJobID: number
+
+  const slugs = { ...resolvePayloadJobsSlugs(), jobs: 'vacancies', organisations: 'employers' }
+
+  beforeAll(async () => {
+    harness = await bootTestPayload({
+      collections: [
+        organisationsCollection({ mediaSlug: null, slug: 'employers', tenantScoped: true }),
+        locationsCollection({ requireTenant: true }),
+        ...withPlanRestrictionGuards(taxonomyCollections({ tenantScoped: true })),
+        planCollection(),
+        addOnCollection(),
+        jobsCollection({ slugs, tenantScoped: true }),
+        ordersStandIn({ organisationsSlug: 'employers', slug: 'purchases' }),
+      ],
+      tenantData: () => ({ currency: 'VUV', currencyMinorUnits: 0, defaultLocale: 'en' }),
+      tenantFields,
+    })
+
+    const org = (await harness.payload.create({
+      collection: 'employers',
+      data: { name: 'Renamed Org', slug: 'renamed-org', tenant: harness.tenantA.id },
+      overrideAccess: true,
+    })) as { id: number }
+
+    pendingJobID = (
+      (await harness.payload.create({
+        collection: 'vacancies',
+        data: {
+          organisation: org.id,
+          status: 'pending',
+          tenant: harness.tenantA.id,
+          title: 'Renamed pending',
+        },
+        overrideAccess: true,
+      })) as { id: number }
+    ).id
+
+    await harness.payload.create({
+      collection: 'purchases',
+      data: {
+        currency: 'VUV',
+        organisation: org.id,
+        status: 'pending',
+        tenant: harness.tenantA.id,
+        total: 1500,
+      },
+      overrideAccess: true,
+    })
+  })
+
+  afterAll(async () => {
+    if (harness) await harness.destroy()
+  })
+
+  it('counts the host’s renamed jobs and orders', async () => {
+    const dashboard = await loadSiteManagerDashboard({
+      payload: harness.payload,
+      slugs: { jobs: 'vacancies', orders: 'purchases' },
+      tenantID: harness.tenantA.id,
+      user: harness.tenantAdminA as never,
+    })
+
+    expect(dashboard.jobCounts.pending).toBe(1)
+    expect(dashboard.pendingJobs).toEqual([
+      { id: pendingJobID, organisation: 'Renamed Org', title: 'Renamed pending' },
+    ])
+    expect(dashboard.orders?.slug).toBe('purchases')
+    expect(dashboard.orders?.count).toBe(1)
+    expect(dashboard.orders?.recent[0]?.totalMinor).toBe(1500)
   })
 })
