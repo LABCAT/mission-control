@@ -1,7 +1,6 @@
 import type { CollectionConfig, Config } from 'payload'
 import { describe, expect, it } from 'vitest'
 
-import { ALERT_SUBSCRIPTIONS_SLUG } from '../alert-subscriptions'
 import { payloadJobs } from '../index'
 import { tenantLocationSettings } from '../location-settings'
 import { TAXONOMY_SLUGS } from '../taxonomies'
@@ -47,7 +46,6 @@ describe('locations collection @S-120', () => {
       'users',
       'locations',
       'organisations',
-      ALERT_SUBSCRIPTIONS_SLUG,
       ...TAXONOMY_SLUGS,
       'plans',
       'add-ons',

@@ -7,9 +7,9 @@ import {
   hashSiteKey,
   PAYLOAD_JOBS_TENANT_COLLECTIONS,
   payloadJobs,
-  removeTenantAlertSubscriptions,
   type MissionControlUser,
 } from '@mission-control/payload-jobs'
+import { payloadJobsAlerts, removeTenantAlertSubscriptions } from '@mission-control/payload-jobs-alerts'
 
 import { Documents } from './collections/Documents'
 import { Folders } from './collections/Folders'
@@ -52,16 +52,19 @@ const superAdmin: TestUser = {
 }
 
 const buildConfig = async (): Promise<Config> => {
-  const withJobs = await payloadJobs({ tenancy: 'multi' })({
+  const base = await payloadJobs({ tenancy: 'multi' })({
     admin: { user: 'users' },
     collections: [Users, Media, Folders, Tags, Tenants, Documents],
   } as Config)
+  // mission-control: the alerts add-on is its own plugin since PJ-115.
+  const withJobs = await payloadJobsAlerts()(base)
 
   return (await multiTenantPlugin(multiTenantOptions)(withJobs)) as Config
 }
 
 const requestFor = (user: MissionControlUser | null) => ({
-  payload: {},
+  // The add-on gate asks which tenants have the add-on on; every tenant here does.
+  payload: { find: async () => ({ docs: [{ id: tenantA.id }] }) },
   payloadAPI: 'REST',
   t: (key: string) => key,
   user,
@@ -525,8 +528,9 @@ describe('alert subscriptions (PJ-26)', () => {
     )
 
     expect(alerts?.fields.some((field) => 'name' in field && field.name === 'tenant')).toBe(true)
+    // The add-on gate narrows the read to tenants that have alerts switched on.
     expect(await collectionAccess(config, 'read', 'alert-subscriptions', tenantAdminA)).toEqual({
-      tenant: { in: [tenantA.id] },
+      and: [{ tenant: { in: [tenantA.id] } }, { tenant: { in: [tenantA.id] } }],
     })
     // The plugin's own tenant constraint sits in front of the collection's read access.
     expect(await baseAccess(config, 'read', 'alert-subscriptions', tenantAdminA)).toEqual({

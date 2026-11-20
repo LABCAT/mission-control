@@ -1,7 +1,6 @@
 import type { CollectionConfig, Config, Field } from 'payload'
 import { describe, expect, it } from 'vitest'
 
-import { ALERT_SUBSCRIPTIONS_SLUG } from './alert-subscriptions'
 import { EXPIRE_PLACEMENTS_TASK, jobsTenantCollections, payloadJobs } from './index'
 import { TAXONOMY_SLUGS } from './taxonomies'
 
@@ -16,13 +15,12 @@ describe('payloadJobs', () => {
     const result = await payloadJobs()(baseConfig)
 
     // mission-control: the users collection is extended (legacy password support PJ-34,
-    // organisation relation PJ-18), and locations (PJ-17), organisations (PJ-18), alerts
-    // (PJ-26), the taxonomies (PJ-16), plans (PJ-21) and coupons (PJ-22) are added.
+    // organisation relation PJ-18), and locations (PJ-17), organisations (PJ-18),
+    // the taxonomies (PJ-16), plans (PJ-21) and coupons (PJ-22) are added.
     expect(result.collections?.map((collection) => collection.slug)).toEqual([
       'users',
       'locations',
       'organisations',
-      ALERT_SUBSCRIPTIONS_SLUG,
       ...TAXONOMY_SLUGS,
       'plans',
       'add-ons',
@@ -41,7 +39,8 @@ describe('payloadJobs', () => {
       existing: true,
       payloadJobs: {
         enabled: true,
-        features: { applications: true, alerts: true, credits: true, coupons: true },
+        features: { applications: true, credits: true, coupons: true },
+        registry: expect.any(Object),
         tenancy: 'single',
       },
     })
@@ -53,14 +52,15 @@ describe('payloadJobs', () => {
 
   it('resolves feature toggles and records them in the config', async () => {
     const result = await payloadJobs({
-      features: { applications: true, alerts: false, credits: true, coupons: false },
+      features: { applications: true, credits: true, coupons: false },
     })(baseConfig)
 
     expect(result.custom).toEqual({
       existing: true,
       payloadJobs: {
         enabled: true,
-        features: { applications: true, alerts: false, credits: true, coupons: false },
+        features: { applications: true, credits: true, coupons: false },
+        registry: expect.any(Object),
         tenancy: 'single',
       },
     })
@@ -103,7 +103,6 @@ const deny = () => false
 
 const OVERRIDES = {
   addOns: { slug: 'extras' },
-  alertSubscriptions: { slug: 'subscribers' },
   coupons: { slug: 'vouchers' },
   jobCategories: { slug: 'categories' },
   jobs: { slug: 'vacancies' },
@@ -140,7 +139,6 @@ describe('collection slug overrides', () => {
       'users',
       'job-locations',
       'employers',
-      'subscribers',
       'categories',
       'employment-types',
       'salaries',
@@ -175,7 +173,6 @@ describe('collection slug overrides', () => {
       'salaries',
       'extras',
       'packages',
-      'subscribers',
       'vacancies',
       'vouchers',
     ])

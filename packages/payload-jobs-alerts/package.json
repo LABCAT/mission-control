@@ -1,0 +1,25 @@
+{
+  "name": "@mission-control/payload-jobs-alerts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "description": "Job alerts add-on for payload-jobs: email-only subscriptions (double opt-in), switchable per tenant.",
+  "peerDependencies": {
+    "payload": "4.0.0-beta.7"
+  },
+  "dependencies": {
+    "@mission-control/payload-jobs": "workspace:*"
+  },
+  "devDependencies": {
+    "@payloadcms/db-postgres": "4.0.0-beta.7",
+    "@payloadcms/plugin-multi-tenant": "4.0.0-beta.7",
+    "payload": "4.0.0-beta.7",
+    "typescript": "6.0.3"
+  }
+}

@@ -62,17 +62,17 @@ export type SupportedTimezones =
   | 'Pacific/Fiji';
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "LexicalNodes_361F5CE2".
+ * via the `definition` "LexicalNodes_906CECCF".
  */
-export type LexicalNodes_361F5CE2 =
+export type LexicalNodes_906CECCF =
   | SerializedTextNode
   | SerializedTabNode
   | SerializedLineBreakNode
-  | SerializedParagraphNode<LexicalNodes_361F5CE2>
+  | SerializedParagraphNode<LexicalNodes_906CECCF>
   | SerializedHorizontalRuleNode
   | SerializedUploadNode<'media'>
   | SerializedUploadNode<'documents'>
-  | SerializedQuoteNode<LexicalNodes_361F5CE2>
+  | SerializedQuoteNode<LexicalNodes_906CECCF>
   | SerializedRelationshipNode<
       | 'users'
       | 'folders'
@@ -81,7 +81,6 @@ export type LexicalNodes_361F5CE2 =
       | 'site-keys'
       | 'locations'
       | 'organisations'
-      | 'alert-subscriptions'
       | 'job-categories'
       | 'job-types'
       | 'salary-bands'
@@ -89,17 +88,18 @@ export type LexicalNodes_361F5CE2 =
       | 'add-ons'
       | 'jobs'
       | 'coupons'
+      | 'alert-subscriptions'
       | 'payload-kv'
       | 'payload-jobs'
       | 'payload-locked-documents'
       | 'payload-preferences'
       | 'payload-migrations'
     >
-  | SerializedAutoLinkNode<LexicalNodes_361F5CE2, LexicalLinkFields>
-  | SerializedLinkNode<LexicalNodes_361F5CE2, LexicalLinkFields>
-  | SerializedListNode<LexicalNodes_361F5CE2>
-  | SerializedListItemNode<LexicalNodes_361F5CE2>
-  | SerializedHeadingNode<LexicalNodes_361F5CE2>;
+  | SerializedAutoLinkNode<LexicalNodes_906CECCF, LexicalLinkFields>
+  | SerializedLinkNode<LexicalNodes_906CECCF, LexicalLinkFields>
+  | SerializedListNode<LexicalNodes_906CECCF>
+  | SerializedListItemNode<LexicalNodes_906CECCF>
+  | SerializedHeadingNode<LexicalNodes_906CECCF>;
 /**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "LexicalNodes_3DE324E4".
@@ -136,7 +136,6 @@ export interface Config {
     documents: Document;
     locations: Location;
     organisations: Organisation;
-    'alert-subscriptions': AlertSubscription;
     'job-categories': JobCategory;
     'job-types': JobType;
     'salary-bands': SalaryBand;
@@ -144,6 +143,7 @@ export interface Config {
     'add-ons': AddOn;
     jobs: Job;
     coupons: Coupon;
+    'alert-subscriptions': AlertSubscription;
     'payload-kv': PayloadKv;
     'payload-jobs': PayloadJob;
     'payload-locked-documents': PayloadLockedDocument;
@@ -162,7 +162,6 @@ export interface Config {
     documents: DocumentsSelect<false> | DocumentsSelect<true>;
     locations: LocationsSelect<false> | LocationsSelect<true>;
     organisations: OrganisationsSelect<false> | OrganisationsSelect<true>;
-    'alert-subscriptions': AlertSubscriptionsSelect<false> | AlertSubscriptionsSelect<true>;
     'job-categories': JobCategoriesSelect<false> | JobCategoriesSelect<true>;
     'job-types': JobTypesSelect<false> | JobTypesSelect<true>;
     'salary-bands': SalaryBandsSelect<false> | SalaryBandsSelect<true>;
@@ -170,6 +169,7 @@ export interface Config {
     'add-ons': AddOnsSelect<false> | AddOnsSelect<true>;
     jobs: JobsSelect<false> | JobsSelect<true>;
     coupons: CouponsSelect<false> | CouponsSelect<true>;
+    'alert-subscriptions': AlertSubscriptionsSelect<false> | AlertSubscriptionsSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-jobs': PayloadJobsSelect<false> | PayloadJobsSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
@@ -481,6 +481,18 @@ export interface Tenant {
    * Receives contact and moderation notifications.
    */
   adminEmail?: string | null;
+  /**
+   * Which add-ons this site uses, for example ["alerts", "reports"]. Leave empty for all installed add-ons; [] switches them all off.
+   */
+  addOns?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
   createdBy?: {
     relationTo: 'users';
     value: number | User;
@@ -728,7 +740,7 @@ export interface FeatureBoxesBlock {
  */
 export interface RichTextBlock {
   heading?: string | null;
-  content: LexicalRichText<LexicalNodes_361F5CE2>;
+  content: LexicalRichText<LexicalNodes_906CECCF>;
   id?: string | null;
   blockName?: string | null;
   blockType: 'rich-text';
@@ -784,7 +796,7 @@ export interface FaqBlock {
   heading?: string | null;
   items: {
     question: string;
-    answer: LexicalRichText<LexicalNodes_361F5CE2>;
+    answer: LexicalRichText<LexicalNodes_906CECCF>;
     id?: string | null;
   }[];
   id?: string | null;
@@ -890,60 +902,6 @@ export interface Document {
   };
   focalX?: number | null;
   focalY?: number | null;
-}
-/**
- * Job alert subscribers. They confirm by email and manage themselves through their link; staff only read this list.
- *
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "alert-subscriptions".
- */
-export interface AlertSubscription {
-  id: number;
-  tenant?: (number | null) | Tenant;
-  /**
-   * Stored lowercase. The subscriber confirms it before any alert is sent.
-   */
-  email: string;
-  /**
-   * Set when the subscriber follows the double opt-in link. Only confirmed subscribers get alerts.
-   */
-  confirmed?: boolean | null;
-  confirmToken?: string | null;
-  manageToken?: string | null;
-  /**
-   * Words a job must mention, separated by spaces. Empty means any job.
-   */
-  keywords?: string | null;
-  /**
-   * Only jobs in these job categories. Empty means any.
-   */
-  categories?: (number | JobCategory)[] | null;
-  /**
-   * Only jobs in these job types. Empty means any.
-   */
-  types?: (number | JobType)[] | null;
-  /**
-   * Only jobs in these locations. Empty means any.
-   */
-  locations?: (number | Location)[] | null;
-  /**
-   * When the daily digest last went out. The next digest starts from here.
-   */
-  lastSentAt?: string | null;
-  /**
-   * WordPress user id for the alert meta, so the importer can match it.
-   */
-  legacyId?: number | null;
-  createdBy?: {
-    relationTo: 'users';
-    value: number | User;
-  } | null;
-  updatedBy?: {
-    relationTo: 'users';
-    value: number | User;
-  } | null;
-  updatedAt: string;
-  createdAt: string;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1217,7 +1175,7 @@ export interface Job {
   publishedAt?: string | null;
   expiresAt?: string | null;
   organisation: number | Organisation;
-  description?: LexicalRichText<LexicalNodes_361F5CE2> | null;
+  description?: LexicalRichText<LexicalNodes_906CECCF> | null;
   /**
    * An optional PDF of the full job description.
    */
@@ -1307,6 +1265,60 @@ export interface Coupon {
   maxUses?: number | null;
   /**
    * WordPress post id, for the import.
+   */
+  legacyId?: number | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * Job alert subscribers. They confirm by email and manage themselves through their link; staff only read this list.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "alert-subscriptions".
+ */
+export interface AlertSubscription {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  /**
+   * Stored lowercase. The subscriber confirms it before any alert is sent.
+   */
+  email: string;
+  /**
+   * Set when the subscriber follows the double opt-in link. Only confirmed subscribers get alerts.
+   */
+  confirmed?: boolean | null;
+  confirmToken?: string | null;
+  manageToken?: string | null;
+  /**
+   * Words a job must mention, separated by spaces. Empty means any job.
+   */
+  keywords?: string | null;
+  /**
+   * Only jobs in these job categories. Empty means any.
+   */
+  categories?: (number | JobCategory)[] | null;
+  /**
+   * Only jobs in these job types. Empty means any.
+   */
+  types?: (number | JobType)[] | null;
+  /**
+   * Only jobs in these locations. Empty means any.
+   */
+  locations?: (number | Location)[] | null;
+  /**
+   * When the daily digest last went out. The next digest starts from here.
+   */
+  lastSentAt?: string | null;
+  /**
+   * WordPress user id for the alert meta, so the importer can match it.
    */
   legacyId?: number | null;
   createdBy?: {
@@ -1491,10 +1503,6 @@ export interface PayloadLockedDocument {
         value: number | Organisation;
       } | null)
     | ({
-        relationTo: 'alert-subscriptions';
-        value: number | AlertSubscription;
-      } | null)
-    | ({
         relationTo: 'job-categories';
         value: number | JobCategory;
       } | null)
@@ -1521,6 +1529,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'coupons';
         value: number | Coupon;
+      } | null)
+    | ({
+        relationTo: 'alert-subscriptions';
+        value: number | AlertSubscription;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -1858,6 +1870,7 @@ export interface TenantsSelect<T extends boolean = true> {
   emailFromName?: T;
   emailFromAddress?: T;
   adminEmail?: T;
+  addOns?: T;
   createdBy?: T;
   updatedBy?: T;
   updatedAt?: T;
@@ -1960,27 +1973,6 @@ export interface OrganisationsSelect<T extends boolean = true> {
   canPayByInvoice?: T;
   billingEmail?: T;
   xeroContactCode?: T;
-  legacyId?: T;
-  createdBy?: T;
-  updatedBy?: T;
-  updatedAt?: T;
-  createdAt?: T;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "alert-subscriptions_select".
- */
-export interface AlertSubscriptionsSelect<T extends boolean = true> {
-  tenant?: T;
-  email?: T;
-  confirmed?: T;
-  confirmToken?: T;
-  manageToken?: T;
-  keywords?: T;
-  categories?: T;
-  types?: T;
-  locations?: T;
-  lastSentAt?: T;
   legacyId?: T;
   createdBy?: T;
   updatedBy?: T;
@@ -2150,6 +2142,27 @@ export interface CouponsSelect<T extends boolean = true> {
   active?: T;
   useCount?: T;
   maxUses?: T;
+  legacyId?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "alert-subscriptions_select".
+ */
+export interface AlertSubscriptionsSelect<T extends boolean = true> {
+  tenant?: T;
+  email?: T;
+  confirmed?: T;
+  confirmToken?: T;
+  manageToken?: T;
+  keywords?: T;
+  categories?: T;
+  types?: T;
+  locations?: T;
+  lastSentAt?: T;
   legacyId?: T;
   createdBy?: T;
   updatedBy?: T;
@@ -2349,14 +2362,14 @@ export interface CollectionQueryWidget {
       | 'documents'
       | 'locations'
       | 'organisations'
-      | 'alert-subscriptions'
       | 'job-categories'
       | 'job-types'
       | 'salary-bands'
       | 'plans'
       | 'add-ons'
       | 'jobs'
-      | 'coupons';
+      | 'coupons'
+      | 'alert-subscriptions';
     where?:
       | {
           [k: string]: unknown;
@@ -2389,7 +2402,6 @@ export interface ActivityWidget {
           | 'documents'
           | 'locations'
           | 'organisations'
-          | 'alert-subscriptions'
           | 'job-categories'
           | 'job-types'
           | 'salary-bands'
@@ -2397,6 +2409,7 @@ export interface ActivityWidget {
           | 'add-ons'
           | 'jobs'
           | 'coupons'
+          | 'alert-subscriptions'
         )[]
       | null;
   };

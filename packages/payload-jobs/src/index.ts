@@ -8,12 +8,6 @@ import type {
 } from 'payload'
 
 import { accountAuthEndpoints, type AccountAuthOptions } from './account-auth'
-import {
-  ALERT_SUBSCRIPTIONS_SLUG,
-  alertSubscriptionCollection,
-  removeTenantAlertSubscriptions,
-  removeTenantAlertSubscriptionsFor,
-} from './alert-subscriptions'
 import type { LocationsOptions } from './collections/locations'
 import { locationsCollection, locationsTenantSlugIndex } from './collections/locations'
 import { organisationsCollection, withOrganisationField } from './collections/organisations'
@@ -31,11 +25,13 @@ import {
   type PayloadJobsCollectionsOptions,
 } from './slugs'
 import { taxonomyCollections } from './taxonomies'
+import { jobLifecycleHook } from './plug-points/gate'
+import { createPayloadJobsRegistry } from './plug-points/payload-jobs-registry'
+import { jobBoardAddOnsField } from './plug-points/tenant-field'
 import { jobBoardSettingsGlobal, jobBoardTenantFields } from './tenancy'
 
 export * from './access'
 export * from './account-auth'
-export * from './alert-subscriptions'
 export * from './collections/locations'
 export * from './collections/organisations'
 export * from './coupons'
@@ -43,6 +39,7 @@ export * from './email'
 export * from './legacy-password'
 export * from './location-settings'
 export * from './money'
+export * from './plug-points'
 export * from './add-ons'
 export * from './collections/jobs'
 export * from './job-status'
@@ -78,7 +75,6 @@ export const payloadJobsTenantCollections = (
   slugs.salaryBands,
   slugs.addOns,
   slugs.plans,
-  slugs.alertSubscriptions,
   slugs.jobs,
   slugs.coupons,
 ]
@@ -104,8 +100,6 @@ export const PAYLOAD_JOBS_TENANT_COLLECTIONS = payloadJobsTenantCollections() as
 export type PayloadJobsFeatures = {
   /** Job applications. The collection is added by a later task. Defaults to true. */
   applications?: boolean
-  /** Email-only job alert subscriptions (PJ-26). Defaults to true. */
-  alerts?: boolean
   /** Organisation job credits. Added by a later task. Defaults to true. */
   credits?: boolean
   /** Coupon codes and their discounts. Defaults to true. */
@@ -151,7 +145,6 @@ export type PayloadJobsOptions = {
 
 const resolvedFeatures = (options: PayloadJobsOptions): Required<PayloadJobsFeatures> => ({
   applications: options.features?.applications ?? true,
-  alerts: options.features?.alerts ?? true,
   credits: options.features?.credits ?? true,
   coupons: options.features?.coupons ?? true,
 })
@@ -178,15 +171,6 @@ const jobBoardCollections = (
     slug: slugs.organisations,
     tenantScoped: tenancy === 'multi',
   }),
-  ...(features.alerts
-    ? [
-        alertSubscriptionCollection({
-          access: collections.alertSubscriptions?.access,
-          slugs,
-          tenantScoped: tenancy === 'multi',
-        }),
-      ]
-    : []),
 ]
 
 /**
@@ -203,6 +187,10 @@ export const payloadJobs =
     const features = resolvedFeatures(options)
     const collectionOptions = options.collections ?? {}
     const slugs = resolveSlugsFromOptions(options)
+
+    // The registry add-on plugins register their plug points on (PJ-115).
+    const registry = createPayloadJobsRegistry({ settingsSlug: options.settingsSlug ?? 'job-board-settings', slugs, tenancy, tenantsSlug })
+    const addOnsField = jobBoardAddOnsField(registry)
 
     let config = incoming
 
@@ -319,20 +307,13 @@ export const payloadJobs =
                 ...(Array.isArray(collection.endpoints) ? collection.endpoints : []),
                 ...accountEndpoints,
               ],
-              fields: [...collection.fields, ...jobBoardTenantFields],
+              fields: [...collection.fields, ...jobBoardTenantFields, addOnsField],
               hooks: {
                 ...collection.hooks,
-                // Deleting a tenant must take its subscribers with it, not detach them.
-                // Coupons are removed too: the tenant foreign key would otherwise null them.
+                // Coupons are removed with the tenant: the tenant foreign key would otherwise
+                // null them. Add-ons clean up their own data the same way (PJ-115).
                 beforeDelete: [
                   ...(collection.hooks?.beforeDelete ?? []),
-                  ...(features.alerts
-                    ? [
-                        slugs.alertSubscriptions === ALERT_SUBSCRIPTIONS_SLUG
-                          ? removeTenantAlertSubscriptions
-                          : removeTenantAlertSubscriptionsFor(slugs.alertSubscriptions),
-                      ]
-                    : []),
                   ...(features.coupons
                     ? [slugs.coupons === 'coupons' ? removeTenantCoupons : removeTenantCouponsFor(slugs.coupons)]
                     : []),
@@ -360,7 +341,7 @@ export const payloadJobs =
         ...config,
         globals: [
           ...(config.globals ?? []),
-          jobBoardSettingsGlobal(settingsSlug) as GlobalConfig,
+          jobBoardSettingsGlobal(settingsSlug, [addOnsField]) as GlobalConfig,
         ],
       }
     }
@@ -418,13 +399,21 @@ export const payloadJobs =
           ? 'documents'
           : null
         : options.documentsSlug
-    const jobs = jobsCollection({
+    const baseJobs = jobsCollection({
       access: collectionOptions.jobs?.access,
       documentsSlug,
       richTextDescription: Boolean(config.editor),
       slugs,
       tenantScoped: tenancy === 'multi',
     })
+    // Add-ons hear about jobs being published, expired or cancelled (PJ-115).
+    const jobs: CollectionConfig = {
+      ...baseJobs,
+      hooks: {
+        ...baseJobs.hooks,
+        afterChange: [...(baseJobs.hooks?.afterChange ?? []), jobLifecycleHook(registry, slugs.jobs)],
+      },
+    }
 
     const jobsWithPlacements = [...(config.collections ?? []), jobs].find(
       (collection) => collection.slug === slugs.jobs,
@@ -447,7 +436,7 @@ export const payloadJobs =
       jobs: jobsConfig,
       custom: {
         ...config.custom,
-        payloadJobs: { enabled: true, tenancy, features },
+        payloadJobs: { enabled: true, features, registry, tenancy },
       },
     }
   }
