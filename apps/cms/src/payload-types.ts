@@ -713,6 +713,7 @@ export interface Tag {
   } | null;
   updatedAt: string;
   createdAt: string;
+  _status?: ('draft' | 'published') | null;
   _h_slugPath?: string | null;
   _h_titlePath?: string | null;
 }
@@ -1842,6 +1843,7 @@ export interface TagsSelect<T extends boolean = true> {
   updatedBy?: T;
   updatedAt?: T;
   createdAt?: T;
+  _status?: T;
   _h_slugPath?: T;
   _h_titlePath?: T;
 }

@@ -238,6 +238,39 @@ jobs:
           path: ${{ runner.temp }}/admin-smoke.png
           if-no-files-found: ignore
 
+  # Runtime evidence that site keys scope reads on a real deployment (PJ-76). The unit tests
+  # in apps/cms prove the access result; this proves it end to end, against this preview and
+  # its Neon branch. It seeds two tenants, the aggregate tenant, published documents and three
+  # keys, then asks the preview's REST API what each key can read.
+  #
+  # The connection string is resolved here rather than passed in as a `publish` output: GitHub
+  # blanks any value registered with `::add-mask::` when it crosses a job boundary, so such an
+  # output arrives empty. Masking it inside this job keeps it usable.
+  site-key-smoke:
+    name: Site-key smoke
+    needs: publish
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The helper imports `generateSiteKey`/`hashSiteKey` straight from the workspace source,
+      # so there is no build or install step: Node strips the types.
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - name: Seed the Neon branch and check site keys on the preview
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          PROJECT: ${{ vars.NEON_PROJECT_ID }}
+          BRANCH: preview/${{ needs.publish.outputs.name }}
+          PREVIEW_URL: https://${{ needs.publish.outputs.name }}-${{ env.WORKER_NAME }}.${{ env.WORKERS_SUBDOMAIN }}
+        run: |
+          set -euo pipefail
+          URI=$(npx -y "$NEONCTL" connection-string "$BRANCH" --database-name neondb --role-name neondb_owner --project-id "$PROJECT" --api-key "$NEON_API_KEY")
+          echo "::add-mask::$URI"
+          command -v psql > /dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client; }
+          DATABASE_URL="$URI" node .github/scripts/site-key-smoke.mjs
+
   # PR closed or merged, or the git branch deleted: remove that branch's preview.
   cleanup:
     name: Delete preview
