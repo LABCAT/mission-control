@@ -109,7 +109,7 @@ describe('every collection slug overridden', () => {
     const job = await create(slugs.jobs, {
       categories: [category.id],
       jobType: jobType.id,
-      location: location.id,
+      location: [location.id],
       organisation: organisation.id,
       plan: plan.id,
       salaryBand: salaryBand.id,
@@ -126,7 +126,7 @@ describe('every collection slug overridden', () => {
     expect(stored).toMatchObject({
       categories: [category.id],
       jobType: jobType.id,
-      location: location.id,
+      location: [location.id],
       organisation: organisation.id,
       plan: plan.id,
       salaryBand: salaryBand.id,

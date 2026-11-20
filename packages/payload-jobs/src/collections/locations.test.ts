@@ -3,13 +3,9 @@ import { describe, expect, it } from 'vitest'
 
 import { ALERT_SUBSCRIPTIONS_SLUG } from '../alert-subscriptions'
 import { payloadJobs } from '../index'
+import { tenantLocationSettings } from '../location-settings'
 import { TAXONOMY_SLUGS } from '../taxonomies'
-import {
-  ALLOWED_PARENT_KINDS,
-  LOCATION_KINDS,
-  locationsCollection,
-  slugifyLocationName,
-} from './locations'
+import { locationsCollection, slugifyLocationName } from './locations'
 
 const baseConfig = {
   collections: [{ slug: 'users', fields: [] }],
@@ -18,10 +14,30 @@ const baseConfig = {
 
 const Locations = locationsCollection()
 
-const fieldNamed = (name: string) =>
-  Locations.fields.find((field) => 'name' in field && field.name === name)
+const fieldNamed = (collection: CollectionConfig, name: string) =>
+  collection.fields.find((field) => 'name' in field && field.name === name)
 
 const requestFor = (user: unknown) => ({ req: { user } }) as never
+
+const settingsA = tenantLocationSettings({
+  locationLevels: [{ label: 'Island' }, { label: 'Town' }],
+  locationMaxDepth: 1,
+})
+const settingsB = tenantLocationSettings({
+  locationLevels: [{ label: 'Region' }, { label: 'City' }, { label: 'Suburb' }],
+  locationMaxDepth: 2,
+})
+
+const limitedCollection = locationsCollection({
+  limits: ({ data }) => {
+    const tenant = String(data.tenant)
+    if (tenant === '2') return settingsA
+    if (tenant === '3') return settingsB
+
+    return null
+  },
+  requireTenant: true,
+})
 
 describe('locations collection @S-120', () => {
   it('is registered by the plugin without touching the host collections', async () => {
@@ -51,18 +67,19 @@ describe('locations collection @S-120', () => {
     ).toThrow('locations')
   })
 
-  it('has the tree fields the task asks for, plus legacyId for the importer', () => {
+  it('has a generic tree: name, slug, parent, computed depth and legacyId', () => {
     expect(Locations.fields.map((field) => ('name' in field ? field.name : field.type))).toEqual([
       'name',
       'slug',
-      'kind',
       'parent',
+      'depth',
       'legacyId',
     ])
 
-    expect(fieldNamed('kind')).toMatchObject({ type: 'select', required: true })
-    expect(fieldNamed('parent')).toMatchObject({ relationTo: 'locations', type: 'relationship' })
-    expect(fieldNamed('legacyId')).toMatchObject({ index: true, type: 'number' })
+    expect(fieldNamed(Locations, 'kind')).toBeUndefined()
+    expect(fieldNamed(Locations, 'parent')).toMatchObject({ relationTo: 'locations', type: 'relationship' })
+    expect(fieldNamed(Locations, 'depth')).toMatchObject({ type: 'number', index: true })
+    expect(fieldNamed(Locations, 'legacyId')).toMatchObject({ index: true, type: 'number' })
   })
 
   it('lets anyone read locations but only tenant staff write them', () => {
@@ -82,13 +99,6 @@ describe('locations collection @S-120', () => {
       access?.update?.(requestFor({ role: 'user', tenants: [{ role: 'tenant-admin', tenant: 1 }] })),
     ).toBe(true)
     expect(access?.delete?.(requestFor({ role: 'super-admin' }))).toBe(true)
-  })
-
-  it('orders kinds strictly so a parent cycle is impossible', () => {
-    expect([...LOCATION_KINDS]).toEqual(['region', 'island', 'town'])
-    expect(ALLOWED_PARENT_KINDS.region).toEqual([])
-    expect(ALLOWED_PARENT_KINDS.island).toEqual(['region'])
-    expect(ALLOWED_PARENT_KINDS.town).toEqual(['region', 'island'])
   })
 
   it('slugifies legacy names into lowercase ASCII slugs', () => {
@@ -125,6 +135,27 @@ const validatingReq = (docs: Record<string, unknown>[] = []) => ({
   },
 })
 
+type ChangeHook = (args: unknown) => Promise<unknown>
+
+const changeHook = (collection: CollectionConfig): ChangeHook => {
+  const hook = collection.hooks?.beforeChange?.[0]
+  if (!hook) throw new Error('Missing beforeChange hook')
+
+  return hook as ChangeHook
+}
+
+const run = (collection: CollectionConfig, args: unknown): Promise<Record<string, unknown>> =>
+  changeHook(collection)(args) as Promise<Record<string, unknown>>
+
+const errorMessages = async (collection: CollectionConfig, args: unknown): Promise<string[]> => {
+  const error = await run(collection, args).then(
+    () => null,
+    (reason: unknown) => reason as { data?: { errors?: { message: string }[] } },
+  )
+
+  return (error?.data?.errors ?? []).map((fieldError) => fieldError.message)
+}
+
 const tenantlessCollection = locationsCollection({ requireTenant: true })
 const singleTenantCollection = locationsCollection()
 
@@ -142,7 +173,7 @@ describe('locations tenant requirements', () => {
 
       expect(
         await validateSlug('port-vila', {
-          data: { kind: 'region', tenant: 2 },
+          data: { tenant: 2 },
           id: 6,
           req: validatingReq([taken]),
         }),
@@ -151,7 +182,7 @@ describe('locations tenant requirements', () => {
       // Nothing in tenant 3, so the same slug there is free.
       expect(
         await validateSlug('port-vila', {
-          data: { kind: 'region', tenant: 3 },
+          data: { tenant: 3 },
           id: 7,
           req: validatingReq(),
         }),
@@ -160,7 +191,7 @@ describe('locations tenant requirements', () => {
       // The same document keeping its slug is not a clash with itself.
       expect(
         await validateSlug('port-vila', {
-          data: { kind: 'region', tenant: 2 },
+          data: { tenant: 2 },
           id: 5,
           req: validatingReq([taken]),
         }),
@@ -171,134 +202,180 @@ describe('locations tenant requirements', () => {
   it.each(scenarios)(
     'rejects a tenantless write in $label mode only when a tenant is required',
     async ({ collection, tenantlessValid }) => {
-      const hook = collection.hooks?.beforeChange?.[0] as
-        | ((args: unknown) => Promise<unknown>)
-        | undefined
-      const run = (args: unknown) =>
-        hook ? Promise.resolve().then(() => hook(args)) : Promise.resolve((args as { data: unknown }).data)
-
-      const tenantError = async (args: unknown) => {
-        const error = await run(args).then(
-          () => null,
-          (reason: unknown) => reason as { data?: { errors?: { message: string }[] } },
-        )
-
-        return error?.data?.errors?.map((fieldError) => fieldError.message)
-      }
-
       if (tenantlessValid) {
-        expect(hook).toBeUndefined()
-        await expect(run({ data: { name: 'Port Vila' }, operation: 'create' })).resolves.toEqual({
+        await expect(run(collection, { data: { name: 'Port Vila' }, operation: 'create' })).resolves.toEqual({
+          depth: 0,
           name: 'Port Vila',
         })
         return
       }
 
-      await expect(tenantError({ data: { name: 'Port Vila' }, operation: 'create' })).resolves.toEqual(
-        ['A location must belong to a tenant'],
-      )
+      await expect(
+        errorMessages(collection, { data: { name: 'Port Vila' }, operation: 'create' }),
+      ).resolves.toEqual(['A location must belong to a tenant'])
       // An update that clears the tenant is refused, and one that keeps the stored tenant passes
       // even though the request does not carry it.
       await expect(
-        tenantError({ data: { name: 'Port Vila', tenant: null }, operation: 'update' }),
+        errorMessages(collection, { data: { name: 'Port Vila', tenant: null }, operation: 'update' }),
       ).resolves.toEqual(['A location must belong to a tenant'])
       await expect(
-        run({ data: { name: 'Port Vila' }, operation: 'update', originalDoc: { tenant: 2 } }),
-      ).resolves.toEqual({ name: 'Port Vila' })
+        run(collection, {
+          data: { name: 'Port Vila' },
+          operation: 'update',
+          originalDoc: { tenant: 2 },
+        }),
+      ).resolves.toEqual({ depth: 0, name: 'Port Vila' })
     },
   )
+})
 
-  it('rechecks the tree on an update that does not submit the parent field', async () => {
-    const hook = tenantlessCollection.hooks?.beforeChange?.[0] as (
-      args: unknown,
-    ) => Promise<unknown>
+describe('locations tree', () => {
+  it('computes depth from the whole parent chain, not from a fixed kind', async () => {
+    const docs = [
+      { id: 1, parent: null, tenant: 2 },
+      { id: 7, parent: 1, tenant: 2 },
+      { id: 8, parent: 7, tenant: 2 },
+    ]
 
-    const messageFor = async (args: unknown) => {
-      const error = await Promise.resolve()
-        .then(() => hook(args))
-        .then(
-          () => null,
-          (reason: unknown) =>
-            reason as { data?: { errors?: { message: string }[] } },
-        )
-
-      return error?.data?.errors?.map((fieldError) => fieldError.message)
-    }
-
-    // `kind` alone moves from island to region: the stored parent would then be invalid, so the
-    // hook must refuse it even though the request never mentions `parent`.
     await expect(
-      messageFor({
-        data: { kind: 'region' },
-        id: 10,
-        operation: 'update',
-        originalDoc: { kind: 'island', parent: 3, tenant: 2 },
-        req: validatingReq(),
+      run(tenantlessCollection, {
+        data: { name: 'Efate', tenant: 2 },
+        operation: 'create',
+        req: validatingReq(docs),
       }),
-    ).resolves.toEqual(['A region cannot have a parent'])
+    ).resolves.toMatchObject({ depth: 0 })
 
-    // Clearing the parent in the same write is fine.
     await expect(
-      Promise.resolve()
-        .then(() =>
-          hook({
-            data: { kind: 'region', parent: null },
-            id: 10,
-            operation: 'update',
-            originalDoc: { kind: 'island', parent: 3, tenant: 2 },
-            req: validatingReq(),
-          }),
-        )
-        .then((result) => result as unknown),
-    ).resolves.toEqual({ kind: 'region', parent: null })
+      run(tenantlessCollection, {
+        data: { name: 'Port Vila', parent: 1, tenant: 2 },
+        operation: 'create',
+        req: validatingReq(docs),
+      }),
+    ).resolves.toMatchObject({ depth: 1 })
+
+    await expect(
+      run(tenantlessCollection, {
+        data: { name: 'Sulphur Bay', parent: 7, tenant: 2 },
+        operation: 'create',
+        req: validatingReq(docs),
+      }),
+    ).resolves.toMatchObject({ depth: 2 })
   })
 
-  it.each(scenarios)(
-    'only accepts a parent from the same tenant in $label mode',
-    async ({ collection }) => {
-      const validateParent = validateOf(collection, 'parent')
-      const parent = { id: 7, kind: 'region', tenant: 2 }
+  it('caps depth per tenant and names the levels in the error', async () => {
+    const docs = [
+      { id: 1, parent: null, tenant: 2 },
+      { id: 7, parent: 1, tenant: 2 },
+    ]
 
-      expect(
-        await validateParent(
-          { id: 7 },
-          { data: { kind: 'island', tenant: 2 }, id: 8, req: validatingReq([parent]) },
-        ),
-      ).toBe(true)
+    // Tenant 2 names Island → Town and allows two levels; tenant 3 names three levels.
+    await expect(
+      run(limitedCollection, {
+        data: { name: 'Port Vila', parent: 1, tenant: 2 },
+        operation: 'create',
+        req: validatingReq(docs),
+      }),
+    ).resolves.toMatchObject({ depth: 1 })
 
-      expect(
-        await validateParent(
-          { id: 7 },
-          { data: { kind: 'island', tenant: 3 }, id: 9, req: validatingReq([parent]) },
-        ),
-      ).toBe('The parent location belongs to another tenant')
+    await expect(
+      errorMessages(limitedCollection, {
+        data: { name: 'Sulphur Bay', parent: 7, tenant: 2 },
+        operation: 'create',
+        req: validatingReq(docs),
+      }),
+    ).resolves.toEqual(['This tenant allows at most 2 location levels (Island → Town)'])
 
-      // A parent with no tenant cannot be in the same tenant as a child that has one.
-      expect(
-        await validateParent(
-          { id: 7 },
-          {
-            data: { kind: 'island', tenant: 2 },
-            id: 10,
-            req: validatingReq([{ ...parent, tenant: null }]),
-          },
-        ),
-      ).toBe('The parent location belongs to no tenant')
+    await expect(
+      run(limitedCollection, {
+        data: { name: 'Sulphur Bay', parent: 7, tenant: 3 },
+        operation: 'create',
+        req: validatingReq([{ id: 1, parent: null, tenant: 3 }, { id: 7, parent: 1, tenant: 3 }]),
+      }),
+    ).resolves.toMatchObject({ depth: 2 })
+  })
 
-      // A tenantless child never reaches a comparison: the beforeChange hook refuses it in
-      // multi-tenant mode, and in single mode there is no tenant field to compare.
-      expect(
-        await validateParent(
-          { id: 7 },
-          { data: { kind: 'island' }, id: 11, req: validatingReq([parent]) },
-        ),
-      ).toBe(true)
-      expect(
-        await validateParent(
-          { id: 7 },
-          { data: { kind: 'island' }, id: 12, req: validatingReq([{ ...parent, tenant: null }]) },
-        ),
-      ).toBe(true)
-    },
-  )
+  it('refuses to put a location under itself or one of its descendants', async () => {
+    const docs = [
+      { id: 1, parent: null, tenant: 2 },
+      { id: 7, parent: 1, tenant: 2 },
+    ]
+
+    await expect(
+      errorMessages(tenantlessCollection, {
+        data: { parent: 1, tenant: 2 },
+        id: 1,
+        operation: 'update',
+        originalDoc: { id: 1, tenant: 2 },
+        req: validatingReq(docs),
+      }),
+    ).resolves.toEqual(['A location cannot be its own parent'])
+
+    await expect(
+      errorMessages(tenantlessCollection, {
+        data: { parent: 7, tenant: 2 },
+        id: 1,
+        operation: 'update',
+        originalDoc: { id: 1, tenant: 2 },
+        req: validatingReq(docs),
+      }),
+    ).resolves.toEqual(['A location cannot sit under one of its own descendants'])
+  })
+
+  it('refuses a stored parent chain that already loops', async () => {
+    const docs = [
+      { id: 1, parent: 7, tenant: 2 },
+      { id: 7, parent: 1, tenant: 2 },
+    ]
+
+    await expect(
+      errorMessages(tenantlessCollection, {
+        data: { parent: 7, tenant: 2 },
+        id: 9,
+        operation: 'create',
+        req: validatingReq(docs),
+      }),
+    ).resolves.toEqual(['The location tree loops; fix the parents before saving'])
+  })
+
+  it.each([
+    { label: 'multi-tenant', collection: tenantlessCollection },
+    { label: 'single-tenant', collection: singleTenantCollection },
+  ])('only accepts a parent from the same tenant in $label mode', async ({ collection }) => {
+    const validateParent = validateOf(collection, 'parent')
+    const parent = { id: 7, parent: null, tenant: 2 }
+
+    expect(
+      await validateParent(
+        { id: 7 },
+        { data: { tenant: 2 }, id: 8, req: validatingReq([parent]) },
+      ),
+    ).toBe(true)
+
+    expect(
+      await validateParent(
+        { id: 7 },
+        { data: { tenant: 3 }, id: 9, req: validatingReq([parent]) },
+      ),
+    ).toBe('The parent location belongs to another tenant')
+
+    // A parent with no tenant cannot be in the same tenant as a child that has one.
+    expect(
+      await validateParent(
+        { id: 7 },
+        { data: { tenant: 2 }, id: 10, req: validatingReq([{ ...parent, tenant: null }]) },
+      ),
+    ).toBe('The parent location belongs to no tenant')
+
+    // A tenantless child never reaches a comparison: the beforeChange hook refuses it in
+    // multi-tenant mode, and in single mode there is no tenant field to compare.
+    expect(
+      await validateParent({ id: 7 }, { data: {}, id: 11, req: validatingReq([parent]) }),
+    ).toBe(true)
+    expect(
+      await validateParent(
+        { id: 7 },
+        { data: {}, id: 12, req: validatingReq([{ ...parent, tenant: null }]) },
+      ),
+    ).toBe(true)
+  })
 })
