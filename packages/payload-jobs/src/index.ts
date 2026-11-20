@@ -110,7 +110,7 @@ export type PayloadJobsOptions = {
   accountAuth?: AccountAuthOptions | false
   /**
    * Per-collection overrides: rename any slug and/or override its access. Every internal
-   * relationship and query uses the resolved slug, so no migration follows a rename.
+   * relationship and query uses the resolved slug, so choosing a slug before your first schema migration needs nothing extra. Renaming one on an installation that already has the tables changes the schema: generate and apply your own app migration for it.
    *
    *   collections: { locations: { slug: 'job-locations' } }
    */
