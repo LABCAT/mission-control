@@ -186,9 +186,19 @@ export const pageUrlRules =
         errors.push({ message: 'The home page cannot have a parent', path: 'parent' })
       }
     } else {
+      const given = hasKey(page, 'slug')
       const submitted = typeof page.slug === 'string' ? page.slug.trim() : ''
       const current = typeof original?.slug === 'string' ? original.slug : ''
-      if (!submitted && !current) {
+
+      // A submitted slug is the editor's choice and the field validator checks its shape.
+      // Leaving the field out keeps the existing address, so renaming a title alone does not
+      // move the page. An empty submission has no address to keep, so it takes the title's
+      // slug exactly as a new page with no slug does.
+      if (given && submitted) {
+        page.slug = submitted
+      } else if (!given && current) {
+        page.slug = current
+      } else {
         const title = typeof page.title === 'string' ? page.title : original?.title
         const derived = typeof title === 'string' ? slugifyPageTitle(title) : ''
         if (derived) page.slug = derived

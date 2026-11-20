@@ -166,6 +166,32 @@ describe('system pages', () => {
       expect(page.slug).toBe('for-employers')
     })
 
+    it('keeps the existing slug when an update leaves the field out @S-144', async () => {
+      const page = await createPage({ slug: 'our-services', title: 'Our services' }, harness.tenantA.id)
+
+      await harness.payload.update({
+        collection: 'pages',
+        data: { title: 'Our services and prices' } as never,
+        id: page.id,
+        user: harness.tenantAdminA as never,
+      })
+
+      expect((await readPage(page.id)).slug).toBe('our-services')
+    })
+
+    it('derives a slug from the title when an update clears it @S-144', async () => {
+      const page = await createPage({ slug: 'old-address', title: 'Contact the team' }, harness.tenantA.id)
+
+      await harness.payload.update({
+        collection: 'pages',
+        data: { slug: '' } as never,
+        id: page.id,
+        user: harness.tenantAdminA as never,
+      })
+
+      expect((await readPage(page.id)).slug).toBe('contact-the-team')
+    })
+
     it('refuses a parent on the home page', async () => {
       const about = (await pagesOf(harness.tenantA.id)).find((page) => page.role === 'about')!
       const home = (await pagesOf(harness.tenantA.id)).find((page) => page.role === 'home')!
