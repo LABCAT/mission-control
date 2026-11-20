@@ -31,6 +31,8 @@ export type JobSummary = {
   /** `Full time`, `Voluntary` … already labelled for the tenant. */
   jobType?: null | string
   salary?: null | Salary
+  /** Free text an employer typed, e.g. `Vt 1,500 a day`. Shown when there is no structured salary. */
+  displayedSalary?: null | string
   /** ISO date (`2026-12-01`, a calendar day) or instant, rendered in the tenant timezone. */
   closes?: null | string
   summary?: null | string

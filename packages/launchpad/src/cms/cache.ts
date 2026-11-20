@@ -100,6 +100,76 @@ export const cached = async <T>(
   return value
 }
 
+/**
+ * The Cache API can store a `Response` whole, which is what a rendered page needs: the HTML
+ * body and its headers. `cached` above stores JSON, so a page uses this instead.
+ */
+export type CachedResponseOptions = Pick<CachedOptions, 'cache' | 'namespace' | 'tags'>
+
+const responseRequest = (namespace: string, key: string, versions: readonly string[]): Request =>
+  new Request(
+    `${ORIGIN}/${encodeURIComponent(namespace)}/page/${encodeURIComponent(key)}?v=${versions
+      .map(encodeURIComponent)
+      .join(',')}`,
+  )
+
+/**
+ * Store a rendered page for `ttl` seconds under `key`, tagged for purging, and return it.
+ *
+ * `ttl <= 0` or no cache runs `render` every time: a preview must not be held. A cache that
+ * fails is skipped, not fatal, and `render`'s own errors are never cached. Only a 200 is stored,
+ * because a 404 is this URL's real answer and would otherwise outlive a fix. `Cache-Control`
+ * and `Cache-Tag` are written here, so the page cannot be held longer than the caller said.
+ *
+ * A page that comes back `Cache-Control: no-store` is passed through untouched: a caller that
+ * knows this response does not belong to its own key must be able to say so, or the cache would
+ * hold one URL's HTML under another's.
+ */
+export const cachedResponse = async (
+  key: string,
+  ttl: number,
+  render: () => Promise<Response>,
+  options: CachedResponseOptions = {},
+): Promise<Response> => {
+  const cache = options.cache ?? defaultCache()
+  if (!cache || !(ttl > 0)) return render()
+
+  const namespace = options.namespace ?? 'mc'
+  const tags = sortedUnique(options.tags)
+
+  let request: Request | undefined
+  try {
+    const versions = await Promise.all(tags.map((tag) => readVersion(cache, namespace, tag)))
+    request = responseRequest(
+      namespace,
+      key,
+      versions.map((version, index) => `${tags[index]}@${version}`),
+    )
+
+    const hit = await cache.match(request)
+    if (hit) return hit
+  } catch {
+    // Unreadable entry: treat it as a miss.
+  }
+
+  const response = await render()
+  const refusable = /\bno-store\b/i.test(response.headers.get('cache-control') ?? '')
+  if (!request || response.status !== 200 || refusable) return response
+
+  const body = await response.text()
+  const headers = new Headers(response.headers)
+  headers.set('cache-control', `public, max-age=${Math.floor(Math.min(ttl, MAX_TTL_SECONDS))}`)
+  if (tags.length > 0) headers.set('cache-tag', tags.join(','))
+
+  try {
+    await cache.put(request, new Response(body, { headers, status: 200 }))
+  } catch {
+    // Storing is best effort.
+  }
+
+  return new Response(body, { headers, status: 200 })
+}
+
 /** Invalidate every entry stored with any of these tags (in this colo; see the file note). */
 export const purgeTags = async (
   tags: readonly string[],

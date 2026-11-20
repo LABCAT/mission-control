@@ -1,0 +1,9 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // The Vanuatu Wok site Worker (`mc-vwok`). @astrojs/cloudflare writes the server entry and the
+  // assets directory into the build output's wrangler config, so they are not repeated here.
+  "name": "mc-vwok",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true }
+}

@@ -4,9 +4,11 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import BaseLayout from './BaseLayout.astro'
 import FilterBar from './FilterBar.astro'
 import JobCard from './JobCard.astro'
+import JobsPage from './JobsPage.astro'
 import OrgCard from './OrgCard.astro'
 import Pagination from './Pagination.astro'
 import Turnstile from './Turnstile.astro'
+import { jobFilterDefinitions, jobListingView, type ListingFacets } from '../jobs/listing'
 import type { FilterDefinition } from '../tenant/filters'
 import type { SiteTenant } from '../tenant/types'
 import type { JobSummary, OrgSummary } from '../types'
@@ -170,6 +172,32 @@ describe('JobCard', () => {
   })
 })
 
+describe('JobCard salary', () => {
+  it('shows the employer\'s own salary text when there is no structured salary', async () => {
+    const html = await container.renderToString(JobCard, {
+      props: { job: { ...job, displayedSalary: 'Vt 1,500 a day', salary: undefined } },
+    })
+
+    expect(html).toContain('Vt 1,500 a day')
+  })
+
+  it('prefers the structured salary, with its period, over the free text', async () => {
+    const html = await container.renderToString(JobCard, {
+      props: {
+        job: {
+          ...job,
+          displayedSalary: 'Vt 1,500 a day',
+          salary: { amountMinor: 150000, currency: 'VUV', minorUnits: 0, period: 'month' },
+        },
+      },
+    })
+
+    // `Intl` separates the currency and the amount with a narrow no-break space.
+    expect(html).toMatch(/VUV\s150,000 \/ month/)
+    expect(html).not.toContain('Vt 1,500 a day')
+  })
+})
+
 describe('OrgCard', () => {
   it('links the organisation and pluralises nothing but the count', async () => {
     const html = await container.renderToString(OrgCard, { props: { org, jobsLabel: 'open jobs' } })
@@ -232,6 +260,142 @@ describe('FilterBar', () => {
     })
 
     expect(html).not.toContain('value="injected"')
+  })
+
+  it('turns voluntary on with a checkbox that sends nothing when unticked', async () => {
+    const html = await container.renderToString(FilterBar, {
+      props: {
+        action: '/jobs',
+        controls: [{ label: 'Include voluntary jobs', name: 'voluntary', type: 'checkbox', value: '1' }],
+        definitions: [...definitions, { allowed: ['1'], name: 'voluntary' }],
+        values: { voluntary: '1' },
+      },
+    })
+
+    expect(html).toMatch(/<input[^>]*name="voluntary"/)
+    expect(html).toMatch(/<input[^>]*name="voluntary"[^>]*value="1"/)
+    expect(html).toMatch(/<input[^>]*type="checkbox"/)
+    expect(html).toContain(' checked')
+    // Off is the absence of the parameter, so an unticked box must not post `voluntary=`.
+    expect(html).not.toContain('name="voluntary" value=""')
+  })
+
+  it('leaves the voluntary box unticked when the filter is off, which is the default', async () => {
+    const html = await container.renderToString(FilterBar, {
+      props: {
+        action: '/jobs',
+        controls: [{ label: 'Include voluntary jobs', name: 'voluntary', type: 'checkbox', value: '1' }],
+        values: {},
+      },
+    })
+
+    expect(html).toContain('name="voluntary"')
+    expect(html).not.toContain('checked')
+  })
+})
+
+describe('JobsPage', () => {
+  const facets: ListingFacets = {
+    categories: [{ id: 1, name: 'Hospitality', slug: 'hospitality' }],
+    locations: [{ id: 10, name: 'Port Vila', parentID: null, slug: 'port-vila' }],
+    types: [
+      { id: 20, isVolunteer: false, name: 'Full time', slug: 'full-time' },
+      { id: 22, isVolunteer: true, name: 'Voluntary', slug: 'voluntary' },
+    ],
+  }
+
+  const listingView = (overrides: {
+    filters?: Record<string, string>
+    jobs?: JobSummary[]
+    page?: number
+    total?: number
+  } = {}) =>
+    jobListingView({
+      basePath: '/jobs',
+      definitions: jobFilterDefinitions(facets),
+      facets,
+      filters: overrides.filters ?? {},
+      jobs: overrides.jobs ?? [job, { ...job, isVolunteer: true, title: 'Water Volunteer', url: '/jobs/water' }],
+      page: overrides.page ?? 1,
+      pageSize: 20,
+      total: overrides.total ?? 2,
+    })
+
+  it('renders the heading, the summary, the cards and a GET filter form', async () => {
+    const html = await container.renderToString(JobsPage, {
+      props: { path: '/jobs', tenant, title: 'Jobs in Vanuatu', view: listingView() },
+    })
+
+    expect(html).toMatch(/<h1[^>]*>Jobs in Vanuatu<\/h1>/)
+    expect(html).toContain('2 jobs')
+    expect(html).toContain('Head Chef')
+    expect(html).toContain('Water Volunteer')
+    expect(html).toContain('href="/jobs/head-chef"')
+    expect(html).toMatch(/<form[^>]*action="\/jobs"[^>]*method="get"/)
+    expect(html).toContain('name="voluntary"')
+    expect(html).toContain('All categories')
+    expect(html).toContain('All types')
+    expect(html).toContain('All locations')
+  })
+
+  it('keeps a filtered listing out of the index but leaves the bare listing indexable', async () => {
+    const plain = await container.renderToString(JobsPage, {
+      props: { path: '/jobs', tenant, title: 'Jobs', view: listingView() },
+    })
+    const filtered = await container.renderToString(JobsPage, {
+      props: { path: '/jobs', tenant, title: 'Jobs', view: listingView({ filters: { q: 'chef' } }) },
+    })
+
+    expect(plain).not.toContain('noindex')
+    expect(filtered).toContain('<meta name="robots" content="noindex, follow">')
+    // Both canonicalise to the unfiltered page, which drops the query string.
+    expect(filtered).toContain('<link rel="canonical" href="/jobs/">')
+  })
+
+  it('noindexes page 2, a variant of the listing rather than a page of its own', async () => {
+    const html = await container.renderToString(JobsPage, {
+      props: { path: '/jobs', tenant, title: 'Jobs', view: listingView({ page: 2, total: 40 }) },
+    })
+
+    expect(html).toContain('noindex')
+    expect(html).toContain('rel="prev"')
+  })
+
+  it('does not treat the section in the path as a filter, so a section has no "clear" link', async () => {
+    const section = jobListingView({
+      basePath: '/jobs/category/hospitality',
+      definitions: jobFilterDefinitions(facets),
+      facets,
+      filters: { category: 'hospitality' },
+      jobs: [],
+      lockedKeys: ['category'],
+      page: 1,
+      total: 0,
+    })
+
+    const html = await container.renderToString(JobsPage, {
+      props: { path: '/jobs/category/hospitality', tenant, title: 'Hospitality jobs', view: section },
+    })
+
+    expect(html).toContain('No jobs are listed yet.')
+    expect(html).not.toContain('Clear filters')
+    // The section's own control still shows the section, and the form posts to /jobs.
+    expect(html).toMatch(/<option[^>]*value="hospitality"[^>]*selected/)
+    expect(html).toMatch(/<form[^>]*action="\/jobs"/)
+  })
+
+  it('tells "no jobs at all" apart from "nothing matched these filters"', async () => {
+    const empty = await container.renderToString(JobsPage, {
+      props: { path: '/jobs', tenant, title: 'Jobs', view: listingView({ jobs: [], total: 0 }) },
+    })
+    const noMatch = await container.renderToString(JobsPage, {
+      props: { path: '/jobs', tenant, title: 'Jobs', view: listingView({ filters: { q: 'nothing' }, jobs: [], total: 0 }) },
+    })
+
+    expect(empty).toContain('No jobs are listed yet.')
+    expect(noMatch).toContain('No jobs match these filters.')
+    // The empty state is announced, not just drawn.
+    expect(empty).toMatch(/role="status"/)
   })
 })
 

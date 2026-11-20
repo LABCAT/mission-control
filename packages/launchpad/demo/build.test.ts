@@ -13,8 +13,11 @@ const astroBin = join(dirname(require.resolve('astro/package.json')), 'bin', 'as
 // so the temporary output lives beside the package rather than in the system temp dir.
 const outDir = mkdtempSync(join(packageRoot, '.demo-build-'))
 
-/** The viewed-jobs feature is the demo's only client JavaScript. Keep it this small. */
+/** The viewed-jobs feature is the only client JavaScript this budget covers. */
 const JS_BUDGET_GZIP = 1500
+
+/** Astro's output files for the viewed-jobs components and their shared module. */
+const VIEWED_JOBS_SCRIPT = /^(?:JobCard|RecentlyViewed|JobViewTracker)\.|^idle\./
 
 beforeAll(() => {
   execFileSync(
@@ -45,9 +48,42 @@ describe('demo site', () => {
     expect(html).not.toContain('astro-island')
   })
 
+  it('builds the job listing and its sections as plain HTML with a GET filter form', () => {
+    const listing = readFileSync(join(outDir, 'jobs', 'index.html'), 'utf8')
+    const category = readFileSync(join(outDir, 'jobs', 'category', 'hospitality', 'index.html'), 'utf8')
+    const volunteer = readFileSync(join(outDir, 'jobs', 'type', 'voluntary', 'index.html'), 'utf8')
+
+    // Filters are a GET form: the query string is the state, so no script is involved.
+    expect(listing).toMatch(/<form[^>]*action="\/jobs"[^>]*method="get"/)
+    expect(listing).toContain('name="q"')
+    expect(listing).toContain('name="category"')
+    expect(listing).toContain('name="type"')
+    expect(listing).toContain('name="location"')
+    expect(listing).toContain('name="voluntary"')
+    expect(listing).not.toContain('astro-island')
+
+    expect(category).toContain('Head Chef')
+    expect(category).not.toContain('Booking Clerk')
+    // The voluntary listing is its own section, and shows the voluntary job.
+    expect(volunteer).toContain('Water Project Volunteer')
+    expect(volunteer).not.toContain('Head Chef')
+
+    // The default listing leaves voluntary jobs out, so the archive stays commercial.
+    expect(listing).toContain('Head Chef')
+    expect(listing).not.toContain('Water Project Volunteer')
+    // Page 1 of a listing says how much it holds; a section says it in its own words.
+    expect(listing).toContain('2 jobs')
+
+    // A filtered page is a variant of a listing, so it is not indexed; the section itself is.
+    expect(listing).not.toContain('noindex')
+  })
+
   it('keeps the viewed-jobs JavaScript under 1.5 KB min+gzip', () => {
     const assets = join(outDir, '_astro')
-    const scripts = readdirSync(assets).filter((name) => name.endsWith('.js'))
+    // Measure only this feature's scripts: the demo may ship other client code later.
+    const scripts = readdirSync(assets).filter(
+      (name) => name.endsWith('.js') && VIEWED_JOBS_SCRIPT.test(name),
+    )
 
     const raw = scripts.reduce((total, name) => total + statSync(join(assets, name)).size, 0)
     const gzipped = scripts.reduce(

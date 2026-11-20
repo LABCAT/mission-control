@@ -13,6 +13,27 @@ export type FilterDefinition = {
   allowed?: readonly string[]
 }
 
+export type FilterOption = { label: string; value: string }
+
+/** One control in the filter form, described as data so a page never builds markup itself. */
+export type FilterControl =
+  | { label: string; name: string; placeholder?: string; type: 'search' | 'text' }
+  | {
+      label: string
+      name: string
+      options: readonly FilterOption[]
+      type: 'select'
+      /** The empty option that clears this filter, e.g. `All categories`. */
+      anyLabel?: string
+    }
+  | {
+      /** Sends `value` (default `1`) when ticked and nothing when not, so it needs no JavaScript. */
+      label: string
+      name: string
+      type: 'checkbox'
+      value?: string
+    }
+
 /** Trims values, drops empty ones, and drops unknown parameters and disallowed values. */
 export const parseFilters = (
   search: null | string | URLSearchParams,
