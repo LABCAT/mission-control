@@ -23,7 +23,7 @@ const fieldNamed = (name: string) =>
 
 const requestFor = (user: unknown) => ({ req: { user } }) as never
 
-describe('locations collection', () => {
+describe('locations collection @S-120', () => {
   it('is registered by the plugin without touching the host collections', async () => {
     const config = await payloadJobs()(baseConfig)
 
@@ -36,6 +36,7 @@ describe('locations collection', () => {
       'plans',
       'add-ons',
       'jobs',
+      'coupons',
     ])
     expect(Locations.slug).toBe('locations')
     expect(Locations.versions).toBe(false)

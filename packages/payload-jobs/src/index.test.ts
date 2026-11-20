@@ -12,12 +12,12 @@ const baseConfig = {
 } as unknown as Config
 
 describe('payloadJobs', () => {
-  it('keeps the existing config and custom keys when it registers itself', async () => {
+  it('keeps the existing config collections and custom keys when it registers itself', async () => {
     const result = await payloadJobs()(baseConfig)
 
     // mission-control: the users collection is extended (legacy password support PJ-34,
     // organisation relation PJ-18), and locations (PJ-17), organisations (PJ-18), alerts
-    // (PJ-26), the taxonomies (PJ-16) and plans (PJ-21) are added.
+    // (PJ-26), the taxonomies (PJ-16), plans (PJ-21) and coupons (PJ-22) are added.
     expect(result.collections?.map((collection) => collection.slug)).toEqual([
       'users',
       'locations',
@@ -27,6 +27,7 @@ describe('payloadJobs', () => {
       'plans',
       'add-ons',
       'jobs',
+      'coupons',
     ])
     expect(result.collections?.[0]?.fields.map((f) => ('name' in f ? f.name : null))).toContain(
       'legacyPasswordHash',
@@ -65,6 +66,14 @@ describe('payloadJobs', () => {
     })
   })
 
+  it('adds coupons only when the feature is on', async () => {
+    const on = await payloadJobs()(baseConfig)
+    const off = await payloadJobs({ features: { coupons: false } })(baseConfig)
+
+    expect(on.collections?.map((collection) => collection.slug)).toContain('coupons')
+    expect(off.collections?.map((collection) => collection.slug)).not.toContain('coupons')
+  })
+
   it('adds jobs with placements, and the daily task that expires them, keeping host tasks', async () => {
     const taskSlugs = (config: Config) => (config.jobs?.tasks ?? []).map((task) => task.slug)
     const withHostTask = {
@@ -95,6 +104,7 @@ const deny = () => false
 const OVERRIDES = {
   addOns: { slug: 'extras' },
   alertSubscriptions: { slug: 'subscribers' },
+  coupons: { slug: 'vouchers' },
   jobCategories: { slug: 'categories' },
   jobs: { slug: 'vacancies' },
   jobTypes: { slug: 'employment-types' },
@@ -137,6 +147,7 @@ describe('collection slug overrides', () => {
       'packages',
       'extras',
       'vacancies',
+      'vouchers',
     ])
 
     const targets = new Set(
@@ -166,6 +177,7 @@ describe('collection slug overrides', () => {
       'packages',
       'subscribers',
       'vacancies',
+      'vouchers',
     ])
   })
 

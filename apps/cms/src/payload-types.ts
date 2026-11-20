@@ -62,17 +62,17 @@ export type SupportedTimezones =
   | 'Pacific/Fiji';
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "LexicalNodes_A38EF438".
+ * via the `definition` "LexicalNodes_361F5CE2".
  */
-export type LexicalNodes_A38EF438 =
+export type LexicalNodes_361F5CE2 =
   | SerializedTextNode
   | SerializedTabNode
   | SerializedLineBreakNode
-  | SerializedParagraphNode<LexicalNodes_A38EF438>
+  | SerializedParagraphNode<LexicalNodes_361F5CE2>
   | SerializedHorizontalRuleNode
   | SerializedUploadNode<'media'>
   | SerializedUploadNode<'documents'>
-  | SerializedQuoteNode<LexicalNodes_A38EF438>
+  | SerializedQuoteNode<LexicalNodes_361F5CE2>
   | SerializedRelationshipNode<
       | 'users'
       | 'folders'
@@ -88,17 +88,18 @@ export type LexicalNodes_A38EF438 =
       | 'plans'
       | 'add-ons'
       | 'jobs'
+      | 'coupons'
       | 'payload-kv'
       | 'payload-jobs'
       | 'payload-locked-documents'
       | 'payload-preferences'
       | 'payload-migrations'
     >
-  | SerializedAutoLinkNode<LexicalNodes_A38EF438, LexicalLinkFields>
-  | SerializedLinkNode<LexicalNodes_A38EF438, LexicalLinkFields>
-  | SerializedListNode<LexicalNodes_A38EF438>
-  | SerializedListItemNode<LexicalNodes_A38EF438>
-  | SerializedHeadingNode<LexicalNodes_A38EF438>;
+  | SerializedAutoLinkNode<LexicalNodes_361F5CE2, LexicalLinkFields>
+  | SerializedLinkNode<LexicalNodes_361F5CE2, LexicalLinkFields>
+  | SerializedListNode<LexicalNodes_361F5CE2>
+  | SerializedListItemNode<LexicalNodes_361F5CE2>
+  | SerializedHeadingNode<LexicalNodes_361F5CE2>;
 /**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "LexicalNodes_3DE324E4".
@@ -116,7 +117,15 @@ export interface Config {
   auth: {
     users: UserAuthOperations;
   };
-  blocks: {};
+  blocks: {
+    hero: HeroBlock;
+    'feature-boxes': FeatureBoxesBlock;
+    'rich-text': RichTextBlock;
+    'card-grid': CardGridBlock;
+    cta: CtaBlock;
+    faq: FaqBlock;
+    banner: BannerBlock;
+  };
   collections: {
     users: User;
     media: Media;
@@ -134,6 +143,7 @@ export interface Config {
     plans: Plan;
     'add-ons': AddOn;
     jobs: Job;
+    coupons: Coupon;
     'payload-kv': PayloadKv;
     'payload-jobs': PayloadJob;
     'payload-locked-documents': PayloadLockedDocument;
@@ -159,6 +169,7 @@ export interface Config {
     plans: PlansSelect<false> | PlansSelect<true>;
     'add-ons': AddOnsSelect<false> | AddOnsSelect<true>;
     jobs: JobsSelect<false> | JobsSelect<true>;
+    coupons: CouponsSelect<false> | CouponsSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-jobs': PayloadJobsSelect<false> | PayloadJobsSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
@@ -216,6 +227,257 @@ export interface UserAuthOperations {
     email: string;
     password: string;
   };
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "HeroBlock".
+ */
+export interface HeroBlock {
+  eyebrow?: string | null;
+  heading: string;
+  body?: string | null;
+  image?: (number | null) | Media;
+  links?:
+    | {
+        label: string;
+        href: string;
+        variant?: ('primary' | 'secondary') | null;
+        id?: string | null;
+      }[]
+    | null;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'hero';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "media".
+ */
+export interface Media {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  alt: string;
+  _h_folders?: (number | null) | Folder;
+  _h_tags?: (number | Tag)[] | null;
+  legacyId?: number | null;
+  prefix?: string | null;
+  _objectKey?: string | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+  url?: string | null;
+  thumbnailURL?: string | null;
+  filename?: string | null;
+  mimeType?: string | null;
+  filesize?: number | null;
+  width?: number | null;
+  height?: number | null;
+  original?: {
+    filename?: string | null;
+    url?: string | null;
+    mimeType?: string | null;
+    filesize?: number | null;
+    width?: number | null;
+    height?: number | null;
+    prefix?: string | null;
+    _objectKey?: string | null;
+  };
+  focalX?: number | null;
+  focalY?: number | null;
+  variants?: {
+    'w320-avif'?: {
+      url?: string | null;
+      width?: number | null;
+      height?: number | null;
+      mimeType?: string | null;
+      filesize?: number | null;
+      filename?: string | null;
+      prefix?: string | null;
+      _objectKey?: string | null;
+    };
+    'w320-webp'?: {
+      url?: string | null;
+      width?: number | null;
+      height?: number | null;
+      mimeType?: string | null;
+      filesize?: number | null;
+      filename?: string | null;
+      prefix?: string | null;
+      _objectKey?: string | null;
+    };
+    'w640-avif'?: {
+      url?: string | null;
+      width?: number | null;
+      height?: number | null;
+      mimeType?: string | null;
+      filesize?: number | null;
+      filename?: string | null;
+      prefix?: string | null;
+      _objectKey?: string | null;
+    };
+    'w640-webp'?: {
+      url?: string | null;
+      width?: number | null;
+      height?: number | null;
+      mimeType?: string | null;
+      filesize?: number | null;
+      filename?: string | null;
+      prefix?: string | null;
+      _objectKey?: string | null;
+    };
+    'w960-avif'?: {
+      url?: string | null;
+      width?: number | null;
+      height?: number | null;
+      mimeType?: string | null;
+      filesize?: number | null;
+      filename?: string | null;
+      prefix?: string | null;
+      _objectKey?: string | null;
+    };
+    'w960-webp'?: {
+      url?: string | null;
+      width?: number | null;
+      height?: number | null;
+      mimeType?: string | null;
+      filesize?: number | null;
+      filename?: string | null;
+      prefix?: string | null;
+      _objectKey?: string | null;
+    };
+    'w1280-avif'?: {
+      url?: string | null;
+      width?: number | null;
+      height?: number | null;
+      mimeType?: string | null;
+      filesize?: number | null;
+      filename?: string | null;
+      prefix?: string | null;
+      _objectKey?: string | null;
+    };
+    'w1280-webp'?: {
+      url?: string | null;
+      width?: number | null;
+      height?: number | null;
+      mimeType?: string | null;
+      filesize?: number | null;
+      filename?: string | null;
+      prefix?: string | null;
+      _objectKey?: string | null;
+    };
+  };
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "tenants".
+ */
+export interface Tenant {
+  id: number;
+  name: string;
+  slug: string;
+  domains?:
+    | {
+        domain: string;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * Aggregate tenants can read published content from every tenant.
+   */
+  isAggregate?: boolean | null;
+  branding?: {
+    logo?: (number | null) | Media;
+    colorPrimary?: string | null;
+    colorAccent?: string | null;
+    colorHover?: string | null;
+  };
+  /**
+   * ISO 4217 code for prices and orders on this tenant.
+   */
+  currency?: string | null;
+  /**
+   * 0 for VUV, 2 for NZD, AUD, USD and most other currencies.
+   */
+  currencyMinorUnits?: number | null;
+  /**
+   * IANA timezone used for job expiry and scheduled jobs.
+   */
+  timezone?: string | null;
+  /**
+   * One or more locales for this tenant. Add more when the site is translated.
+   */
+  locales?:
+    | {
+        locale: string;
+        id?: string | null;
+      }[]
+    | null;
+  defaultLocale?: string | null;
+  /**
+   * Shown on prices and invoices, for example VAT.
+   */
+  taxLabel?: string | null;
+  /**
+   * Tax on plans and add-ons. Off until turned on; the label above is shown on prices and invoices.
+   */
+  tax?: {
+    enabled?: boolean | null;
+    /**
+     * On: prices include tax. Off: tax is added on top of prices.
+     */
+    pricesIncludeTax?: boolean | null;
+    rounding: 'invoice' | 'line';
+    rates?:
+      | {
+          key: string;
+          name: string;
+          /**
+           * Basis points: 1500 is 15%.
+           */
+          rate: number;
+          /**
+           * Xero tax type, e.g. OUTPUT.
+           */
+          xeroTaxType?: string | null;
+          id?: string | null;
+        }[]
+      | null;
+    /**
+     * The rate for plans and add-ons that name none.
+     */
+    defaultRateKey?: string | null;
+    /**
+     * Xero tax type for tax-exempt lines, e.g. EXEMPTOUTPUT.
+     */
+    exemptXeroTaxType?: string | null;
+  };
+  /**
+   * Whether new jobs need an admin’s approval before they go live.
+   */
+  jobModeration?: ('legacy' | 'review' | 'auto') | null;
+  emailFromName?: string | null;
+  emailFromAddress?: string | null;
+  /**
+   * Receives contact and moderation notifications.
+   */
+  adminEmail?: string | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -349,122 +611,19 @@ export interface Organisation {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "tenants".
+ * via the `definition` "locations".
  */
-export interface Tenant {
-  id: number;
-  name: string;
-  slug: string;
-  domains?:
-    | {
-        domain: string;
-        id?: string | null;
-      }[]
-    | null;
-  /**
-   * Aggregate tenants can read published content from every tenant.
-   */
-  isAggregate?: boolean | null;
-  branding?: {
-    logo?: (number | null) | Media;
-    colorPrimary?: string | null;
-    colorAccent?: string | null;
-    colorHover?: string | null;
-  };
-  /**
-   * ISO 4217 code for prices and orders on this tenant.
-   */
-  currency?: string | null;
-  /**
-   * 0 for VUV, 2 for NZD, AUD, USD and most other currencies.
-   */
-  currencyMinorUnits?: number | null;
-  /**
-   * IANA timezone used for job expiry and scheduled jobs.
-   */
-  timezone?: string | null;
-  /**
-   * One or more locales for this tenant. Add more when the site is translated.
-   */
-  locales?:
-    | {
-        locale: string;
-        id?: string | null;
-      }[]
-    | null;
-  defaultLocale?: string | null;
-  /**
-   * Shown on prices and invoices, for example VAT.
-   */
-  taxLabel?: string | null;
-  /**
-   * Tax on plans and add-ons. Off until turned on; the label above is shown on prices and invoices.
-   */
-  tax?: {
-    enabled?: boolean | null;
-    /**
-     * On: prices include tax. Off: tax is added on top of prices.
-     */
-    pricesIncludeTax?: boolean | null;
-    rounding: 'invoice' | 'line';
-    rates?:
-      | {
-          key: string;
-          name: string;
-          /**
-           * Basis points: 1500 is 15%.
-           */
-          rate: number;
-          /**
-           * Xero tax type, e.g. OUTPUT.
-           */
-          xeroTaxType?: string | null;
-          id?: string | null;
-        }[]
-      | null;
-    /**
-     * The rate for plans and add-ons that name none.
-     */
-    defaultRateKey?: string | null;
-    /**
-     * Xero tax type for tax-exempt lines, e.g. EXEMPTOUTPUT.
-     */
-    exemptXeroTaxType?: string | null;
-  };
-  /**
-   * Whether new jobs need an admin’s approval before they go live.
-   */
-  jobModeration?: ('legacy' | 'review' | 'auto') | null;
-  emailFromName?: string | null;
-  emailFromAddress?: string | null;
-  /**
-   * Receives contact and moderation notifications.
-   */
-  adminEmail?: string | null;
-  createdBy?: {
-    relationTo: 'users';
-    value: number | User;
-  } | null;
-  updatedBy?: {
-    relationTo: 'users';
-    value: number | User;
-  } | null;
-  updatedAt: string;
-  createdAt: string;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "media".
- */
-export interface Media {
+export interface Location {
   id: number;
   tenant?: (number | null) | Tenant;
-  alt: string;
-  _h_folders?: (number | null) | Folder;
-  _h_tags?: (number | Tag)[] | null;
+  name: string;
+  slug: string;
+  kind: 'region' | 'island' | 'town';
+  parent?: (number | null) | Location;
+  /**
+   * WordPress id, so the importer can match an existing location.
+   */
   legacyId?: number | null;
-  prefix?: string | null;
-  _objectKey?: string | null;
   createdBy?: {
     relationTo: 'users';
     value: number | User;
@@ -475,107 +634,6 @@ export interface Media {
   } | null;
   updatedAt: string;
   createdAt: string;
-  url?: string | null;
-  thumbnailURL?: string | null;
-  filename?: string | null;
-  mimeType?: string | null;
-  filesize?: number | null;
-  width?: number | null;
-  height?: number | null;
-  original?: {
-    filename?: string | null;
-    url?: string | null;
-    mimeType?: string | null;
-    filesize?: number | null;
-    width?: number | null;
-    height?: number | null;
-    prefix?: string | null;
-    _objectKey?: string | null;
-  };
-  focalX?: number | null;
-  focalY?: number | null;
-  variants?: {
-    'w320-avif'?: {
-      url?: string | null;
-      width?: number | null;
-      height?: number | null;
-      mimeType?: string | null;
-      filesize?: number | null;
-      filename?: string | null;
-      prefix?: string | null;
-      _objectKey?: string | null;
-    };
-    'w320-webp'?: {
-      url?: string | null;
-      width?: number | null;
-      height?: number | null;
-      mimeType?: string | null;
-      filesize?: number | null;
-      filename?: string | null;
-      prefix?: string | null;
-      _objectKey?: string | null;
-    };
-    'w640-avif'?: {
-      url?: string | null;
-      width?: number | null;
-      height?: number | null;
-      mimeType?: string | null;
-      filesize?: number | null;
-      filename?: string | null;
-      prefix?: string | null;
-      _objectKey?: string | null;
-    };
-    'w640-webp'?: {
-      url?: string | null;
-      width?: number | null;
-      height?: number | null;
-      mimeType?: string | null;
-      filesize?: number | null;
-      filename?: string | null;
-      prefix?: string | null;
-      _objectKey?: string | null;
-    };
-    'w960-avif'?: {
-      url?: string | null;
-      width?: number | null;
-      height?: number | null;
-      mimeType?: string | null;
-      filesize?: number | null;
-      filename?: string | null;
-      prefix?: string | null;
-      _objectKey?: string | null;
-    };
-    'w960-webp'?: {
-      url?: string | null;
-      width?: number | null;
-      height?: number | null;
-      mimeType?: string | null;
-      filesize?: number | null;
-      filename?: string | null;
-      prefix?: string | null;
-      _objectKey?: string | null;
-    };
-    'w1280-avif'?: {
-      url?: string | null;
-      width?: number | null;
-      height?: number | null;
-      mimeType?: string | null;
-      filesize?: number | null;
-      filename?: string | null;
-      prefix?: string | null;
-      _objectKey?: string | null;
-    };
-    'w1280-webp'?: {
-      url?: string | null;
-      width?: number | null;
-      height?: number | null;
-      mimeType?: string | null;
-      filesize?: number | null;
-      filename?: string | null;
-      prefix?: string | null;
-      _objectKey?: string | null;
-    };
-  };
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -618,34 +676,131 @@ export interface Tag {
   } | null;
   updatedAt: string;
   createdAt: string;
+  _status?: ('draft' | 'published') | null;
   _h_slugPath?: string | null;
   _h_titlePath?: string | null;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "locations".
+ * via the `definition` "FeatureBoxesBlock".
  */
-export interface Location {
-  id: number;
-  tenant?: (number | null) | Tenant;
-  name: string;
-  slug: string;
-  kind: 'region' | 'island' | 'town';
-  parent?: (number | null) | Location;
+export interface FeatureBoxesBlock {
+  heading?: string | null;
+  intro?: string | null;
+  items: {
+    /**
+     * A short glyph or emoji shown above the title.
+     */
+    icon?: string | null;
+    title: string;
+    body?: string | null;
+    link: {
+      label: string;
+      href: string;
+      variant?: ('primary' | 'secondary') | null;
+      id?: string | null;
+    };
+    id?: string | null;
+  }[];
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'feature-boxes';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "RichTextBlock".
+ */
+export interface RichTextBlock {
+  heading?: string | null;
+  content: LexicalRichText<LexicalNodes_361F5CE2>;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'rich-text';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "CardGridBlock".
+ */
+export interface CardGridBlock {
+  heading?: string | null;
+  intro?: string | null;
+  columns?: ('2' | '3' | '4') | null;
+  cards: {
+    image?: (number | null) | Media;
+    title: string;
+    body?: string | null;
+    link: {
+      label: string;
+      href: string;
+      variant?: ('primary' | 'secondary') | null;
+      id?: string | null;
+    };
+    id?: string | null;
+  }[];
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'card-grid';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "CtaBlock".
+ */
+export interface CtaBlock {
+  heading: string;
+  body?: string | null;
+  links?:
+    | {
+        label: string;
+        href: string;
+        variant?: ('primary' | 'secondary') | null;
+        id?: string | null;
+      }[]
+    | null;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'cta';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "FaqBlock".
+ */
+export interface FaqBlock {
+  heading?: string | null;
+  items: {
+    question: string;
+    answer: LexicalRichText<LexicalNodes_361F5CE2>;
+    id?: string | null;
+  }[];
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'faq';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "BannerBlock".
+ */
+export interface BannerBlock {
+  desktopImage: number | Media;
   /**
-   * WordPress id, so the importer can match an existing location.
+   * Optional narrower image; the desktop image is used when empty.
    */
-  legacyId?: number | null;
-  createdBy?: {
-    relationTo: 'users';
-    value: number | User;
-  } | null;
-  updatedBy?: {
-    relationTo: 'users';
-    value: number | User;
-  } | null;
-  updatedAt: string;
-  createdAt: string;
+  mobileImage?: (number | null) | Media;
+  /**
+   * Overrides the image alt text.
+   */
+  alt?: string | null;
+  /**
+   * Optional link target for the whole banner.
+   */
+  href?: string | null;
+  newTab?: boolean | null;
+  /**
+   * Load eagerly, for the header banner above the fold.
+   */
+  priority?: boolean | null;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'banner';
 }
 /**
  * Keys public sites use to read their own tenant. The raw key is shown once.
@@ -1046,7 +1201,7 @@ export interface Job {
   publishedAt?: string | null;
   expiresAt?: string | null;
   organisation: number | Organisation;
-  description?: LexicalRichText<LexicalNodes_A38EF438> | null;
+  description?: LexicalRichText<LexicalNodes_361F5CE2> | null;
   /**
    * An optional PDF of the full job description.
    */
@@ -1085,6 +1240,49 @@ export interface Job {
       }[]
     | null;
   views?: number | null;
+  /**
+   * WordPress post id, for the import.
+   */
+  legacyId?: number | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "coupons".
+ */
+export interface Coupon {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  /**
+   * Saved in uppercase. Unique within the tenant, for example LINKPS.
+   */
+  code: string;
+  discountType: 'flat' | 'percent';
+  /**
+   * Flat: minor units of the tenant currency, so 500 is Vt 500. Percentage: a whole percentage, so 10 is 10%.
+   */
+  amount: number;
+  /**
+   * An inactive coupon is kept but cannot be applied.
+   */
+  active?: boolean | null;
+  /**
+   * How many orders have used the coupon. Only order processing changes it; other writes keep the stored value.
+   */
+  useCount: number;
+  /**
+   * Leave empty for unlimited uses.
+   */
+  maxUses?: number | null;
   /**
    * WordPress post id, for the import.
    */
@@ -1297,6 +1495,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'jobs';
         value: number | Job;
+      } | null)
+    | ({
+        relationTo: 'coupons';
+        value: number | Coupon;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -1568,6 +1770,7 @@ export interface TagsSelect<T extends boolean = true> {
   updatedBy?: T;
   updatedAt?: T;
   createdAt?: T;
+  _status?: T;
   _h_slugPath?: T;
   _h_titlePath?: T;
 }
@@ -1908,6 +2111,24 @@ export interface JobsSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "coupons_select".
+ */
+export interface CouponsSelect<T extends boolean = true> {
+  tenant?: T;
+  code?: T;
+  discountType?: T;
+  amount?: T;
+  active?: T;
+  useCount?: T;
+  maxUses?: T;
+  legacyId?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv_select".
  */
 export interface PayloadKvSelect<T extends boolean = true> {
@@ -2105,7 +2326,8 @@ export interface CollectionQueryWidget {
       | 'salary-bands'
       | 'plans'
       | 'add-ons'
-      | 'jobs';
+      | 'jobs'
+      | 'coupons';
     where?:
       | {
           [k: string]: unknown;
@@ -2145,6 +2367,7 @@ export interface ActivityWidget {
           | 'plans'
           | 'add-ons'
           | 'jobs'
+          | 'coupons'
         )[]
       | null;
   };

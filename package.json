@@ -12,10 +12,12 @@
     "wp-import": "pnpm --filter cms wp-import",
     "typecheck": "pnpm -r --if-present typecheck",
     "lint": "oxlint packages tools apps/vwok",
-    "test": "vitest run"
+    "test": "vitest run",
+    "features:report": "node scripts/features/report.mjs"
   },
   "devDependencies": {
     "oxlint": "1.91.0",
-    "vitest": "5.1.0"
+    "vitest": "5.1.0",
+    "yaml": "^2.9.1"
   }
 }

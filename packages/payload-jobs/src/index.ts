@@ -9,6 +9,7 @@ import {
 } from './alert-subscriptions'
 import { locationsCollection, locationsTenantSlugIndex } from './collections/locations'
 import { organisationsCollection, withOrganisationField } from './collections/organisations'
+import { couponCollection, removeTenantCouponsFor, removeTenantCoupons } from './coupons'
 import { withLegacyPasswords } from './legacy-password'
 import { addOnCollection } from './add-ons'
 import { jobsCollection } from './collections/jobs'
@@ -28,6 +29,7 @@ export * from './account-auth'
 export * from './alert-subscriptions'
 export * from './collections/locations'
 export * from './collections/organisations'
+export * from './coupons'
 export * from './email'
 export * from './legacy-password'
 export * from './money'
@@ -68,6 +70,7 @@ export const payloadJobsTenantCollections = (
   slugs.plans,
   slugs.alertSubscriptions,
   slugs.jobs,
+  slugs.coupons,
 ]
 
 /** `jobsTenantCollections` alias, named for the multi-tenant plugin option it fills. */
@@ -84,7 +87,7 @@ export type PayloadJobsFeatures = {
   alerts?: boolean
   /** Organisation job credits. Added by a later task. Defaults to true. */
   credits?: boolean
-  /** Coupons. Added by a later task. Defaults to true. */
+  /** Coupon codes and their discounts. Defaults to true. */
   coupons?: boolean
 }
 
@@ -266,14 +269,20 @@ export const payloadJobs =
               hooks: {
                 ...collection.hooks,
                 // Deleting a tenant must take its subscribers with it, not detach them.
-                beforeDelete: features.alerts
-                  ? [
-                      ...(collection.hooks?.beforeDelete ?? []),
-                      slugs.alertSubscriptions === ALERT_SUBSCRIPTIONS_SLUG
-                        ? removeTenantAlertSubscriptions
-                        : removeTenantAlertSubscriptionsFor(slugs.alertSubscriptions),
-                    ]
-                  : collection.hooks?.beforeDelete,
+                // Coupons are removed too: the tenant foreign key would otherwise null them.
+                beforeDelete: [
+                  ...(collection.hooks?.beforeDelete ?? []),
+                  ...(features.alerts
+                    ? [
+                        slugs.alertSubscriptions === ALERT_SUBSCRIPTIONS_SLUG
+                          ? removeTenantAlertSubscriptions
+                          : removeTenantAlertSubscriptionsFor(slugs.alertSubscriptions),
+                      ]
+                    : []),
+                  ...(features.coupons
+                    ? [slugs.coupons === 'coupons' ? removeTenantCoupons : removeTenantCouponsFor(slugs.coupons)]
+                    : []),
+                ],
               },
             }
           }
@@ -336,6 +345,15 @@ export const payloadJobs =
       ...catalogOptions,
       access: collectionOptions.plans?.access,
     })
+    const coupons = features.coupons
+      ? [
+          couponCollection({
+            access: collectionOptions.coupons?.access,
+            slug: slugs.coupons,
+            tenantScoped: tenancy === 'multi',
+          }),
+        ]
+      : []
 
     // Expire job placements daily, once there is a jobs collection that has them (PJ-19).
     // Jobs go last: Payload numbers compound index names in collection order, and the
@@ -371,7 +389,7 @@ export const payloadJobs =
       ...config,
       // Plans before add-ons: Payload numbers compound index names in collection order, and
       // plans' existing `tenant_key_idx` must keep its name.
-      collections: [...(config.collections ?? []), ...taxonomies, plans, addOns, jobs],
+      collections: [...(config.collections ?? []), ...taxonomies, plans, addOns, jobs, ...coupons],
       jobs: jobsConfig,
       custom: {
         ...config.custom,

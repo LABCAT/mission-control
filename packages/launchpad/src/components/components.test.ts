@@ -31,6 +31,7 @@ const tenant: SiteTenant = {
 
 const job: JobSummary = {
   closes: '2026-12-01',
+  id: 1,
   location: 'Port Vila',
   organisation: { name: 'Santo Bakery', url: '/organisations/santo-bakery' },
   salary: { amountMinor: 150000, currency: 'VUV', minorUnits: 0, period: 'month' },
@@ -152,6 +153,22 @@ describe('JobCard', () => {
 
     expect(html).not.toContain('lp-job__facts')
     expect(html).not.toContain('Closes')
+  })
+
+  it('carries the job id and a reserved Viewed label that starts hidden', async () => {
+    const html = await container.renderToString(JobCard, { props: { job } })
+
+    expect(html).toContain('data-job-id="1"')
+    expect(html).toMatch(/<li[^>]*data-viewed-label[^>]*aria-hidden="true"[^>]*>Viewed<\/li>/)
+    expect(html).toContain('lp-job__viewed')
+  })
+
+  it('falls back to the url as the viewed-jobs id', async () => {
+    const html = await container.renderToString(JobCard, {
+      props: { job: { ...job, id: undefined } },
+    })
+
+    expect(html).toContain('data-job-id="/jobs/head-chef"')
   })
 })
 

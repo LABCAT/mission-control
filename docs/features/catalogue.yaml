@@ -1,0 +1,2009 @@
+# Features catalogue – Mission Control / Vanuatu Wok
+#
+# The acceptance criteria for the MVP. Sources: docs/migration/STATUS.md decisions
+# (later ones win, to 20 Nov 2026), docs/migration/PROPOSAL-ROLES.md and the legacy
+# parity walk in docs/migration/FEATURE-INVENTORY.md.
+#
+# Conventions
+# - id: stable story id. Tests link to it with a `@S-NNN` tag in their title.
+# - role: seeker | employer | org owner | site manager | super admin.
+# - status: planned | built. `built` means the behaviour exists in this repo.
+# - mvp: true when the story must work before launch.
+# - settings: per-tenant switches the story depends on. Where the setting exists,
+#   the name matches the job-board tenant settings; otherwise it is the planned key.
+# - manual: filled in during the staging walk-through (PJ-72); empty until then.
+#
+# CI runs `scripts/features/report.mjs`, which fails when an MVP story marked
+# `built` has no matching `@S-NNN` test.
+
+meta:
+  title: Mission Control features catalogue
+  version: 1
+  updated: 2026-11-20
+  sources:
+    - docs/migration/STATUS.md
+    - docs/migration/PROPOSAL-ROLES.md
+    - docs/migration/FEATURE-INVENTORY.md
+
+stories:
+  # ---------------------------------------------------------------------------
+  # Public site and content
+  # ---------------------------------------------------------------------------
+  - id: S-001
+    area: Public site
+    role: seeker
+    story: "A visitor lands on the home page and sees the hero, search, feature boxes, latest jobs and page content."
+    steps:
+      - "Open /"
+      - "Read the hero, use the search box, scan the feature boxes and the latest jobs."
+    expected: "Every block comes from the CMS in the order the site manager arranged, and latest jobs are featured first, then newest."
+    settings:
+      - home.blocks
+      - jobs.listingOrder
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-002
+    area: Public site
+    role: seeker
+    story: "A visitor uses the top, main and footer menus exactly as the site manager configured them."
+    steps:
+      - "Open any public page."
+      - "Open each menu and follow one link."
+    expected: "Menus render from CMS menu records, keyboard accessible, and links resolve to the configured pages or URLs."
+    settings:
+      - site.menus
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-003
+    area: Public site
+    role: site manager
+    story: "A site manager sets one site-wide header banner with desktop and mobile images and a link."
+    steps:
+      - "Add a desktop image, a mobile image, alt text and a link in site settings."
+      - "Open the public site at desktop and mobile widths."
+    expected: "The matching banner renders above the content on every page, links to the target and does not shift layout."
+    settings:
+      - site.headerBanner
+    mvp: false
+    status: planned
+    tests: []
+
+  - id: S-004
+    area: Public site
+    role: seeker
+    story: "A visitor reads the About, For Employers, Organisations, Volunteering and Terms pages."
+    steps:
+      - "Open each system page from the menu."
+    expected: "Each page renders its CMS blocks; system pages can be unpublished but not deleted."
+    settings:
+      - pages.system
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-005
+    area: Public site
+    role: seeker
+    story: "A visitor sends a message through the contact form and gets confirmation."
+    steps:
+      - "Open /contact."
+      - "Complete the form and submit."
+    expected: "The form validates, passes Turnstile, sends one email to the configured recipient and shows a success message."
+    settings:
+      - contact.enabled
+      - contact.recipient
+      - security.turnstile
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-006
+    area: Public site
+    role: seeker
+    story: "A visitor who follows a broken link gets a helpful 404 page."
+    steps:
+      - "Open a URL that does not exist."
+    expected: "The response is 404 with links to home, jobs and the organisation directory; no stack trace is shown."
+    settings: []
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-007
+    area: Public site
+    role: seeker
+    story: "A visitor sees their recently viewed jobs on the site without an account."
+    steps:
+      - "Open two job pages."
+      - "Return to a listing or the home page."
+    expected: "The last viewed jobs appear from browser storage, labelled Viewed, with no server-side tracking."
+    settings:
+      - jobs.recentlyViewed
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-008
+    area: Public site
+    role: seeker
+    story: "The public site is English only and declares its language correctly."
+    steps:
+      - "Inspect any page's html element."
+    expected: "The html lang attribute comes from the tenant language setting; no locale switcher is shown."
+    settings:
+      - defaultLocale
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-009
+    area: Public site
+    role: seeker
+    story: "A visitor using a keyboard or screen reader can use every public page."
+    steps:
+      - "Tab through the header, listings, job page and forms."
+      - "Run Lighthouse accessibility on the key pages."
+    expected: "Focus order is logical, controls have names, contrast passes and Lighthouse accessibility is 100."
+    settings: []
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-010
+    area: Public site
+    role: seeker
+    story: "Each tenant's public site shows only its own branding, logo and theme tokens."
+    steps:
+      - "Open two tenant sites with different branding."
+    expected: "Each site uses its own logo and tokens; no other tenant's content or assets appear."
+    settings:
+      - site.brand
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-011
+    area: Public site
+    role: site manager
+    story: "A site key can read only its own tenant's published content, and can never write."
+    steps:
+      - "Call the read API with tenant A's key for tenant A and tenant B content."
+      - "Attempt a write with the key."
+    expected: "Tenant A reads succeed, tenant B content and drafts are hidden, and the write is rejected."
+    settings: []
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/site-keys.test.ts
+
+  # ---------------------------------------------------------------------------
+  # Search, listings and filters
+  # ---------------------------------------------------------------------------
+  - id: S-012
+    area: Search and listings
+    role: seeker
+    story: "A visitor browses all live jobs, newest first, with featured jobs above the list."
+    steps:
+      - "Open /jobs."
+    expected: "Only live, unexpired jobs appear; the featured block comes first, then all jobs newest first."
+    settings:
+      - jobs.listingOrder
+      - jobs.featuredEnabled
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-013
+    area: Search and listings
+    role: seeker
+    story: "A visitor uses keyword search across job titles, descriptions, organisations and locations."
+    steps:
+      - "Enter a keyword in the search box and submit."
+    expected: "Results match the keyword through Postgres full-text search, with a clean results URL and empty-state copy."
+    settings:
+      - search.keyword
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-014
+    area: Search and listings
+    role: seeker
+    story: "A visitor filters jobs by location using a clean URL, including sub-locations."
+    steps:
+      - "Open /jobs/{location} for an island and for a town."
+    expected: "The location page lists jobs tagged with that location or any child location; the heading names the location."
+    settings:
+      - search.filters.location
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-015
+    area: Search and listings
+    role: seeker
+    story: "A visitor filters jobs by category using a clean URL."
+    steps:
+      - "Open /jobs/{category}."
+    expected: "The page lists live jobs in that category with the category name as the heading."
+    settings:
+      - search.filters.category
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-016
+    area: Search and listings
+    role: seeker
+    story: "A visitor opens a job type page, and volunteer jobs can be listed separately as in the old site."
+    steps:
+      - "Open /jobs/{type} for a paid type and for the volunteer type."
+    expected: "Each type page lists its live jobs; when listed separately is on, volunteer jobs stay off the main listing and search."
+    settings:
+      - search.filters.type
+      - jobs.typesListedSeparately
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-017
+    area: Search and listings
+    role: seeker
+    story: "A visitor filters jobs by salary band."
+    steps:
+      - "Choose a salary band in the filter bar."
+    expected: "Only jobs in that band remain, and the filter is reflected in the URL as a query parameter."
+    settings:
+      - search.filters.salary
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-018
+    area: Search and listings
+    role: seeker
+    story: "A visitor filters jobs by date posted."
+    steps:
+      - "Choose today, this week or this month."
+    expected: "The list keeps only jobs posted in that window and the filter survives a page reload."
+    settings:
+      - search.filters.datePosted
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-019
+    area: Search and listings
+    role: seeker
+    story: "A visitor combines keyword, location, category, type, salary and date filters."
+    steps:
+      - "Apply several filters together."
+      - "Remove one filter."
+    expected: "Filters combine with AND semantics, the active filters are visible and removable, and the URL round-trips the state."
+    settings:
+      - search.keyword
+      - search.filters.location
+      - search.filters.category
+      - search.filters.type
+      - search.filters.salary
+      - search.filters.datePosted
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-020
+    area: Search and listings
+    role: seeker
+    story: "A filter with no matches returns a useful empty page without indexing it."
+    steps:
+      - "Open a filter combination with no jobs."
+    expected: "The page returns 200 with an empty-state message, is noindex, and stays out of the sitemap."
+    settings:
+      - search.emptyPages
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-021
+    area: Search and listings
+    role: seeker
+    story: "Expired jobs never appear in listings, search, alerts or the sitemap."
+    steps:
+      - "Let a job pass its close date, then search and browse for it."
+    expected: "The job is absent from every listing and feed; its own URL still follows the expired-job story."
+    settings:
+      - jobs.showExpired
+      - jobs.expiredMode
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-022
+    area: Search and listings
+    role: seeker
+    story: "A visitor browses the organisation directory, with organisations that have live jobs first."
+    steps:
+      - "Open /organisations."
+      - "Filter by type or size."
+    expected: "Only public organisations appear, live-job organisations come first, then alphabetical, with no job count."
+    settings:
+      - organisations.pagesPublicByDefault
+      - organisations.directoryOrder
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-023
+    area: Search and listings
+    role: seeker
+    story: "A visitor opens an organisation page and sees its profile and current jobs."
+    steps:
+      - "Open /organisation/{slug}."
+    expected: "The page shows logo, cover, type, size, about, location, website, socials and that organisation's live jobs."
+    settings:
+      - organisations.pageApproval
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-024
+    area: Search and listings
+    role: seeker
+    story: "Junk query parameters and tracking parameters never create duplicate pages."
+    steps:
+      - "Open a listing with unknown parameters, unsorted parameters and utm parameters."
+    expected: "Unknown and unsorted parameters 301 to the canonical URL; tracking parameters are kept in the URL but ignored by the cache."
+    settings:
+      - seo.canonical
+    mvp: true
+    status: planned
+    tests: []
+
+  # ---------------------------------------------------------------------------
+  # Job posting (employer)
+  # ---------------------------------------------------------------------------
+  - id: S-025
+    area: Job posting
+    role: employer
+    story: "A new employer signs up to post a job and gets a user account plus an organisation."
+    steps:
+      - "Choose Post a job while signed out."
+      - "Answer employer or recruitment agency and complete registration."
+    expected: "One user and one organisation are created, the first user is the owner, and the account must verify its email before signing in."
+    settings:
+      - organisations.allowMembers
+      - security.blockDisposableEmails
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-026
+    area: Job posting
+    role: employer
+    story: "An employer completes the multi-step job form and can leave and resume a draft."
+    steps:
+      - "Start a job, fill the first step, leave the form."
+      - "Return to the draft and continue."
+    expected: "The draft is saved after the details step and every later visit resumes the same job without losing fields."
+    settings:
+      - jobs.drafts
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-027
+    area: Job posting
+    role: employer
+    story: "An employer writes a job title and a rich description."
+    steps:
+      - "Enter a title."
+      - "Write and format the description in the Lexical editor."
+    expected: "The title is required, the description saves as Lexical JSON and renders safely on the job page."
+    settings:
+      - jobs.descriptionEditor
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-028
+    area: Job posting
+    role: employer
+    story: "An employer picks a required category, and can change it after posting when the site allows."
+    steps:
+      - "Submit without a category."
+      - "Submit with a category, then edit it."
+    expected: "The form rejects a missing category; category editing follows the per-tenant required and editable settings."
+    settings:
+      - jobs.requireCategory
+      - jobs.categoryEditable
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-029
+    area: Job posting
+    role: employer
+    story: "An employer picks a job type and an optional salary band, with volunteer types defaulting to Voluntary."
+    steps:
+      - "Choose a volunteer type and a paid type."
+      - "Leave or change the salary band."
+    expected: "Job type is required, volunteer types preselect the Voluntary band, and the displayed salary text is kept."
+    settings:
+      - jobs.defaultSalaryBandByType
+      - jobs.displayedSalary
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-030
+    area: Job posting
+    role: employer
+    story: "An employer tags a job with one or more locations using the chip picker."
+    steps:
+      - "Type ahead and select an island, a town and Remote anywhere."
+      - "Add optional location details."
+    expected: "The job stores every chosen location, appears on each matching location page, and keeps the free-text details."
+    settings:
+      - jobs.locations.mode
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-031
+    area: Job posting
+    role: employer
+    story: "An employer chooses a close date up to the plan's maximum."
+    steps:
+      - "Open the close-date picker."
+      - "Try a date beyond the maximum."
+    expected: "The default is the maximum allowed, dates beyond it are rejected, and the job page and JSON-LD show the close date."
+    settings:
+      - jobs.closeDateMaxDays
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-032
+    area: Job posting
+    role: employer
+    story: "An employer chooses whether to accept online applications and which address receives them."
+    steps:
+      - "Turn Apply online off and on."
+      - "Set the application recipient address."
+    expected: "With online apply off the job shows how to apply instead of the form; the recipient defaults to the organisation address."
+    settings:
+      - jobs.applyOnline
+      - jobs.applicationsRecipient
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-033
+    area: Job posting
+    role: site manager
+    story: "A job follows the allowed status moves and only staff or the system can publish, expire or relist it."
+    steps:
+      - "Move a job through draft, pending, published, expired and cancelled."
+      - "Try an illegal move as an employer."
+    expected: "Only the documented transitions succeed; employers can only manage their own drafts, pending jobs and cancellations."
+    settings:
+      - jobs.moderation
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/job-status.test.ts
+
+  - id: S-034
+    area: Job posting
+    role: employer
+    story: "An employer uploads a PDF job description and it appears on the job page."
+    steps:
+      - "Attach a PDF on a new job."
+      - "Open the published job."
+    expected: "The PDF is stored in R2, linked from the job page and only editable while the job is being created."
+    settings:
+      - jobs.descriptionPdf
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-035
+    area: Job posting
+    role: employer
+    story: "An employer previews the job before choosing a plan."
+    steps:
+      - "Complete the job details and choose Preview."
+    expected: "The preview renders the public job layout exactly, with no live URL and no indexing."
+    settings: []
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-036
+    area: Job posting
+    role: employer
+    story: "An employer chooses a plan that applies to the job's category and type and sees the price."
+    steps:
+      - "Open the plan step for a paid job and for a volunteer job."
+    expected: "Only eligible plans are offered, the price comes from the plan record, and included add-ons are shown as included."
+    settings:
+      - plans.enabled
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-037
+    area: Job posting
+    role: employer
+    story: "An employer applies a coupon and the quoted total is reduced correctly."
+    steps:
+      - "Enter a valid coupon on the plan step."
+      - "Enter an expired or invalid coupon."
+    expected: "A valid coupon reduces the total by its rule; an invalid coupon explains why and leaves the total unchanged."
+    settings:
+      - plans.coupons
+    mvp: true
+    status: planned
+    tests:
+      - packages/payload-jobs/src/coupons.test.ts
+
+  - id: S-038
+    area: Job posting
+    role: employer
+    story: "An employer pays for a single listing with a job credit."
+    steps:
+      - "Choose Use credits when the organisation has a credit."
+    expected: "One credit is spent, the total drops to any add-on balance, and the ledger records the spend."
+    settings:
+      - billing.memberCanUseCredits
+      - billing.creditsExpire
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-039
+    area: Job posting
+    role: employer
+    story: "Submitting a job creates one order and sends one job-submitted email with the invoice details."
+    steps:
+      - "Submit a paid job."
+      - "Check the organisation's orders and the employer inbox."
+    expected: "Exactly one order is created for the organisation, the job waits for payment or approval, and one email covers both the job and the order."
+    settings:
+      - billing.invoiceOnly
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-040
+    area: Job posting
+    role: org owner
+    story: "A trusted organisation's job goes live immediately and is invoiced afterwards."
+    steps:
+      - "Post a job from a trusted organisation."
+    expected: "The job publishes at submit time, the order is unpaid, and the invoice is issued without blocking the listing."
+    settings:
+      - organisations.trustedSwitch
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-041
+    area: Job posting
+    role: site manager
+    story: "When moderation is on, a submitted job waits for a site manager before it goes live."
+    steps:
+      - "Submit a job from an untrusted organisation with moderation on."
+      - "Approve it as a site manager."
+    expected: "The job is pending until approved, the employer sees a waiting message, and approval publishes it."
+    settings:
+      - jobs.moderation
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-042
+    area: Job posting
+    role: employer
+    story: "An employer edits a live job and the edit goes live without re-approval."
+    steps:
+      - "Open a live job in the dashboard, change the title, save."
+    expected: "The live job updates immediately when editing needs approval is off, and the public page reflects the change."
+    settings:
+      - jobs.editingNeedsApproval
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-043
+    area: Job posting
+    role: employer
+    story: "An employer relists an expired job, paying the relist price and choosing a new close date."
+    steps:
+      - "Choose Relist on an expired job."
+      - "Complete the plan and close date."
+    expected: "A new order is created at the relist price, the job goes through payment or approval again, and its post date resets."
+    settings:
+      - jobs.relist
+      - jobs.closeDateMaxDays
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-044
+    area: Job posting
+    role: employer
+    story: "An employer ends a job early or cancels a draft."
+    steps:
+      - "End a live job early."
+      - "Cancel a draft."
+    expected: "The job stops appearing publicly, the history records why, and a cancelled-before-publish job returns its credit."
+    settings:
+      - jobs.allowEndEarly
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-045
+    area: Job posting
+    role: employer
+    story: "An agency posts a job for a client, as confidential or for an existing organisation."
+    steps:
+      - "Pick a client from the agency's Clients list, or Confidential."
+      - "Submit the job."
+    expected: "The agency owns and pays for the job; the job page shows the client name or Confidential plus Posted by the agency."
+    settings:
+      - organisations.agencyClients
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-046
+    area: Job posting
+    role: site manager
+    story: "A site manager posts or edits a job for any organisation, and the organisation is invoiced."
+    steps:
+      - "Create a job in the admin and pick an organisation."
+    expected: "The job belongs to that organisation, appears in its dashboard, and the invoice goes to its billing details."
+    settings:
+      - organisations.allowAdminPosting
+    mvp: true
+    status: planned
+    tests: []
+
+  # ---------------------------------------------------------------------------
+  # Job page and applications
+  # ---------------------------------------------------------------------------
+  - id: S-047
+    area: Job page
+    role: seeker
+    story: "A visitor reads a complete job page at a flat /jobs/{slug} URL."
+    steps:
+      - "Open a live job."
+    expected: "The page shows title, organisation, locations, type, salary, description, PDF, how to apply, close date and print styles."
+    settings: []
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-048
+    area: Job page
+    role: seeker
+    story: "Search engines read valid JobPosting structured data for every live job."
+    steps:
+      - "Fetch a live job page and inspect its JSON-LD."
+    expected: "JobPosting is valid, includes title, organisation, location, salary and validThrough, and is absent on expired jobs."
+    settings:
+      - seo.structuredData
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-049
+    area: Applications
+    role: seeker
+    story: "A visitor applies online with a CV, a message and optional cover letter."
+    steps:
+      - "Open the apply form on a live job."
+      - "Attach a PDF CV, write a message and submit."
+    expected: "The form validates, passes Turnstile, accepts PDF/DOC/DOCX up to the limit, and confirms the application."
+    settings:
+      - jobs.applyOnline
+      - jobs.applyCVRequired
+      - security.turnstile
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-050
+    area: Applications
+    role: seeker
+    story: "A guest can apply without an account when the site allows it."
+    steps:
+      - "Apply while signed out with account required off."
+    expected: "The application is accepted and the applicant receives a copy; with account required on they are asked to sign in first."
+    settings:
+      - jobs.accountRequired
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-051
+    area: Applications
+    role: seeker
+    story: "Applying sends the employer, the applicant and optionally the site admin an email with the CV."
+    steps:
+      - "Submit an application."
+      - "Check the employer, applicant and admin inboxes."
+    expected: "The employer gets the application at the job's recipient, the applicant gets a copy, and the admin copy follows the tenant setting."
+    settings:
+      - applications.adminCopy
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-052
+    area: Applications
+    role: employer
+    story: "An employer views applications for its jobs and exports them to CSV."
+    steps:
+      - "Open Applications in the account dashboard."
+      - "Filter by job and export."
+    expected: "Only applications for that organisation's jobs are visible, and the CSV matches the filtered list."
+    settings:
+      - applications.dashboard
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-053
+    area: Applications
+    role: seeker
+    story: "A seeker saves a job and returns to the saved list."
+    steps:
+      - "Save a live job."
+      - "Open Saved jobs in the account."
+    expected: "The job is saved per seeker, the button reflects the state, and the list survives a new session."
+    settings:
+      - jobs.savedJobs
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-054
+    area: Job page
+    role: seeker
+    story: "An expired job URL returns 200 with a clear expired notice and similar jobs."
+    steps:
+      - "Open a job past its close date."
+    expected: "The page says no longer accepting applications, shows similar jobs, is noindex and has no JobPosting schema."
+    settings:
+      - jobs.expiredMode
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-055
+    area: Job page
+    role: seeker
+    story: "A job that expired more than 12 months ago returns 410 Gone."
+    steps:
+      - "Open a job whose close date is over 12 months ago."
+    expected: "The response is 410, with no listing content and no redirect."
+    settings:
+      - jobs.goneAfterMonths
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-056
+    area: Job page
+    role: seeker
+    story: "A job page shows how many times it has been viewed when the tenant publishes counts."
+    steps:
+      - "Open a job twice."
+    expected: "The view beacon records total and daily counts, and the page shows them in reserved space when enabled."
+    settings:
+      - jobs.publicViewCounter
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-057
+    area: Job page
+    role: seeker
+    story: "A visitor can share a job with a generated 1200x630 image."
+    steps:
+      - "Copy the job link into a social preview or open the OG image URL."
+    expected: "The share image is generated with the organisation logo, cached in R2, and used for the OG and Twitter tags."
+    settings:
+      - seo.shareImages
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-058
+    area: Job page
+    role: seeker
+    story: "A visitor prints a job from the browser."
+    steps:
+      - "Open a job and print it."
+    expected: "The print stylesheet removes navigation, filters and the apply form while keeping title, organisation, location and description."
+    settings: []
+    mvp: false
+    status: planned
+    tests: []
+
+  # ---------------------------------------------------------------------------
+  # Organisations and roles
+  # ---------------------------------------------------------------------------
+  - id: S-059
+    area: Organisations
+    role: org owner
+    story: "An organisation owner edits the organisation's profile."
+    steps:
+      - "Change name, type, size, about, phone, location, website and socials."
+      - "Upload a logo and a cover image."
+    expected: "The public organisation page reflects every field and the images are served from R2."
+    settings:
+      - organisations.profile
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-060
+    area: Organisations
+    role: org owner
+    story: "An owner invites a colleague to the organisation by email."
+    steps:
+      - "Invite a colleague from the team screen."
+      - "Accept the invite and set a password."
+    expected: "The invitee becomes a member of that organisation only, and the owner can remove them later."
+    settings:
+      - organisations.allowMembers
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-061
+    area: Organisations
+    role: employer
+    story: "An organisation member posts and manages jobs for the organisation."
+    steps:
+      - "Sign in as a member and post a job."
+    expected: "The job belongs to the organisation, not the member, and every member with posting rights sees it."
+    settings:
+      - organisations.allowMembers
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-062
+    area: Organisations
+    role: org owner
+    story: "A sign-up whose organisation name matches an existing one is flagged, not blocked."
+    steps:
+      - "Register with an existing organisation name."
+    expected: "The sign-up succeeds, the organisation is flagged as a possible duplicate, and the existing owner gets a join request."
+    settings:
+      - organisations.duplicateHandling
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-063
+    area: Organisations
+    role: org owner
+    story: "An owner approves a join request and the requester's organisation moves in."
+    steps:
+      - "Open the join request email and approve it."
+    expected: "The requester and their jobs move into the existing organisation, and the duplicate is resolved."
+    settings:
+      - organisations.duplicateHandling
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-064
+    area: Organisations
+    role: site manager
+    story: "A site manager merges two organisations, moving jobs, members and orders."
+    steps:
+      - "Choose Merge on a flagged duplicate and confirm the target."
+    expected: "Jobs, members, orders and credits move to the target; the old organisation is archived and its page redirects."
+    settings:
+      - organisations.merge
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-065
+    area: Organisations
+    role: org owner
+    story: "An organisation page is private until the owner publishes it."
+    steps:
+      - "Create an organisation and open its public page."
+      - "Publish the page."
+    expected: "The page and directory entry stay hidden until published; a flagged duplicate cannot be published."
+    settings:
+      - organisations.pagesPublicByDefault
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-066
+    area: Organisations
+    role: site manager
+    story: "Organisation pages need site-manager approval when the tenant turns that on."
+    steps:
+      - "Request publication as an owner."
+      - "Approve it as a site manager."
+    expected: "The owner sees pending, the site manager gets the request, and approval sends the page-live email."
+    settings:
+      - organisations.pageApproval
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-067
+    area: Organisations
+    role: site manager
+    story: "A site manager marks an organisation as trusted, so its jobs publish before payment."
+    steps:
+      - "Turn Trusted on for an organisation."
+      - "Post a job from it."
+    expected: "New jobs publish immediately and the order waits for the invoice; imported trusted organisations keep the flag."
+    settings:
+      - organisations.trustedSwitch
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-068
+    area: Organisations
+    role: org owner
+    story: "An organisation sets the billing email that receives invoices."
+    steps:
+      - "Set a billing email on the organisation."
+    expected: "Invoices and order emails copy that address, and it is separate from the sign-in email."
+    settings:
+      - billing.invoiceEmail
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-069
+    area: Organisations
+    role: org owner
+    story: "An owner sees the organisation history of orders, credit movements and job events with a running balance."
+    steps:
+      - "Buy a job pack, post a job and end it."
+      - "Open History."
+    expected: "Every event is listed newest first with a running credit balance and links to the affected job or order."
+    settings:
+      - billing.history
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-070
+    area: Organisations
+    role: employer
+    story: "An agency keeps a reusable Clients list of names and logos."
+    steps:
+      - "Add two clients to the agency organisation."
+      - "Pick one when posting."
+    expected: "Clients are private to the agency, reusable, and show the chosen client name and logo on the job."
+    settings:
+      - organisations.agencyClients
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-071
+    area: Organisations
+    role: org owner
+    story: "A client organisation lists jobs that agencies posted for it, once linked."
+    steps:
+      - "Link an agency job to an organisation."
+      - "Open the client organisation page."
+    expected: "The job appears on the client page only after the link, never while the duplicate is unresolved."
+    settings:
+      - organisations.listAgencyJobs
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-072
+    area: Organisations
+    role: super admin
+    story: "Deleting a user removes personal data but keeps orders and invoices on an anonymised link."
+    steps:
+      - "Delete a user who has orders."
+    expected: "Profile fields and files are removed, orders stay for accounting, and the order shows an anonymised customer reference."
+    settings:
+      - organisations.accountDeletion
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-073
+    area: Organisations
+    role: super admin
+    story: "A super admin views the site as another user with a visible banner and an audit entry."
+    steps:
+      - "Start View as user from the admin, browse, then stop."
+    expected: "The hint cookie switches the public site view, a banner names the impersonated user, and the action is logged."
+    settings:
+      - security.viewAsUser
+    mvp: true
+    status: planned
+    tests: []
+
+  # ---------------------------------------------------------------------------
+  # Accounts and authentication
+  # ---------------------------------------------------------------------------
+  - id: S-074
+    area: Accounts
+    role: seeker
+    story: "A seeker creates an optional account with an email and password."
+    steps:
+      - "Register as a seeker with a valid email and an 8+ character password."
+    expected: "The account is created unverified on that tenant, a verification email is sent, and duplicate emails answer the same way."
+    settings:
+      - accounts.seekerSignup
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/account-auth.test.ts
+
+  - id: S-075
+    area: Accounts
+    role: seeker
+    story: "A seeker verifies their email before they can sign in."
+    steps:
+      - "Open the verification link, then sign in."
+      - "Try to sign in before verifying."
+    expected: "The token works once, sign-in is refused until verification, and a token from another tenant is rejected."
+    settings:
+      - accounts.emailVerification
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/account-auth.test.ts
+
+  - id: S-076
+    area: Accounts
+    role: seeker
+    story: "A verified seeker signs in and out with email and password."
+    steps:
+      - "Sign in with the right password, call me, then log out."
+    expected: "A tenant-scoped token is issued, me returns the user, and logout invalidates it; a wrong password and unknown email answer alike."
+    settings:
+      - accounts.emailSignIn
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/account-auth.test.ts
+
+  - id: S-077
+    area: Accounts
+    role: seeker
+    story: "A migrated WordPress user signs in with the old password and the hash is upgraded."
+    steps:
+      - "Sign in with a legacy password through the account endpoint."
+    expected: "Sign-in succeeds once, the password is rehashed with the current algorithm, and the old hash is not touched on another tenant."
+    settings:
+      - accounts.legacyPasswords
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/account-auth.test.ts
+      - packages/payload-jobs/src/legacy-password.test.ts
+
+  - id: S-078
+    area: Accounts
+    role: seeker
+    story: "A seeker resets a forgotten password and every older session is signed out."
+    steps:
+      - "Request a reset link, set a new password, then use an old token."
+    expected: "The reset link works once, unknown emails answer the same way, weak passwords are rejected, and old sessions stop working."
+    settings:
+      - accounts.passwordReset
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/account-auth.test.ts
+
+  - id: S-079
+    area: Accounts
+    role: super admin
+    story: "Sign-in, registration and password reset are rate limited per visitor and per email."
+    steps:
+      - "Repeat each request quickly from one IP and one email."
+    expected: "Requests are limited per IP and per email, tenants count separately, and Retry-After is returned."
+    settings:
+      - security.rateLimits
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/account-auth.test.ts
+
+  - id: S-080
+    area: Accounts
+    role: site manager
+    story: "A site manager sets the session length for Keep me signed in and the default session."
+    steps:
+      - "Change both session settings and sign in with the box ticked and unticked."
+    expected: "The unticked session lasts the default and the ticked session rolls for the longer configured period."
+    settings:
+      - sessions.defaultDays
+      - sessions.keepSignedInDays
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-081
+    area: Accounts
+    role: seeker
+    story: "A seeker who signs in from a protected page returns to that page afterwards."
+    steps:
+      - "Open a saved-jobs page while signed out, sign in."
+    expected: "Sign-in returns to the original page; the legacy role hint is ignored."
+    settings:
+      - accounts.returnUrl
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-082
+    area: Accounts
+    role: seeker
+    story: "A cached public page knows whether the visitor is signed in without becoming uncacheable."
+    steps:
+      - "Sign in, open a cached page, sign out and reload."
+    expected: "A hint cookie corrects the header state, and stale hints send the visitor through sign-in and back."
+    settings:
+      - accounts.signedInHint
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-083
+    area: Accounts
+    role: super admin
+    story: "A user asks support to delete their account; no self-service deletion exists."
+    steps:
+      - "Follow the privacy policy's email-us instruction."
+    expected: "A super admin deletes the user through the admin action, and the site offers no Delete Me control."
+    settings:
+      - organisations.accountDeletion
+    mvp: true
+    status: planned
+    tests: []
+
+  # ---------------------------------------------------------------------------
+  # Job alerts
+  # ---------------------------------------------------------------------------
+  - id: S-084
+    area: Job alerts
+    role: super admin
+    story: "An alert subscription is stored per tenant, unique per email, with secret confirm and unsubscribe tokens."
+    steps:
+      - "Create a subscription twice for one email in one tenant and once in another tenant."
+      - "Read the subscription over the API."
+    expected: "The duplicate is rejected, the other tenant is allowed, and tokens are never returned by the API."
+    settings:
+      - alerts.enabled
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/alert-subscriptions.test.ts
+
+  - id: S-085
+    area: Job alerts
+    role: seeker
+    story: "A visitor subscribes to a saved search without an account and confirms by email."
+    steps:
+      - "Save a search with keywords, locations and types."
+      - "Open the confirmation link."
+    expected: "The alert stays unconfirmed until the link is opened, and double opt-in follows the tenant setting."
+    settings:
+      - alerts.doubleOptIn
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-086
+    area: Job alerts
+    role: seeker
+    story: "A subscriber manages several alerts, their filters and whether they are active."
+    steps:
+      - "Open the manage-alerts page from an email."
+      - "Change one alert and pause another."
+    expected: "Each alert is independent, changes save in place, and pausing stops its emails."
+    settings:
+      - alerts.multiple
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-087
+    area: Job alerts
+    role: seeker
+    story: "A subscriber unsubscribes from one alert with one click."
+    steps:
+      - "Open the unsubscribe link in an alert email."
+    expected: "Only that alert stops, the token is signed, and the page confirms without exposing other subscriber data."
+    settings:
+      - alerts.oneClickUnsubscribe
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-088
+    area: Job alerts
+    role: seeker
+    story: "A subscriber gets a daily or weekly digest with only new jobs and direct links."
+    steps:
+      - "Wait for a scheduled run after new matching jobs are posted."
+    expected: "The digest contains only jobs new since the last run, links straight to each job, and sends nothing when there are no new jobs."
+    settings:
+      - alerts.frequency
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-089
+    area: Job alerts
+    role: site manager
+    story: "A site manager caps how many jobs one alert email lists and when alerts send."
+    steps:
+      - "Set max jobs and send hour; run the alert job."
+    expected: "The digest honours both settings, defaulting to 5 jobs and the old site's send hour."
+    settings:
+      - alerts.maxJobs
+      - alerts.sendHour
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-090
+    area: Job alerts
+    role: site manager
+    story: "A site manager sees the alert run log and is warned when a run is missed."
+    steps:
+      - "Open the alert log after a run and after a skipped run."
+    expected: "Each run lists counts, the missed-run warning appears, and per-email detail is reachable through the email log."
+    settings:
+      - alerts.runLog
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-091
+    area: Job alerts
+    role: super admin
+    story: "Every legacy alert subscriber becomes one confirmed daily email-only alert with the same filters."
+    steps:
+      - "Run the import and check a migrated subscriber."
+    expected: "The subscriber is confirmed, keeps their filters, and is not dropped by the last-login migration rule."
+    settings:
+      - alerts.legacyImport
+    mvp: true
+    status: planned
+    tests: []
+
+  # ---------------------------------------------------------------------------
+  # Commerce: plans, orders, credits, Xero, reports
+  # ---------------------------------------------------------------------------
+  - id: S-092
+    area: Commerce
+    role: site manager
+    story: "A site manager configures plans with prices, durations, restrictions and included add-ons."
+    steps:
+      - "Create a plan, restrict it to a category and a type, and archive another."
+    expected: "Plans store prices in whole currency units, restrictions are enforced on quote, and archived plans stop selling but stay on past orders."
+    settings:
+      - plans.enabled
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/plans.test.ts
+
+  - id: S-093
+    area: Commerce
+    role: employer
+    story: "The quote returns one deterministic total with add-ons, a credit and a coupon applied in the right order."
+    steps:
+      - "Quote a listing with an add-on, a credit and a percentage coupon."
+    expected: "The total is whole money, the credit is spent at most once, the coupon applies after the credit and rounding is half up."
+    settings:
+      - plans.enabled
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/pricing.test.ts
+
+  - id: S-094
+    area: Commerce
+    role: employer
+    story: "Submitting a job creates an invoiced order instead of a card payment."
+    steps:
+      - "Submit a paid job and open the order."
+    expected: "The order is created as invoiced for the organisation, with one line per plan and add-on and a 14-day due date."
+    settings:
+      - billing.invoiceOnly
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-095
+    area: Commerce
+    role: site manager
+    story: "A site manager marks an order paid manually, releasing the job and sending the order-paid email."
+    steps:
+      - "Open a pending order and choose Mark paid."
+    expected: "The order becomes paid, a job waiting on payment publishes, and one order-paid email is sent."
+    settings:
+      - billing.manualMarkPaid
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-096
+    area: Commerce
+    role: site manager
+    story: "Xero payment sync marks an invoice paid and releases the job automatically."
+    steps:
+      - "Record the payment in Xero, then wait for the hourly sync."
+    expected: "The matching order becomes paid, the job releases, the email sends once, and overdue invoices are visible in the admin."
+    settings:
+      - xero.paymentSync
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-097
+    area: Commerce
+    role: org owner
+    story: "Cancelling a job before it publishes returns the credit spent on it."
+    steps:
+      - "Post a job with a credit, cancel it before publication."
+    expected: "The credit returns to the organisation's balance and the ledger records the return."
+    settings:
+      - billing.refundCreditBeforePublish
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-098
+    area: Commerce
+    role: org owner
+    story: "Credits never expire by default, and the ledger is append-only with a running balance."
+    steps:
+      - "Buy a pack, spend a credit, check later."
+    expected: "Credits remain until used, no expiry job removes them when expiry is off, and history cannot be edited."
+    settings:
+      - billing.creditsExpire
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-099
+    area: Commerce
+    role: org owner
+    story: "An owner decides whether members may use credits and whether they may buy or invoice."
+    steps:
+      - "Turn member credit use off, then post as a member."
+    expected: "Members see only the actions allowed: use credits, request a purchase, or both, per the owner's settings."
+    settings:
+      - billing.memberCanUseCredits
+      - billing.memberCanBuy
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-100
+    area: Commerce
+    role: org owner
+    story: "A member's purchase request appears as Waiting for purchase until the owner approves it in one click."
+    steps:
+      - "Request a purchase as a member, approve as the owner."
+    expected: "The order stays waiting until approved, and approval creates the invoice and releases the job."
+    settings:
+      - billing.memberCanBuy
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-101
+    area: Commerce
+    role: employer
+    story: "An employer opens the Xero invoice link for an order."
+    steps:
+      - "Open the invoice link from the order or email."
+    expected: "The Xero online invoice opens for the signed-in organisation; a HTML fallback renders when Xero is unavailable."
+    settings:
+      - xero.invoiceLink
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-102
+    area: Commerce
+    role: org owner
+    story: "An order creates a Xero invoice with the configured account codes and due date."
+    steps:
+      - "Submit a job and open Xero."
+    expected: "A draft invoice becomes authorised with lines for the plan, add-on and coupon, due in 14 days, using the tenant's account codes."
+    settings:
+      - xero.accountCodes
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-103
+    area: Commerce
+    role: site manager
+    story: "A site manager sets tax per tenant, including label, rates and inclusive pricing."
+    steps:
+      - "Enable tax, add a rate, quote a job."
+    expected: "The quote applies the rate exactly, the label appears on invoices, and the default keeps vwok's no-tax behaviour."
+    settings:
+      - tax.enabled
+      - tax.rates
+      - taxLabel
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-104
+    area: Commerce
+    role: site manager
+    story: "A site manager exports jobs and orders by month as a CSV with selectable fields."
+    steps:
+      - "Choose a month and fields, export."
+    expected: "The CSV contains exactly the selected columns and the month's jobs and orders."
+    settings:
+      - reports.jobsAndOrders
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-105
+    area: Commerce
+    role: site manager
+    story: "A site manager exports job views as a CSV."
+    steps:
+      - "Open Reports and export job views."
+    expected: "The CSV lists each job's total views with the imported 9.29M legacy views included."
+    settings:
+      - reports.jobViews
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-106
+    area: Commerce
+    role: site manager
+    story: "A site manager sees traffic and job statistics in the admin dashboard."
+    steps:
+      - "Open the dashboard."
+    expected: "Cloudflare Web Analytics numbers and our own job views and applications appear, scoped to the tenant."
+    settings:
+      - analytics.dashboard
+    mvp: true
+    status: planned
+    tests: []
+
+  # ---------------------------------------------------------------------------
+  # Emails
+  # ---------------------------------------------------------------------------
+  - id: S-107
+    area: Emails
+    role: site manager
+    story: "A site manager edits the tenant's email templates and layout with variable chips."
+    steps:
+      - "Edit a template, insert a variable, send a test."
+    expected: "Templates are stored per tenant, variables resolve, and every email uses the tenant's logo, colours and footer."
+    settings:
+      - email.templates
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-108
+    area: Emails
+    role: seeker
+    story: "A new user receives a welcome and verification email, and can receive a password reset."
+    steps:
+      - "Register and open the verification email; request a reset."
+    expected: "The emails come from the tenant sender, never contain a password, and the reset link works once."
+    settings:
+      - email.templates
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-109
+    area: Emails
+    role: employer
+    story: "An employer gets the job lifecycle emails from the legacy set."
+    steps:
+      - "Submit, approve, approach the close date and let a job expire."
+    expected: "Job submitted, live, expiring and expired each send once, and one email per action includes any order details."
+    settings:
+      - email.jobLifecycle
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-110
+    area: Emails
+    role: employer
+    story: "An employer gets order-created, paid and cancelled emails."
+    steps:
+      - "Create, pay and cancel orders."
+    expected: "Each event sends one email to the right recipients, with no standalone order email when a job email already covers it."
+    settings:
+      - email.orders
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-111
+    area: Emails
+    role: employer
+    story: "An employer gets application emails, and the site admin can get a copy."
+    steps:
+      - "Apply to a job with the admin copy on and off."
+    expected: "The employer and applicant always get the email; the admin copy follows the tenant setting and is on for vwok."
+    settings:
+      - applications.adminCopy
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-112
+    area: Emails
+    role: seeker
+    story: "A visitor's contact form message reaches the configured inbox."
+    steps:
+      - "Submit the contact form."
+    expected: "One email is sent to the recipient with the message and reply-to, and Turnstile blocks bots."
+    settings:
+      - contact.recipient
+      - security.turnstile
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-113
+    area: Emails
+    role: super admin
+    story: "The email log records status without bodies, masks recipients after 90 days and deletes after 12 months."
+    steps:
+      - "Inspect the email log after a send and after the retention job."
+    expected: "Recipients are masked after 90 days, entries disappear after 12 months, and no body or attachment is stored."
+    settings:
+      - email.logRetentionMonths
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-114
+    area: Emails
+    role: super admin
+    story: "Bounces and complaints suppress the address and pause its alerts."
+    steps:
+      - "Feed a hard bounce through the delivery queue."
+    expected: "The email log records the bounce, the address is suppressed and its alerts pause."
+    settings:
+      - email.bounceSuppression
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-115
+    area: Emails
+    role: super admin
+    story: "Each tenant sends through Cloudflare Email Sending or its own SMTP."
+    steps:
+      - "Configure Cloudflare, then SMTP, and send a test."
+    expected: "The chosen transport sends from the tenant sender; vwok uses YCV Gmail OAuth2; non-production mail redirects to one inbox."
+    settings:
+      - email.transport
+    mvp: true
+    status: planned
+    tests: []
+
+  # ---------------------------------------------------------------------------
+  # Admin and moderation
+  # ---------------------------------------------------------------------------
+  - id: S-116
+    area: Admin
+    role: site manager
+    story: "A site manager approves or rejects jobs waiting for moderation."
+    steps:
+      - "Open the pending list, approve one job and reject another."
+    expected: "Approval publishes and emails the employer; rejection keeps the job off the site and records the reason."
+    settings:
+      - jobs.moderation
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-117
+    area: Admin
+    role: site manager
+    story: "A site manager's admin only shows their tenant, with a cut-down menu and a pending-jobs dashboard."
+    steps:
+      - "Sign in as a site manager and open the admin."
+    expected: "Only that tenant's jobs, orders, organisations and users are visible, and the dashboard shows pending jobs and recent orders."
+    settings:
+      - admin.siteManagerScope
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-118
+    area: Admin
+    role: site manager
+    story: "A site manager manages plans and add-ons without touching code."
+    steps:
+      - "Create an add-on, add it to a plan, archive both."
+    expected: "Add-ons and plans are data, changes apply to new quotes, and archived records stay on past orders."
+    settings:
+      - plans.enabled
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-119
+    area: Admin
+    role: site manager
+    story: "A site manager manages users and organisations, including confirming or deleting them."
+    steps:
+      - "Edit a user, change their role, confirm an email, delete a user."
+    expected: "Only tenant users are listed, role changes apply immediately, and deletion follows the anonymised-orders rule."
+    settings:
+      - admin.userManagement
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-120
+    area: Admin
+    role: site manager
+    story: "A site manager edits the location tree and the job taxonomies."
+    steps:
+      - "Add an island and a town, add a category, type and salary band."
+      - "Try a duplicate slug in the same tenant."
+    expected: "Tree levels nest correctly, slugs are unique per tenant, and every taxonomy is editable in the admin."
+    settings:
+      - locations.enabled
+      - taxonomies.enabled
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/collections/locations.test.ts
+      - packages/payload-jobs/src/taxonomies.test.ts
+
+  - id: S-121
+    area: Admin
+    role: site manager
+    story: "A site manager changes any business rule from the tenant settings without a deploy."
+    steps:
+      - "Change moderation, currency, email sender and a filter switch."
+    expected: "The settings save per tenant and take effect on the next request; another tenant is unaffected."
+    settings:
+      - admin.tenantSettings
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-122
+    area: Admin
+    role: super admin
+    story: "Every privileged action is recorded in an audit log."
+    steps:
+      - "View as a user, delete a user and merge organisations."
+    expected: "Each action records who did it, to whom, and when, and the log is readable by super admins."
+    settings:
+      - admin.auditLog
+    mvp: true
+    status: planned
+    tests: []
+
+  # ---------------------------------------------------------------------------
+  # SEO, feeds and URLs
+  # ---------------------------------------------------------------------------
+  - id: S-123
+    area: SEO and URLs
+    role: seeker
+    story: "A search engine reads a sitemap of every live job, organisation and page."
+    steps:
+      - "Fetch /sitemap.xml."
+    expected: "The sitemap lists only live, indexable URLs, excludes empty filters and expired jobs, and is referenced from robots.txt."
+    settings:
+      - seo.sitemap
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-124
+    area: SEO and URLs
+    role: seeker
+    story: "A crawler reads a robots.txt that points at the sitemap and blocks private areas."
+    steps:
+      - "Fetch /robots.txt."
+    expected: "Robots allows public pages, blocks /admin and /account, and points at the sitemap."
+    settings:
+      - seo.robots
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-125
+    area: SEO and URLs
+    role: seeker
+    story: "Every indexable page has one canonical URL and Open Graph metadata."
+    steps:
+      - "Open a job, organisation and listing page and inspect the head."
+    expected: "Each page has one canonical, a title, a description and OG/Twitter tags, all tenant-aware."
+    settings:
+      - seo.canonical
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-126
+    area: SEO and URLs
+    role: seeker
+    story: "Every legacy WordPress URL redirects to its new location or returns 410."
+    steps:
+      - "Crawl the old sitemap against the new site."
+    expected: "Jobs, organisations, taxonomies and pages 301 to their new URLs; dropped pages 410; nothing 404s by accident."
+    settings:
+      - seo.legacyRedirects
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-127
+    area: SEO and URLs
+    role: site manager
+    story: "A site manager edits SEO titles and descriptions per page, job and organisation."
+    steps:
+      - "Open the SEO tab and override a title and description."
+    expected: "Overrides are used in the head and sitemap; blank fields fall back to generated values."
+    settings:
+      - seo.overrides
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-128
+    area: SEO and URLs
+    role: seeker
+    story: "An AI crawler can read llms.txt and the tenant can allow or block AI crawlers."
+    steps:
+      - "Fetch /llms.txt with the setting on and off."
+    expected: "llms.txt describes the site and its key URLs; blocking the AI-crawler setting changes robots accordingly."
+    settings:
+      - seo.aiCrawlers
+    mvp: true
+    status: planned
+    tests: []
+
+  # ---------------------------------------------------------------------------
+  # Import and cutover
+  # ---------------------------------------------------------------------------
+  - id: S-129
+    area: Import and cutover
+    role: super admin
+    story: "The importer brings taxonomies and the location tree across with clean slugs."
+    steps:
+      - "Run the import against the legacy database."
+      - "Check categories, types, salary bands and locations."
+    expected: "Terms map one-to-one, broken salary and type terms are cleaned, and every record keeps its legacy id."
+    settings:
+      - import.taxonomies
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-130
+    area: Import and cutover
+    role: super admin
+    story: "The importer brings the users and organisations that qualify, with password hashes and org fields."
+    steps:
+      - "Run the import and check a migrated employer and seeker."
+    expected: "Only users matching the last-login rule import, WordPress hashes survive, and organisations keep type, logo, trusted flag and Xero code."
+    settings:
+      - import.users
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-131
+    area: Import and cutover
+    role: super admin
+    story: "The importer brings every published and expired job with locations, salary text, PDFs and view counts."
+    steps:
+      - "Run the import and compare counts and a sample job."
+    expected: "Jobs appear once, legacy locations become chips plus details, featured placements and view counts import, and no application data comes across."
+    settings:
+      - import.jobs
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-132
+    area: Import and cutover
+    role: super admin
+    story: "The importer brings plans, coupons, orders for 24 months and opening credit balances."
+    steps:
+      - "Run the import and check an order and a pack holder."
+    expected: "Pending WordPress orders map to invoiced, LINKPS is kept, credits open with a ledger entry, and totals reconcile."
+    settings:
+      - import.orders
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-133
+    area: Import and cutover
+    role: super admin
+    story: "The importer brings the legacy pages, menus, site settings and alert subscribers."
+    steps:
+      - "Run the import and open the imported pages and menus."
+    expected: "The seven real pages import, system pages are seeded, menus match the old site, and settings map to tenant settings."
+    settings:
+      - import.content
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-134
+    area: Import and cutover
+    role: super admin
+    story: "A verification report compares legacy and new counts before cutover."
+    steps:
+      - "Run the verification report after the import."
+    expected: "Jobs, users, organisations, orders, pages and subscribers are compared with an explained difference for each."
+    settings:
+      - import.verification
+    mvp: true
+    status: planned
+    tests: []
+
+  # ---------------------------------------------------------------------------
+  # Security and spam
+  # ---------------------------------------------------------------------------
+  - id: S-135
+    area: Security
+    role: seeker
+    story: "Every public form is protected by Turnstile and a honeypot."
+    steps:
+      - "Submit each form as a bot and as a person."
+    expected: "Bots are blocked without a challenge for normal visitors, and the form still works with JavaScript disabled where possible."
+    settings:
+      - security.turnstile
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-136
+    area: Security
+    role: super admin
+    story: "Form and API endpoints are rate limited per IP and per email."
+    steps:
+      - "Flood the contact, sign-in and apply endpoints."
+    expected: "Limits apply per IP and per email, with Retry-After, and legitimate traffic is unaffected."
+    settings:
+      - security.rateLimits
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-137
+    area: Security
+    role: seeker
+    story: "Disposable email domains are blocked at sign-up."
+    steps:
+      - "Register with a known disposable domain."
+    expected: "Registration is refused with a clear message; normal domains are unaffected."
+    settings:
+      - security.blockDisposableEmails
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-138
+    area: Security
+    role: employer
+    story: "Uploaded logos, covers, CVs and PDFs are only reachable by the right people."
+    steps:
+      - "Open an application CV as the employer, as another employer and anonymously."
+    expected: "The employer can read its CVs, another organisation cannot, and anonymous reads are refused."
+    settings:
+      - security.uploadAccess
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-139
+    area: Security
+    role: super admin
+    story: "No secret is committed, logged or exposed to the public site."
+    steps:
+      - "Scan the repo and the built Worker for keys and tokens."
+    expected: "Secrets live in Cloudflare secrets, the public bundle has no keys, and logs never print tokens or passwords."
+    settings: []
+    mvp: true
+    status: planned
+    tests: []
+
+  # ---------------------------------------------------------------------------
+  # Scheduled jobs and retention
+  # ---------------------------------------------------------------------------
+  - id: S-140
+    area: Scheduled jobs
+    role: site manager
+    story: "An hourly job expires jobs that reached their close date."
+    steps:
+      - "Let a job reach its close date, then wait for the hourly run."
+    expected: "The job status becomes expired, it leaves every listing and feed, and the expired email sends once."
+    settings:
+      - jobs.expiry
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-141
+    area: Scheduled jobs
+    role: employer
+    story: "An employer gets expiry reminders at the configured days before close."
+    steps:
+      - "Set reminders to 5 and 1 days and wait."
+    expected: "One reminder sends at each configured day, never twice, and the default matches the old site."
+    settings:
+      - jobs.expiryReminderDays
+    mvp: true
+    status: planned
+    tests: []
+
+  - id: S-142
+    area: Scheduled jobs
+    role: site manager
+    story: "A daily job removes featured placements that have ended."
+    steps:
+      - "Let a featured placement pass its expiry and run the placement task."
+    expected: "Only ended placements are removed, active ones keep their order, and the job remains live."
+    settings:
+      - plans.placements
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/placements.test.ts
+
+  - id: S-143
+    area: Scheduled jobs
+    role: super admin
+    story: "Retention jobs delete applications, form submissions and email logs after their configured periods."
+    steps:
+      - "Age records past each retention setting and run the jobs."
+    expected: "Applications and CVs delete 12 months after the job closes, forms follow their setting, and email logs follow theirs."
+    settings:
+      - retention.applicationsMonths
+      - retention.formsDays
+      - email.logRetentionMonths
+    mvp: true
+    status: planned
+    tests: []

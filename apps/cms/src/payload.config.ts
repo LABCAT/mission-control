@@ -22,6 +22,17 @@ import { Documents } from './collections/Documents'
 import { createMediaTransformers } from './media'
 import { r2Storage } from '@payloadcms/storage-r2'
 import { multiTenantOptions } from './tenancy'
+// mission-control: generic page blocks (PJ-84). Registering them here lets page and
+// site-settings fields reference them by slug; no collection uses them yet.
+import {
+  bannerBlock,
+  cardGridBlock,
+  ctaBlock,
+  faqBlock,
+  featureBoxesBlock,
+  heroBlock,
+  richTextBlock,
+} from '@mission-control/rocketship-payload/blocks'
 
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
@@ -48,6 +59,17 @@ export default buildConfig({
   },
   // Cloudflare Workers rejects PBKDF2 above 100,000 iterations (Payload's default is 600,000).
   auth: { passwordHashIterations: 100000 },
+  // mission-control: reusable page blocks (PJ-84). Page and site-settings fields can name
+  // these slugs; registering a block here adds no collection or table.
+  blocks: [
+    heroBlock({ mediaSlug: 'media' }),
+    featureBoxesBlock,
+    richTextBlock,
+    cardGridBlock({ mediaSlug: 'media' }),
+    ctaBlock,
+    faqBlock,
+    bannerBlock({ mediaSlug: 'media' }),
+  ],
   collections: [Users, Media, Folders, Tags, Tenants, SiteKeys, Documents], // mission-control: tenants, site keys, documents
   editor: lexicalEditor(),
   secret: process.env.PAYLOAD_SECRET || '',

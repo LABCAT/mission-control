@@ -45,13 +45,33 @@ timezone.
 | Component    | Built from                          | Notes                                       |
 | ------------ | ----------------------------------- | ------------------------------------------- |
 | `BaseLayout` | Rocketship styles, `Container`       | head, SEO meta, canonical/header/footer slots |
-| `JobCard`    | `Card`                               | salary and closing date in the tenant's settings |
+| `JobCard`    | `Card`                               | salary and closing date in the tenant's settings; reveals a "Viewed" pill |
 | `OrgCard`    | `Card`                               | logo, description, open job count            |
 | `FilterBar`  | `Field`, `Label`, `Input`, `Select`, `Checkbox` | plain GET form, works without JavaScript |
 | `JobsListing` | `Alert`, `Grid`, `Typography`       | listing body: heading, filters, cards, empty state |
 | `JobsPage`   | `BaseLayout`, `Container`            | whole `/jobs` page; filtered views are `noindex` |
 | `Turnstile`  | `Field`                              | the only client island; site key from env    |
+| `RecentlyViewed` | —                               | browser-local list, filled on idle           |
+| `JobViewTracker` | —                              | records the current job on a detail page     |
 | `Pagination` | —                                    | **temporary**; moves to Rocketship (RCL task) |
+
+## Viewed jobs (browser-local)
+
+`src/viewed-jobs` stores the last 20 viewed job ids in `localStorage` under `lp:viewed-jobs`,
+newest first. There is no server store and no account sync; every storage access is guarded, so
+private modes and cleared storage simply show no history. `record(jobId)`, `list(limit)` and
+`has(jobId)` are the whole API.
+
+Use `JobViewTracker` on a job detail page (pass the same id `JobCard` uses in `data-job-id`:
+the job's id, or its url). `JobCard` reserves the "Viewed" pill's space and reveals it on idle,
+so the label never shifts the layout. `RecentlyViewed` renders an empty hidden section and fills
+it on idle from `list(5)`. Give it one of:
+
+- `jobs`: `{ id, title, url }[]` already on the page (used as-is), or
+- `endpoint`: a URL that accepts `?ids=a,b,c` and returns the same array as JSON.
+
+The site app owns the endpoint; the component only documents the contract. Place the list where
+it can grow without moving content above it (for example, the last block on the page).
 
 `Pagination` is local on purpose: a pagination component is generic, so it belongs in
 Rocketship. When Rocketship releases one, delete `src/components/Pagination.astro`, import the
@@ -137,9 +157,11 @@ return serveJobListing({
 ## Conventions
 
 - Zero client JavaScript by default. Only `Turnstile` ships a script, and only the forms that
-  include it. The component owns its own `cf-turnstile-response` field, so the widget is
-  rendered with `response-field: false`; otherwise the token would be posted twice. Its
-  no-JavaScript notice is a `<noscript>`, so it is invisible when the script works.
+  include it, plus the tiny browser-local viewed-jobs scripts on pages that use `JobCard`,
+  `JobViewTracker` or `RecentlyViewed`. The component owns its own `cf-turnstile-response`
+  field, so the widget is rendered with `response-field: false`; otherwise the token would be
+  posted twice. Its no-JavaScript notice is a `<noscript>`, so it is invisible when the script
+  works.
 - Money is an integer amount of minor units plus an ISO 4217 code, never a float.
 - A tenant's domain, currency, timezone, locale and colours are never hardcoded here.
 - Filter values come from the URL, so they are validated against `FilterDefinition` before

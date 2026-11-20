@@ -141,7 +141,7 @@ describe('alert subscription collection config', () => {
       expect.arrayContaining([removeTenantAlertSubscriptions]),
     )
     // The host's own hook keeps running: the plugin appends, it does not replace.
-    expect(withAlerts?.hooks?.beforeDelete).toHaveLength(2)
+    expect(withAlerts?.hooks?.beforeDelete).toHaveLength(3)
 
     const withoutAlerts = await tenantsOf({ features: { alerts: false }, tenancy: 'multi' })
     expect(withoutAlerts?.hooks?.beforeDelete).not.toContain(removeTenantAlertSubscriptions)
@@ -299,7 +299,7 @@ const taxonomies = (): CollectionConfig[] => [
   locationsCollection({ requireTenant: true }),
 ]
 
-describe('alert subscriptions integration', () => {
+describe('alert subscriptions integration @S-084', () => {
   let harness: TestHarness
   let employerA: TestUser
   let editorA: TestUser
