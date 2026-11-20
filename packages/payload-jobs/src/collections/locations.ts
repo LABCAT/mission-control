@@ -2,6 +2,7 @@ import type { CollectionConfig, CompoundIndex, Field, PayloadRequest, Validate, 
 import { ValidationError } from 'payload'
 
 import { tenantContentWriteAccess } from '../access'
+import { slugConflict, type SlugRules } from '../slug-rules'
 import { mergeCollectionAccess, type CollectionAccess } from '../slugs'
 import type { TenantLocationSettings } from '../location-settings'
 
@@ -62,6 +63,11 @@ export type LocationsOptions = {
   requireTenant?: boolean
   /** Overrides the collection slug. Defaults to `locations`. */
   slug?: string
+  /**
+   * Slugs shared with job categories and job types, and the reserved words (PJ-98). Without
+   * it a location slug only has to be unique among locations.
+   */
+  slugRules?: SlugRules
 }
 
 /**
@@ -69,7 +75,7 @@ export type LocationsOptions = {
  * tenant is taken from the document being validated, so the check also works for a create
  * made with `overrideAccess` (the seed and the importer).
  */
-const validateSlug = (collectionSlug: string): Validate => async (value, { data, id, req }) => {
+const validateSlug = (collectionSlug: string, rules?: SlugRules): Validate => async (value, { data, id, req }) => {
   if (typeof value !== 'string' || !SLUG.test(value)) {
     return 'Use lowercase letters, numbers and single hyphens, for example port-vila'
   }
@@ -79,24 +85,15 @@ const validateSlug = (collectionSlug: string): Validate => async (value, { data,
   // The beforeChange hook has already refused a tenantless document in multi-tenant mode.
   if (tenant === null) return true
 
-  const { docs } = await req.payload.find({
-    collection: collectionSlug as CollectionSlug,
-    depth: 0,
-    limit: 2,
-    overrideAccess: true,
-    pagination: false,
+  const conflict = await slugConflict({
+    collection: collectionSlug,
     req,
-    where: {
-      and: [{ slug: { equals: value } }, { tenant: { equals: tenant } }],
-    },
+    rules: rules ?? { namespaces: [{ collection: collectionSlug, label: 'location' }], reserved: [] },
+    selfID: id,
+    slug: value,
+    tenant,
   })
-
-  const ownID = id === undefined || id === null ? null : String(id)
-  if (docs.some((doc) => String(doc.id) !== ownID)) {
-    return `The slug "${value}" is already used by another location in this tenant`
-  }
-
-  return true
+  return conflict ?? true
 }
 
 type TreeCheckArgs = {
@@ -222,7 +219,7 @@ const validateParent = (collectionSlug: string): Validate => async (value, { dat
   return result.error ?? true
 }
 
-const fields = (collectionSlug: string): Field[] => [
+const fields = (collectionSlug: string, rules?: SlugRules): Field[] => [
   {
     name: 'name',
     type: 'text',
@@ -233,7 +230,7 @@ const fields = (collectionSlug: string): Field[] => [
     type: 'text',
     required: true,
     index: true,
-    validate: validateSlug(collectionSlug),
+    validate: validateSlug(collectionSlug, rules),
   },
   {
     name: 'parent',
@@ -268,7 +265,7 @@ const fields = (collectionSlug: string): Field[] => [
  * multi-tenant plugin scopes every operation to the caller's tenant.
  */
 export const locationsCollection = (options: LocationsOptions = {}): CollectionConfig => {
-  const { access, limits, requireTenant = false, slug = DEFAULT_SLUG } = options
+  const { access, limits, requireTenant = false, slug = DEFAULT_SLUG, slugRules } = options
 
   return {
     slug,
@@ -286,7 +283,7 @@ export const locationsCollection = (options: LocationsOptions = {}): CollectionC
       group: 'Jobs',
       useAsTitle: 'name',
     },
-    fields: fields(slug),
+    fields: fields(slug, slugRules),
     hooks: {
       // Field validators are skipped when their field is not submitted, so a write that never
       // mentions `tenant` or `parent` would slip past `validateSlug` and `validateParent`.

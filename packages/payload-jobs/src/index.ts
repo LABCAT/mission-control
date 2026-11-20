@@ -30,6 +30,7 @@ import {
   type PayloadJobsCollectionSlugs,
   type PayloadJobsCollectionsOptions,
 } from './slugs'
+import { slugRulesFor } from './slug-rules'
 import { taxonomyCollections } from './taxonomies'
 import { jobBoardSettingsGlobal, jobBoardTenantFields } from './tenancy'
 
@@ -43,6 +44,7 @@ export * from './email'
 export * from './legacy-password'
 export * from './location-settings'
 export * from './money'
+export * from './slug-rules'
 export * from './add-ons'
 export * from './collections/jobs'
 export * from './job-status'
@@ -125,6 +127,11 @@ export type PayloadJobsOptions = {
    *   collections: { locations: { slug: 'job-locations' } }
    */
   collections?: PayloadJobsCollectionsOptions
+  /**
+   * Words that no job category, location or job type slug may be, because they would collide
+   * with a route on the site. Defaults to `DEFAULT_RESERVED_SLUGS`.
+   */
+  reservedSlugs?: readonly string[]
   /** Turn the plugin off without removing it from the config. Defaults to true. */
   enabled?: boolean
   /** Which job-board collections to enable. All default to true. */
@@ -227,6 +234,7 @@ export const payloadJobs =
     // The location tree may be capped per tenant. Read the limit at write time, so an admin's
     // change to the tenant settings takes effect on the next save.
     const locationsOptions: LocationsOptions = {
+      slugRules: slugRulesFor(slugs, options.reservedSlugs),
       limits: async ({ data, req }) => {
         if (tenancy === 'multi') {
           const ref = data.tenant
@@ -374,6 +382,7 @@ export const payloadJobs =
           jobTypes: collectionOptions.jobTypes?.access,
           salaryBands: collectionOptions.salaryBands?.access,
         },
+        reservedSlugs: options.reservedSlugs,
         slugs,
         tenantScoped: tenancy === 'multi',
       }).filter((collection) => !registeredSlugs.has(collection.slug)),
