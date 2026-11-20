@@ -259,3 +259,4 @@ Not imported: applications/CVs, resumes, logs (order-log, job-alerts-log, resume
 - **20 Nov: ticket sync done** – decisions from results 36–59 pushed into PJ-62/64/52/45/51/42/31/68 (plus earlier PJ-99/82/37/23/32/118/119).
 - **Rule (20 Nov): migration last.** PRs with schema changes are built/reviewed without a migration (label needs-migration; tests push schema to the test DB); the migration is generated on top of main only when the PR is next to merge, then preview, then merge. One migration PR at a time.
 - **Rule (20 Nov, founder): one ticket = one fresh Sonnet session** (fresh context). The orchestrator sequences migration PRs and merges; tonight's single worker is a one-off exception.
+- **20 Nov: closed superseded PRs** #31 (PJ-79 → PJ-80/115), #36 (PJ-27 → PJ-50), #38 (PJ-20 → PJ-103); tickets cancelled; branches kept. Frees 3 PR slots.
