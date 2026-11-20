@@ -21,6 +21,13 @@ import { couponCollection, removeTenantCouponsFor, removeTenantCoupons } from '.
 import { withLegacyPasswords } from './legacy-password'
 import { tenantLocationSettings, type TenantLocationSource } from './location-settings'
 import { addOnCollection } from './add-ons'
+import {
+  APPLICATION_FILES_SLUG,
+  APPLICATIONS_SLUG,
+  applicationFilesCollection,
+  applicationsCollection,
+  blockDeleteWhileReferencedByApplications,
+} from './collections/applications'
 import { jobsCollection } from './collections/jobs'
 import { menusCollection, removeTenantMenus } from './collections/menus'
 import { pagesCollection } from './collections/pages'
@@ -52,6 +59,7 @@ export * from './money'
 export * from './slug-rules'
 export * from './add-ons'
 export * from './collections/jobs'
+export * from './collections/applications'
 export * from './job-status'
 export * from './add-ons-seed'
 export * from './catalog'
@@ -91,6 +99,8 @@ export const payloadJobsTenantCollections = (
   slugs.alertSubscriptions,
   slugs.jobs,
   slugs.coupons,
+  APPLICATION_FILES_SLUG,
+  APPLICATIONS_SLUG,
 ]
 
 /**
@@ -112,7 +122,7 @@ export const jobsTenantCollections = (options: PayloadJobsOptions = {}): string[
 export const PAYLOAD_JOBS_TENANT_COLLECTIONS = payloadJobsTenantCollections() as string[]
 
 export type PayloadJobsFeatures = {
-  /** Job applications. The collection is added by a later task. Defaults to true. */
+  /** Applications and their private CV files (PJ-25). Defaults to true. */
   applications?: boolean
   /** Email-only job alert subscriptions (PJ-26). Defaults to true. */
   alerts?: boolean
@@ -165,6 +175,31 @@ export type PayloadJobsOptions = {
    */
   jobsSlug?: string
 }
+
+const withApplicationDeleteGuard = (
+  collection: CollectionConfig,
+  field: 'job' | 'organisation',
+  label: string,
+): CollectionConfig => ({
+  ...collection,
+  hooks: {
+    ...collection.hooks,
+    beforeDelete: [
+      ...(collection.hooks?.beforeDelete ?? []),
+      blockDeleteWhileReferencedByApplications({ fields: [field], label }),
+      // A CV is uploaded before its application exists, so organisations also guard their files.
+      ...(field === 'organisation'
+        ? [
+            blockDeleteWhileReferencedByApplications({
+              collection: APPLICATION_FILES_SLUG,
+              fields: ['organisation'],
+              label,
+            }),
+          ]
+        : []),
+    ],
+  },
+})
 
 const resolvedFeatures = (options: PayloadJobsOptions): Required<PayloadJobsFeatures> => ({
   applications: options.features?.applications ?? true,
@@ -518,7 +553,37 @@ export const payloadJobs =
       ...config,
       // Plans before add-ons: Payload numbers compound index names in collection order, and
       // plans' existing `tenant_key_idx` must keep its name.
-      collections: [...(config.collections ?? []), ...taxonomies, plans, addOns, jobs, ...coupons],
+      // Applications and their files go after jobs: they relate to it, and the compound
+      // index names of the collections before them must not shift.
+      collections: [
+        ...(features.applications
+          ? (config.collections ?? []).map((collection) =>
+              collection.slug === slugs.organisations
+                ? withApplicationDeleteGuard(collection, 'organisation', 'organisation')
+                : collection,
+            )
+          : (config.collections ?? [])),
+        ...taxonomies,
+        plans,
+        addOns,
+        features.applications ? withApplicationDeleteGuard(jobs, 'job', 'job') : jobs,
+        ...coupons,
+        ...(features.applications
+          ? [
+              applicationFilesCollection({
+                applicantsSlug: usersSlug,
+                organisationsSlug: slugs.organisations,
+                tenantScoped: tenancy === 'multi',
+              }),
+              applicationsCollection({
+                applicantsSlug: usersSlug,
+                jobsSlug: slugs.jobs,
+                organisationsSlug: slugs.organisations,
+                tenantScoped: tenancy === 'multi',
+              }),
+            ]
+          : []),
+      ],
       jobs: jobsConfig,
       custom: {
         ...config.custom,

@@ -31,6 +31,8 @@ describe('payloadJobs', () => {
       'add-ons',
       'jobs',
       'coupons',
+      'application-files',
+      'applications',
     ])
     expect(result.collections?.[0]?.fields.map((f) => ('name' in f ? f.name : null))).toContain(
       'legacyPasswordHash',
@@ -155,6 +157,8 @@ describe('collection slug overrides', () => {
       'extras',
       'vacancies',
       'vouchers',
+      'application-files',
+      'applications',
     ])
 
     const targets = new Set(
@@ -176,6 +180,11 @@ describe('collection slug overrides', () => {
         'salaries',
         'packages',
         'extras',
+        // Applications relate to the renamed jobs and organisations, their own private files
+        // (a slug of their own, not overridable), and the applicant's users collection.
+        'vacancies',
+        'application-files',
+        'users',
       ]),
     )
 
@@ -197,6 +206,8 @@ describe('collection slug overrides', () => {
       'subscribers',
       'vacancies',
       'vouchers',
+      'application-files',
+      'applications',
     ])
   })
 

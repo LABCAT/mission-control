@@ -758,7 +758,8 @@ stories:
       - applications.dashboard
     mvp: true
     status: planned
-    tests: []
+    tests:
+      - packages/payload-jobs/src/collections/applications.test.ts
 
   - id: S-053
     area: Applications

@@ -62,17 +62,18 @@ export type SupportedTimezones =
   | 'Pacific/Fiji';
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "LexicalNodes_334D3D85".
+ * via the `definition` "LexicalNodes_F20892C1".
  */
-export type LexicalNodes_334D3D85 =
+export type LexicalNodes_F20892C1 =
   | SerializedTextNode
   | SerializedTabNode
   | SerializedLineBreakNode
-  | SerializedParagraphNode<LexicalNodes_334D3D85>
+  | SerializedParagraphNode<LexicalNodes_F20892C1>
   | SerializedHorizontalRuleNode
   | SerializedUploadNode<'media'>
   | SerializedUploadNode<'documents'>
-  | SerializedQuoteNode<LexicalNodes_334D3D85>
+  | SerializedUploadNode<'application-files'>
+  | SerializedQuoteNode<LexicalNodes_F20892C1>
   | SerializedRelationshipNode<
       | 'users'
       | 'folders'
@@ -91,17 +92,18 @@ export type LexicalNodes_334D3D85 =
       | 'add-ons'
       | 'jobs'
       | 'coupons'
+      | 'applications'
       | 'payload-kv'
       | 'payload-jobs'
       | 'payload-locked-documents'
       | 'payload-preferences'
       | 'payload-migrations'
     >
-  | SerializedAutoLinkNode<LexicalNodes_334D3D85, LexicalLinkFields>
-  | SerializedLinkNode<LexicalNodes_334D3D85, LexicalLinkFields>
-  | SerializedListNode<LexicalNodes_334D3D85>
-  | SerializedListItemNode<LexicalNodes_334D3D85>
-  | SerializedHeadingNode<LexicalNodes_334D3D85>;
+  | SerializedAutoLinkNode<LexicalNodes_F20892C1, LexicalLinkFields>
+  | SerializedLinkNode<LexicalNodes_F20892C1, LexicalLinkFields>
+  | SerializedListNode<LexicalNodes_F20892C1>
+  | SerializedListItemNode<LexicalNodes_F20892C1>
+  | SerializedHeadingNode<LexicalNodes_F20892C1>;
 /**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "LexicalNodes_3DE324E4".
@@ -148,6 +150,8 @@ export interface Config {
     'add-ons': AddOn;
     jobs: Job;
     coupons: Coupon;
+    'application-files': ApplicationFile;
+    applications: Application;
     'payload-kv': PayloadKv;
     'payload-jobs': PayloadJob;
     'payload-locked-documents': PayloadLockedDocument;
@@ -176,6 +180,8 @@ export interface Config {
     'add-ons': AddOnsSelect<false> | AddOnsSelect<true>;
     jobs: JobsSelect<false> | JobsSelect<true>;
     coupons: CouponsSelect<false> | CouponsSelect<true>;
+    'application-files': ApplicationFilesSelect<false> | ApplicationFilesSelect<true>;
+    applications: ApplicationsSelect<false> | ApplicationsSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-jobs': PayloadJobsSelect<false> | PayloadJobsSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
@@ -481,6 +487,10 @@ export interface Tenant {
    * Whether new jobs need an admin’s approval before they go live.
    */
   jobModeration?: ('legacy' | 'review' | 'auto') | null;
+  /**
+   * When on, only signed-in accounts can apply to a job. Off: guests can apply with an email address.
+   */
+  accountRequiredToApply?: boolean | null;
   emailFromName?: string | null;
   emailFromAddress?: string | null;
   /**
@@ -733,7 +743,7 @@ export interface FeatureBoxesBlock {
  */
 export interface RichTextBlock {
   heading?: string | null;
-  content: LexicalRichText<LexicalNodes_334D3D85>;
+  content: LexicalRichText<LexicalNodes_F20892C1>;
   id?: string | null;
   blockName?: string | null;
   blockType: 'rich-text';
@@ -788,7 +798,7 @@ export interface FaqBlock {
   heading?: string | null;
   items: {
     question: string;
-    answer: LexicalRichText<LexicalNodes_334D3D85>;
+    answer: LexicalRichText<LexicalNodes_F20892C1>;
     id?: string | null;
   }[];
   id?: string | null;
@@ -1341,7 +1351,7 @@ export interface Job {
   publishedAt?: string | null;
   expiresAt?: string | null;
   organisation: number | Organisation;
-  description?: LexicalRichText<LexicalNodes_334D3D85> | null;
+  description?: LexicalRichText<LexicalNodes_F20892C1> | null;
   /**
    * An optional PDF of the full job description.
    */
@@ -1429,6 +1439,91 @@ export interface Coupon {
    * Leave empty for unlimited uses.
    */
   maxUses?: number | null;
+  /**
+   * WordPress post id, for the import.
+   */
+  legacyId?: number | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "application-files".
+ */
+export interface ApplicationFile {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  organisation: number | Organisation;
+  applicant?: (number | null) | User;
+  prefix?: string | null;
+  _objectKey?: string | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+  url?: string | null;
+  thumbnailURL?: string | null;
+  filename?: string | null;
+  mimeType?: string | null;
+  filesize?: number | null;
+  width?: number | null;
+  height?: number | null;
+  original?: {
+    filename?: string | null;
+    url?: string | null;
+    mimeType?: string | null;
+    filesize?: number | null;
+    width?: number | null;
+    height?: number | null;
+    prefix?: string | null;
+    _objectKey?: string | null;
+  };
+  focalX?: number | null;
+  focalY?: number | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "applications".
+ */
+export interface Application {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  job: number | Job;
+  /**
+   * Copied from the job. Not editable.
+   */
+  organisation?: (number | null) | Organisation;
+  /**
+   * Set when the applicant was signed in; guests apply with an email only.
+   */
+  applicant?: (number | null) | User;
+  name: string;
+  email: string;
+  phone?: string | null;
+  /**
+   * Plain text. No formatting or HTML.
+   */
+  message?: string | null;
+  cv: number | ApplicationFile;
+  coverLetter?: (number | null) | ApplicationFile;
+  /**
+   * When the applicant agreed to the privacy policy.
+   */
+  consentAt: string;
   /**
    * WordPress post id, for the import.
    */
@@ -1653,6 +1748,14 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'coupons';
         value: number | Coupon;
+      } | null)
+    | ({
+        relationTo: 'application-files';
+        value: number | ApplicationFile;
+      } | null)
+    | ({
+        relationTo: 'applications';
+        value: number | Application;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -1987,6 +2090,7 @@ export interface TenantsSelect<T extends boolean = true> {
         exemptXeroTaxType?: T;
       };
   jobModeration?: T;
+  accountRequiredToApply?: T;
   emailFromName?: T;
   emailFromAddress?: T;
   adminEmail?: T;
@@ -2340,6 +2444,64 @@ export interface CouponsSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "application-files_select".
+ */
+export interface ApplicationFilesSelect<T extends boolean = true> {
+  tenant?: T;
+  organisation?: T;
+  applicant?: T;
+  prefix?: T;
+  _objectKey?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+  url?: T;
+  thumbnailURL?: T;
+  filename?: T;
+  mimeType?: T;
+  filesize?: T;
+  width?: T;
+  height?: T;
+  original?:
+    | T
+    | {
+        filename?: T;
+        url?: T;
+        mimeType?: T;
+        filesize?: T;
+        width?: T;
+        height?: T;
+        prefix?: T;
+        _objectKey?: T;
+      };
+  focalX?: T;
+  focalY?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "applications_select".
+ */
+export interface ApplicationsSelect<T extends boolean = true> {
+  tenant?: T;
+  job?: T;
+  organisation?: T;
+  applicant?: T;
+  name?: T;
+  email?: T;
+  phone?: T;
+  message?: T;
+  cv?: T;
+  coverLetter?: T;
+  consentAt?: T;
+  legacyId?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv_select".
  */
 export interface PayloadKvSelect<T extends boolean = true> {
@@ -2540,7 +2702,9 @@ export interface CollectionQueryWidget {
       | 'plans'
       | 'add-ons'
       | 'jobs'
-      | 'coupons';
+      | 'coupons'
+      | 'application-files'
+      | 'applications';
     where?:
       | {
           [k: string]: unknown;
@@ -2583,6 +2747,8 @@ export interface ActivityWidget {
           | 'add-ons'
           | 'jobs'
           | 'coupons'
+          | 'application-files'
+          | 'applications'
         )[]
       | null;
   };
@@ -2594,7 +2760,7 @@ export interface ActivityWidget {
  */
 export interface UploadDropzoneWidget {
   data?: {
-    excludedCollections?: ('media' | 'documents')[] | null;
+    excludedCollections?: ('media' | 'documents' | 'application-files')[] | null;
   };
   width: 'x-small' | 'small' | 'medium' | 'large' | 'x-large' | 'full';
 }
