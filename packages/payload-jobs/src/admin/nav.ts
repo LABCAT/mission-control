@@ -1,8 +1,8 @@
 import type { CollectionConfig, Config, GlobalConfig } from 'payload'
 
 import { hasAnyTenantRole, isSuperAdmin, type MissionControlUser } from '../access'
-import { COUPONS_SLUG } from '../coupons'
-import { APPLICATIONS_SLUG, ORDERS_SLUG, PAGES_SLUG } from './collections'
+import { DEFAULT_PAYLOAD_JOBS_SLUGS, type PayloadJobsCollectionSlugs } from '../slugs'
+import { APPLICATIONS_SLUG, ORDERS_SLUG } from './collections'
 
 /**
  * The cut-down admin nav for site managers (PJ-30, S-117).
@@ -16,38 +16,65 @@ import { APPLICATIONS_SLUG, ORDERS_SLUG, PAGES_SLUG } from './collections'
 /** Roles that run a site. `editor` stays for older data; the MVP has no separate editor role. */
 export const SITE_MANAGER_ROLES = ['tenant-admin', 'editor'] as const
 
+/** The slugs the default menu is built from. Every one comes from the host's options (PJ-80). */
+export type SiteManagerNavSlugs = {
+  /** The host's upload collection for PDF job descriptions; `null` when it has none. */
+  documentsSlug?: null | string
+  /** The host's upload collection for logos and covers; `null` when it has none. */
+  mediaSlug?: null | string
+  /** The plugin's resolved collection slugs. Defaults to `DEFAULT_PAYLOAD_JOBS_SLUGS`. */
+  slugs?: PayloadJobsCollectionSlugs
+  /** The host's auth collection. */
+  usersSlug?: string
+}
+
 /**
  * What a site manager sees.
  *
  * The first block is the list this task names. The rest is the tenant content a site manager
  * needs to keep running the site: the location tree and taxonomies behind every job form
- * (S-120), and the tenant's people and uploads (S-119). Platform collections (tenants, site
- * keys, alert subscriptions) and the job-board settings global stay super-admin only.
+ * (S-120), the pages and menus of the site (PJ-103, S-145), and the tenant's people and
+ * uploads (S-119). Platform collections (tenants, site keys, alert subscriptions) and the
+ * job-board settings global stay super-admin only.
+ *
+ * Every slug the plugin owns comes from its resolved options (PJ-80), so a host that renames
+ * `jobs` to `vacancies` keeps it in a site manager's menu. The host upload collections follow
+ * `mediaSlug`/`documentsSlug`/`usersSlug` the same way; `orders` and `applications` are
+ * placeholders until PJ-31 and PJ-22 land, and `folders`/`tags` belong to the host's own CMS.
  *
  * It is a superset of the task's list on purpose: S-120 is built and needs the location tree
  * and taxonomies in a site manager's menu, and media/documents are the tenant's own uploads.
  * The host can narrow or widen it through `siteManagerAdmin.collections`. The `job-tags` and
  * `areas-of-focus` taxonomies are gone (PJ-80), so they are not in this list.
  */
-export const SITE_MANAGER_NAV_COLLECTIONS = [
-  'jobs',
-  'organisations',
+export const siteManagerNavCollections = ({
+  documentsSlug = 'documents',
+  mediaSlug = 'media',
+  slugs = DEFAULT_PAYLOAD_JOBS_SLUGS,
+  usersSlug = 'users',
+}: SiteManagerNavSlugs = {}): string[] => [
+  slugs.jobs,
+  slugs.organisations,
   ORDERS_SLUG,
   APPLICATIONS_SLUG,
-  PAGES_SLUG,
-  'plans',
-  COUPONS_SLUG,
-  'add-ons',
-  'locations',
-  'job-categories',
-  'job-types',
-  'salary-bands',
-  'media',
-  'documents',
+  slugs.pages,
+  slugs.menus,
+  slugs.plans,
+  slugs.coupons,
+  slugs.addOns,
+  slugs.locations,
+  slugs.jobCategories,
+  slugs.jobTypes,
+  slugs.salaryBands,
+  ...(mediaSlug ? [mediaSlug] : []),
+  ...(documentsSlug ? [documentsSlug] : []),
   'folders',
   'tags',
-  'users',
-] as const
+  usersSlug,
+]
+
+/** The default menu, under the plugin's default slugs. */
+export const SITE_MANAGER_NAV_COLLECTIONS = siteManagerNavCollections()
 
 /**
  * True for a signed-in user who manages a tenant's site but not the platform. Employers and
@@ -96,11 +123,11 @@ const trimGlobal = (global: GlobalConfig): GlobalConfig => ({
 })
 
 export type SiteManagerNavOptions = {
-  /** Collection slugs a site manager keeps. Defaults to `SITE_MANAGER_NAV_COLLECTIONS`. */
+  /** Collection slugs a site manager keeps. Defaults to `siteManagerNavCollections(slugs)`. */
   collections?: readonly string[]
   /** Global slugs a site manager keeps. Defaults to none: globals are platform settings. */
   globals?: readonly string[]
-}
+} & SiteManagerNavSlugs
 
 /**
  * Apply the trimmed nav. `admin.hidden` is what Payload's sidebar, command palette, dashboard
@@ -109,8 +136,9 @@ export type SiteManagerNavOptions = {
  * (the tests below show a site manager cannot reach another tenant's documents).
  */
 export const withSiteManagerNav = (config: Config, options: SiteManagerNavOptions = {}): Config => {
-  const keepCollections = new Set<string>(options.collections ?? SITE_MANAGER_NAV_COLLECTIONS)
-  const keepGlobals = new Set<string>(options.globals ?? [])
+  const { collections, globals, ...slugOptions } = options
+  const keepCollections = new Set<string>(collections ?? siteManagerNavCollections(slugOptions))
+  const keepGlobals = new Set<string>(globals ?? [])
 
   return {
     ...config,

@@ -1,9 +1,15 @@
+import type { SiteManagerNavOptions } from './nav'
+
 export * from './collections'
 export * from './dashboard'
 export * from './links'
 export * from './nav'
 
-export type { SiteManagerNavOptions as SiteManagerAdminOptions } from './nav'
+/**
+ * What a host sets on `siteManagerAdmin`: the allow-list overrides. The resolved slugs come
+ * from the plugin's own options (PJ-80), so a host never repeats them here.
+ */
+export type SiteManagerAdminOptions = Pick<SiteManagerNavOptions, 'collections' | 'globals'>
 
 /** The package name the admin import map resolves components from. */
 export const PACKAGE_NAME = '@mission-control/payload-jobs'

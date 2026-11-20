@@ -2,9 +2,11 @@ import type { Config, GlobalConfig } from 'payload'
 import { describe, expect, it } from 'vitest'
 
 import type { MissionControlUser } from '../access'
+import { DEFAULT_PAYLOAD_JOBS_SLUGS } from '../slugs'
 import {
   isSiteManager,
   SITE_MANAGER_NAV_COLLECTIONS,
+  siteManagerNavCollections,
   siteManagerVisibleCollections,
   withSiteManagerNav,
 } from './nav'
@@ -117,6 +119,77 @@ describe('site manager nav @S-117', () => {
     expect(siteManagerVisibleCollections(trimmed, superAdmin)).toEqual(SLUGS)
   })
 
+  it('keeps a renamed job-board collection in the menu @S-117', () => {
+    const renamed = {
+      collections: ['vacancies', 'employers', 'job-locations', 'categories', 'packages', 'users'].map(
+        (slug) => ({ slug, fields: [] }),
+      ),
+      globals: [],
+    } as unknown as Config
+    const slugs = {
+      ...DEFAULT_PAYLOAD_JOBS_SLUGS,
+      jobs: 'vacancies',
+      locations: 'job-locations',
+      organisations: 'employers',
+      jobCategories: 'categories',
+      plans: 'packages',
+    }
+
+    const trimmed = withSiteManagerNav(renamed, { slugs })
+
+    expect(siteManagerVisibleCollections(trimmed, siteManagerA)).toEqual([
+      'vacancies',
+      'employers',
+      'job-locations',
+      'categories',
+      'packages',
+      'users',
+    ])
+  })
+
+  it('follows the host’s own upload and auth collection slugs', () => {
+    const hostSlugs = {
+      collections: ['jobs', 'uploads', 'pdfs', 'accounts', 'users', 'documents'].map((slug) => ({
+        slug,
+        fields: [],
+      })),
+      globals: [],
+    } as unknown as Config
+
+    const trimmed = withSiteManagerNav(hostSlugs, {
+      documentsSlug: 'pdfs',
+      mediaSlug: 'uploads',
+      usersSlug: 'accounts',
+    })
+
+    // The collections the host really has stay; the defaults it ignored do not come back.
+    expect(siteManagerVisibleCollections(trimmed, siteManagerA)).toEqual([
+      'jobs',
+      'uploads',
+      'pdfs',
+      'accounts',
+    ])
+  })
+
+  it('leaves out an upload collection the host does not have', () => {
+    expect(siteManagerNavCollections({ documentsSlug: null, mediaSlug: null })).not.toContain(
+      'documents',
+    )
+  })
+
+  it('builds the default menu from the resolved slugs, never a literal', () => {
+    const renamed = { ...DEFAULT_PAYLOAD_JOBS_SLUGS, jobs: 'vacancies', menus: 'navigation' }
+
+    const menu = siteManagerNavCollections({ slugs: renamed })
+
+    expect(menu).toContain('vacancies')
+    expect(menu).toContain('navigation')
+    expect(menu).not.toContain('jobs')
+    expect(menu).not.toContain('menus')
+    // The host content that names no plugin slug is unchanged.
+    expect(menu).toEqual(expect.arrayContaining(['orders', 'folders', 'tags', 'media', 'users']))
+  })
+
   it('keeps the task’s own list of collections in the default allow-list', () => {
     for (const slug of [
       'jobs',
@@ -124,6 +197,7 @@ describe('site manager nav @S-117', () => {
       'orders',
       'applications',
       'pages',
+      'menus',
       'plans',
       'coupons',
       'add-ons',

@@ -550,7 +550,15 @@ export const payloadJobs =
     const siteManagerAdmin = options.siteManagerAdmin === true ? {} : (options.siteManagerAdmin ?? {})
 
     return {
-      ...withSiteManagerNav(jobBoardConfig, siteManagerAdmin),
+      // The default menu is built from the resolved slugs, so a renamed collection stays in
+      // a site manager's menu (PJ-80). A host allow-list replaces it, as before.
+      ...withSiteManagerNav(jobBoardConfig, {
+        documentsSlug,
+        mediaSlug,
+        slugs,
+        usersSlug,
+        ...siteManagerAdmin,
+      }),
       admin: {
         ...jobBoardConfig.admin,
         components: {

@@ -163,6 +163,56 @@ features: { applications: true, alerts: false, credits: true, coupons: false, pa
     ).toContain('media')
   })
 
+  it('keeps renamed job-board collections in a site manager’s menu @S-117', async () => {
+    const result = await payloadJobs({
+      accountAuth: false,
+      collections: OVERRIDES,
+      tenancy: 'multi',
+    })(multiConfig)
+
+    const visible = siteManagerVisibleCollections(result, {
+      role: 'user',
+      tenants: [{ role: 'tenant-admin', tenant: 1 }],
+    })
+
+    // Every renamed collection is the site manager's own content, so all of them stay.
+    expect(visible).toEqual(
+      expect.arrayContaining([
+        'vacancies',
+        'employers',
+        'job-locations',
+        'categories',
+        'employment-types',
+        'salaries',
+        'packages',
+        'extras',
+        'vouchers',
+      ]),
+    )
+    // The platform collections stay hidden, and no default slug leaks back in.
+    expect(visible).not.toContain('tenants')
+    expect(visible).not.toContain('subscribers')
+    for (const slug of ['jobs', 'organisations', 'locations', 'plans', 'add-ons', 'coupons']) {
+      expect(visible).not.toContain(slug)
+    }
+  })
+
+  it('honours the legacy jobsSlug option in the site manager’s menu @S-117', async () => {
+    const result = await payloadJobs({
+      accountAuth: false,
+      jobsSlug: 'vacancies',
+      tenancy: 'multi',
+    })(multiConfig)
+
+    const visible = siteManagerVisibleCollections(result, {
+      role: 'user',
+      tenants: [{ role: 'tenant-admin', tenant: 1 }],
+    })
+
+    expect(visible).toContain('vacancies')
+    expect(visible).not.toContain('jobs')
+  })
+
   it('uses a rich-text job description only when the host has an editor', async () => {
     expect(await description(baseConfig)).toBe('textarea')
     expect(await description({ ...baseConfig, editor: {} } as unknown as Config)).toBe('richText')
