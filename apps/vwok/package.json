@@ -1,0 +1,31 @@
+{
+  "name": "@mission-control/vwok",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "vanuatuwok.vu, the Vanuatu Wok job board (Astro on Cloudflare Workers)",
+  "scripts": {
+    "build": "astro build",
+    "dev": "astro dev",
+    "lighthouse": "astro build && lhci autorun",
+    "preview": "astro preview",
+    "test": "vitest run",
+    "typecheck": "astro check"
+  },
+  "dependencies": {
+    "@labcat2020/rocketship": "0.3.0",
+    "@mission-control/launchpad": "workspace:*"
+  },
+  "devDependencies": {
+    "@astrojs/check": "0.9.12",
+    "@astrojs/cloudflare": "14.4.9",
+    "@lhci/cli": "0.16.1",
+    "astro": "7.4.12",
+    "sass": "1.108.2",
+    "typescript": "6.0.3",
+    "wrangler": "4.165.0"
+  },
+  "engines": {
+    "node": ">=24.22.1"
+  }
+}
