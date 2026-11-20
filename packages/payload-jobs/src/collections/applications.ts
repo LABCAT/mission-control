@@ -269,6 +269,12 @@ export const applicationsCollection = ({
       required: true,
       admin: { description: 'When the applicant agreed to the privacy policy.' },
     },
+    {
+      name: 'legacyId',
+      type: 'number',
+      index: true,
+      admin: { description: 'WordPress post id, for the import.', position: 'sidebar' },
+    },
   ],
   hooks: {
     beforeChange: [applicationFilesMatchOrganisation(filesSlug)],

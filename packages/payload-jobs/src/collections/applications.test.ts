@@ -1,4 +1,4 @@
-import type { Field, Payload } from 'payload'
+import type { Field, NumberField, Payload } from 'payload'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { addOnCollection } from '../add-ons'
@@ -91,6 +91,16 @@ describe('applications collection config @S-052', () => {
     expect(field('job')).toMatchObject({ required: true })
     expect(field('consentAt')).toMatchObject({ required: true })
     expect(field('message')).toMatchObject({ type: 'textarea' })
+  })
+
+  it('has an optional indexed legacyId for the WordPress importer', () => {
+    const config = applicationsCollection({ tenantScoped: true })
+    const legacyId = config.fields.find((f) => 'name' in f && f.name === 'legacyId') as
+      | NumberField
+      | undefined
+
+    expect(legacyId).toMatchObject({ index: true, type: 'number' })
+    expect(legacyId?.required).toBeFalsy()
   })
 
   it('accepts only PDF and Word files on the file collection', () => {

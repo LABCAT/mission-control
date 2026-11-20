@@ -1400,6 +1400,10 @@ export interface Application {
    * When the applicant agreed to the privacy policy.
    */
   consentAt: string;
+  /**
+   * WordPress post id, for the import.
+   */
+  legacyId?: number | null;
   createdBy?: {
     relationTo: 'users';
     value: number | User;
@@ -2308,6 +2312,7 @@ export interface ApplicationsSelect<T extends boolean = true> {
   cv?: T;
   coverLetter?: T;
   consentAt?: T;
+  legacyId?: T;
   createdBy?: T;
   updatedBy?: T;
   updatedAt?: T;
