@@ -33,7 +33,8 @@ const salary = job.salary
     )
   : undefined
 
-const salaryLabel = salary && job.salary?.period ? `${salary} / ${job.salary.period}` : salary
+const salaryLabel =
+  salary && job.salary?.period ? `${salary} / ${job.salary.period}` : (salary ?? job.displayedSalary ?? undefined)
 const closes = job.closes ? formatDate(job.closes, { locale, timezone }) : undefined
 ---
 

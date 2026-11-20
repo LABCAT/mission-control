@@ -1,0 +1,49 @@
+---
+/**
+ * A complete job listing page: the document head, the tenant chrome and the listing body.
+ * A site app (or the demo) renders this; it fetches nothing.
+ *
+ * Filtered and paginated pages are `noindex`: the section and the unfiltered listing are the
+ * pages worth indexing, and the canonical link (built from the path, which drops the query
+ * string) already points there.
+ */
+import Container from '@labcat2020/rocketship/components/Container'
+
+import BaseLayout from './BaseLayout.astro'
+import JobsListing from './JobsListing.astro'
+import type { JobListingView } from '../jobs/listing'
+import type { SiteTenant } from '../tenant/types'
+
+type Props = {
+  tenant: SiteTenant
+  view: JobListingView
+  /** The page's own path, e.g. `/jobs` or `/jobs/category/hospitality`. */
+  path: string
+  title: string
+  description?: string
+  /** Absolute site origin for this deployment. */
+  siteUrl?: string
+  /** Where "clear filters" goes: the bare listing. */
+  clearHref?: string
+  /** Keep the page out of the index whatever the filters say. */
+  noindex?: boolean
+}
+
+const { tenant, view, path, title, description, siteUrl, clearHref = '/jobs', noindex = false } = Astro.props as Props
+
+// A filtered or paged view is a variant of the section, not a page of its own.
+const variant = view.hasActiveFilters || view.page > 1
+---
+
+<BaseLayout
+  description={description}
+  noindex={noindex || variant}
+  path={path}
+  siteUrl={siteUrl}
+  tenant={tenant}
+  title={title}
+>
+  <Container size="wide">
+    <JobsListing clearHref={clearHref} description={description} timezone={tenant.timezone} title={title} view={view} />
+  </Container>
+</BaseLayout>
