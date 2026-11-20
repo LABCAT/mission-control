@@ -51,6 +51,7 @@ describe('payloadJobs tenancy modes', () => {
     expect(result.custom?.payloadJobs).toEqual({
       enabled: true,
       features: { applications: true, alerts: true, credits: true, coupons: true },
+      slugs: { jobs: 'jobs', tenants: 'tenants' },
       tenancy: 'multi',
     })
   })
@@ -118,6 +119,7 @@ describe('payloadJobs tenancy modes', () => {
     expect(result.custom?.payloadJobs).toEqual({
       enabled: true,
       features: { applications: true, alerts: true, credits: true, coupons: true },
+      slugs: { jobs: 'jobs', tenants: 'tenants' },
       tenancy: 'single',
     })
 

@@ -1,6 +1,7 @@
 import type { CollectionConfig, Config, GlobalConfig, Plugin } from 'payload'
 
 import { accountAuthEndpoints, type AccountAuthOptions } from './account-auth'
+import { DASHBOARD_COMPONENT_PATH, type SiteManagerAdminOptions } from './admin'
 import {
   ALERT_SUBSCRIPTIONS_SLUG,
   alertSubscriptionCollection,
@@ -19,8 +20,10 @@ import { expireJobPlacementsTask, PLACEMENTS_FIELD } from './placements'
 import { planCollection, PLANS_SLUG, withPlanRestrictionGuards } from './plans'
 import { TAXONOMY_SLUGS, taxonomyCollections } from './taxonomies'
 import { jobBoardSettingsGlobal, jobBoardTenantFields } from './tenancy'
+import { withSiteManagerNav } from './admin/nav'
 
 export * from './access'
+export * from './admin'
 export * from './account-auth'
 export * from './alert-subscriptions'
 export * from './collections/locations'
@@ -100,6 +103,12 @@ export type PayloadJobsOptions = {
    * (`jobPlacementsField()`), the daily task that expires placements is registered.
    */
   jobsSlug?: string
+  /**
+   * The tenant-scoped admin for site managers (PJ-30): a cut-down nav and a dashboard of
+   * pending jobs and recent orders. Defaults to on. Pass `false` for the stock admin, or an
+   * object to keep extra collections in the site manager's menu (e.g. `media`).
+   */
+  siteManagerAdmin?: boolean | SiteManagerAdminOptions
 }
 
 const resolvedFeatures = (options: PayloadJobsOptions): Required<PayloadJobsFeatures> => ({
@@ -291,7 +300,7 @@ export const payloadJobs =
         }
       : config.jobs
 
-    return {
+    const jobBoardConfig: Config = {
       ...config,
       // Plans before add-ons: Payload numbers compound index names in collection order, and
       // plans' existing `tenant_key_idx` must keep its name.
@@ -299,7 +308,35 @@ export const payloadJobs =
       jobs: jobsConfig,
       custom: {
         ...config.custom,
-        payloadJobs: { enabled: true, tenancy, features },
+        payloadJobs: {
+          enabled: true,
+          tenancy,
+          features,
+          // The dashboard and other admin code read the slugs back from here (PJ-80).
+          slugs: { jobs: jobsSlug, tenants: tenantsSlug },
+        },
+      },
+    }
+
+    if (options.siteManagerAdmin === false) return jobBoardConfig
+
+    // Site managers get a cut-down menu and a dashboard of their own tenant (PJ-30, S-117).
+    // Multi-tenant only: single mode has no site managers to scope.
+    if (tenancy !== 'multi') return jobBoardConfig
+
+    const siteManagerAdmin = options.siteManagerAdmin === true ? {} : (options.siteManagerAdmin ?? {})
+
+    return {
+      ...withSiteManagerNav(jobBoardConfig, siteManagerAdmin),
+      admin: {
+        ...jobBoardConfig.admin,
+        components: {
+          ...jobBoardConfig.admin?.components,
+          beforeDashboard: [
+            ...(jobBoardConfig.admin?.components?.beforeDashboard ?? []),
+            { path: DASHBOARD_COMPONENT_PATH },
+          ],
+        },
       },
     }
   }

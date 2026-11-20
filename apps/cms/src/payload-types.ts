@@ -1262,10 +1262,6 @@ export interface Job {
   expiresAt?: string | null;
   organisation: number | Organisation;
   description?: LexicalRichText<LexicalNodes_0DF1558F> | null;
-  /**
-   * An optional PDF of the full job description.
-   */
-  jobDescriptionPdf?: (number | null) | Document;
   jobType?: (number | null) | JobType;
   categories?: (number | JobCategory)[] | null;
   tags?: (number | JobTag)[] | null;
@@ -1276,14 +1272,18 @@ export interface Job {
    */
   companyName?: string | null;
   companyUrl?: string | null;
-  howToApply?: string | null;
   location?: (number | null) | Location;
   address?: string | null;
+  howToApply?: string | null;
   applyOnline?: boolean | null;
   /**
    * Where online applications go. Empty: the organisation’s contacts.
    */
   applicationsRecipient?: string | null;
+  /**
+   * An optional PDF of the full job description.
+   */
+  jobDescriptionPdf?: (number | null) | Document;
   /**
    * Set at checkout.
    */
@@ -2130,7 +2130,6 @@ export interface JobsSelect<T extends boolean = true> {
   expiresAt?: T;
   organisation?: T;
   description?: T;
-  jobDescriptionPdf?: T;
   jobType?: T;
   categories?: T;
   tags?: T;
@@ -2138,11 +2137,12 @@ export interface JobsSelect<T extends boolean = true> {
   displayedSalary?: T;
   companyName?: T;
   companyUrl?: T;
-  howToApply?: T;
   location?: T;
   address?: T;
+  howToApply?: T;
   applyOnline?: T;
   applicationsRecipient?: T;
+  jobDescriptionPdf?: T;
   plan?: T;
   placements?:
     | T

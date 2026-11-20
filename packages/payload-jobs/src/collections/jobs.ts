@@ -537,6 +537,18 @@ export const jobsCollection = ({
   const staffWrite = { create: staffOnly, update: staffOnly }
   const privateRead = jobPrivateFieldRead(tenantScoped)
 
+  const descriptionField: Field = richTextDescription
+    ? { name: 'description', type: 'richText', localized: true }
+    : { name: 'description', type: 'textarea', localized: true }
+  const jobDescriptionPdf: Field | null = documentsSlug
+    ? {
+        name: 'jobDescriptionPdf',
+        type: 'upload',
+        relationTo: documentsSlug as CollectionSlug,
+        admin: { description: 'An optional PDF of the full job description.' },
+      }
+    : null
+
   const fields: Field[] = [
     { name: 'title', type: 'text', localized: true, required: true },
     {
@@ -565,68 +577,94 @@ export const jobsCollection = ({
       index: true,
       required: true,
     },
-    richTextDescription
-      ? { name: 'description', type: 'richText', localized: true }
-      : { name: 'description', type: 'textarea', localized: true },
-    ...(documentsSlug
-      ? [
-          {
-            name: 'jobDescriptionPdf',
-            type: 'upload',
-            relationTo: documentsSlug as CollectionSlug,
-            admin: { description: 'An optional PDF of the full job description.' },
-          } as Field,
-        ]
-      : []),
+    // mission-control: the edit view is grouped into tabs for site managers (PJ-30). Tabs are
+    // presentational only: field names, columns and validation are unchanged, so queries and
+    // CSV exports keep working; only code that walks `fields` must look inside a tab.
     {
-      type: 'row',
-      fields: [
-        { name: 'jobType', type: 'relationship', relationTo: 'job-types' as CollectionSlug, index: true },
+      type: 'tabs',
+      tabs: [
         {
-          name: 'categories',
-          type: 'relationship',
-          hasMany: true,
-          relationTo: 'job-categories' as CollectionSlug,
+          label: 'Details',
+          fields: [
+            descriptionField,
+            {
+              type: 'row',
+              fields: [
+                {
+                  name: 'jobType',
+                  type: 'relationship',
+                  relationTo: 'job-types' as CollectionSlug,
+                  index: true,
+                },
+                {
+                  name: 'categories',
+                  type: 'relationship',
+                  hasMany: true,
+                  relationTo: 'job-categories' as CollectionSlug,
+                },
+              ],
+            },
+            {
+              type: 'row',
+              fields: [
+                {
+                  name: 'tags',
+                  type: 'relationship',
+                  hasMany: true,
+                  relationTo: 'job-tags' as CollectionSlug,
+                },
+                { name: 'salaryBand', type: 'relationship', relationTo: 'salary-bands' as CollectionSlug },
+                { name: 'displayedSalary', type: 'text', localized: true },
+              ],
+            },
+            {
+              type: 'row',
+              fields: [
+                {
+                  name: 'companyName',
+                  type: 'text',
+                  admin: { description: 'Defaults to the organisation’s name.' },
+                },
+                { name: 'companyUrl', type: 'text', validate: validateUrl },
+              ],
+            },
+          ],
         },
-      ],
-    },
-    {
-      type: 'row',
-      fields: [
-        { name: 'tags', type: 'relationship', hasMany: true, relationTo: 'job-tags' as CollectionSlug },
-        { name: 'salaryBand', type: 'relationship', relationTo: 'salary-bands' as CollectionSlug },
-        { name: 'displayedSalary', type: 'text', localized: true },
-      ],
-    },
-    {
-      type: 'row',
-      fields: [
         {
-          name: 'companyName',
-          type: 'text',
-          admin: { description: 'Defaults to the organisation’s name.' },
+          label: 'Location',
+          fields: [
+            {
+              type: 'row',
+              fields: [
+                { name: 'location', type: 'relationship', relationTo: 'locations' as CollectionSlug },
+                { name: 'address', type: 'textarea' },
+              ],
+            },
+          ],
         },
-        { name: 'companyUrl', type: 'text', validate: validateUrl },
-      ],
-    },
-    { name: 'howToApply', type: 'textarea', localized: true },
-    {
-      type: 'row',
-      fields: [
-        { name: 'location', type: 'relationship', relationTo: 'locations' as CollectionSlug },
-        { name: 'address', type: 'textarea' },
-      ],
-    },
-    {
-      type: 'row',
-      fields: [
-        { name: 'applyOnline', type: 'checkbox', defaultValue: true },
         {
-          name: 'applicationsRecipient',
-          type: 'email',
-          access: { read: privateRead },
-          admin: { description: 'Where online applications go. Empty: the organisation’s contacts.' },
+          label: 'Apply',
+          fields: [
+            { name: 'howToApply', type: 'textarea', localized: true },
+            {
+              type: 'row',
+              fields: [
+                { name: 'applyOnline', type: 'checkbox', defaultValue: true },
+                {
+                  name: 'applicationsRecipient',
+                  type: 'email',
+                  access: { read: privateRead },
+                  admin: {
+                    description: 'Where online applications go. Empty: the organisation’s contacts.',
+                  },
+                },
+              ],
+            },
+          ],
         },
+        // The PDF sits with the other attachments, away from the details a site manager edits
+        // most often. Without a documents collection there is no tab.
+        ...(jobDescriptionPdf ? [{ label: 'Files', fields: [jobDescriptionPdf] }] : []),
       ],
     },
     {

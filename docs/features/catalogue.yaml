@@ -1647,8 +1647,14 @@ stories:
     settings:
       - admin.siteManagerScope
     mvp: true
-    status: planned
-    tests: []
+    status: built
+    tests:
+      - packages/payload-jobs/src/admin/nav.test.ts
+      - packages/payload-jobs/src/admin/dashboard.test.ts
+      - packages/payload-jobs/src/admin/SiteManagerDashboard.test.tsx
+      - packages/payload-jobs/src/admin/links.test.ts
+      - packages/payload-jobs/src/index.test.ts
+      - packages/payload-jobs/src/collections/jobs.test.ts
 
   - id: S-118
     area: Admin

@@ -407,3 +407,57 @@ describe('jobs', () => {
     ])
   })
 })
+
+const tabsOf = (documentsSlug: null | string) => {
+  const jobs = jobsCollection({ documentsSlug, tenantScoped: true })
+  const tabs = jobs.fields.find((field) => field.type === 'tabs')
+
+  return tabs && tabs.type === 'tabs' ? tabs.tabs : []
+}
+
+const tabFieldNames = (documentsSlug: null | string) =>
+  tabsOf(documentsSlug).flatMap((tab) =>
+    tab.fields.flatMap((field) =>
+      field.type === 'row'
+        ? field.fields.map((inner) => ('name' in inner ? inner.name : null))
+        : ['name' in field ? field.name : null],
+    ),
+  )
+
+describe('job edit view tabs @S-117', () => {
+  it('groups the editable fields into Details, Location, Apply and Files', () => {
+    expect(tabsOf('documents').map((tab) => tab.label)).toEqual(['Details', 'Location', 'Apply', 'Files'])
+  })
+
+  it('leaves the Files tab out when the host has no documents collection', () => {
+    expect(tabsOf(null).map((tab) => tab.label)).toEqual(['Details', 'Location', 'Apply'])
+  })
+
+  it('keeps every field it had before the tabs, including the sidebar ones', () => {
+    const jobs = jobsCollection({ documentsSlug: 'documents', tenantScoped: true })
+    const topLevel = jobs.fields.flatMap((field) => ('name' in field && field.name ? [field.name] : []))
+
+    expect(tabFieldNames('documents')).toEqual(
+      expect.arrayContaining([
+        'description',
+        'jobType',
+        'categories',
+        'tags',
+        'salaryBand',
+        'displayedSalary',
+        'companyName',
+        'companyUrl',
+        'location',
+        'address',
+        'howToApply',
+        'applyOnline',
+        'applicationsRecipient',
+        'jobDescriptionPdf',
+      ]),
+    )
+    // The fields that stay outside the tabs are the ones that always were: identity and sidebar.
+    expect(topLevel).toEqual(
+      expect.arrayContaining(['title', 'slug', 'organisation', 'status', 'plan', 'placements', 'views']),
+    )
+  })
+})
