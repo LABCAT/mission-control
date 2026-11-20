@@ -1366,7 +1366,8 @@ stories:
       - xero.paymentSync
     mvp: true
     status: planned
-    tests: []
+    tests:
+      - packages/payload-xero/src/payment-sync.test.ts
 
   - id: S-097
     area: Commerce
