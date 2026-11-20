@@ -368,9 +368,9 @@ export async function up({ db, payload, req }: MigrateUpArgs): Promise<void> {
   );
   
   DROP INDEX "tenant_slug_2_idx";
-  DROP INDEX IF EXISTS "tenant_slug_3_idx";
-  DROP INDEX IF EXISTS "tenant_slug_4_idx";
-  DROP INDEX IF EXISTS "tenant_slug_5_idx";
+  DROP INDEX "tenant_slug_3_idx";
+  DROP INDEX "tenant_slug_4_idx";
+  DROP INDEX "tenant_slug_5_idx";
   ALTER TABLE "payload_locked_documents_rels" ADD COLUMN "pages_id" integer;
   ALTER TABLE "payload_locked_documents_rels" ADD COLUMN "menus_id" integer;
   ALTER TABLE "pages_blocks_hero_links" ADD CONSTRAINT "pages_blocks_hero_links_parent_id_fk" FOREIGN KEY ("_parent_id") REFERENCES "public"."pages_blocks_hero"("id") ON DELETE cascade ON UPDATE no action;
@@ -548,6 +548,13 @@ export async function up({ db, payload, req }: MigrateUpArgs): Promise<void> {
 }
 
 export async function down({ db, payload, req }: MigrateDownArgs): Promise<void> {
+  // mission-control: these foreign keys reference the tables dropped below. Dropping those
+  // tables with CASCADE takes the constraints with them, so the generated drop that came after
+  // the tables failed. Drop them first, while the referenced tables still exist.
+  await db.execute(sql`
+  ALTER TABLE "payload_locked_documents_rels" DROP CONSTRAINT "payload_locked_documents_rels_pages_fk";
+  ALTER TABLE "payload_locked_documents_rels" DROP CONSTRAINT "payload_locked_documents_rels_menus_fk";`)
+
   await db.execute(sql`
    ALTER TABLE "pages_blocks_hero_links" DISABLE ROW LEVEL SECURITY;
   ALTER TABLE "pages_blocks_hero" DISABLE ROW LEVEL SECURITY;
@@ -580,8 +587,6 @@ export async function down({ db, payload, req }: MigrateDownArgs): Promise<void>
   ALTER TABLE "menus_items" DISABLE ROW LEVEL SECURITY;
   ALTER TABLE "menus" DISABLE ROW LEVEL SECURITY;
   ALTER TABLE "menus_rels" DISABLE ROW LEVEL SECURITY;
-  ALTER TABLE "payload_locked_documents_rels" DROP CONSTRAINT IF EXISTS "payload_locked_documents_rels_pages_fk";
-  ALTER TABLE "payload_locked_documents_rels" DROP CONSTRAINT IF EXISTS "payload_locked_documents_rels_menus_fk";
   DROP TABLE "pages_blocks_hero_links" CASCADE;
   DROP TABLE "pages_blocks_hero" CASCADE;
   DROP TABLE "pages_blocks_feature_boxes_items" CASCADE;
@@ -613,8 +618,6 @@ export async function down({ db, payload, req }: MigrateDownArgs): Promise<void>
   DROP TABLE "menus_items" CASCADE;
   DROP TABLE "menus" CASCADE;
   DROP TABLE "menus_rels" CASCADE;
-  
-  
   DROP INDEX IF EXISTS "tenant_slug_3_idx";
   DROP INDEX IF EXISTS "tenant_slug_4_idx";
   DROP INDEX IF EXISTS "tenant_slug_5_idx";

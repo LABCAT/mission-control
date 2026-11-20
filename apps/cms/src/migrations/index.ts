@@ -19,7 +19,7 @@ import * as migration_20261120_065125_coupons from './20261120_065125_coupons';
 import * as migration_20261120_105626_tags_drafts from './20261120_105626_tags_drafts';
 import * as migration_20261120_111524_remove_job_tags_areas from './20261120_111524_remove_job_tags_areas';
 import * as migration_20261120_122303_location_tree from './20261120_122303_location_tree';
-import * as migration_20261120_123353_pages_menus from './20261120_123353_pages_menus';
+import * as migration_20261120_151343_pages_menus from './20261120_151343_pages_menus';
 
 export const migrations = [
   {
@@ -128,8 +128,8 @@ export const migrations = [
     name: '20261120_122303_location_tree',
   },
   {
-    up: migration_20261120_123353_pages_menus.up,
-    down: migration_20261120_123353_pages_menus.down,
-    name: '20261120_123353_pages_menus'
+    up: migration_20261120_151343_pages_menus.up,
+    down: migration_20261120_151343_pages_menus.down,
+    name: '20261120_151343_pages_menus'
   },
 ];

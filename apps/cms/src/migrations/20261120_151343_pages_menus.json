@@ -4060,6 +4060,88 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.tenants_location_levels": {
+      "name": "tenants_location_levels",
+      "schema": "",
+      "columns": {
+        "_order": {
+          "name": "_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "_parent_id": {
+          "name": "_parent_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "id": {
+          "name": "id",
+          "type": "varchar",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "label": {
+          "name": "label",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "tenants_location_levels_order_idx": {
+          "name": "tenants_location_levels_order_idx",
+          "columns": [
+            {
+              "expression": "_order",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "tenants_location_levels_parent_id_idx": {
+          "name": "tenants_location_levels_parent_id_idx",
+          "columns": [
+            {
+              "expression": "_parent_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "tenants_location_levels_parent_id_fk": {
+          "name": "tenants_location_levels_parent_id_fk",
+          "tableFrom": "tenants_location_levels",
+          "tableTo": "tenants",
+          "columnsFrom": [
+            "_parent_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.tenants_tax_rates": {
       "name": "tenants_tax_rates",
       "schema": "",
@@ -4240,6 +4322,12 @@
         "tax_label": {
           "name": "tax_label",
           "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "location_max_depth": {
+          "name": "location_max_depth",
+          "type": "numeric",
           "primaryKey": false,
           "notNull": false
         },
@@ -5219,16 +5307,15 @@
           "primaryKey": false,
           "notNull": true
         },
-        "kind": {
-          "name": "kind",
-          "type": "enum_locations_kind",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
         "parent_id": {
           "name": "parent_id",
           "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "depth": {
+          "name": "depth",
+          "type": "numeric",
           "primaryKey": false,
           "notNull": false
         },
@@ -5289,6 +5376,21 @@
           "columns": [
             {
               "expression": "parent_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "locations_depth_idx": {
+          "name": "locations_depth_idx",
+          "columns": [
+            {
+              "expression": "depth",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -13444,18 +13546,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "location_id": {
-          "name": "location_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "address": {
-          "name": "address",
-          "type": "varchar",
-          "primaryKey": false,
-          "notNull": false
-        },
         "apply_online": {
           "name": "apply_online",
           "type": "boolean",
@@ -13639,21 +13729,6 @@
           "method": "btree",
           "with": {}
         },
-        "jobs_location_idx": {
-          "name": "jobs_location_idx",
-          "columns": [
-            {
-              "expression": "location_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "jobs_plan_idx": {
           "name": "jobs_plan_idx",
           "columns": [
@@ -13802,19 +13877,6 @@
           "onDelete": "set null",
           "onUpdate": "no action"
         },
-        "jobs_location_id_locations_id_fk": {
-          "name": "jobs_location_id_locations_id_fk",
-          "tableFrom": "jobs",
-          "tableTo": "locations",
-          "columnsFrom": [
-            "location_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
         "jobs_plan_id_plans_id_fk": {
           "name": "jobs_plan_id_plans_id_fk",
           "tableFrom": "jobs",
@@ -13859,6 +13921,12 @@
         },
         "how_to_apply": {
           "name": "how_to_apply",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "location_details": {
+          "name": "location_details",
           "type": "varchar",
           "primaryKey": false,
           "notNull": false
@@ -13961,6 +14029,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "locations_id": {
+          "name": "locations_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
         "users_id": {
           "name": "users_id",
           "type": "integer",
@@ -14029,6 +14103,21 @@
           "method": "btree",
           "with": {}
         },
+        "jobs_rels_locations_id_idx": {
+          "name": "jobs_rels_locations_id_idx",
+          "columns": [
+            {
+              "expression": "locations_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "jobs_rels_users_id_idx": {
           "name": "jobs_rels_users_id_idx",
           "columns": [
@@ -14065,6 +14154,19 @@
           "tableTo": "job_categories",
           "columnsFrom": [
             "job_categories_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "jobs_rels_locations_fk": {
+          "name": "jobs_rels_locations_fk",
+          "tableFrom": "jobs_rels",
+          "tableTo": "locations",
+          "columnsFrom": [
+            "locations_id"
           ],
           "columnsTo": [
             "id"
@@ -16498,15 +16600,6 @@
         "auto"
       ]
     },
-    "public.enum_locations_kind": {
-      "name": "enum_locations_kind",
-      "schema": "public",
-      "values": [
-        "region",
-        "island",
-        "town"
-      ]
-    },
     "public.enum_organisations_type": {
       "name": "enum_organisations_type",
       "schema": "public",
@@ -16769,6 +16862,6 @@
     "tables": {},
     "columns": {}
   },
-  "id": "2fa54544-5712-4157-93fb-d874b90067cf",
+  "id": "5593b78d-11bd-4a6c-b5c8-1af1140eddc5",
   "prevId": "00000000-0000-0000-0000-000000000000"
 }
