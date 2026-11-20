@@ -2,25 +2,7 @@ import type { CollectionConfig, CompoundIndex, Field, PayloadRequest, Validate }
 import { ValidationError } from 'payload'
 
 import { tenantContentWriteAccess } from '../access'
-
-export const LOCATION_KINDS = ['region', 'island', 'town'] as const
-export type LocationKind = (typeof LOCATION_KINDS)[number]
-
-export const locationKindOptions = LOCATION_KINDS.map((value) => ({
-  label: value === 'region' ? 'Region' : value === 'island' ? 'Island' : 'Town',
-  value,
-}))
-
-/**
- * Allowed parent kinds per kind. A parent is always broader than its child — a `region` is a
- * root, an `island` hangs off a region, a `town` off a region or island — so a parent cycle
- * cannot be built and no cycle walk is needed.
- */
-export const ALLOWED_PARENT_KINDS: Record<LocationKind, readonly LocationKind[]> = {
-  island: ['region'],
-  region: [],
-  town: ['region', 'island'],
-}
+import type { TenantLocationSettings } from '../location-settings'
 
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 
@@ -37,7 +19,6 @@ type LocationRef = number | string | { id: number | string } | null | undefined
 
 type LocationData = {
   id?: number | string
-  kind?: LocationKind | null
   parent?: LocationRef
   slug?: null | string
   tenant?: LocationRef
@@ -50,7 +31,22 @@ const idOf = (value: LocationRef): null | number | string => {
   return value
 }
 
+/**
+ * A tenant's location settings, read when a write needs its maximum depth. The plugin supplies
+ * this from the tenants collection (multi) or the job-board settings global (single), so the
+ * collection itself stays independent of where settings live.
+ */
+export type LocationLimits = (args: {
+  data: LocationData
+  req: PayloadRequest
+}) => Promise<null | TenantLocationSettings> | null | TenantLocationSettings
+
 export type LocationsOptions = {
+  /**
+   * Refuse a location deeper than the tenant allows. Optional: a tenant without a limit can
+   * build any tree.
+   */
+  limits?: LocationLimits
   /**
    * In multi-tenant mode every location must name a tenant. The tenant is what scopes the
    * slug and the parent comparison, so a tenantless row would sit outside the tenant tree
@@ -99,69 +95,115 @@ type TreeCheckArgs = {
   /** The document as it will be stored: submitted data merged over the stored document. */
   data: LocationData
   id?: number | string
+  limits?: LocationLimits
   req: PayloadRequest
 }
 
-/**
- * A parent must exist in the same tenant and be a broader kind. A region takes no parent.
- * The check reads the parent with `overrideAccess`, otherwise a tenant admin could not
- * resolve locations outside their own read filter, and compares tenants explicitly.
- */
-const checkParent = async (
-  value: LocationRef,
-  { data, id, req }: TreeCheckArgs,
-): Promise<string | true> => {
-  const parentID = idOf(value)
-  if (parentID === null) return true
+type ParentCheck = { depth: number; error?: undefined } | { depth?: undefined; error: string }
 
-  const kind = data.kind
+/** A limit on how far an ancestor walk goes, so corrupt data cannot spin forever. */
+const MAX_TREE_WALK = 1000
 
-  if (!kind) return true
-
-  if (id !== undefined && id !== null && String(parentID) === String(id)) {
-    return 'A location cannot be its own parent'
-  }
-
-  if (ALLOWED_PARENT_KINDS[kind].length === 0) {
-    return `A ${kind} cannot have a parent`
-  }
-
-  const parent = (await req.payload.findByID({
+const readLocation = async (id: number | string, req: PayloadRequest): Promise<LocationData | null> =>
+  (await req.payload.findByID({
     collection: 'locations',
     depth: 0,
-    id: parentID,
+    id,
     overrideAccess: true,
     req,
   })) as LocationData | null
 
-  if (!parent) return 'The parent location does not exist'
+/**
+ * A parent must exist in the same tenant and the tree may not loop. There is no fixed kind
+ * ladder any more, so the check walks the parent chain: the document cannot be moved under
+ * one of its own descendants, and a parent chain that already loops is refused rather than
+ * followed forever. The walk also counts the ancestors, which is the stored `depth`.
+ *
+ * The check reads parents with `overrideAccess`, otherwise a tenant admin could not resolve
+ * locations outside their own read filter, and compares tenants explicitly.
+ */
+const checkParent = async (
+  value: LocationRef,
+  { data, id, limits, req }: TreeCheckArgs,
+): Promise<ParentCheck> => {
+  const parentID = idOf(value)
+  let depth = 0
+  let parent: LocationData | null = null
 
-  if (!parent.kind || !ALLOWED_PARENT_KINDS[kind].includes(parent.kind)) {
-    return `A ${kind}’s parent must be a ${ALLOWED_PARENT_KINDS[kind].join(' or ')}`
+  if (parentID !== null) {
+    if (id !== undefined && id !== null && String(parentID) === String(id)) {
+      return { error: 'A location cannot be its own parent' }
+    }
+
+    // Walk up from the parent. Reaching the document itself means the new parent is one of
+    // its descendants; a repeated id means the stored tree already loops.
+    const seen = new Set<string>()
+    let currentID: null | number | string = parentID
+
+    while (currentID !== null) {
+      const key = String(currentID)
+      if (id !== undefined && id !== null && key === String(id)) {
+        return { error: 'A location cannot sit under one of its own descendants' }
+      }
+      if (seen.has(key)) return { error: 'The location tree loops; fix the parents before saving' }
+      if (seen.size >= MAX_TREE_WALK) return { error: 'The location tree is deeper than allowed' }
+      seen.add(key)
+
+      const doc = await readLocation(currentID, req)
+      if (!doc) {
+        return { error: depth === 0 ? 'The parent location does not exist' : 'An ancestor location is missing' }
+      }
+
+      if (depth === 0) parent = doc
+      depth += 1
+      currentID = idOf(doc.parent)
+    }
+
+    const tenantID = idOf(data.tenant)
+    // A tenantless child never reaches here in multi-tenant mode: the beforeChange hook
+    // refuses it. In single-tenant mode there is no tenant field at all.
+    if (tenantID !== null) {
+      const parentTenantID = idOf(parent?.tenant)
+
+      if (parentTenantID === null) return { error: 'The parent location belongs to no tenant' }
+      if (String(tenantID) !== String(parentTenantID)) {
+        return { error: 'The parent location belongs to another tenant' }
+      }
+    }
   }
 
-  const tenantID = idOf(data.tenant)
-  // A tenantless child never reaches here in multi-tenant mode: the beforeChange hook
-  // refuses it. In single-tenant mode there is no tenant field at all.
-  if (tenantID === null) return true
+  if (limits) {
+    const settings = await limits({ data, req })
+    const maxDepth = settings?.maxDepth ?? null
 
-  const parentTenantID = idOf(parent.tenant)
+    if (maxDepth !== null && depth > maxDepth) {
+      const named = settings?.levels.length
+        ? ` (${settings.levels.slice(0, maxDepth + 1).join(' → ')})`
+        : ''
+      const levelWord = maxDepth === 0 ? 'level' : 'levels'
 
-  if (parentTenantID === null) return 'The parent location belongs to no tenant'
+      return { error: `This tenant allows at most ${maxDepth + 1} location ${levelWord}${named}` }
+    }
+  }
 
-  return String(tenantID) === String(parentTenantID)
-    ? true
-    : 'The parent location belongs to another tenant'
+  return { depth }
 }
 
 /**
- * Field validators only run for fields the request submits, so an update that changes `kind`
- * without sending `parent` would skip this check and could leave a region with a parent. The
- * collection-level `beforeChange` hook below therefore runs the same check against the merged
- * document on every write, and this validator only covers the field-level error message.
+ * Field validators only run for fields the request submits, so an update that changes nothing
+ * but leaves a stored parent invalid would skip this check. The collection-level `beforeChange`
+ * hook below therefore runs the same check against the merged document on every write, and this
+ * validator only covers the field-level error message.
  */
-const validateParent: Validate = async (value, { data, id, req }) =>
-  checkParent(value as LocationRef, { data: (data ?? {}) as LocationData, id, req })
+const validateParent: Validate = async (value, { data, id, req }) => {
+  const result = await checkParent(value as LocationRef, {
+    data: (data ?? {}) as LocationData,
+    id,
+    req,
+  })
+
+  return result.error ?? true
+}
 
 const fields: Field[] = [
   {
@@ -177,17 +219,21 @@ const fields: Field[] = [
     validate: validateSlug,
   },
   {
-    name: 'kind',
-    type: 'select',
-    required: true,
-    options: locationKindOptions,
-  },
-  {
     name: 'parent',
     type: 'relationship',
     relationTo: 'locations',
     index: true,
     validate: validateParent,
+  },
+  {
+    name: 'depth',
+    type: 'number',
+    index: true,
+    admin: {
+      description:
+        'Computed from the parent chain: 0 is the top level (Island on Vanuatu Wok), 1 its children, and so on.',
+      readOnly: true,
+    },
   },
   {
     name: 'legacyId',
@@ -200,12 +246,12 @@ const fields: Field[] = [
 ]
 
 /**
- * The location tree: regions (roots), islands and towns. Public read, so sites and job
- * alerts can build filters without a session. Only tenant admins and editors write, and the
+ * The generic location tree: any depth, any level names. Public read, so sites and job alerts
+ * can build filters without a session. Only tenant admins and editors write, and the
  * multi-tenant plugin scopes every operation to the caller's tenant.
  */
 export const locationsCollection = (options: LocationsOptions = {}): CollectionConfig => {
-  const { requireTenant = false } = options
+  const { limits, requireTenant = false } = options
 
   return {
     slug: 'locations',
@@ -216,48 +262,47 @@ export const locationsCollection = (options: LocationsOptions = {}): CollectionC
       update: tenantContentWriteAccess,
     },
     admin: {
-      defaultColumns: ['name', 'kind', 'slug', 'parent'],
+      defaultColumns: ['name', 'depth', 'slug', 'parent'],
       group: 'Jobs',
       useAsTitle: 'name',
     },
     fields,
-    hooks: requireTenant
-      ? {
-          // Field validators are skipped when their field is not submitted, so a write that never
-          // mentions `tenant` or `parent` would slip past `validateSlug` and `validateParent`.
-          // Check both here, against the document as it will be stored. (`beforeChange`, not
-          // `beforeValidate`: the plugin's membership hook is the first entry there, and the
-          // tenancy test reaches for it by that position.)
-          beforeChange: [
-            async ({ data, originalDoc, req }) => {
-              const submitted = (data ?? {}) as LocationData
-              const stored = (originalDoc ?? {}) as LocationData
-              const merged: LocationData = { ...stored, ...submitted }
+    hooks: {
+      // Field validators are skipped when their field is not submitted, so a write that never
+      // mentions `tenant` or `parent` would slip past `validateSlug` and `validateParent`.
+      // Check both here, against the document as it will be stored, and persist the computed
+      // depth. (`beforeChange`, not `beforeValidate`: the plugin's membership hook is the first
+      // entry there, and the tenancy test reaches for it by that position.)
+      beforeChange: [
+        async ({ data, originalDoc, req }) => {
+          const submitted = (data ?? {}) as LocationData
+          const stored = (originalDoc ?? {}) as LocationData
+          const merged: LocationData = { ...stored, ...submitted }
 
-              if (idOf(merged.tenant) === null) {
-                throw new ValidationError({
-                  collection: 'locations',
-                  errors: [{ message: 'A location must belong to a tenant', path: 'tenant' }],
-                })
-              }
+          if (requireTenant && idOf(merged.tenant) === null) {
+            throw new ValidationError({
+              collection: 'locations',
+              errors: [{ message: 'A location must belong to a tenant', path: 'tenant' }],
+            })
+          }
 
-              const parentError = await checkParent(merged.parent, {
-                data: merged,
-                id: merged.id ?? stored.id,
-                req,
-              })
-              if (parentError !== true) {
-                throw new ValidationError({
-                  collection: 'locations',
-                  errors: [{ message: parentError, path: 'parent' }],
-                })
-              }
+          const result = await checkParent(merged.parent, {
+            data: merged,
+            id: merged.id ?? stored.id,
+            limits,
+            req,
+          })
+          if (result.error !== undefined) {
+            throw new ValidationError({
+              collection: 'locations',
+              errors: [{ message: result.error, path: 'parent' }],
+            })
+          }
 
-              return data
-            },
-          ],
-        }
-      : {},
+          return { ...submitted, depth: result.depth }
+        },
+      ],
+    },
     versions: false,
   }
 }

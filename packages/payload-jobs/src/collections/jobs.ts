@@ -613,8 +613,25 @@ export const jobsCollection = ({
     {
       type: 'row',
       fields: [
-        { name: 'location', type: 'relationship', relationTo: 'locations' as CollectionSlug },
-        { name: 'address', type: 'textarea' },
+        {
+          name: 'location',
+          type: 'relationship',
+          hasMany: true,
+          relationTo: 'locations' as CollectionSlug,
+          admin: {
+            description:
+              'One or more places in the tenant’s location tree. The job appears on every matching location page and its descendants.',
+          },
+        },
+        {
+          name: 'locationDetails',
+          type: 'textarea',
+          localized: true,
+          admin: {
+            description:
+              'Optional free-text detail, e.g. a street address or the legacy “Multiple locations” text.',
+          },
+        },
       ],
     },
     {
