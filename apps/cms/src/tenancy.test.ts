@@ -412,13 +412,7 @@ describe('site key reads', () => {
 })
 
 describe('job-board taxonomies', () => {
-  const taxonomySlugs = [
-    'job-categories',
-    'job-types',
-    'job-tags',
-    'salary-bands',
-    'areas-of-focus',
-  ]
+  const taxonomySlugs = ['job-categories', 'job-types', 'salary-bands']
 
   it.each(taxonomySlugs)('registers %s and scopes its reads to the user’s tenants', async (slug) => {
     const config = await buildConfig()
@@ -447,8 +441,8 @@ describe('job-board taxonomies', () => {
       tenants: [{ role: 'employer', tenant: tenantA }],
     }
 
-    expect(await collectionAccess(config, 'create', 'job-tags', tenantAdminA)).toBeTruthy()
-    expect(await collectionAccess(config, 'create', 'job-tags', employer)).toBe(false)
+    expect(await collectionAccess(config, 'create', 'salary-bands', tenantAdminA)).toBeTruthy()
+    expect(await collectionAccess(config, 'create', 'salary-bands', employer)).toBe(false)
   })
 })
 

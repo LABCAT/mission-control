@@ -11,7 +11,7 @@ describe('registry', () => {
 
   it('offers every entity PJ-61 imports, plus the location audit', () => {
     expect(Object.keys(registry).toSorted()).toEqual(
-      ['areas-of-focus', 'job-categories', 'job-tags', 'job-types', 'locations', 'salary-bands'].toSorted(),
+      ['job-categories', 'job-types', 'locations', 'salary-bands'].toSorted(),
     )
   })
 

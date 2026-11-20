@@ -18,6 +18,7 @@ import {
   type MissionControlUser,
 } from './access'
 import { isMinorUnits, percentOf } from './money'
+import { mergeCollectionAccess, type CollectionAccess } from './slugs'
 
 /**
  * Discount codes, replacing the WordPress `appthemes-coupons` plugin (see AUDIT.md).
@@ -146,14 +147,19 @@ export const uniqueCodePerTenant =
  * which would leave coupons that belong to no tenant (and that tenant admins cannot reach), so
  * they are removed in the tenant's `beforeDelete`, as alert subscriptions are.
  */
-export const removeTenantCoupons: CollectionBeforeDeleteHook = async ({ id, req }) => {
-  await req.payload.delete({
-    collection: COUPONS_SLUG,
-    overrideAccess: true,
-    req,
-    where: { tenant: { equals: id } },
-  })
-}
+export const removeTenantCouponsFor =
+  (collectionSlug: string = COUPONS_SLUG): CollectionBeforeDeleteHook =>
+  async ({ id, req }) => {
+    await req.payload.delete({
+      collection: collectionSlug as CollectionSlug,
+      overrideAccess: true,
+      req,
+      where: { tenant: { equals: id } },
+    })
+  }
+
+/** Removes the default coupons collection; the plugin binds a custom slug itself. */
+export const removeTenantCoupons: CollectionBeforeDeleteHook = removeTenantCouponsFor()
 
 /**
  * A multi-tenant coupon always keeps a tenant. Access cannot stop an update that sets `tenant`
@@ -233,20 +239,29 @@ export const validateCouponMaxUses = (value: null | number | undefined): string 
     : 'Use a whole number, 1 or more, or leave it empty for unlimited'
 
 export type CouponCollectionOptions = {
+  /** Overrides the collection's `access`, operation by operation (PJ-80). */
+  access?: CollectionAccess
+  /** Collection slug. Defaults to `coupons`. */
+  slug?: string
   /** Set to `false` in single-tenant mode, where there is no `tenants` collection. */
   tenantScoped?: boolean
 }
 
 export const couponCollection = ({
+  access,
+  slug = COUPONS_SLUG,
   tenantScoped = true,
 }: CouponCollectionOptions = {}): CollectionConfig => ({
-  slug: COUPONS_SLUG,
-  access: {
-    create: couponCreateAccess(tenantScoped),
-    delete: couponWriteAccess(tenantScoped),
-    read: authenticatedAccess,
-    update: couponWriteAccess(tenantScoped),
-  },
+  slug,
+  access: mergeCollectionAccess(
+    {
+      create: couponCreateAccess(tenantScoped),
+      delete: couponWriteAccess(tenantScoped),
+      read: authenticatedAccess,
+      update: couponWriteAccess(tenantScoped),
+    },
+    access,
+  ),
   admin: {
     defaultColumns: ['code', 'discountType', 'amount', 'active', 'useCount', 'maxUses'],
     group: 'Job board',
@@ -328,7 +343,7 @@ export const couponCollection = ({
   ],
   hooks: {
     beforeChange: [...(tenantScoped ? [requireCouponTenant] : []), protectCouponUseCount],
-    beforeValidate: [normalizeCouponCodeHook, uniqueCodePerTenant(COUPONS_SLUG)],
+    beforeValidate: [normalizeCouponCodeHook, uniqueCodePerTenant(slug as CollectionSlug)],
   },
   // The unique index spans the tenant, so the same code may exist on two tenants.
   indexes: tenantScoped ? [{ fields: ['tenant', 'code'], unique: true }] : [],

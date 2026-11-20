@@ -23,6 +23,7 @@ import {
   type TenantRole,
 } from '../access'
 import { getSiteKeyHeader, resolveSiteKey } from '../site-keys'
+import { mergeCollectionAccess, type CollectionAccess } from '../slugs'
 import { uniqueSlugPerTenant, validateTaxonomySlug } from '../taxonomies'
 
 /**
@@ -299,7 +300,11 @@ export const validateOrganisationSlug = (value: null | string | undefined): stri
  * another tenant's locations, media or areas of focus.
  */
 export const organisationRelationsInTenant =
-  (tenantScoped: boolean, mediaSlug: null | string = 'media'): CollectionBeforeChangeHook =>
+  (
+    tenantScoped: boolean,
+    mediaSlug: null | string = 'media',
+    locationsSlug = 'locations',
+  ): CollectionBeforeChangeHook =>
   async ({ collection, data, originalDoc, req }) => {
     if (!tenantScoped) return data
 
@@ -310,8 +315,7 @@ export const organisationRelationsInTenant =
     const errors: { message: string; path: string }[] = []
 
     const relations: { label: string; path: string; relationTo: CollectionSlug }[] = [
-      { label: 'areas of focus', path: 'areasOfFocus', relationTo: 'areas-of-focus' },
-      { label: 'location', path: 'location', relationTo: 'locations' },
+      { label: 'location', path: 'location', relationTo: locationsSlug as CollectionSlug },
     ]
     if (mediaSlug) {
       relations.push(
@@ -349,7 +353,7 @@ export const organisationRelationsInTenant =
  * re-assign it: an admin of an unrelated tenant decides nothing about either.
  */
 export const organisationTenantIsStable =
-  (tenantScoped: boolean): CollectionBeforeChangeHook =>
+  (tenantScoped: boolean, collectionSlug = ORGANISATIONS_SLUG): CollectionBeforeChangeHook =>
   ({ data, operation, originalDoc, req }) => {
     if (!tenantScoped || operation !== 'update' || !originalDoc) return data
     if (!submitsTenant(data)) return data
@@ -370,7 +374,7 @@ export const organisationTenantIsStable =
     if (isAdminOf(stored) && isAdminOf(submitted)) return data
 
     throw new ValidationError({
-      collection: ORGANISATIONS_SLUG,
+      collection: collectionSlug as CollectionSlug,
       errors: [
         {
           message: 'Only a tenant admin of both tenants can move an organisation',
@@ -414,9 +418,9 @@ const imageFields = (mediaSlug: string): Field[] => [
  * with a readable message instead of a database error.
  */
 export const uniqueOrganisationSlug =
-  (tenantScoped: boolean): CollectionBeforeValidateHook =>
+  (tenantScoped: boolean, collectionSlug = ORGANISATIONS_SLUG): CollectionBeforeValidateHook =>
   async (args) => {
-    if (tenantScoped) return uniqueSlugPerTenant(ORGANISATIONS_SLUG as CollectionSlug)(args)
+    if (tenantScoped) return uniqueSlugPerTenant(collectionSlug as CollectionSlug)(args)
 
     const { data, originalDoc, req } = args
     const slug = typeof data?.slug === 'string' ? data.slug.trim() : ''
@@ -424,7 +428,7 @@ export const uniqueOrganisationSlug =
 
     const selfID = originalDoc?.id
     const { docs } = await req.payload.find({
-      collection: ORGANISATIONS_SLUG as CollectionSlug,
+      collection: collectionSlug as CollectionSlug,
       depth: 0,
       limit: 2,
       overrideAccess: true,
@@ -437,13 +441,17 @@ export const uniqueOrganisationSlug =
     if (!conflict) return data
 
     throw new ValidationError({
-      collection: ORGANISATIONS_SLUG,
+      collection: collectionSlug as CollectionSlug,
       errors: [{ message: `Slug "${slug}" is already used`, path: 'slug' }],
       req,
     })
   }
 
-const profileFields = (mediaSlug: null | string, tenantScoped: boolean): Field[] => {
+const profileFields = (
+  mediaSlug: null | string,
+  tenantScoped: boolean,
+  locationsSlug: string,
+): Field[] => {
   const adminOnly = adminOnlyFor(tenantScoped)
   const billingOnly = adminOnlyForReads(tenantScoped)
 
@@ -484,15 +492,6 @@ const profileFields = (mediaSlug: null | string, tenantScoped: boolean): Field[]
     ],
   },
   {
-    name: 'areasOfFocus',
-    type: 'relationship',
-    relationTo: 'areas-of-focus',
-    hasMany: true,
-    admin: {
-      description: 'From the tenant’s areas of focus. The directory filter uses these.',
-    },
-  },
-  {
     name: 'about',
     type: 'textarea',
   },
@@ -513,7 +512,7 @@ const profileFields = (mediaSlug: null | string, tenantScoped: boolean): Field[]
       {
         name: 'location',
         type: 'relationship',
-        relationTo: 'locations',
+        relationTo: locationsSlug as CollectionSlug,
         admin: {
           description: 'The tenant’s location tree, not a free-text address.',
         },
@@ -605,11 +604,17 @@ const profileFields = (mediaSlug: null | string, tenantScoped: boolean): Field[]
 }
 
 export type OrganisationsOptions = {
+  /** Overrides the collection's default access, operation by operation. */
+  access?: CollectionAccess
+  /** Resolved slug of the locations collection. Defaults to `locations`. */
+  locationsSlug?: string
   /**
    * Slug of the host's upload collection for `logo` and `cover`. `null` drops the images,
    * for a config without uploads.
    */
   mediaSlug?: null | string
+  /** Overrides the collection slug. Defaults to `organisations`. */
+  slug?: string
   /** `false` in single-tenant mode, where there is no tenants collection. */
   tenantScoped?: boolean
 }
@@ -619,16 +624,22 @@ export type OrganisationsOptions = {
  * Tenant-scoped: the multi-tenant plugin adds the `tenant` field and the tenant filter.
  */
 export const organisationsCollection = ({
+  access,
+  locationsSlug = 'locations',
   mediaSlug = 'media',
+  slug = ORGANISATIONS_SLUG,
   tenantScoped = true,
 }: OrganisationsOptions = {}): CollectionConfig => ({
-  slug: ORGANISATIONS_SLUG,
-  access: {
-    create: organisationCreateAccess(tenantScoped),
-    delete: organisationDeleteAccess(tenantScoped),
-    read: organisationReadAccess(tenantScoped),
-    update: organisationUpdateAccess(tenantScoped),
-  },
+  slug,
+  access: mergeCollectionAccess(
+    {
+      create: organisationCreateAccess(tenantScoped),
+      delete: organisationDeleteAccess(tenantScoped),
+      read: organisationReadAccess(tenantScoped),
+      update: organisationUpdateAccess(tenantScoped),
+    },
+    access,
+  ),
   admin: {
     defaultColumns: ['name', 'type', 'slug', 'approved', 'pageEnabled'],
     description:
@@ -636,13 +647,13 @@ export const organisationsCollection = ({
     group: 'Job board',
     useAsTitle: 'name',
   },
-  fields: profileFields(mediaSlug, tenantScoped),
+  fields: profileFields(mediaSlug, tenantScoped, locationsSlug),
   hooks: {
     beforeChange: [
-      organisationRelationsInTenant(tenantScoped, mediaSlug),
-      organisationTenantIsStable(tenantScoped),
+      organisationRelationsInTenant(tenantScoped, mediaSlug, locationsSlug),
+      organisationTenantIsStable(tenantScoped, slug),
     ],
-    beforeValidate: [uniqueOrganisationSlug(tenantScoped)],
+    beforeValidate: [uniqueOrganisationSlug(tenantScoped, slug)],
   },
   // The unique index spans the tenant, so the same slug may exist on two tenants.
   indexes: tenantScoped ? [{ fields: ['tenant', 'slug'], unique: true }] : [],
@@ -661,9 +672,10 @@ const organisationHoldersTenantsOf = (user: Record<string, unknown> | undefined)
 const organisationTenantOf = async (
   organisationID: number | string,
   req: PayloadRequest,
+  collectionSlug: string,
 ): Promise<{ error: string } | { tenant: null | number | string }> => {
   const organisation = (await req.payload.findByID({
-    collection: ORGANISATIONS_SLUG as CollectionSlug,
+    collection: collectionSlug as CollectionSlug,
     depth: 0,
     disableErrors: true,
     id: organisationID,
@@ -688,8 +700,9 @@ export const checkOrganisationLink = async (
   organisationID: number | string,
   user: Record<string, unknown> | null | undefined,
   req: PayloadRequest,
+  collectionSlug = ORGANISATIONS_SLUG,
 ): Promise<string | true> => {
-  const found = await organisationTenantOf(organisationID, req)
+  const found = await organisationTenantOf(organisationID, req, collectionSlug)
   if ('error' in found) return found.error
   if (found.tenant === null) return true
 
@@ -709,48 +722,57 @@ export const checkOrganisationLink = async (
   return 'Pick an organisation from a tenant where this user is an employer'
 }
 
-export const organisationMatchesUserTenants: Validate = async (
-  value,
-  { collectionSlug, data, id, operation, req },
-) => {
-  if (value === null || value === undefined) return true
+export const organisationMatchesUserTenantsWith =
+  (organisationSlug = ORGANISATIONS_SLUG): Validate =>
+  async (value, { collectionSlug, data, id, operation, req }) => {
+    if (value === null || value === undefined) return true
 
-  const organisationID = idsOf(value)[0]
-  if (organisationID === undefined) return true
+    const organisationID = idsOf(value)[0]
+    if (organisationID === undefined) return true
 
-  const submitted = data as Record<string, unknown>
-  const user =
-    submitted.tenants === undefined && operation === 'update' && id !== undefined
-      ? ((await req.payload.findByID({
-          collection: (collectionSlug ??
-            req.payload.config.admin?.user ??
-            'users') as CollectionSlug,
-          depth: 0,
-          disableErrors: true,
-          id,
-          overrideAccess: true,
-          req,
-        })) as null | Record<string, unknown>)
-      : submitted
+    const submitted = data as Record<string, unknown>
+    const user =
+      submitted.tenants === undefined && operation === 'update' && id !== undefined
+        ? ((await req.payload.findByID({
+            collection: (collectionSlug ??
+              req.payload.config.admin?.user ??
+              'users') as CollectionSlug,
+            depth: 0,
+            disableErrors: true,
+            id,
+            overrideAccess: true,
+            req,
+          })) as null | Record<string, unknown>)
+        : submitted
 
-  return checkOrganisationLink(organisationID, user, req)
-}
+    return checkOrganisationLink(organisationID, user, req, organisationSlug)
+  }
+
+/** The validator with the default organisation slug; `organisationField` binds a custom one. */
+export const organisationMatchesUserTenants: Validate = organisationMatchesUserTenantsWith()
 
 /**
  * The relation an employer user gets to their organisation. Added to the users collection by
  * the plugin. Only staff may move a user to another organisation: an employer must not be able
  * to re-point their account at somebody else's profile.
  */
-export const organisationField = (tenantScoped = true): Field => ({
+export const organisationField = (
+  tenantScoped = true,
+  collectionSlug = ORGANISATIONS_SLUG,
+): Field => ({
   name: 'organisation',
   type: 'relationship',
-  relationTo: ORGANISATIONS_SLUG,
+  relationTo: collectionSlug as CollectionSlug,
   index: true,
   access: {
     create: organisationAdminFieldAccess(false),
     update: organisationAdminFieldAccess(false),
   },
-  validate: tenantScoped ? organisationMatchesUserTenants : undefined,
+  validate: tenantScoped
+    ? collectionSlug === ORGANISATIONS_SLUG
+      ? organisationMatchesUserTenants
+      : organisationMatchesUserTenantsWith(collectionSlug)
+    : undefined,
   admin: {
     description: 'The organisation this employer belongs to.',
     position: 'sidebar',
@@ -761,11 +783,15 @@ export const organisationField = (tenantScoped = true): Field => ({
 export const withOrganisationField = (
   collection: CollectionConfig,
   tenantScoped = true,
+  collectionSlug = ORGANISATIONS_SLUG,
 ): CollectionConfig => {
   const hasField = collection.fields.some(
     (field) => 'name' in field && field.name === 'organisation',
   )
   if (hasField) return collection
 
-  return { ...collection, fields: [...collection.fields, organisationField(tenantScoped)] }
+  return {
+    ...collection,
+    fields: [...collection.fields, organisationField(tenantScoped, collectionSlug)],
+  }
 }
