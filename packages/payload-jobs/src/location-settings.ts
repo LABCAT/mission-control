@@ -58,7 +58,7 @@ export const tenantLocationFields = (condition?: (data: Record<string, unknown>)
     admin: {
       ...(condition ? { condition } : {}),
       description:
-        'Name the tree’s levels, top first: Island then Town on Vanuatu Wok, or Region, City. Used in the admin and on the public location filters.',
+        'Name the tree’s levels, top first: Island then Town on Vanuatu Wok, or Region, City. The names are exposed for the admin and the public filters through `locationLevelLabel`.',
     },
     fields: [{ name: 'label', type: 'text', required: true }],
     validate: validateLocationLevels as never,

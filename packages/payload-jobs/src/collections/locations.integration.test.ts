@@ -103,6 +103,43 @@ describe('locations tree', () => {
     expect(await readBack(suburb.id)).toMatchObject({ depth: 2, parent: city.id })
   })
 
+  it('recomputes the depth of every descendant when a branch is moved', async () => {
+    const top = await create({ name: 'Tafea', slug: 'tafea' }, harness.tenantB.id, harness.tenantAdminB)
+    const mid = await create(
+      { name: 'Tanna', parent: top.id, slug: 'tanna' },
+      harness.tenantB.id,
+      harness.tenantAdminB,
+    )
+    const leaf = await create(
+      { name: 'Lenakel', parent: mid.id, slug: 'lenakel' },
+      harness.tenantB.id,
+      harness.tenantAdminB,
+    )
+    expect((await readBack(leaf.id)).depth).toBe(2)
+
+    // Move the middle branch to the top: it becomes a root and its child moves up with it.
+    await harness.payload.update({
+      collection: 'locations',
+      data: { parent: null } as never,
+      id: mid.id,
+      user: harness.tenantAdminB as never,
+    })
+
+    expect((await readBack(mid.id)).depth).toBe(0)
+    expect((await readBack(leaf.id)).depth).toBe(1)
+
+    // And back under the top: both go down again.
+    await harness.payload.update({
+      collection: 'locations',
+      data: { parent: top.id } as never,
+      id: mid.id,
+      user: harness.tenantAdminB as never,
+    })
+
+    expect((await readBack(mid.id)).depth).toBe(1)
+    expect((await readBack(leaf.id)).depth).toBe(2)
+  })
+
   it('names the levels and caps the depth per tenant', async () => {
     const tenantA = (await harness.payload.findByID({
       collection: 'tenants',

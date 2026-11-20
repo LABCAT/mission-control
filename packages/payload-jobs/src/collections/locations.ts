@@ -326,6 +326,38 @@ export const locationsCollection = (options: LocationsOptions = {}): CollectionC
           return { ...submitted, depth: result.depth }
         },
       ],
+      afterChange: [
+        // Moving a branch changes the depth of everything under it. Each child is saved again
+        // so its own beforeChange recomputes the depth from the parent chain, and its
+        // afterChange carries the move on to the grandchildren.
+        async ({ doc, operation, previousDoc, req }) => {
+          if (operation !== 'update') return doc
+          if (String(previousDoc?.depth ?? '') === String(doc?.depth ?? '')) return doc
+
+          const children = await req.payload.find({
+            collection: slug as CollectionSlug,
+            depth: 0,
+            limit: 0,
+            overrideAccess: true,
+            pagination: false,
+            req,
+            where: { parent: { equals: doc.id } },
+          })
+
+          for (const child of children.docs) {
+            await req.payload.update({
+              collection: slug as CollectionSlug,
+              data: {},
+              depth: 0,
+              id: child.id,
+              overrideAccess: true,
+              req,
+            })
+          }
+
+          return doc
+        },
+      ],
     },
     versions: false,
   }

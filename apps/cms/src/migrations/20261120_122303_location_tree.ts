@@ -76,9 +76,15 @@ export async function down({ db, payload, req }: MigrateDownArgs): Promise<void>
   CREATE INDEX "jobs_location_idx" ON "jobs" USING btree ("location_id");
   ALTER TABLE "tenants" DROP COLUMN "location_max_depth";`)
 
-  // Top-level places were islands (the legacy picker's keys), everything below them towns.
+  // The old `kind` is not stored any more, so it is restored from the tree by the rule the
+  // Vanuatu seed used: the catch-all roots `overseas` and `other` were regions, every other root
+  // an island, and everything below a root a town. A tenant that kept another kind by hand
+  // (a region above islands) is not recoverable and comes back as island/town.
   await db.execute(sql`
-  UPDATE "locations" SET "kind" = CASE WHEN "depth" IS NULL OR "depth" = 0 THEN 'island'::"enum_locations_kind" ELSE 'town'::"enum_locations_kind" END;
+  UPDATE "locations" SET "kind" = CASE
+    WHEN ("depth" IS NULL OR "depth" = 0) AND "slug" IN ('overseas', 'other') THEN 'region'::"enum_locations_kind"
+    WHEN "depth" IS NULL OR "depth" = 0 THEN 'island'::"enum_locations_kind"
+    ELSE 'town'::"enum_locations_kind" END;
   ALTER TABLE "locations" ALTER COLUMN "kind" SET NOT NULL;
   UPDATE "jobs" SET "location_id" = r."locations_id"
     FROM "jobs_rels" r WHERE r."parent_id" = "jobs"."id" AND r."path" = 'location';
