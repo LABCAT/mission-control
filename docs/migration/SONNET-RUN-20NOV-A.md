@@ -32,3 +32,9 @@ D1 set to done: PJ-22, PJ-76, PJ-80, PJ-99, PJ-112 (PJ-13/26/110/111/117/84 were
 1. Items 1–5 are complete and every migration deploy (runs 48–51) succeeded. No migration was run on Neon by this run.
 2. After 15:00 UTC: #77 (wait for CI + Kinsho, merge if pass or needs-evidence only), then #78 (merge main, adopt resolved slugs, generate the migration on main's newest, label `migration`, one at a time, wait for the deploy between).
 3. Then the rest of item 6 in order: PJ-37, PJ-62, PJ-30, then PJ-98, PJ-103, PJ-115, PJ-63, PJ-88, keeping ≤9 open PRs.
+
+## Run 2 (20 Nov, 20:06 UTC)
+- Nothing done. The orchestrator told this session (15:02 UTC) that items 1–5 were complete and that new tickets are dispatched one session per ticket, so item 6 was not started.
+- State found: #77 (PJ-118) was merged by someone else at 18:01 UTC (three review rounds were fixed by another session). #78 (PJ-25) is still open, `needs-migration`, with commits and review rounds from another session since my last touch (head b9ac342). I did not touch either.
+- Skipped, and why: item 6 tickets (PJ-37, 62, 30, 98, 103, 115, 63, 88), per the orchestrator's instruction. #31, #36, #38 untouched.
+- Resume point: none for this session. #78 is owned by whichever session is working it; it still needs main merged, a migration on main's newest (own commit, `migration` label), one migration PR at a time with the prod deploy confirmed.
