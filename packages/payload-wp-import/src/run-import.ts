@@ -51,8 +51,11 @@ export const sortImporters = (importers: Importer[]): Importer[] => {
   return sorted
 }
 
+// Database and validation errors can quote the offending value, such as a duplicate email, and
+// the summary is printed. Nothing personal may reach it.
+const EMAIL = /[^\s@'"<>(),;]+@[^\s@'"<>(),;]+/g
 const messageOf = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error)
+  (error instanceof Error ? error.message : String(error)).replaceAll(EMAIL, '[email]')
 
 /**
  * Run importers in dependency order. Documents are matched by `legacyId` + tenant, so a

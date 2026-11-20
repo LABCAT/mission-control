@@ -205,4 +205,15 @@ describe('runImport', () => {
     const importer = rowsImporter('things', [{ id: 1 }], { report: () => ({ read: 5 }) })
     expect((await run([importer], payload)).importers.things!.report).toEqual({ read: 5 })
   })
+
+  it('redacts email addresses from error messages', async () => {
+    const { payload } = createFakePayload()
+    const importer = rowsImporter('things', [{ id: 1 }], {
+      map: () => {
+        throw new Error('duplicate key (email)=(Jo.Bloggs@example.com) already exists')
+      },
+    })
+    const summary = await run([importer], payload)
+    expect(summary.errors[0]!.message).toBe('duplicate key (email)=([email]) already exists')
+  })
 })
