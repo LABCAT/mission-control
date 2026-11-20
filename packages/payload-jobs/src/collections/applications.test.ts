@@ -13,6 +13,7 @@ import {
   applicationNoWriteAccess,
   applicationReadAccess,
   applicationsCollection,
+  blockDeleteWhileReferencedByApplications,
 } from './applications'
 import { jobsCollection } from './jobs'
 import { locationsCollection } from './locations'
@@ -332,5 +333,31 @@ describe('applications in Postgres @S-052', () => {
       harness.payload.delete({ collection: APPLICATIONS_SLUG, id: ids.appB, ...as(harness.tenantAdminA) } as never),
     ).rejects.toThrow()
     await harness.payload.delete({ collection: APPLICATIONS_SLUG, id: victim, ...as(harness.tenantAdminA) } as never)
+  })
+})
+
+describe('delete guard for documents applications point at', () => {
+  const run = (totalDocs: number) => {
+    const where: unknown[] = []
+    const hook = blockDeleteWhileReferencedByApplications({ fields: ['cv', 'coverLetter'], label: 'file' })
+    const req = {
+      payload: {
+        count: (args: { where: unknown }) => {
+          where.push(args.where)
+          return Promise.resolve({ totalDocs })
+        },
+      },
+    }
+    return { result: Promise.resolve(hook({ id: 7, req } as never)), where }
+  }
+
+  it('refuses with a clear message while an application uses the document @S-052', async () => {
+    const { result, where } = run(2)
+    await expect(result).rejects.toThrow('used by 2 applications')
+    expect(where[0]).toEqual({ or: [{ cv: { equals: 7 } }, { coverLetter: { equals: 7 } }] })
+  })
+
+  it('allows the delete when no application uses it @S-052', async () => {
+    await expect(run(0).result).resolves.toBeUndefined()
   })
 })

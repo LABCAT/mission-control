@@ -26,6 +26,7 @@ import {
   APPLICATIONS_SLUG,
   applicationFilesCollection,
   applicationsCollection,
+  blockDeleteWhileReferencedByApplications,
 } from './collections/applications'
 import { jobsCollection } from './collections/jobs'
 import { menusCollection, removeTenantMenus } from './collections/menus'
@@ -174,6 +175,21 @@ export type PayloadJobsOptions = {
    */
   jobsSlug?: string
 }
+
+const withApplicationDeleteGuard = (
+  collection: CollectionConfig,
+  field: 'job' | 'organisation',
+  label: string,
+): CollectionConfig => ({
+  ...collection,
+  hooks: {
+    ...collection.hooks,
+    beforeDelete: [
+      ...(collection.hooks?.beforeDelete ?? []),
+      blockDeleteWhileReferencedByApplications({ fields: [field], label }),
+    ],
+  },
+})
 
 const resolvedFeatures = (options: PayloadJobsOptions): Required<PayloadJobsFeatures> => ({
   applications: options.features?.applications ?? true,
@@ -530,11 +546,17 @@ export const payloadJobs =
       // Applications and their files go after jobs: they relate to it, and the compound
       // index names of the collections before them must not shift.
       collections: [
-        ...(config.collections ?? []),
+        ...(features.applications
+          ? (config.collections ?? []).map((collection) =>
+              collection.slug === slugs.organisations
+                ? withApplicationDeleteGuard(collection, 'organisation', 'organisation')
+                : collection,
+            )
+          : (config.collections ?? [])),
         ...taxonomies,
         plans,
         addOns,
-        jobs,
+        features.applications ? withApplicationDeleteGuard(jobs, 'job', 'job') : jobs,
         ...coupons,
         ...(features.applications
           ? [

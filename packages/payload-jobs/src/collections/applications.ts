@@ -4,6 +4,7 @@ import {
   type Access,
   type AccessResult,
   type CollectionBeforeChangeHook,
+  type CollectionBeforeDeleteHook,
   type CollectionBeforeValidateHook,
   type CollectionConfig,
   type CollectionSlug,
@@ -119,6 +120,38 @@ export const applicationDeleteAccess =
 
     const tenants = getUserTenantIDsByRole(user, ['tenant-admin'])
     return tenants.length > 0 ? { tenant: { in: tenants } } : false
+  }
+
+/**
+ * An application's job, organisation and CV are required, and the generated foreign keys are
+ * `ON DELETE SET NULL`, which cannot null a required column. Rather than let the database fail
+ * with a constraint error, refuse the delete with a clear message while applications still
+ * point at the document. Payload has no per-field `onDelete`, so the guard lives in a hook.
+ */
+export const blockDeleteWhileReferencedByApplications = ({
+  applicationsSlug = APPLICATIONS_SLUG,
+  fields,
+  label,
+}: {
+  applicationsSlug?: string
+  fields: ('coverLetter' | 'cv' | 'job' | 'organisation')[]
+  label: string
+}): CollectionBeforeDeleteHook =>
+  async ({ id, req }) => {
+    const { totalDocs } = await req.payload.count({
+      collection: applicationsSlug as CollectionSlug,
+      overrideAccess: true,
+      req,
+      where: { or: fields.map((field) => ({ [field]: { equals: id } })) },
+    })
+    if (totalDocs > 0) {
+      throw new APIError(
+        `This ${label} is used by ${totalDocs} application${totalDocs === 1 ? '' : 's'} and cannot be deleted until they are removed.`,
+        409,
+        undefined,
+        true,
+      )
+    }
   }
 
 type JobDoc = { id: number | string; organisation?: unknown; tenant?: unknown }
@@ -338,7 +371,13 @@ export const applicationFilesCollection = ({
           },
         ]),
   ],
-  hooks: { beforeValidate: [validateApplicationFileSize] },
+  hooks: {
+    // A CV is also referenced as a cover letter, so check both fields.
+    beforeDelete: [
+      blockDeleteWhileReferencedByApplications({ fields: ['cv', 'coverLetter'], label: 'file' }),
+    ],
+    beforeValidate: [validateApplicationFileSize],
+  },
   upload: { mimeTypes: APPLICATION_FILE_MIME_TYPES },
   versions: false,
 })
