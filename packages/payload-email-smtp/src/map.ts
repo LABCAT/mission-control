@@ -1,4 +1,4 @@
-import { toSmtpAddress } from './address'
+import { assertValidAddress, assertValidHeaderValue, toSmtpAddress } from './address'
 import { toBase64, toBytes } from './bytes'
 import { encodeHeader } from './encoding'
 import { EmailSendError } from './errors'
@@ -20,6 +20,11 @@ const mapAddress = (value: MessageAddress): SmtpAddress => {
 
 const mapRecipients = (value: Recipients | undefined): SmtpAddress[] =>
   value === undefined ? [] : (Array.isArray(value) ? value : [value]).map(mapAddress)
+
+const assertValidRecipients = (value: Recipients | undefined, field: string): void => {
+  if (value === undefined) return
+  for (const address of Array.isArray(value) ? value : [value]) assertValidAddress(address, field)
+}
 
 const mapAttachment = (attachment: EmailAttachmentInput): SmtpAttachment => {
   if (attachment.path !== undefined || attachment.href !== undefined) {
@@ -69,12 +74,19 @@ const normalizeMessageId = (headers: Record<string, string>, domain: string): Re
  * `info.messageId`, which is also client-generated.
  */
 export const mapToSmtpEnvelope = (config: SmtpConfig, message: EmailMessageInput): SmtpEnvelope => {
-  const from = mapAddress(
+  const fromValue =
     message.from ?? {
       ...(config.fromName ? { name: config.fromName } : {}),
       address: config.fromAddress,
-    },
-  )
+    }
+  assertValidAddress(fromValue, 'from')
+  assertValidRecipients(message.to, 'to')
+  assertValidRecipients(message.cc, 'cc')
+  assertValidRecipients(message.bcc, 'bcc')
+  if (message.replyTo !== undefined) assertValidAddress(message.replyTo, 'replyTo')
+  assertValidHeaderValue(message.subject ?? '', 'subject')
+
+  const from = mapAddress(fromValue)
   const headers = normalizeMessageId({ ...message.headers }, messageIdDomain(from))
   return {
     from,

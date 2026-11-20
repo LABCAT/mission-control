@@ -382,6 +382,82 @@ describe('sendViaSmtp with XOAUTH2', () => {
   })
 })
 
+describe('address validation', () => {
+  const injectionAddresses = ['a@b.com\r\nRSET', 'a@b.com\nDATA'] as const
+  const addressFields = ['to', 'cc', 'bcc', 'from'] as const
+
+  for (const auth of ['password', 'xoauth2'] as const) {
+    for (const field of addressFields) {
+      for (const address of injectionAddresses) {
+        it(`rejects ${field} injection on ${auth}: ${JSON.stringify(address)}`, async () => {
+          const server = resetServer()
+          const fetchMock = vi.fn(async () => tokenResponse())
+          const message: EmailMessageInput = { from: 'sender@example.com', to: 'recipient@example.com', text: 'hello' }
+          ;(message as Record<string, unknown>)[field] = address
+
+          const error = await caught(
+            sendViaSmtp(auth === 'xoauth2' ? oauthConfig(fetchMock as typeof fetch) : config(), message),
+          )
+
+          expect(error).toBeInstanceOf(EmailSendError)
+          expect(error.provider).toBe('smtp')
+          expect(error.message).toContain(`\`${field}\``)
+          expect(error.message).not.toContain('a@b.com')
+          expect(error.message).not.toContain('RSET')
+          expect(error.message).not.toContain('DATA')
+          expect(server.commands).toHaveLength(0)
+          expect(server.authCommands).toHaveLength(0)
+          expect(server.recipients).toHaveLength(0)
+          expect(server.messageIds).toHaveLength(0)
+          if (auth === 'xoauth2') expect(fetchMock).not.toHaveBeenCalled()
+        })
+      }
+    }
+  }
+
+  it('rejects a display name containing CRLF', async () => {
+    const server = resetServer()
+    const error = await caught(
+      sendViaSmtp(config(), {
+        from: { name: 'Evil\r\nBcc: victim@example.com', address: 'sender@example.com' },
+        to: 'recipient@example.com',
+        text: 'hello',
+      }),
+    )
+    expect(error).toBeInstanceOf(EmailSendError)
+    expect(error.provider).toBe('smtp')
+    expect(error.message).toContain('`from`')
+    expect(error.message).not.toContain('victim@example.com')
+    expect(error.message).not.toContain('Evil')
+    expect(server.commands).toHaveLength(0)
+  })
+
+  it('rejects a subject containing CRLF', async () => {
+    const server = resetServer()
+    const error = await caught(
+      sendViaSmtp(config(), {
+        to: 'recipient@example.com',
+        subject: 'Hello\r\nBcc: victim@example.com',
+        text: 'hello',
+      }),
+    )
+    expect(error).toBeInstanceOf(EmailSendError)
+    expect(error.provider).toBe('smtp')
+    expect(error.message).toContain('`subject`')
+    expect(error.message).not.toContain('victim@example.com')
+    expect(server.commands).toHaveLength(0)
+  })
+
+  it('still sends a message with valid addresses and display names', async () => {
+    const server = resetServer()
+    await sendViaSmtp(config(), {
+      to: { name: 'Ünicode Name', address: 'recipient@example.com' },
+      text: 'hello',
+    })
+    expect(server.messageIds).toHaveLength(1)
+  })
+})
+
 describe('smtpEmail adapter', () => {
   it('logs without recipients, subject or body when SMTP is unconfigured outside Workers', async () => {
     const { info, payload: p } = payload()
