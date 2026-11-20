@@ -34,8 +34,32 @@ const mapAttachment = (attachment: EmailAttachmentInput): SmtpAttachment => {
 
 const messageIdDomain = (from: SmtpAddress): string => from.email.split('@')[1]?.trim() || 'localhost'
 
-const hasHeader = (headers: Record<string, string>, name: string): boolean =>
-  Object.keys(headers).some((key) => key.toLowerCase() === name.toLowerCase())
+/** Case-insensitive header lookup, so `message-id` and `MESSAGE-ID` behave like `Message-ID`. */
+export const getHeader = (headers: Record<string, string>, name: string): string | undefined => {
+  const target = name.toLowerCase()
+  for (const [key, value] of Object.entries(headers)) {
+    if (key.toLowerCase() === target) return value
+  }
+  return undefined
+}
+
+/**
+ * Collapse every case variant of `Message-ID` into one exact key, keeping the caller's value.
+ * Callers cannot cause two Message-ID headers to be sent.
+ */
+const normalizeMessageId = (headers: Record<string, string>, domain: string): Record<string, string> => {
+  const normalized: Record<string, string> = {}
+  let messageId: string | undefined
+  for (const [key, value] of Object.entries(headers)) {
+    if (key.toLowerCase() === 'message-id') {
+      if (!messageId && value) messageId = value
+      continue
+    }
+    normalized[key] = value
+  }
+  normalized['Message-ID'] = messageId ?? `<${crypto.randomUUID()}@${domain}>`
+  return normalized
+}
 
 /**
  * Build worker-mailer's message shape from a Payload/nodemailer message.
@@ -51,10 +75,7 @@ export const mapToSmtpEnvelope = (config: SmtpConfig, message: EmailMessageInput
       address: config.fromAddress,
     },
   )
-  const headers = { ...message.headers }
-  if (!hasHeader(headers, 'Message-ID')) {
-    headers['Message-ID'] = `<${crypto.randomUUID()}@${messageIdDomain(from)}>`
-  }
+  const headers = normalizeMessageId({ ...message.headers }, messageIdDomain(from))
   return {
     from,
     to: mapRecipients(message.to),

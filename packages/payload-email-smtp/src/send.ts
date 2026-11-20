@@ -1,6 +1,6 @@
 import { toBase64 } from './bytes'
 import { EmailSendError, redact } from './errors'
-import { mapToSmtpEnvelope } from './map'
+import { getHeader, mapToSmtpEnvelope } from './map'
 import { getAccessToken } from './oauth'
 import { sendViaWorkerMailer } from './transport'
 import type { EmailMessageInput, SmtpConfig, SmtpConnectionOptions, SmtpCredentials } from './types'
@@ -55,7 +55,7 @@ const resolveCredentials = async (config: SmtpConfig): Promise<SmtpCredentials> 
  */
 export const sendViaSmtp = async (config: SmtpConfig, message: EmailMessageInput): Promise<string> => {
   const envelope = mapToSmtpEnvelope(config, message)
-  const messageId = envelope.headers['Message-ID'] ?? ''
+  const messageId = getHeader(envelope.headers, 'Message-ID') ?? ''
   const secrets: (string | undefined)[] = [
     config.password,
     config.oauth?.clientId,

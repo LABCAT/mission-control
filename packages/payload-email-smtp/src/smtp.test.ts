@@ -79,6 +79,9 @@ const caught = async (run: Promise<unknown>): Promise<EmailSendError> => {
   throw new Error('expected rejection')
 }
 
+const countMessageIdHeaders = (raw: string): number =>
+  raw.split(/\r?\n/).filter((line) => /^message-id:/i.test(line)).length
+
 const payload = () => {
   const info = vi.fn()
   return { info, payload: { logger: { info } } as never }
@@ -187,6 +190,38 @@ describe('sendViaSmtp over a mocked socket', () => {
     expect(server.lastMessage).toContain('aGk=')
   })
 
+  it('returns a caller-supplied lowercase message-id and sends it once', async () => {
+    const server = resetServer()
+    const messageId = await sendViaSmtp(config(), {
+      to: 'a@example.com',
+      text: 'hello',
+      headers: { 'message-id': '<caller-lower@example.com>' },
+    })
+    expect(messageId).toBe('<caller-lower@example.com>')
+    expect(server.lastMessage).toContain('Message-ID: <caller-lower@example.com>')
+    expect(countMessageIdHeaders(server.lastMessage ?? '')).toBe(1)
+  })
+
+  it('returns a caller-supplied uppercase MESSAGE-ID and sends it once', async () => {
+    const server = resetServer()
+    const messageId = await sendViaSmtp(config(), {
+      to: 'a@example.com',
+      text: 'hello',
+      headers: { 'MESSAGE-ID': '<caller-upper@example.com>' },
+    })
+    expect(messageId).toBe('<caller-upper@example.com>')
+    expect(server.lastMessage).toContain('Message-ID: <caller-upper@example.com>')
+    expect(countMessageIdHeaders(server.lastMessage ?? '')).toBe(1)
+  })
+
+  it('generates a Message-ID when the caller supplies none', async () => {
+    const server = resetServer()
+    const messageId = await sendViaSmtp(config(), { to: 'a@example.com', text: 'hello' })
+    expect(messageId).toMatch(/^<[^@]+@example\.com>$/)
+    expect(server.lastMessage).toContain(`Message-ID: ${messageId}`)
+    expect(countMessageIdHeaders(server.lastMessage ?? '')).toBe(1)
+  })
+
   it('uses implicit TLS without STARTTLS for secure: tls', async () => {
     const server = resetServer()
     await sendViaSmtp(config({ secure: 'tls', port: 465 }), { to: 'a@example.com', text: 'hello' })
@@ -268,6 +303,19 @@ describe('sendViaSmtp with XOAUTH2', () => {
     const authLine = server.authCommands[0] ?? ''
     const decoded = Buffer.from(authLine.slice('AUTH XOAUTH2 '.length), 'base64').toString('utf8')
     expect(decoded).toBe('user=billing@example.com\x01auth=Bearer ya29.access-token\x01\x01')
+  })
+
+  it('returns a caller-supplied message-id case-insensitively on the XOAUTH2 path', async () => {
+    const server = resetServer({ xoauth2Token: 'ya29.access-token' })
+    const fetchMock = vi.fn(async () => tokenResponse())
+    const messageId = await sendViaSmtp(oauthConfig(fetchMock as typeof fetch), {
+      to: 'a@example.com',
+      text: 'hello',
+      headers: { 'message-id': '<oauth@example.com>' },
+    })
+    expect(messageId).toBe('<oauth@example.com>')
+    expect(server.lastMessage).toContain('Message-ID: <oauth@example.com>')
+    expect(countMessageIdHeaders(server.lastMessage ?? '')).toBe(1)
   })
 
   it('turns a token endpoint failure into a typed error with no secrets', async () => {
