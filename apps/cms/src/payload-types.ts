@@ -62,17 +62,17 @@ export type SupportedTimezones =
   | 'Pacific/Fiji';
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "LexicalNodes_0DF1558F".
+ * via the `definition` "LexicalNodes_710E7ECA".
  */
-export type LexicalNodes_0DF1558F =
+export type LexicalNodes_710E7ECA =
   | SerializedTextNode
   | SerializedTabNode
   | SerializedLineBreakNode
-  | SerializedParagraphNode<LexicalNodes_0DF1558F>
+  | SerializedParagraphNode<LexicalNodes_710E7ECA>
   | SerializedHorizontalRuleNode
   | SerializedUploadNode<'media'>
   | SerializedUploadNode<'documents'>
-  | SerializedQuoteNode<LexicalNodes_0DF1558F>
+  | SerializedQuoteNode<LexicalNodes_710E7ECA>
   | SerializedRelationshipNode<
       | 'users'
       | 'folders'
@@ -90,17 +90,18 @@ export type LexicalNodes_0DF1558F =
       | 'plans'
       | 'add-ons'
       | 'jobs'
+      | 'coupons'
       | 'payload-kv'
       | 'payload-jobs'
       | 'payload-locked-documents'
       | 'payload-preferences'
       | 'payload-migrations'
     >
-  | SerializedAutoLinkNode<LexicalNodes_0DF1558F, LexicalLinkFields>
-  | SerializedLinkNode<LexicalNodes_0DF1558F, LexicalLinkFields>
-  | SerializedListNode<LexicalNodes_0DF1558F>
-  | SerializedListItemNode<LexicalNodes_0DF1558F>
-  | SerializedHeadingNode<LexicalNodes_0DF1558F>;
+  | SerializedAutoLinkNode<LexicalNodes_710E7ECA, LexicalLinkFields>
+  | SerializedLinkNode<LexicalNodes_710E7ECA, LexicalLinkFields>
+  | SerializedListNode<LexicalNodes_710E7ECA>
+  | SerializedListItemNode<LexicalNodes_710E7ECA>
+  | SerializedHeadingNode<LexicalNodes_710E7ECA>;
 /**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "LexicalNodes_3DE324E4".
@@ -146,6 +147,7 @@ export interface Config {
     plans: Plan;
     'add-ons': AddOn;
     jobs: Job;
+    coupons: Coupon;
     'payload-kv': PayloadKv;
     'payload-jobs': PayloadJob;
     'payload-locked-documents': PayloadLockedDocument;
@@ -173,6 +175,7 @@ export interface Config {
     plans: PlansSelect<false> | PlansSelect<true>;
     'add-ons': AddOnsSelect<false> | AddOnsSelect<true>;
     jobs: JobsSelect<false> | JobsSelect<true>;
+    coupons: CouponsSelect<false> | CouponsSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-jobs': PayloadJobsSelect<false> | PayloadJobsSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
@@ -745,7 +748,7 @@ export interface FeatureBoxesBlock {
  */
 export interface RichTextBlock {
   heading?: string | null;
-  content: LexicalRichText<LexicalNodes_0DF1558F>;
+  content: LexicalRichText<LexicalNodes_710E7ECA>;
   id?: string | null;
   blockName?: string | null;
   blockType: 'rich-text';
@@ -801,7 +804,7 @@ export interface FaqBlock {
   heading?: string | null;
   items: {
     question: string;
-    answer: LexicalRichText<LexicalNodes_0DF1558F>;
+    answer: LexicalRichText<LexicalNodes_710E7ECA>;
     id?: string | null;
   }[];
   id?: string | null;
@@ -1261,7 +1264,7 @@ export interface Job {
   publishedAt?: string | null;
   expiresAt?: string | null;
   organisation: number | Organisation;
-  description?: LexicalRichText<LexicalNodes_0DF1558F> | null;
+  description?: LexicalRichText<LexicalNodes_710E7ECA> | null;
   /**
    * An optional PDF of the full job description.
    */
@@ -1301,6 +1304,49 @@ export interface Job {
       }[]
     | null;
   views?: number | null;
+  /**
+   * WordPress post id, for the import.
+   */
+  legacyId?: number | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "coupons".
+ */
+export interface Coupon {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  /**
+   * Saved in uppercase. Unique within the tenant, for example LINKPS.
+   */
+  code: string;
+  discountType: 'flat' | 'percent';
+  /**
+   * Flat: minor units of the tenant currency, so 500 is Vt 500. Percentage: a whole percentage, so 10 is 10%.
+   */
+  amount: number;
+  /**
+   * An inactive coupon is kept but cannot be applied.
+   */
+  active?: boolean | null;
+  /**
+   * How many orders have used the coupon. Only order processing changes it; other writes keep the stored value.
+   */
+  useCount: number;
+  /**
+   * Leave empty for unlimited uses.
+   */
+  maxUses?: number | null;
   /**
    * WordPress post id, for the import.
    */
@@ -1521,6 +1567,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'jobs';
         value: number | Job;
+      } | null)
+    | ({
+        relationTo: 'coupons';
+        value: number | Coupon;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -2162,6 +2212,24 @@ export interface JobsSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "coupons_select".
+ */
+export interface CouponsSelect<T extends boolean = true> {
+  tenant?: T;
+  code?: T;
+  discountType?: T;
+  amount?: T;
+  active?: T;
+  useCount?: T;
+  maxUses?: T;
+  legacyId?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv_select".
  */
 export interface PayloadKvSelect<T extends boolean = true> {
@@ -2361,7 +2429,8 @@ export interface CollectionQueryWidget {
       | 'areas-of-focus'
       | 'plans'
       | 'add-ons'
-      | 'jobs';
+      | 'jobs'
+      | 'coupons';
     where?:
       | {
           [k: string]: unknown;
@@ -2403,6 +2472,7 @@ export interface ActivityWidget {
           | 'plans'
           | 'add-ons'
           | 'jobs'
+          | 'coupons'
         )[]
       | null;
   };

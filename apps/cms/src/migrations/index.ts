@@ -15,6 +15,7 @@ import * as migration_20261118_144548_add_ons from './20261118_144548_add_ons';
 import * as migration_20261118_150954_tax from './20261118_150954_tax';
 import * as migration_20261118_152848_alert_subscriptions from './20261118_152848_alert_subscriptions';
 import * as migration_20261118_154336_jobs from './20261118_154336_jobs';
+import * as migration_20261120_065125_coupons from './20261120_065125_coupons';
 
 export const migrations = [
   {
@@ -100,6 +101,11 @@ export const migrations = [
   {
     up: migration_20261118_154336_jobs.up,
     down: migration_20261118_154336_jobs.down,
-    name: '20261118_154336_jobs'
+    name: '20261118_154336_jobs',
+  },
+  {
+    up: migration_20261120_065125_coupons.up,
+    down: migration_20261120_065125_coupons.down,
+    name: '20261120_065125_coupons'
   },
 ];

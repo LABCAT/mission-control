@@ -23,6 +23,9 @@ export const multiTenantOptions = {
     locations: { accessResultOverride: tenantContentOverride },
     media: { accessResultOverride: tenantContentOverride },
     tags: { accessResultOverride: tenantContentOverride },
+    // mission-control: coupons are private to tenant members and not readable with a site
+    // key; seekers are denied (PJ-22).
+    coupons: { accessResultOverride: denySeekerOnly(({ accessResult }) => accessResult) },
     // mission-control: job-board taxonomies (PJ-16).
     'areas-of-focus': { accessResultOverride: tenantContentOverride },
     'job-categories': { accessResultOverride: tenantContentOverride },

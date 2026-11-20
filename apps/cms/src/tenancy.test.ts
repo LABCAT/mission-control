@@ -643,6 +643,41 @@ describe('organisations (PJ-18)', () => {
   })
 })
 
+describe('coupons', () => {
+  it('registers the coupons collection with its tenant field', async () => {
+    const config = await buildConfig()
+    const coupons = config.collections?.find((collection) => collection.slug === 'coupons')
+
+    expect(coupons).toBeDefined()
+    expect(coupons?.fields.some((field) => 'name' in field && field.name === 'tenant')).toBe(true)
+  })
+
+  it('scopes coupon reads to the tenants on the user', async () => {
+    const config = await buildConfig()
+
+    expect(await collectionAccess(config, 'read', 'coupons', tenantAdminA)).toEqual({
+      tenant: { in: [tenantA.id] },
+    })
+    expect(await collectionAccess(config, 'read', 'coupons', tenantAdminB)).toEqual({
+      tenant: { in: [tenantB.id] },
+    })
+    // Super admins are not constrained to a tenant.
+    expect(await collectionAccess(config, 'read', 'coupons', superAdmin)).toBe(true)
+  })
+
+  it('keeps coupons out of reach for anonymous requests and site keys', async () => {
+    const config = await buildConfig()
+    const coupons = config.collections?.find((candidate) => candidate.slug === 'coupons')
+    const read = coupons?.access?.read as (args: unknown) => Promise<unknown>
+
+    expect(await read({ req: requestFor(null), slug: 'coupons' })).toBe(false)
+
+    const req = await siteKeyRequest({ key: 'sk_tenant', tenant: tenantA.id })
+
+    expect(await read({ req, slug: 'coupons' })).toBe(false)
+  })
+})
+
 describe('credential updates', () => {
   const target = { id: 20, email: 'b@example.com' }
 
