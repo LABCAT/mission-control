@@ -2,7 +2,7 @@ import type { CollectionConfig, CompoundIndex, Field, PayloadRequest, Validate, 
 import { ValidationError } from 'payload'
 
 import { tenantContentWriteAccess } from '../access'
-import { slugConflict, type SlugRules } from '../slug-rules'
+import { assertUniqueSlug, slugConflict, type SlugRules } from '../slug-rules'
 import { mergeCollectionAccess, type CollectionAccess } from '../slugs'
 import type { TenantLocationSettings } from '../location-settings'
 
@@ -75,15 +75,17 @@ export type LocationsOptions = {
  * tenant is taken from the document being validated, so the check also works for a create
  * made with `overrideAccess` (the seed and the importer).
  */
-const validateSlug = (collectionSlug: string, rules?: SlugRules): Validate => async (value, { data, id, req }) => {
+const validateSlug = (collectionSlug: string, rules?: SlugRules, requireTenant = false): Validate => async (value, { data, id, req }) => {
   if (typeof value !== 'string' || !SLUG.test(value)) {
     return 'Use lowercase letters, numbers and single hyphens, for example port-vila'
   }
 
   const sibling = (data ?? {}) as LocationData
   const tenant = idOf(sibling.tenant)
-  // The beforeChange hook has already refused a tenantless document in multi-tenant mode.
-  if (tenant === null) return true
+  // A tenantless document is refused by the beforeChange hook in multi-tenant mode. In
+  // single-tenant mode there is no tenant to scope to: the shared rules still apply, across the
+  // whole collection. Without shared rules the legacy behaviour (no check) is kept.
+  if (tenant === null && (requireTenant || !rules)) return true
 
   const conflict = await slugConflict({
     collection: collectionSlug,
@@ -219,7 +221,7 @@ const validateParent = (collectionSlug: string): Validate => async (value, { dat
   return result.error ?? true
 }
 
-const fields = (collectionSlug: string, rules?: SlugRules): Field[] => [
+const fields = (collectionSlug: string, rules?: SlugRules, requireTenant = false): Field[] => [
   {
     name: 'name',
     type: 'text',
@@ -230,7 +232,7 @@ const fields = (collectionSlug: string, rules?: SlugRules): Field[] => [
     type: 'text',
     required: true,
     index: true,
-    validate: validateSlug(collectionSlug, rules),
+    validate: validateSlug(collectionSlug, rules, requireTenant),
   },
   {
     name: 'parent',
@@ -283,7 +285,7 @@ export const locationsCollection = (options: LocationsOptions = {}): CollectionC
       group: 'Jobs',
       useAsTitle: 'name',
     },
-    fields: fields(slug, slugRules),
+    fields: fields(slug, slugRules, requireTenant),
     hooks: {
       // Field validators are skipped when their field is not submitted, so a write that never
       // mentions `tenant` or `parent` would slip past `validateSlug` and `validateParent`.
@@ -301,6 +303,21 @@ export const locationsCollection = (options: LocationsOptions = {}): CollectionC
               collection: slug,
               errors: [{ message: 'A location must belong to a tenant', path: 'tenant' }],
             })
+          }
+
+          // The slug validator only runs when `slug` is submitted. Moving a location to another
+          // tenant submits only `tenant`, so check the stored slug against the destination.
+          if (slugRules && submitted.slug === undefined && submitted.tenant !== undefined) {
+            if (typeof merged.slug === 'string') {
+              await assertUniqueSlug({
+                collection: slug,
+                req,
+                rules: slugRules,
+                selfID: merged.id ?? stored.id,
+                slug: merged.slug,
+                tenant: idOf(merged.tenant),
+              })
+            }
           }
 
           const result = await checkParent(

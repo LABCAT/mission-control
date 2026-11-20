@@ -146,4 +146,34 @@ describe('slugs are unique across categories, locations and job types per tenant
       )
     expect(error).toMatch(/job type/)
   })
+
+  it('checks the stored slug when a taxonomy is moved to another tenant', async () => {
+    await create('locations', 'move-target', harness.tenantB.id)
+    const category = await create('job-categories', 'move-target', harness.tenantA.id)
+
+    const error = await failure(
+      harness.payload.update({
+        collection: 'job-categories',
+        data: { tenant: harness.tenantB.id } as never,
+        id: category.id,
+        overrideAccess: true,
+      }),
+    )
+    expect(error).toMatch(/location/)
+  })
+
+  it('checks the stored slug when a location is moved to another tenant', async () => {
+    await create('job-types', 'move-loc', harness.tenantB.id)
+    const location = await create('locations', 'move-loc', harness.tenantA.id)
+
+    const error = await failure(
+      harness.payload.update({
+        collection: 'locations',
+        data: { tenant: harness.tenantB.id } as never,
+        id: location.id,
+        overrideAccess: true,
+      }),
+    )
+    expect(error).toMatch(/job type/)
+  })
 })

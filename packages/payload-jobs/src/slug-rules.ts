@@ -128,14 +128,19 @@ const tenantIDOf = (tenant: unknown): IDLike =>
     : (tenant as IDLike)
 
 /**
- * beforeValidate hook for a collection in the shared namespace. It only runs when a slug is
- * submitted, so a write that leaves the slug alone is never blocked by a later clash; renaming
- * one to a taken slug is.
+ * beforeValidate hook for a collection in the shared namespace. It runs when a slug or a tenant
+ * is submitted, so a write that touches neither is never blocked by a later clash; renaming one
+ * to a taken slug, or moving it to a tenant where its slug is taken, is.
  */
 export const sharedSlugHook =
   (collection: string, rules: SlugRules): CollectionBeforeValidateHook =>
   async ({ data, originalDoc, req }) => {
-    const slug = typeof data?.slug === 'string' ? data.slug.trim() : ''
+    // Moving a document to another tenant changes where its stored slug has to be free, so a
+    // write that submits only `tenant` is checked too, against the slug already stored.
+    if (data?.slug === undefined && data?.tenant === undefined) return data
+
+    const raw = data?.slug ?? originalDoc?.slug
+    const slug = typeof raw === 'string' ? raw.trim() : ''
     if (!slug) return data
 
     await assertUniqueSlug({
