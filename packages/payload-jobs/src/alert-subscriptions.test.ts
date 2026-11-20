@@ -299,7 +299,7 @@ const taxonomies = (): CollectionConfig[] => [
   locationsCollection({ requireTenant: true }),
 ]
 
-describe('alert subscriptions integration', () => {
+describe('alert subscriptions integration @S-084', () => {
   let harness: TestHarness
   let employerA: TestUser
   let editorA: TestUser

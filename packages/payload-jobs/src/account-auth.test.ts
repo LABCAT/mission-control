@@ -320,7 +320,7 @@ describe('account auth endpoints', () => {
     })
   })
 
-  describe('login, me and logout', () => {
+  describe('login, me and logout @S-076', () => {
     it('signs a member in and returns a token that me accepts', async () => {
       const email = await createUser({ tenant: tenantA })
       const result = await login(tenantA, email.toUpperCase())
@@ -341,7 +341,7 @@ describe('account auth endpoints', () => {
       expect(me.body.user).toMatchObject({ email, role: 'seeker' })
     })
 
-    describe('WordPress legacy passwords (PJ-34)', () => {
+    describe('WordPress legacy passwords (PJ-34) @S-077', () => {
       // A known phpass hash of this password, from the PJ-34 fixtures.
       const PHPASS = '$P$9IQRaTwmfeRo7ud9Fh4E2PdI0S3r.L0'
       const WP_PASSWORD = 'test12345'
@@ -553,7 +553,7 @@ describe('account auth endpoints', () => {
     })
   })
 
-  describe('register and email verification', () => {
+  describe('register and email verification @S-074 @S-075', () => {
     it('creates an unverified seeker on the tenant and sends the verification email', async () => {
       const email = newEmail('seeker')
       const result = await register(tenantA, email)
@@ -711,7 +711,7 @@ describe('account auth endpoints', () => {
     })
   })
 
-  describe('forgot and reset password', () => {
+  describe('forgot and reset password @S-078', () => {
     it('emails a reset link from the tenant sender and answers the same for unknown emails', async () => {
       const email = await createUser({ tenant: tenantA })
 
@@ -788,7 +788,7 @@ describe('account auth endpoints', () => {
     })
   })
 
-  describe('rate limits', () => {
+  describe('rate limits @S-079', () => {
     beforeEach(() => {
       limiter = createMemoryRateLimiter({ limit: 3, windowMs: 60_000 })
     })

@@ -32,6 +32,14 @@ The `Migration round-trip` job runs `.github/scripts/migration-round-trip.sh`, w
 DATABASE_URL=postgres://orbit:orbit@localhost:8900/orbit PAYLOAD_SECRET=dev .github/scripts/migration-round-trip.sh
 ```
 
+## Definition of done
+
+`docs/features/catalogue.yaml` is the acceptance criteria. Every feature PR:
+
+- adds or updates the stories it changes (id, area, role, story, steps, expected, settings, `mvp`, `status`, `tests`);
+- tags its tests with the story id in the test title, e.g. `it('publishes a paid job @S-041')` — Playwright e2e for user journeys, unit/integration for details;
+- runs `pnpm features:report` (CI runs `scripts/features/report.mjs`) and leaves no MVP story marked `built` without a test. CI fails when one has none.
+
 ## Schema changes and migrations
 
 Dev schema push is **off** (drizzle-kit can't run in workerd), so every collection, field or global change needs a migration.
