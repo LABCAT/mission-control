@@ -20,6 +20,7 @@
     "@mission-control/payload-email-cloudflare": "workspace:*",
     "@mission-control/payload-jobs": "workspace:*",
     "@mission-control/payload-wp-import": "workspace:*",
+    "@mission-control/rocketship-payload": "workspace:*",
     "@payloadcms/db-postgres": "4.0.0-beta.7",
     "@payloadcms/graphql": "4.0.0-beta.7",
     "@payloadcms/plugin-multi-tenant": "4.0.0-beta.7",
