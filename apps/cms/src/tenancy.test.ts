@@ -654,14 +654,14 @@ describe('coupons', () => {
   it('scopes coupon reads to the tenants on the user', async () => {
     const config = await buildConfig()
 
-    expect(await baseAccess(config, 'read', 'coupons', tenantAdminA)).toEqual({
+    expect(await collectionAccess(config, 'read', 'coupons', tenantAdminA)).toEqual({
       tenant: { in: [tenantA.id] },
     })
-    expect(await baseAccess(config, 'read', 'coupons', tenantAdminB)).toEqual({
+    expect(await collectionAccess(config, 'read', 'coupons', tenantAdminB)).toEqual({
       tenant: { in: [tenantB.id] },
     })
     // Super admins are not constrained to a tenant.
-    expect(await baseAccess(config, 'read', 'coupons', superAdmin)).toBe(true)
+    expect(await collectionAccess(config, 'read', 'coupons', superAdmin)).toBe(true)
   })
 
   it('keeps coupons out of reach for anonymous requests and site keys', async () => {

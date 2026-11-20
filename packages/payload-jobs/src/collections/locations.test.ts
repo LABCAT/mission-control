@@ -36,6 +36,7 @@ describe('locations collection', () => {
       'plans',
       'add-ons',
       'jobs',
+      'coupons',
     ])
     expect(Locations.slug).toBe('locations')
     expect(Locations.versions).toBe(false)
