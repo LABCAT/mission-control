@@ -1,4 +1,4 @@
-import type { Payload } from 'payload'
+import type { CollectionSlug, Payload } from 'payload'
 
 import { slugifyLocationName } from '../collections/locations'
 import { LEGACY_REGIONS_AND_TOWNS } from './legacy-regions-and-towns'
@@ -74,6 +74,8 @@ export const parseVanuatuLocations = (
 type TenantRef = number | { id: number }
 
 type SeedVanuatuOptions = {
+  /** Resolved locations collection slug. Defaults to `locations`. */
+  collectionSlug?: string
   log?: (message: string) => void
   /** The three calls the seed needs; a full `Payload` instance satisfies this. */
   payload: Pick<Payload, 'create' | 'find' | 'update'>
@@ -90,6 +92,7 @@ const tenantIDOf = (tenant: TenantRef): number =>
  * wants a different tree edits its own locations.
  */
 export const seedVanuatuLocations = async ({
+  collectionSlug = 'locations',
   log,
   payload,
   tenant,
@@ -98,7 +101,7 @@ export const seedVanuatuLocations = async ({
   const seeds = parseVanuatuLocations()
 
   const existing = await payload.find({
-    collection: 'locations',
+    collection: collectionSlug as CollectionSlug,
     depth: 0,
     overrideAccess: true,
     pagination: false,
@@ -125,11 +128,11 @@ export const seedVanuatuLocations = async ({
     const found = idsBySlug.get(seed.slug)
 
     if (found === undefined) {
-      const doc = await payload.create({ collection: 'locations', data, overrideAccess: true })
+      const doc = await payload.create({ collection: collectionSlug as CollectionSlug, data, overrideAccess: true })
       idsBySlug.set(seed.slug, Number(doc.id))
       created += 1
     } else {
-      await payload.update({ collection: 'locations', data, id: found, overrideAccess: true })
+      await payload.update({ collection: collectionSlug as CollectionSlug, data, id: found, overrideAccess: true })
       updated += 1
     }
   }

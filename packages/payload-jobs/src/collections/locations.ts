@@ -1,10 +1,14 @@
-import type { CollectionConfig, CompoundIndex, Field, PayloadRequest, Validate } from 'payload'
+import type { CollectionConfig, CompoundIndex, Field, PayloadRequest, Validate, CollectionSlug } from 'payload'
 import { ValidationError } from 'payload'
 
 import { tenantContentWriteAccess } from '../access'
+import { mergeCollectionAccess, type CollectionAccess } from '../slugs'
 import type { TenantLocationSettings } from '../location-settings'
 
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
+
+/** The collection's own slug, also used for the parent relation and the lookups. */
+const DEFAULT_SLUG = 'locations'
 
 /** Lowercase ASCII slug: `Anywhere/Work From Home` becomes `anywhere-work-from-home`. */
 export const slugifyLocationName = (name: string): string =>
@@ -42,6 +46,8 @@ export type LocationLimits = (args: {
 }) => Promise<null | TenantLocationSettings> | null | TenantLocationSettings
 
 export type LocationsOptions = {
+  /** Overrides the collection's default access, operation by operation. */
+  access?: CollectionAccess
   /**
    * Refuse a location deeper than the tenant allows. Optional: a tenant without a limit can
    * build any tree.
@@ -54,6 +60,8 @@ export type LocationsOptions = {
    * all, so there the check is off.
    */
   requireTenant?: boolean
+  /** Overrides the collection slug. Defaults to `locations`. */
+  slug?: string
 }
 
 /**
@@ -61,7 +69,7 @@ export type LocationsOptions = {
  * tenant is taken from the document being validated, so the check also works for a create
  * made with `overrideAccess` (the seed and the importer).
  */
-const validateSlug: Validate = async (value, { data, id, req }) => {
+const validateSlug = (collectionSlug: string): Validate => async (value, { data, id, req }) => {
   if (typeof value !== 'string' || !SLUG.test(value)) {
     return 'Use lowercase letters, numbers and single hyphens, for example port-vila'
   }
@@ -72,7 +80,7 @@ const validateSlug: Validate = async (value, { data, id, req }) => {
   if (tenant === null) return true
 
   const { docs } = await req.payload.find({
-    collection: 'locations',
+    collection: collectionSlug as CollectionSlug,
     depth: 0,
     limit: 2,
     overrideAccess: true,
@@ -104,9 +112,13 @@ type ParentCheck = { depth: number; error?: undefined } | { depth?: undefined; e
 /** A limit on how far an ancestor walk goes, so corrupt data cannot spin forever. */
 const MAX_TREE_WALK = 1000
 
-const readLocation = async (id: number | string, req: PayloadRequest): Promise<LocationData | null> =>
+const readLocation = async (
+  id: number | string,
+  req: PayloadRequest,
+  collectionSlug: string,
+): Promise<LocationData | null> =>
   (await req.payload.findByID({
-    collection: 'locations',
+    collection: collectionSlug as CollectionSlug,
     depth: 0,
     id,
     overrideAccess: true,
@@ -125,6 +137,7 @@ const readLocation = async (id: number | string, req: PayloadRequest): Promise<L
 const checkParent = async (
   value: LocationRef,
   { data, id, limits, req }: TreeCheckArgs,
+  collectionSlug: string,
 ): Promise<ParentCheck> => {
   const parentID = idOf(value)
   let depth = 0
@@ -149,7 +162,7 @@ const checkParent = async (
       if (seen.size >= MAX_TREE_WALK) return { error: 'The location tree is deeper than allowed' }
       seen.add(key)
 
-      const doc = await readLocation(currentID, req)
+      const doc = await readLocation(currentID, req, collectionSlug)
       if (!doc) {
         return { error: depth === 0 ? 'The parent location does not exist' : 'An ancestor location is missing' }
       }
@@ -195,17 +208,21 @@ const checkParent = async (
  * hook below therefore runs the same check against the merged document on every write, and this
  * validator only covers the field-level error message.
  */
-const validateParent: Validate = async (value, { data, id, req }) => {
-  const result = await checkParent(value as LocationRef, {
-    data: (data ?? {}) as LocationData,
-    id,
-    req,
-  })
+const validateParent = (collectionSlug: string): Validate => async (value, { data, id, req }) => {
+  const result = await checkParent(
+    value as LocationRef,
+    {
+      data: (data ?? {}) as LocationData,
+      id,
+      req,
+    },
+    collectionSlug,
+  )
 
   return result.error ?? true
 }
 
-const fields: Field[] = [
+const fields = (collectionSlug: string): Field[] => [
   {
     name: 'name',
     type: 'text',
@@ -216,14 +233,14 @@ const fields: Field[] = [
     type: 'text',
     required: true,
     index: true,
-    validate: validateSlug,
+    validate: validateSlug(collectionSlug),
   },
   {
     name: 'parent',
     type: 'relationship',
-    relationTo: 'locations',
+    relationTo: collectionSlug as CollectionSlug,
     index: true,
-    validate: validateParent,
+    validate: validateParent(collectionSlug),
   },
   {
     name: 'depth',
@@ -251,22 +268,25 @@ const fields: Field[] = [
  * multi-tenant plugin scopes every operation to the caller's tenant.
  */
 export const locationsCollection = (options: LocationsOptions = {}): CollectionConfig => {
-  const { limits, requireTenant = false } = options
+  const { access, limits, requireTenant = false, slug = DEFAULT_SLUG } = options
 
   return {
-    slug: 'locations',
-    access: {
-      create: tenantContentWriteAccess,
-      delete: tenantContentWriteAccess,
-      read: () => true,
-      update: tenantContentWriteAccess,
-    },
+    slug,
+    access: mergeCollectionAccess(
+      {
+        create: tenantContentWriteAccess,
+        delete: tenantContentWriteAccess,
+        read: () => true,
+        update: tenantContentWriteAccess,
+      },
+      access,
+    ),
     admin: {
       defaultColumns: ['name', 'depth', 'slug', 'parent'],
       group: 'Jobs',
       useAsTitle: 'name',
     },
-    fields,
+    fields: fields(slug),
     hooks: {
       // Field validators are skipped when their field is not submitted, so a write that never
       // mentions `tenant` or `parent` would slip past `validateSlug` and `validateParent`.
@@ -281,20 +301,24 @@ export const locationsCollection = (options: LocationsOptions = {}): CollectionC
 
           if (requireTenant && idOf(merged.tenant) === null) {
             throw new ValidationError({
-              collection: 'locations',
+              collection: slug,
               errors: [{ message: 'A location must belong to a tenant', path: 'tenant' }],
             })
           }
 
-          const result = await checkParent(merged.parent, {
-            data: merged,
-            id: merged.id ?? stored.id,
-            limits,
-            req,
-          })
+          const result = await checkParent(
+            merged.parent,
+            {
+              data: merged,
+              id: merged.id ?? stored.id,
+              limits,
+              req,
+            },
+            slug,
+          )
           if (result.error !== undefined) {
             throw new ValidationError({
-              collection: 'locations',
+              collection: slug,
               errors: [{ message: result.error, path: 'parent' }],
             })
           }

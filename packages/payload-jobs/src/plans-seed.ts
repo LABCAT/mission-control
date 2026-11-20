@@ -174,6 +174,14 @@ export const planSeedProblems = (plans: readonly PlanSeed[]): string[] => {
 }
 
 type SeedPlansArgs = {
+  /** Resolved add-ons collection slug. Defaults to `add-ons`. */
+  addOnsSlug?: string
+  /** Resolved plans collection slug. Defaults to `plans`. */
+  collectionSlug?: string
+  /** Resolved job-categories collection slug. Defaults to `job-categories`. */
+  jobCategoriesSlug?: string
+  /** Resolved job-types collection slug. Defaults to `job-types`. */
+  jobTypesSlug?: string
   payload: Payload
   plans: readonly PlanSeed[]
   /** Pass a request to run inside a caller's transaction. */
@@ -189,6 +197,10 @@ type SeedPlansArgs = {
  * All seed data is checked before anything is written.
  */
 export const seedPlans = async ({
+  addOnsSlug = ADD_ONS_SLUG,
+  collectionSlug = PLANS_SLUG,
+  jobCategoriesSlug = PLAN_JOB_CATEGORIES_SLUG,
+  jobTypesSlug = PLAN_JOB_TYPES_SLUG,
   payload,
   plans,
   req,
@@ -217,11 +229,11 @@ export const seedPlans = async ({
   }
 
   const typeIDs = await resolve(
-    PLAN_JOB_TYPES_SLUG,
+    jobTypesSlug,
     plans.flatMap((plan) => plan.allowedJobTypes ?? []),
   )
   const categoryIDs = await resolve(
-    PLAN_JOB_CATEGORIES_SLUG,
+    jobCategoriesSlug,
     plans.flatMap((plan) => plan.allowedJobCategories ?? []),
   )
   const missing = plans.flatMap((plan) => [
@@ -243,7 +255,7 @@ export const seedPlans = async ({
   const addOnIDs = new Map<string, number | string>()
   if (addOnKeys.length > 0) {
     const { docs } = await payload.find({
-      collection: ADD_ONS_SLUG as CollectionSlug,
+      collection: addOnsSlug as CollectionSlug,
       depth: 0,
       limit: addOnKeys.length,
       overrideAccess: true,
@@ -283,7 +295,7 @@ export const seedPlans = async ({
     }
 
     const { totalDocs } = await payload.count({
-      collection: PLANS_SLUG,
+      collection: collectionSlug as CollectionSlug,
       overrideAccess: true,
       req,
       where: { and: [{ tenant: { equals: tenantID } }, { or: match }] },
@@ -297,7 +309,7 @@ export const seedPlans = async ({
     // The seed was checked above, so every value is confirmed. The data is generic here: the
     // host's generated types know the tenant's id type, this package doesn't.
     await payload.create({
-      collection: PLANS_SLUG,
+      collection: collectionSlug as CollectionSlug,
       data: {
         acceptsCredits: plan.acceptsCredits ?? true,
         allowedJobCategories: (plan.allowedJobCategories ?? []).map((slug) => categoryIDs.get(slug)),

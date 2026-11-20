@@ -1,4 +1,4 @@
-import type { Payload, PayloadRequest, Where } from 'payload'
+import type { CollectionSlug, Payload, PayloadRequest, Where } from 'payload'
 
 import { addOnFieldValidators, ADD_ONS_SLUG, type AddOnPlacement } from './add-ons'
 import { CATALOG_KEY_PATTERN, missingTaxRateKeys } from './catalog'
@@ -179,6 +179,8 @@ const seedCreationOrder = (addOns: readonly AddOnSeed[]): AddOnSeed[] | null => 
 
 type SeedAddOnsArgs = {
   addOns: readonly AddOnSeed[]
+  /** Resolved add-ons collection slug. Defaults to `add-ons`. */
+  collectionSlug?: string
   payload: Payload
   /** Pass a request to run inside a caller's transaction. */
   req?: Partial<PayloadRequest>
@@ -193,6 +195,7 @@ type SeedAddOnsArgs = {
  */
 export const seedAddOns = async ({
   addOns,
+  collectionSlug = ADD_ONS_SLUG,
   payload,
   req,
   tenantID,
@@ -208,7 +211,7 @@ export const seedAddOns = async ({
     if (typeof addOn.legacyKey === 'string') match.push({ legacyKey: { equals: addOn.legacyKey } })
 
     const { docs } = await payload.find({
-      collection: ADD_ONS_SLUG,
+      collection: collectionSlug as CollectionSlug,
       depth: 0,
       limit: 1,
       overrideAccess: true,
@@ -231,7 +234,7 @@ export const seedAddOns = async ({
 
   if (outsideKeys.length > 0) {
     const { docs } = await payload.find({
-      collection: ADD_ONS_SLUG,
+      collection: collectionSlug as CollectionSlug,
       depth: 0,
       limit: outsideKeys.length,
       overrideAccess: true,
@@ -272,7 +275,7 @@ export const seedAddOns = async ({
 
     // Checked above: every value is confirmed and every granted key resolves.
     const created = await payload.create({
-      collection: ADD_ONS_SLUG,
+      collection: collectionSlug as CollectionSlug,
       data: {
         active: addOn.active ?? true,
         description: addOn.description,

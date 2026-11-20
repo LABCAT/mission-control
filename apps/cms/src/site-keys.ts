@@ -9,10 +9,9 @@ export const siteKeyAllowedCollections = [
   'locations',
   'media',
   'tags',
-  // mission-control: job-board taxonomies (PJ-16).
-  'areas-of-focus',
+  // mission-control: job-board taxonomies (PJ-16). Job tags and areas of focus were
+  // removed in PJ-80 (no legacy terms).
   'job-categories',
-  'job-tags',
   'job-types',
   'salary-bands',
 ] as const

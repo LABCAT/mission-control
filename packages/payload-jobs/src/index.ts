@@ -12,21 +12,25 @@ import {
   ALERT_SUBSCRIPTIONS_SLUG,
   alertSubscriptionCollection,
   removeTenantAlertSubscriptions,
+  removeTenantAlertSubscriptionsFor,
 } from './alert-subscriptions'
 import type { LocationsOptions } from './collections/locations'
 import { locationsCollection, locationsTenantSlugIndex } from './collections/locations'
-import {
-  ORGANISATIONS_SLUG,
-  organisationsCollection,
-  withOrganisationField,
-} from './collections/organisations'
+import { organisationsCollection, withOrganisationField } from './collections/organisations'
+import { couponCollection, removeTenantCouponsFor, removeTenantCoupons } from './coupons'
 import { withLegacyPasswords } from './legacy-password'
 import { tenantLocationSettings, type TenantLocationSource } from './location-settings'
-import { addOnCollection, ADD_ONS_SLUG } from './add-ons'
-import { jobsCollection, JOBS_SLUG } from './collections/jobs'
+import { addOnCollection } from './add-ons'
+import { jobsCollection } from './collections/jobs'
 import { expireJobPlacementsTask, PLACEMENTS_FIELD } from './placements'
-import { planCollection, PLANS_SLUG, withPlanRestrictionGuards } from './plans'
-import { TAXONOMY_SLUGS, taxonomyCollections } from './taxonomies'
+import { planCollection, withPlanRestrictionGuards } from './plans'
+import {
+  DEFAULT_PAYLOAD_JOBS_SLUGS,
+  resolvePayloadJobsSlugs,
+  type PayloadJobsCollectionSlugs,
+  type PayloadJobsCollectionsOptions,
+} from './slugs'
+import { taxonomyCollections } from './taxonomies'
 import { jobBoardSettingsGlobal, jobBoardTenantFields } from './tenancy'
 
 export * from './access'
@@ -34,6 +38,7 @@ export * from './account-auth'
 export * from './alert-subscriptions'
 export * from './collections/locations'
 export * from './collections/organisations'
+export * from './coupons'
 export * from './email'
 export * from './legacy-password'
 export * from './location-settings'
@@ -49,6 +54,7 @@ export * from './plans-seed'
 export * from './pricing'
 export * from './rate-limit'
 export * from './seed/vanuatu'
+export * from './slugs'
 export * from './site-keys'
 export * from './tax'
 export * from './tax-settings'
@@ -58,19 +64,42 @@ export * from './tenancy'
 export type TenancyMode = 'multi' | 'single'
 
 /**
- * Collections this plugin adds that belong to a tenant. In `multi` mode the host must list
- * every one of them in the multi-tenant plugin's `collections`, which adds their `tenant`
- * field; Payload otherwise rejects the config ("Field tenant was not found").
+ * Every collection this plugin adds that belongs to a tenant, with the resolved slugs.
+ * In `multi` mode the host must list each one in the multi-tenant plugin's `collections`,
+ * which adds their `tenant` field; Payload otherwise rejects the config.
  */
-export const PAYLOAD_JOBS_TENANT_COLLECTIONS = [
-  'locations',
-  ORGANISATIONS_SLUG,
-  ...TAXONOMY_SLUGS,
-  ADD_ONS_SLUG,
-  PLANS_SLUG,
-  ALERT_SUBSCRIPTIONS_SLUG,
-  JOBS_SLUG,
-] as const
+export const payloadJobsTenantCollections = (
+  slugs: PayloadJobsCollectionSlugs = DEFAULT_PAYLOAD_JOBS_SLUGS,
+): string[] => [
+  slugs.locations,
+  slugs.organisations,
+  slugs.jobCategories,
+  slugs.jobTypes,
+  slugs.salaryBands,
+  slugs.addOns,
+  slugs.plans,
+  slugs.alertSubscriptions,
+  slugs.jobs,
+  slugs.coupons,
+]
+
+/**
+ * The one place the plugin options become slugs, shared by the plugin and the helpers.
+ * `jobsSlug` predates the per-collection options and still wins for the jobs collection.
+ */
+const resolveSlugsFromOptions = (options: PayloadJobsOptions): PayloadJobsCollectionSlugs => {
+  const slugs = resolvePayloadJobsSlugs(options.collections ?? {})
+  if (options.jobsSlug !== undefined) slugs.jobs = options.jobsSlug
+
+  return slugs
+}
+
+/** `jobsTenantCollections` alias, named for the multi-tenant plugin option it fills. */
+export const jobsTenantCollections = (options: PayloadJobsOptions = {}): string[] =>
+  payloadJobsTenantCollections(resolveSlugsFromOptions(options))
+
+/** Tenant collections under the default slugs. */
+export const PAYLOAD_JOBS_TENANT_COLLECTIONS = payloadJobsTenantCollections() as string[]
 
 export type PayloadJobsFeatures = {
   /** Job applications. The collection is added by a later task. Defaults to true. */
@@ -79,7 +108,7 @@ export type PayloadJobsFeatures = {
   alerts?: boolean
   /** Organisation job credits. Added by a later task. Defaults to true. */
   credits?: boolean
-  /** Coupons. Added by a later task. Defaults to true. */
+  /** Coupon codes and their discounts. Defaults to true. */
   coupons?: boolean
 }
 
@@ -89,6 +118,13 @@ export type PayloadJobsOptions = {
    * The users collection must enable `auth.verify`. Pass `false` to leave them out.
    */
   accountAuth?: AccountAuthOptions | false
+  /**
+   * Per-collection overrides: rename any slug and/or override its access. Every internal
+   * relationship and query uses the resolved slug, so choosing a slug before your first schema migration needs nothing extra. Renaming one on an installation that already has the tables changes the schema: generate and apply your own app migration for it.
+   *
+   *   collections: { locations: { slug: 'job-locations' } }
+   */
+  collections?: PayloadJobsCollectionsOptions
   /** Turn the plugin off without removing it from the config. Defaults to true. */
   enabled?: boolean
   /** Which job-board collections to enable. All default to true. */
@@ -106,7 +142,8 @@ export type PayloadJobsOptions = {
   /** Slug of the tenants collection in multi-tenant mode. */
   tenantsSlug?: string
   /**
-   * Slug of the jobs collection (PJ-19). When it exists and has the `placements` field
+   * Slug of the jobs collection (PJ-19). Kept for compatibility; `collections.jobs.slug`
+   * is the newer spelling. When it exists and has the `placements` field
    * (`jobPlacementsField()`), the daily task that expires placements is registered.
    */
   jobsSlug?: string
@@ -125,11 +162,30 @@ const jobBoardCollections = (
   features: Required<PayloadJobsFeatures>,
   mediaSlug: null | string,
   locationsOptions: LocationsOptions,
+  slugs: PayloadJobsCollectionSlugs,
+  collections: PayloadJobsCollectionsOptions,
 ): CollectionConfig[] => [
-  locationsCollection(locationsOptions),
-  organisationsCollection({ mediaSlug, tenantScoped: tenancy === 'multi' }),
+  locationsCollection({
+    ...locationsOptions,
+    access: collections.locations?.access,
+    requireTenant: tenancy === 'multi',
+    slug: slugs.locations,
+  }),
+  organisationsCollection({
+    access: collections.organisations?.access,
+    locationsSlug: slugs.locations,
+    mediaSlug,
+    slug: slugs.organisations,
+    tenantScoped: tenancy === 'multi',
+  }),
   ...(features.alerts
-    ? [alertSubscriptionCollection({ tenantScoped: tenancy === 'multi' })]
+    ? [
+        alertSubscriptionCollection({
+          access: collections.alertSubscriptions?.access,
+          slugs,
+          tenantScoped: tenancy === 'multi',
+        }),
+      ]
     : []),
 ]
 
@@ -145,6 +201,8 @@ export const payloadJobs =
     const tenancy = options.tenancy ?? 'single'
     const tenantsSlug = options.tenantsSlug ?? 'tenants'
     const features = resolvedFeatures(options)
+    const collectionOptions = options.collections ?? {}
+    const slugs = resolveSlugsFromOptions(options)
 
     let config = incoming
 
@@ -155,7 +213,11 @@ export const payloadJobs =
       ...config,
       collections: config.collections?.map((collection) =>
         collection.slug === usersSlug
-          ? withOrganisationField(withLegacyPasswords(collection), tenancy === 'multi')
+          ? withOrganisationField(
+              withLegacyPasswords(collection),
+              tenancy === 'multi',
+              slugs.organisations,
+            )
           : collection,
       ),
     }
@@ -205,7 +267,7 @@ export const payloadJobs =
           : null
         : options.mediaSlug
 
-    const added = jobBoardCollections(tenancy, features, mediaSlug, locationsOptions)
+    const added = jobBoardCollections(tenancy, features, mediaSlug, locationsOptions, slugs, collectionOptions)
     const existingSlugs = new Set((config.collections ?? []).map((collection) => collection.slug))
     const clashes = added.filter((collection) => existingSlugs.has(collection.slug))
     if (clashes.length > 0) {
@@ -261,17 +323,25 @@ export const payloadJobs =
               hooks: {
                 ...collection.hooks,
                 // Deleting a tenant must take its subscribers with it, not detach them.
-                beforeDelete: features.alerts
-                  ? [
-                      ...(collection.hooks?.beforeDelete ?? []),
-                      removeTenantAlertSubscriptions,
-                    ]
-                  : collection.hooks?.beforeDelete,
+                // Coupons are removed too: the tenant foreign key would otherwise null them.
+                beforeDelete: [
+                  ...(collection.hooks?.beforeDelete ?? []),
+                  ...(features.alerts
+                    ? [
+                        slugs.alertSubscriptions === ALERT_SUBSCRIPTIONS_SLUG
+                          ? removeTenantAlertSubscriptions
+                          : removeTenantAlertSubscriptionsFor(slugs.alertSubscriptions),
+                      ]
+                    : []),
+                  ...(features.coupons
+                    ? [slugs.coupons === 'coupons' ? removeTenantCoupons : removeTenantCouponsFor(slugs.coupons)]
+                    : []),
+                ],
               },
             }
           }
 
-          if (collection.slug === 'locations') {
+          if (collection.slug === slugs.locations) {
             return {
               ...collection,
               indexes: [...(collection.indexes ?? []), locationsTenantSlugIndex],
@@ -298,15 +368,46 @@ export const payloadJobs =
     const registeredSlugs = new Set(config.collections?.map((collection) => collection.slug))
     // Job types and categories that a plan is restricted to can't be deleted (PJ-21).
     const taxonomies = withPlanRestrictionGuards(
-      taxonomyCollections({ tenantScoped: tenancy === 'multi' }).filter(
-        (collection) => !registeredSlugs.has(collection.slug),
-      ),
-      { tenantScoped: tenancy === 'multi' },
+      taxonomyCollections({
+        access: {
+          jobCategories: collectionOptions.jobCategories?.access,
+          jobTypes: collectionOptions.jobTypes?.access,
+          salaryBands: collectionOptions.salaryBands?.access,
+        },
+        slugs,
+        tenantScoped: tenancy === 'multi',
+      }).filter((collection) => !registeredSlugs.has(collection.slug)),
+      {
+        jobCategoriesSlug: slugs.jobCategories,
+        jobTypesSlug: slugs.jobTypes,
+        plansSlug: slugs.plans,
+        tenantScoped: tenancy === 'multi',
+      },
     )
-    const catalogOptions = { settingsSlug, tenantScoped: tenancy === 'multi', tenantsSlug }
+    const catalogOptions = {
+      settingsSlug,
+      slugs,
+      tenantScoped: tenancy === 'multi',
+      tenantsSlug,
+    }
     // Plans and add-ons are always on: every job board sells listings, even if all are free.
-    const addOns = addOnCollection(catalogOptions)
-    const plans = planCollection(catalogOptions)
+    const addOns = addOnCollection({
+      ...catalogOptions,
+      access: collectionOptions.addOns?.access,
+    })
+    const plans = planCollection({
+      ...catalogOptions,
+      access: collectionOptions.plans?.access,
+    })
+    const coupons = features.coupons
+      ? [
+          couponCollection({
+            access: collectionOptions.coupons?.access,
+            slug: slugs.coupons,
+            tenantScoped: tenancy === 'multi',
+          }),
+        ]
+      : []
 
     // Expire job placements daily, once there is a jobs collection that has them (PJ-19).
     // Jobs go last: Payload numbers compound index names in collection order, and the
@@ -318,20 +419,23 @@ export const payloadJobs =
           : null
         : options.documentsSlug
     const jobs = jobsCollection({
+      access: collectionOptions.jobs?.access,
       documentsSlug,
       richTextDescription: Boolean(config.editor),
+      slugs,
       tenantScoped: tenancy === 'multi',
     })
 
-    const jobsSlug = options.jobsSlug ?? JOBS_SLUG
-    const jobsWithPlacements = [...(config.collections ?? []), jobs].find((collection) => collection.slug === jobsSlug)
+    const jobsWithPlacements = [...(config.collections ?? []), jobs].find(
+      (collection) => collection.slug === slugs.jobs,
+    )
     const hasPlacements = jobsWithPlacements?.fields.some(
       (field) => 'name' in field && field.name === PLACEMENTS_FIELD,
     )
     const jobsConfig = hasPlacements
       ? {
           ...config.jobs,
-          tasks: [...(config.jobs?.tasks ?? []), expireJobPlacementsTask({ jobsSlug })],
+          tasks: [...(config.jobs?.tasks ?? []), expireJobPlacementsTask({ jobsSlug: slugs.jobs })],
         }
       : config.jobs
 
@@ -339,7 +443,7 @@ export const payloadJobs =
       ...config,
       // Plans before add-ons: Payload numbers compound index names in collection order, and
       // plans' existing `tenant_key_idx` must keep its name.
-      collections: [...(config.collections ?? []), ...taxonomies, plans, addOns, jobs],
+      collections: [...(config.collections ?? []), ...taxonomies, plans, addOns, jobs, ...coupons],
       jobs: jobsConfig,
       custom: {
         ...config.custom,

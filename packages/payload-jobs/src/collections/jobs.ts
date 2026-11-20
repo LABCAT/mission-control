@@ -38,7 +38,13 @@ import { jobPlacementsField } from '../placements'
 import { assertPlanAllowsJob, PricingError, type QuoteJob } from '../pricing'
 import { getSiteKeyHeader, resolveSiteKey } from '../site-keys'
 import { TAXONOMY_SLUG_PATTERN, uniqueSlugPerTenant } from '../taxonomies'
-import { ORGANISATIONS_SLUG, validateUrl } from './organisations'
+import {
+  DEFAULT_PAYLOAD_JOBS_SLUGS,
+  mergeCollectionAccess,
+  type CollectionAccess,
+  type PayloadJobsCollectionSlugs,
+} from '../slugs'
+import { validateUrl } from './organisations'
 
 /**
  * Jobs (PJ-19). A job belongs to one organisation in one tenant. Employers write their own
@@ -271,7 +277,7 @@ export const slugifyTitle = (title: string): string =>
  * clash). An explicit slug is left alone; the unique-slug hook reports a clash for it.
  */
 export const autoJobSlug =
-  (tenantScoped: boolean): CollectionBeforeValidateHook =>
+  (tenantScoped: boolean, collectionSlug = JOBS_SLUG): CollectionBeforeValidateHook =>
   async ({ data, originalDoc, req }) => {
     if (!data) return data
     const current = typeof data.slug === 'string' ? data.slug.trim() : (originalDoc?.slug as string | undefined)
@@ -283,7 +289,7 @@ export const autoJobSlug =
     const base = slugifyTitle(title)
     const tenantID = tenantIDOf(data.tenant ?? originalDoc?.tenant)
     const { docs } = await req.payload.find({
-      collection: JOBS_SLUG as CollectionSlug,
+      collection: collectionSlug as CollectionSlug,
       depth: 0,
       limit: 1000,
       overrideAccess: true,
@@ -311,14 +317,16 @@ export const validateJobSlug = (value: null | string | undefined): string | true
     : 'Use lowercase letters, numbers and single hyphens, for example accountant-port-vila'
 
 /** The relationship fields that must point inside the job's tenant, and what they relate to. */
-const relationsFor = (documentsSlug: null | string): { label: string; path: string; relationTo: string }[] => [
-  { label: 'organisation', path: 'organisation', relationTo: ORGANISATIONS_SLUG },
-  { label: 'job type', path: 'jobType', relationTo: 'job-types' },
-  { label: 'category', path: 'categories', relationTo: 'job-categories' },
-  { label: 'tag', path: 'tags', relationTo: 'job-tags' },
-  { label: 'salary band', path: 'salaryBand', relationTo: 'salary-bands' },
-  { label: 'location', path: 'location', relationTo: 'locations' },
-  { label: 'plan', path: 'plan', relationTo: 'plans' },
+const relationsFor = (
+  documentsSlug: null | string,
+  slugs: PayloadJobsCollectionSlugs,
+): { label: string; path: string; relationTo: string }[] => [
+  { label: 'organisation', path: 'organisation', relationTo: slugs.organisations },
+  { label: 'job type', path: 'jobType', relationTo: slugs.jobTypes },
+  { label: 'category', path: 'categories', relationTo: slugs.jobCategories },
+  { label: 'salary band', path: 'salaryBand', relationTo: slugs.salaryBands },
+  { label: 'location', path: 'location', relationTo: slugs.locations },
+  { label: 'plan', path: 'plan', relationTo: slugs.plans },
   ...(documentsSlug ? [{ label: 'job description file', path: 'jobDescriptionPdf', relationTo: documentsSlug }] : []),
 ]
 
@@ -333,7 +341,11 @@ const valueAfterSave = (
  * multi-tenant plugin, but a REST or local API write could still name another tenant's documents.
  */
 export const jobRelationsInTenant =
-  (tenantScoped: boolean, documentsSlug: null | string): CollectionBeforeChangeHook =>
+  (
+    tenantScoped: boolean,
+    documentsSlug: null | string,
+    slugs: PayloadJobsCollectionSlugs = DEFAULT_PAYLOAD_JOBS_SLUGS,
+  ): CollectionBeforeChangeHook =>
   async ({ collection, data, originalDoc, req }) => {
     if (!tenantScoped) return data
     const tenantID = resultingTenantID(data, originalDoc)
@@ -346,7 +358,7 @@ export const jobRelationsInTenant =
     }
 
     const errors: { message: string; path: string }[] = []
-    for (const { label, path, relationTo } of relationsFor(documentsSlug)) {
+    for (const { label, path, relationTo } of relationsFor(documentsSlug, slugs)) {
       if (!hasCollection(req, relationTo)) continue
       const ids = idsOf([valueAfterSave(data, originalDoc, path)].flat())
       if (ids.length === 0) continue
@@ -371,7 +383,7 @@ export const jobRelationsInTenant =
  * ones; an employer can't write them at all (field access).
  */
 export const jobStatusRules =
-  (tenantScoped: boolean): CollectionBeforeChangeHook =>
+  (tenantScoped: boolean, plansSlug = 'plans'): CollectionBeforeChangeHook =>
   async ({ collection, data, operation, originalDoc, req }) => {
     const from: JobStatus | null =
       operation === 'create' ? null : isJobStatus(originalDoc?.status) ? originalDoc.status : 'draft'
@@ -387,9 +399,9 @@ export const jobStatusRules =
     // The listing duration comes from the plan the job is on, when it has one.
     let durationDays: null | number = null
     const planID = tenantIDOf(valueAfterSave(data, originalDoc, 'plan'))
-    if (planID !== null && hasCollection(req, 'plans')) {
+    if (planID !== null && hasCollection(req, plansSlug)) {
       const plan = (await req.payload.findByID({
-        collection: 'plans' as CollectionSlug,
+        collection: plansSlug as CollectionSlug,
         depth: 0,
         disableErrors: true,
         id: planID,
@@ -421,50 +433,55 @@ export const jobStatusRules =
  * A job's plan must allow it: the same type, category and volunteer rules as `quote()`. The job
  * type is read from the database so its own `isVolunteer` flag decides, never the caller.
  */
-export const jobPlanAllowsJob: CollectionBeforeChangeHook = async ({ collection, data, originalDoc, req }) => {
-  const planID = tenantIDOf(valueAfterSave(data, originalDoc, 'plan'))
-  if (planID === null || !hasCollection(req, 'plans')) return data
+export const jobPlanAllowsJobWith =
+  (slugs: PayloadJobsCollectionSlugs = DEFAULT_PAYLOAD_JOBS_SLUGS): CollectionBeforeChangeHook =>
+  async ({ collection, data, originalDoc, req }) => {
+    const planID = tenantIDOf(valueAfterSave(data, originalDoc, 'plan'))
+    if (planID === null || !hasCollection(req, slugs.plans)) return data
 
-  const plan = await req.payload.findByID({
-    collection: 'plans' as CollectionSlug,
-    depth: 0,
-    disableErrors: true,
-    id: planID,
-    overrideAccess: true,
-    req,
-  })
-  if (!plan) return data // jobRelationsInTenant / Payload reject a missing relation.
-
-  const typeID = tenantIDOf(valueAfterSave(data, originalDoc, 'jobType'))
-  const type =
-    typeID === null || !hasCollection(req, 'job-types')
-      ? null
-      : ((await req.payload.findByID({
-          collection: 'job-types' as CollectionSlug,
-          depth: 0,
-          disableErrors: true,
-          id: typeID,
-          overrideAccess: true,
-          req,
-        })) as null | { id: number | string; isVolunteer?: boolean | null })
-
-  const job: QuoteJob = {
-    categories: idsOf([valueAfterSave(data, originalDoc, 'categories')].flat()),
-    type: type ? { id: type.id, isVolunteer: type.isVolunteer === true } : typeID,
-  }
-
-  try {
-    assertPlanAllowsJob(plan as never, job)
-  } catch (error) {
-    if (!(error instanceof PricingError)) throw error
-    throw new ValidationError({
-      collection: collection.slug,
-      errors: [{ message: error.message, path: 'plan' }],
+    const plan = await req.payload.findByID({
+      collection: slugs.plans as CollectionSlug,
+      depth: 0,
+      disableErrors: true,
+      id: planID,
+      overrideAccess: true,
       req,
     })
+    if (!plan) return data // jobRelationsInTenant / Payload reject a missing relation.
+
+    const typeID = tenantIDOf(valueAfterSave(data, originalDoc, 'jobType'))
+    const type =
+      typeID === null || !hasCollection(req, slugs.jobTypes)
+        ? null
+        : ((await req.payload.findByID({
+            collection: slugs.jobTypes as CollectionSlug,
+            depth: 0,
+            disableErrors: true,
+            id: typeID,
+            overrideAccess: true,
+            req,
+          })) as null | { id: number | string; isVolunteer?: boolean | null })
+
+    const job: QuoteJob = {
+      categories: idsOf([valueAfterSave(data, originalDoc, 'categories')].flat()),
+      type: type ? { id: type.id, isVolunteer: type.isVolunteer === true } : typeID,
+    }
+
+    try {
+      assertPlanAllowsJob(plan as never, job)
+    } catch (error) {
+      if (!(error instanceof PricingError)) throw error
+      throw new ValidationError({
+        collection: collection.slug,
+        errors: [{ message: error.message, path: 'plan' }],
+        req,
+      })
+    }
+    return data
   }
-  return data
-}
+
+/** The task's default plan rule, for hosts that keep the default slugs. */
+export const jobPlanAllowsJob: CollectionBeforeChangeHook = jobPlanAllowsJobWith()
 
 /**
  * Employers keep a job in their own organisation: they can't move one to another organisation.
@@ -472,7 +489,10 @@ export const jobPlanAllowsJob: CollectionBeforeChangeHook = async ({ collection,
  * to its organisation's name.
  */
 export const jobOrganisationRules =
-  (tenantScoped: boolean): CollectionBeforeChangeHook =>
+  (
+    tenantScoped: boolean,
+    slugs: PayloadJobsCollectionSlugs = DEFAULT_PAYLOAD_JOBS_SLUGS,
+  ): CollectionBeforeChangeHook =>
   async ({ collection, data, operation, originalDoc, req }) => {
     const organisationID = tenantIDOf(valueAfterSave(data, originalDoc, 'organisation'))
     if (organisationID === null) {
@@ -499,7 +519,7 @@ export const jobOrganisationRules =
     if (typeof companyName === 'string' && companyName.trim()) return data
 
     const organisation = (await req.payload.findByID({
-      collection: ORGANISATIONS_SLUG as CollectionSlug,
+      collection: slugs.organisations as CollectionSlug,
       depth: 0,
       disableErrors: true,
       id: organisationID,
@@ -518,6 +538,8 @@ export const protectJobViews: CollectionBeforeChangeHook = ({ context, data, ope
 }
 
 export type JobsCollectionOptions = {
+  /** Overrides the collection's default access, operation by operation. */
+  access?: CollectionAccess
   /** The host's upload collection for PDF job descriptions; `null` leaves the field out. */
   documentsSlug?: null | string
   /**
@@ -525,12 +547,16 @@ export type JobsCollectionOptions = {
    * config) the description is plain text rather than failing the config.
    */
   richTextDescription?: boolean
+  /** Resolved collection slugs, so relationships and queries never use a literal. */
+  slugs?: PayloadJobsCollectionSlugs
   tenantScoped?: boolean
 }
 
 export const jobsCollection = ({
+  access,
   documentsSlug = null,
   richTextDescription = true,
+  slugs = DEFAULT_PAYLOAD_JOBS_SLUGS,
   tenantScoped = true,
 }: JobsCollectionOptions = {}): CollectionConfig => {
   const staffOnly = jobStaffFieldAccess(tenantScoped)
@@ -561,7 +587,7 @@ export const jobsCollection = ({
     {
       name: 'organisation',
       type: 'relationship',
-      relationTo: ORGANISATIONS_SLUG as CollectionSlug,
+      relationTo: slugs.organisations as CollectionSlug,
       index: true,
       required: true,
     },
@@ -581,20 +607,19 @@ export const jobsCollection = ({
     {
       type: 'row',
       fields: [
-        { name: 'jobType', type: 'relationship', relationTo: 'job-types' as CollectionSlug, index: true },
+        { name: 'jobType', type: 'relationship', relationTo: slugs.jobTypes as CollectionSlug, index: true },
         {
           name: 'categories',
           type: 'relationship',
           hasMany: true,
-          relationTo: 'job-categories' as CollectionSlug,
+          relationTo: slugs.jobCategories as CollectionSlug,
         },
       ],
     },
     {
       type: 'row',
       fields: [
-        { name: 'tags', type: 'relationship', hasMany: true, relationTo: 'job-tags' as CollectionSlug },
-        { name: 'salaryBand', type: 'relationship', relationTo: 'salary-bands' as CollectionSlug },
+        { name: 'salaryBand', type: 'relationship', relationTo: slugs.salaryBands as CollectionSlug },
         { name: 'displayedSalary', type: 'text', localized: true },
       ],
     },
@@ -617,7 +642,7 @@ export const jobsCollection = ({
           name: 'location',
           type: 'relationship',
           hasMany: true,
-          relationTo: 'locations' as CollectionSlug,
+          relationTo: slugs.locations as CollectionSlug,
           admin: {
             description:
               'One or more places in the tenant’s location tree. The job appears on every matching location page and its descendants.',
@@ -649,11 +674,11 @@ export const jobsCollection = ({
     {
       name: 'plan',
       type: 'relationship',
-      relationTo: 'plans' as CollectionSlug,
+      relationTo: slugs.plans as CollectionSlug,
       access: { ...staffWrite, read: privateRead },
       admin: { description: 'Set at checkout.', position: 'sidebar' },
     },
-    jobPlacementsField({ addOnRead: privateRead }),
+    jobPlacementsField({ addOnRead: privateRead, addOnsSlug: slugs.addOns }),
     {
       name: 'views',
       type: 'number',
@@ -672,13 +697,16 @@ export const jobsCollection = ({
   ]
 
   return {
-    slug: JOBS_SLUG,
-    access: {
-      create: jobCreateAccess(tenantScoped),
-      delete: jobDeleteAccess(tenantScoped),
-      read: jobReadAccess(tenantScoped),
-      update: jobUpdateAccess(tenantScoped),
-    },
+    slug: slugs.jobs,
+    access: mergeCollectionAccess(
+      {
+        create: jobCreateAccess(tenantScoped),
+        delete: jobDeleteAccess(tenantScoped),
+        read: jobReadAccess(tenantScoped),
+        update: jobUpdateAccess(tenantScoped),
+      },
+      access,
+    ),
     admin: {
       defaultColumns: ['title', 'organisation', 'status', 'publishedAt', 'expiresAt'],
       group: 'Job board',
@@ -688,13 +716,16 @@ export const jobsCollection = ({
     fields,
     hooks: {
       beforeChange: [
-        jobRelationsInTenant(tenantScoped, documentsSlug),
-        jobOrganisationRules(tenantScoped),
-        jobStatusRules(tenantScoped),
-        jobPlanAllowsJob,
+        jobRelationsInTenant(tenantScoped, documentsSlug, slugs),
+        jobOrganisationRules(tenantScoped, slugs),
+        jobStatusRules(tenantScoped, slugs.plans),
+        jobPlanAllowsJobWith(slugs),
         protectJobViews,
       ],
-      beforeValidate: [autoJobSlug(tenantScoped), ...(tenantScoped ? [uniqueSlugPerTenant(JOBS_SLUG as CollectionSlug)] : [])],
+      beforeValidate: [
+        autoJobSlug(tenantScoped, slugs.jobs),
+        ...(tenantScoped ? [uniqueSlugPerTenant(slugs.jobs as CollectionSlug)] : []),
+      ],
     },
     indexes: tenantScoped ? [{ fields: ['tenant', 'slug'], unique: true }] : [],
     labels: { plural: 'Jobs', singular: 'Job' },

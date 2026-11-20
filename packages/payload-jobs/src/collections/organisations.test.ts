@@ -99,7 +99,6 @@ describe('organisations collection config', () => {
       'slug',
       'type',
       'size',
-      'areasOfFocus',
       'logo',
       'cover',
       'website',
@@ -141,12 +140,7 @@ describe('organisations collection config', () => {
     expect(ORGANISATION_SIZES).toHaveLength(5)
   })
 
-  it('relates the profile to the tenant taxonomies, locations and media', () => {
-    expect(fieldNamed('areasOfFocus')).toMatchObject({
-      hasMany: true,
-      relationTo: 'areas-of-focus',
-      type: 'relationship',
-    })
+  it('relates the profile to locations and media', () => {
     expect(fieldNamed('location')).toMatchObject({
       relationTo: 'locations',
       type: 'relationship',
