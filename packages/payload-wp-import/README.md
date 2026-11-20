@@ -46,11 +46,12 @@ Registered in `src/registry.ts`, so `pnpm wp-import <entity> --tenant <slug>` wo
 | `locations` | `locations` (audit only) | `_jr_geo_*` job post meta |
 | `job-categories` | `job-categories` | `wp_term_taxonomy.taxonomy = 'job_cat'` |
 | `job-types` | `job-types` | `job_type` |
-| `job-tags` | `job-tags` | `job_tag` |
 | `salary-bands` | `salary-bands` | `job_salary` |
-| `areas-of-focus` | `areas-of-focus` | `area-of-focus` (the legacy user taxonomy) |
 
-All five taxonomy importers write `name` (entities decoded, so `&amp;` becomes `&`), `slug` and
+`job_tag` and the `area-of-focus` user taxonomy are not imported: their Payload collections were
+removed in PJ-80 because the legacy database has no terms for them.
+
+The three taxonomy importers write `name` (entities decoded, so `&amp;` becomes `&`), `slug` and
 `legacyId`. Slugs keep the legacy value when it is valid, otherwise one is derived from the name.
 Two legacy slugs that sanitise to the same value are told apart by appending the `term_id`
 (`trades-services-33`), which stays stable across runs. A damaged term (no usable name or slug)

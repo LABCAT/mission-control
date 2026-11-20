@@ -10,14 +10,15 @@ import type { Importer, MappedDoc } from '../types'
 
 /**
  * Payload collection → the `wp_term_taxonomy.taxonomy` keys it is imported from. The names come
- * from AUDIT.md (`job_cat`, `job_type`, `job_tag`, `job_salary`, the `area-of-focus` user
- * taxonomy). Each list has the underscore and dash spellings JobRoller versions use; a wrong
- * guess yields no rows rather than wrong data, and the run reports the empty importer.
+ * from AUDIT.md (`job_cat`, `job_type`, `job_salary`). Each list has the underscore and dash
+ * spellings JobRoller versions use; a wrong guess yields no rows rather than wrong data, and the
+ * run reports the empty importer.
+ *
+ * `job_tag` and the `area-of-focus` user taxonomy are not imported: their Payload collections
+ * were removed in PJ-80 because no terms exist in the legacy database.
  */
 export const LEGACY_TAXONOMY_KEYS = {
-  'areas-of-focus': ['area-of-focus', 'area_of_focus', 'areas-of-focus', 'areas_of_focus'],
   'job-categories': ['job_cat', 'job_categories'],
-  'job-tags': ['job_tag', 'job_tags'],
   'job-types': ['job_type', 'job_types'],
   'salary-bands': ['job_salary', 'job_salaries'],
 } as const

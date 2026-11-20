@@ -182,9 +182,7 @@ describe('taxonomyImporters', () => {
     expect(first.errors).toEqual([])
     expect(first.importers['job-categories']).toMatchObject({ created: 2, failed: 0, skipped: 1 })
     expect(first.importers['job-types']).toMatchObject({ created: 5, failed: 0 })
-    expect(first.importers['job-tags']).toMatchObject({ created: 3, failed: 0 })
     expect(first.importers['salary-bands']).toMatchObject({ created: 1, failed: 0 })
-    expect(first.importers['areas-of-focus']).toMatchObject({ created: 1, failed: 0 })
 
     const types = new Map(store['job-types']!.map((doc) => [doc.legacyId, doc]))
     expect(types.get(21)).toMatchObject({ isVolunteer: false, name: 'Full-Time', slug: 'full-time' })
@@ -194,11 +192,6 @@ describe('taxonomyImporters', () => {
     expect(types.get(25)).toMatchObject({ isVolunteer: false, name: 'Not Stated' })
 
     expect(store['salary-bands']![0]).toMatchObject({ name: 'Vt 0 – 1,000,000', slug: '0-100000' })
-    expect(store['job-tags']!.map((doc) => doc.slug)).toEqual([
-      'accommodation',
-      'trades-services',
-      'trades-services-33',
-    ])
 
     const second = await runImport({ importers, payload, reader: readerFor(), tenant: 1 })
 
@@ -206,7 +199,6 @@ describe('taxonomyImporters', () => {
     expect(second.importers['job-categories']).toMatchObject({ created: 0, updated: 2 })
     expect(second.importers['job-types']).toMatchObject({ created: 0, updated: 5 })
     expect(store['job-types']).toHaveLength(5)
-    expect(store['job-tags']).toHaveLength(3)
   })
 
   it('keeps each tenant’s taxonomy separate', async () => {

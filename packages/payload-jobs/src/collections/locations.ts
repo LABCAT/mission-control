@@ -1,7 +1,15 @@
-import type { CollectionConfig, CompoundIndex, Field, PayloadRequest, Validate } from 'payload'
+import type {
+  CollectionConfig,
+  CollectionSlug,
+  CompoundIndex,
+  Field,
+  PayloadRequest,
+  Validate,
+} from 'payload'
 import { ValidationError } from 'payload'
 
 import { tenantContentWriteAccess } from '../access'
+import { mergeCollectionAccess, type CollectionAccess } from '../slugs'
 
 export const LOCATION_KINDS = ['region', 'island', 'town'] as const
 export type LocationKind = (typeof LOCATION_KINDS)[number]
@@ -23,6 +31,9 @@ export const ALLOWED_PARENT_KINDS: Record<LocationKind, readonly LocationKind[]>
 }
 
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
+
+/** The collection's own slug, also used for the parent relation and the slug lookup. */
+const DEFAULT_SLUG = 'locations'
 
 /** Lowercase ASCII slug: `Anywhere/Work From Home` becomes `anywhere-work-from-home`. */
 export const slugifyLocationName = (name: string): string =>
@@ -51,6 +62,8 @@ const idOf = (value: LocationRef): null | number | string => {
 }
 
 export type LocationsOptions = {
+  /** Overrides the collection's default access, operation by operation. */
+  access?: CollectionAccess
   /**
    * In multi-tenant mode every location must name a tenant. The tenant is what scopes the
    * slug and the parent comparison, so a tenantless row would sit outside the tenant tree
@@ -58,6 +71,8 @@ export type LocationsOptions = {
    * all, so there the check is off.
    */
   requireTenant?: boolean
+  /** Overrides the collection slug. Defaults to `locations`. */
+  slug?: string
 }
 
 /**
@@ -65,7 +80,7 @@ export type LocationsOptions = {
  * tenant is taken from the document being validated, so the check also works for a create
  * made with `overrideAccess` (the seed and the importer).
  */
-const validateSlug: Validate = async (value, { data, id, req }) => {
+const validateSlug = (collectionSlug: string): Validate => async (value, { data, id, req }) => {
   if (typeof value !== 'string' || !SLUG.test(value)) {
     return 'Use lowercase letters, numbers and single hyphens, for example port-vila'
   }
@@ -76,7 +91,7 @@ const validateSlug: Validate = async (value, { data, id, req }) => {
   if (tenant === null) return true
 
   const { docs } = await req.payload.find({
-    collection: 'locations',
+    collection: collectionSlug as CollectionSlug,
     depth: 0,
     limit: 2,
     overrideAccess: true,
@@ -110,6 +125,7 @@ type TreeCheckArgs = {
 const checkParent = async (
   value: LocationRef,
   { data, id, req }: TreeCheckArgs,
+  collectionSlug: string,
 ): Promise<string | true> => {
   const parentID = idOf(value)
   if (parentID === null) return true
@@ -127,7 +143,7 @@ const checkParent = async (
   }
 
   const parent = (await req.payload.findByID({
-    collection: 'locations',
+    collection: collectionSlug as CollectionSlug,
     depth: 0,
     id: parentID,
     overrideAccess: true,
@@ -160,10 +176,10 @@ const checkParent = async (
  * collection-level `beforeChange` hook below therefore runs the same check against the merged
  * document on every write, and this validator only covers the field-level error message.
  */
-const validateParent: Validate = async (value, { data, id, req }) =>
-  checkParent(value as LocationRef, { data: (data ?? {}) as LocationData, id, req })
+const validateParent = (collectionSlug: string): Validate => async (value, { data, id, req }) =>
+  checkParent(value as LocationRef, { data: (data ?? {}) as LocationData, id, req }, collectionSlug)
 
-const fields: Field[] = [
+const fields = (collectionSlug: string): Field[] => [
   {
     name: 'name',
     type: 'text',
@@ -174,7 +190,7 @@ const fields: Field[] = [
     type: 'text',
     required: true,
     index: true,
-    validate: validateSlug,
+    validate: validateSlug(collectionSlug),
   },
   {
     name: 'kind',
@@ -185,9 +201,9 @@ const fields: Field[] = [
   {
     name: 'parent',
     type: 'relationship',
-    relationTo: 'locations',
+    relationTo: collectionSlug as CollectionSlug,
     index: true,
-    validate: validateParent,
+    validate: validateParent(collectionSlug),
   },
   {
     name: 'legacyId',
@@ -205,22 +221,25 @@ const fields: Field[] = [
  * multi-tenant plugin scopes every operation to the caller's tenant.
  */
 export const locationsCollection = (options: LocationsOptions = {}): CollectionConfig => {
-  const { requireTenant = false } = options
+  const { access, requireTenant = false, slug = DEFAULT_SLUG } = options
 
   return {
-    slug: 'locations',
-    access: {
-      create: tenantContentWriteAccess,
-      delete: tenantContentWriteAccess,
-      read: () => true,
-      update: tenantContentWriteAccess,
-    },
+    slug,
+    access: mergeCollectionAccess(
+      {
+        create: tenantContentWriteAccess,
+        delete: tenantContentWriteAccess,
+        read: () => true,
+        update: tenantContentWriteAccess,
+      },
+      access,
+    ),
     admin: {
       defaultColumns: ['name', 'kind', 'slug', 'parent'],
       group: 'Jobs',
       useAsTitle: 'name',
     },
-    fields,
+    fields: fields(slug),
     hooks: requireTenant
       ? {
           // Field validators are skipped when their field is not submitted, so a write that never
@@ -236,19 +255,23 @@ export const locationsCollection = (options: LocationsOptions = {}): CollectionC
 
               if (idOf(merged.tenant) === null) {
                 throw new ValidationError({
-                  collection: 'locations',
+                  collection: slug,
                   errors: [{ message: 'A location must belong to a tenant', path: 'tenant' }],
                 })
               }
 
-              const parentError = await checkParent(merged.parent, {
-                data: merged,
-                id: merged.id ?? stored.id,
-                req,
-              })
+              const parentError = await checkParent(
+                merged.parent,
+                {
+                  data: merged,
+                  id: merged.id ?? stored.id,
+                  req,
+                },
+                slug,
+              )
               if (parentError !== true) {
                 throw new ValidationError({
-                  collection: 'locations',
+                  collection: slug,
                   errors: [{ message: parentError, path: 'parent' }],
                 })
               }

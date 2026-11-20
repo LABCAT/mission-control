@@ -23,10 +23,9 @@ export const multiTenantOptions = {
     locations: { accessResultOverride: tenantContentOverride },
     media: { accessResultOverride: tenantContentOverride },
     tags: { accessResultOverride: tenantContentOverride },
-    // mission-control: job-board taxonomies (PJ-16).
-    'areas-of-focus': { accessResultOverride: tenantContentOverride },
+    // mission-control: job-board taxonomies (PJ-16). Job tags and areas of focus were
+    // removed in PJ-80 (no legacy terms).
     'job-categories': { accessResultOverride: tenantContentOverride },
-    'job-tags': { accessResultOverride: tenantContentOverride },
     'job-types': { accessResultOverride: tenantContentOverride },
     'salary-bands': { accessResultOverride: tenantContentOverride },
     // mission-control: organisations read site keys themselves (approved, page-enabled ones

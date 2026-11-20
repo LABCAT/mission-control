@@ -9,6 +9,12 @@ import {
 } from 'payload'
 
 import {
+  DEFAULT_PAYLOAD_JOBS_SLUGS,
+  mergeCollectionAccess,
+  type CollectionAccess,
+  type PayloadJobsCollectionSlugs,
+} from './slugs'
+import {
   catalogCreateAccess,
   catalogDeleteAccess,
   catalogReadAccess,
@@ -132,8 +138,9 @@ export const addOnGrantsValid =
  * is null, so they don't count.
  */
 export const preventDeletingAddOnInUse = ({
+  plansSlug = PLANS_SLUG,
   tenantScoped = true,
-}: { tenantScoped?: boolean } = {}): CollectionBeforeDeleteHook => {
+}: { plansSlug?: string; tenantScoped?: boolean } = {}): CollectionBeforeDeleteHook => {
   const inTenant = (where: Where): Where =>
     tenantScoped ? { and: [where, { tenant: { exists: true } }] } : where
 
@@ -141,9 +148,9 @@ export const preventDeletingAddOnInUse = ({
     const uses: string[] = []
     const collections = req.payload.collections as Record<string, unknown>
 
-    if (collections[PLANS_SLUG]) {
+    if (collections[plansSlug]) {
       const { docs, totalDocs } = await req.payload.find({
-        collection: PLANS_SLUG as CollectionSlug,
+        collection: plansSlug as CollectionSlug,
         depth: 0,
         limit: 3,
         overrideAccess: true,
@@ -195,25 +202,34 @@ export const addOnFieldValidators = {
 } as const
 
 export type AddOnCollectionOptions = {
+  /** Overrides the collection's default access, operation by operation. */
+  access?: CollectionAccess
   /** Single-tenant settings global that holds the currency. */
   settingsSlug?: string
+  /** Resolved collection slugs, so relationships and queries use the tenant's names. */
+  slugs?: PayloadJobsCollectionSlugs
   /** `false` in single-tenant mode, where there is no tenants collection. */
   tenantScoped?: boolean
   tenantsSlug?: string
 }
 
 export const addOnCollection = ({
+  access,
   settingsSlug = 'job-board-settings',
+  slugs = DEFAULT_PAYLOAD_JOBS_SLUGS,
   tenantScoped = true,
   tenantsSlug = 'tenants',
 }: AddOnCollectionOptions = {}): CollectionConfig => ({
-  slug: ADD_ONS_SLUG,
-  access: {
-    create: catalogCreateAccess(tenantScoped),
-    delete: catalogDeleteAccess,
-    read: catalogReadAccess({ onSale: ON_SALE, tenantScoped }),
-    update: catalogUpdateAccess(tenantScoped),
-  },
+  slug: slugs.addOns,
+  access: mergeCollectionAccess(
+    {
+      create: catalogCreateAccess(tenantScoped),
+      delete: catalogDeleteAccess,
+      read: catalogReadAccess({ onSale: ON_SALE, tenantScoped }),
+      update: catalogUpdateAccess(tenantScoped),
+    },
+    access,
+  ),
   admin: {
     defaultColumns: ['name', 'price', 'currency', 'durationDays', 'placement', 'active', 'sortOrder'],
     description:
@@ -281,7 +297,7 @@ export const addOnCollection = ({
         {
           name: 'addOn',
           type: 'relationship',
-          relationTo: ADD_ONS_SLUG,
+          relationTo: slugs.addOns as CollectionSlug,
           required: true,
         },
         {
@@ -334,7 +350,7 @@ export const addOnCollection = ({
       taxRateKeyInTenant({ settingsSlug, tenantScoped, tenantsSlug }),
       addOnGrantsValid(tenantScoped),
     ],
-    beforeDelete: [preventDeletingAddOnInUse({ tenantScoped })],
+    beforeDelete: [preventDeletingAddOnInUse({ plansSlug: slugs.plans, tenantScoped })],
     beforeValidate: [uniqueKeyPerTenant(tenantScoped, 'add-on')],
   },
   indexes: tenantScoped ? [{ fields: ['tenant', 'key'], unique: true }] : [],

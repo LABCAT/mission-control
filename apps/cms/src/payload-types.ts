@@ -62,17 +62,17 @@ export type SupportedTimezones =
   | 'Pacific/Fiji';
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "LexicalNodes_0DF1558F".
+ * via the `definition` "LexicalNodes_A38EF438".
  */
-export type LexicalNodes_0DF1558F =
+export type LexicalNodes_A38EF438 =
   | SerializedTextNode
   | SerializedTabNode
   | SerializedLineBreakNode
-  | SerializedParagraphNode<LexicalNodes_0DF1558F>
+  | SerializedParagraphNode<LexicalNodes_A38EF438>
   | SerializedHorizontalRuleNode
   | SerializedUploadNode<'media'>
   | SerializedUploadNode<'documents'>
-  | SerializedQuoteNode<LexicalNodes_0DF1558F>
+  | SerializedQuoteNode<LexicalNodes_A38EF438>
   | SerializedRelationshipNode<
       | 'users'
       | 'folders'
@@ -84,9 +84,7 @@ export type LexicalNodes_0DF1558F =
       | 'alert-subscriptions'
       | 'job-categories'
       | 'job-types'
-      | 'job-tags'
       | 'salary-bands'
-      | 'areas-of-focus'
       | 'plans'
       | 'add-ons'
       | 'jobs'
@@ -96,11 +94,11 @@ export type LexicalNodes_0DF1558F =
       | 'payload-preferences'
       | 'payload-migrations'
     >
-  | SerializedAutoLinkNode<LexicalNodes_0DF1558F, LexicalLinkFields>
-  | SerializedLinkNode<LexicalNodes_0DF1558F, LexicalLinkFields>
-  | SerializedListNode<LexicalNodes_0DF1558F>
-  | SerializedListItemNode<LexicalNodes_0DF1558F>
-  | SerializedHeadingNode<LexicalNodes_0DF1558F>;
+  | SerializedAutoLinkNode<LexicalNodes_A38EF438, LexicalLinkFields>
+  | SerializedLinkNode<LexicalNodes_A38EF438, LexicalLinkFields>
+  | SerializedListNode<LexicalNodes_A38EF438>
+  | SerializedListItemNode<LexicalNodes_A38EF438>
+  | SerializedHeadingNode<LexicalNodes_A38EF438>;
 /**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "LexicalNodes_3DE324E4".
@@ -132,9 +130,7 @@ export interface Config {
     'alert-subscriptions': AlertSubscription;
     'job-categories': JobCategory;
     'job-types': JobType;
-    'job-tags': JobTag;
     'salary-bands': SalaryBand;
-    'areas-of-focus': AreasOfFocus;
     plans: Plan;
     'add-ons': AddOn;
     jobs: Job;
@@ -159,9 +155,7 @@ export interface Config {
     'alert-subscriptions': AlertSubscriptionsSelect<false> | AlertSubscriptionsSelect<true>;
     'job-categories': JobCategoriesSelect<false> | JobCategoriesSelect<true>;
     'job-types': JobTypesSelect<false> | JobTypesSelect<true>;
-    'job-tags': JobTagsSelect<false> | JobTagsSelect<true>;
     'salary-bands': SalaryBandsSelect<false> | SalaryBandsSelect<true>;
-    'areas-of-focus': AreasOfFocusSelect<false> | AreasOfFocusSelect<true>;
     plans: PlansSelect<false> | PlansSelect<true>;
     'add-ons': AddOnsSelect<false> | AddOnsSelect<true>;
     jobs: JobsSelect<false> | JobsSelect<true>;
@@ -292,10 +286,6 @@ export interface Organisation {
   slug: string;
   type?: ('business' | 'government' | 'nfp' | 'consultant' | 'recruiter' | 'social-enterprise') | null;
   size?: ('1-10' | '11-50' | '51-200' | '201-500' | '500-plus') | null;
-  /**
-   * From the tenant’s areas of focus. The directory filter uses these.
-   */
-  areasOfFocus?: (number | AreasOfFocus)[] | null;
   about?: string | null;
   /**
    * Shown in the directory and on the organisation page.
@@ -633,33 +623,6 @@ export interface Tag {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "areas-of-focus".
- */
-export interface AreasOfFocus {
-  id: number;
-  tenant?: (number | null) | Tenant;
-  name: string;
-  /**
-   * Used in listing URLs and filters. Unique within the tenant.
-   */
-  slug: string;
-  /**
-   * WordPress term id, for the import.
-   */
-  legacyId?: number | null;
-  createdBy?: {
-    relationTo: 'users';
-    value: number | User;
-  } | null;
-  updatedBy?: {
-    relationTo: 'users';
-    value: number | User;
-  } | null;
-  updatedAt: string;
-  createdAt: string;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "locations".
  */
 export interface Location {
@@ -858,33 +821,6 @@ export interface JobType {
    * Volunteer job types are kept out of the main listing and can be posted for free.
    */
   isVolunteer?: boolean | null;
-  createdBy?: {
-    relationTo: 'users';
-    value: number | User;
-  } | null;
-  updatedBy?: {
-    relationTo: 'users';
-    value: number | User;
-  } | null;
-  updatedAt: string;
-  createdAt: string;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "job-tags".
- */
-export interface JobTag {
-  id: number;
-  tenant?: (number | null) | Tenant;
-  name: string;
-  /**
-   * Used in listing URLs and filters. Unique within the tenant.
-   */
-  slug: string;
-  /**
-   * WordPress term id, for the import.
-   */
-  legacyId?: number | null;
   createdBy?: {
     relationTo: 'users';
     value: number | User;
@@ -1110,14 +1046,13 @@ export interface Job {
   publishedAt?: string | null;
   expiresAt?: string | null;
   organisation: number | Organisation;
-  description?: LexicalRichText<LexicalNodes_0DF1558F> | null;
+  description?: LexicalRichText<LexicalNodes_A38EF438> | null;
   /**
    * An optional PDF of the full job description.
    */
   jobDescriptionPdf?: (number | null) | Document;
   jobType?: (number | null) | JobType;
   categories?: (number | JobCategory)[] | null;
-  tags?: (number | JobTag)[] | null;
   salaryBand?: (number | null) | SalaryBand;
   displayedSalary?: string | null;
   /**
@@ -1348,16 +1283,8 @@ export interface PayloadLockedDocument {
         value: number | JobType;
       } | null)
     | ({
-        relationTo: 'job-tags';
-        value: number | JobTag;
-      } | null)
-    | ({
         relationTo: 'salary-bands';
         value: number | SalaryBand;
-      } | null)
-    | ({
-        relationTo: 'areas-of-focus';
-        value: number | AreasOfFocus;
       } | null)
     | ({
         relationTo: 'plans';
@@ -1780,7 +1707,6 @@ export interface OrganisationsSelect<T extends boolean = true> {
   slug?: T;
   type?: T;
   size?: T;
-  areasOfFocus?: T;
   about?: T;
   logo?: T;
   cover?: T;
@@ -1860,37 +1786,9 @@ export interface JobTypesSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "job-tags_select".
- */
-export interface JobTagsSelect<T extends boolean = true> {
-  tenant?: T;
-  name?: T;
-  slug?: T;
-  legacyId?: T;
-  createdBy?: T;
-  updatedBy?: T;
-  updatedAt?: T;
-  createdAt?: T;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "salary-bands_select".
  */
 export interface SalaryBandsSelect<T extends boolean = true> {
-  tenant?: T;
-  name?: T;
-  slug?: T;
-  legacyId?: T;
-  createdBy?: T;
-  updatedBy?: T;
-  updatedAt?: T;
-  createdAt?: T;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "areas-of-focus_select".
- */
-export interface AreasOfFocusSelect<T extends boolean = true> {
   tenant?: T;
   name?: T;
   slug?: T;
@@ -1982,7 +1880,6 @@ export interface JobsSelect<T extends boolean = true> {
   jobDescriptionPdf?: T;
   jobType?: T;
   categories?: T;
-  tags?: T;
   salaryBand?: T;
   displayedSalary?: T;
   companyName?: T;
@@ -2205,9 +2102,7 @@ export interface CollectionQueryWidget {
       | 'alert-subscriptions'
       | 'job-categories'
       | 'job-types'
-      | 'job-tags'
       | 'salary-bands'
-      | 'areas-of-focus'
       | 'plans'
       | 'add-ons'
       | 'jobs';
@@ -2246,9 +2141,7 @@ export interface ActivityWidget {
           | 'alert-subscriptions'
           | 'job-categories'
           | 'job-types'
-          | 'job-tags'
           | 'salary-bands'
-          | 'areas-of-focus'
           | 'plans'
           | 'add-ons'
           | 'jobs'

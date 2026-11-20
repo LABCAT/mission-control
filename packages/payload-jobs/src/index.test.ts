@@ -1,8 +1,8 @@
-import type { Config } from 'payload'
+import type { CollectionConfig, Config, Field } from 'payload'
 import { describe, expect, it } from 'vitest'
 
 import { ALERT_SUBSCRIPTIONS_SLUG } from './alert-subscriptions'
-import { EXPIRE_PLACEMENTS_TASK, payloadJobs } from './index'
+import { EXPIRE_PLACEMENTS_TASK, jobsTenantCollections, payloadJobs } from './index'
 import { TAXONOMY_SLUGS } from './taxonomies'
 
 const baseConfig = {
@@ -87,5 +87,114 @@ describe('payloadJobs', () => {
 
     expect(await description(baseConfig)).toBe('textarea')
     expect(await description({ ...baseConfig, editor: {} } as unknown as Config)).toBe('richText')
+  })
+})
+
+const deny = () => false
+
+const OVERRIDES = {
+  addOns: { slug: 'extras' },
+  alertSubscriptions: { slug: 'subscribers' },
+  jobCategories: { slug: 'categories' },
+  jobs: { slug: 'vacancies' },
+  jobTypes: { slug: 'employment-types' },
+  locations: { slug: 'job-locations' },
+  organisations: { slug: 'employers' },
+  plans: { slug: 'packages' },
+  salaryBands: { slug: 'salaries' },
+} as const
+
+/** Every `relationTo` in a collection, including fields nested in rows and collapsibles. */
+const relationTargets = (collection: CollectionConfig): string[] => {
+  const targets: string[] = []
+  const visit = (fields: Field[] | undefined) => {
+    for (const field of fields ?? []) {
+      const relation = field as { fields?: Field[]; relationTo?: unknown }
+      if (relation.relationTo !== undefined) {
+        targets.push(...[relation.relationTo].flat().map(String))
+      }
+      if (relation.fields) visit(relation.fields)
+    }
+  }
+
+  visit(collection.fields)
+  return targets
+}
+
+describe('collection slug overrides', () => {
+  it('renames every plugin collection, and every relationship points at the resolved slug', async () => {
+    const result = await payloadJobs({ collections: OVERRIDES })(baseConfig)
+    const slugs = (result.collections ?? []).map((collection) => collection.slug)
+
+    expect(slugs).toEqual([
+      'users',
+      'job-locations',
+      'employers',
+      'subscribers',
+      'categories',
+      'employment-types',
+      'salaries',
+      'packages',
+      'extras',
+      'vacancies',
+    ])
+
+    const targets = new Set(
+      (result.collections ?? []).flatMap((collection) => relationTargets(collection)),
+    )
+
+    // No default plugin slug survives a rename, and each relation resolves to its new name.
+    for (const slug of ['locations', 'organisations', 'job-categories', 'job-types', 'salary-bands', 'plans', 'add-ons', 'jobs']) {
+      expect(targets).not.toContain(slug)
+    }
+    expect(targets).toEqual(
+      new Set(['job-locations', 'employers', 'categories', 'employment-types', 'salaries', 'packages', 'extras']),
+    )
+
+    const users = result.collections?.find((collection) => collection.slug === 'users')
+    expect(relationTargets(users!)).toContain('employers')
+  })
+
+  it('exports the tenant-scoped slugs under the same overrides', () => {
+    expect(jobsTenantCollections({ collections: OVERRIDES })).toEqual([
+      'job-locations',
+      'employers',
+      'categories',
+      'employment-types',
+      'salaries',
+      'extras',
+      'packages',
+      'subscribers',
+      'vacancies',
+    ])
+  })
+
+  it('merges per-collection access overrides over the operation defaults', async () => {
+    const defaults = await payloadJobs()(baseConfig)
+    const result = await payloadJobs({
+      collections: {
+        jobs: { access: { read: deny } },
+        locations: { access: { create: deny } },
+      },
+    })(baseConfig)
+
+    const defaultJobs = defaults.collections?.find((collection) => collection.slug === 'jobs')
+    const jobs = result.collections?.find((collection) => collection.slug === 'jobs')
+    const defaultLocations = defaults.collections?.find(
+      (collection) => collection.slug === 'locations',
+    )
+    const locations = result.collections?.find((collection) => collection.slug === 'locations')
+
+    expect(jobs?.access?.read).toBe(deny)
+    expect(locations?.access?.create).toBe(deny)
+
+    // The operations the host did not override keep the plugin's default behaviour.
+    const args = {
+      req: { user: { id: 1, role: 'user', tenants: [{ role: 'editor', tenant: 1 }] } },
+    } as never
+    expect(await jobs?.access?.update?.(args)).toEqual(await defaultJobs?.access?.update?.(args))
+    expect(await locations?.access?.read?.(args)).toEqual(
+      await defaultLocations?.access?.read?.(args),
+    )
   })
 })

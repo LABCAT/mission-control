@@ -282,7 +282,7 @@ describe('taxonomy integration', () => {
     it('lets a tenant-admin create a taxonomy in their tenant and not in another', async () => {
       await expect(
         harness.payload.create({
-          collection: 'job-tags',
+          collection: 'salary-bands',
           data: { name: 'NGO', slug: 'ngo', tenant: harness.tenantA.id } as never,
           user: harness.tenantAdminA as never,
         }),
@@ -290,7 +290,7 @@ describe('taxonomy integration', () => {
 
       await expect(
         harness.payload.create({
-          collection: 'job-tags',
+          collection: 'salary-bands',
           data: { name: 'NGO', slug: 'ngo-b', tenant: harness.tenantB.id } as never,
           user: harness.tenantAdminA as never,
         }),
@@ -311,7 +311,7 @@ describe('taxonomy integration', () => {
 
       await expect(
         harness.payload.create({
-          collection: 'areas-of-focus',
+          collection: 'job-categories',
           data: { name: 'Youth', slug: 'youth', tenant: harness.tenantA.id } as never,
           user: employer as never,
         }),
@@ -320,7 +320,7 @@ describe('taxonomy integration', () => {
       // The same tenant's admin is allowed, so the rejection above is the role, not the tenant.
       await expect(
         harness.payload.create({
-          collection: 'areas-of-focus',
+          collection: 'job-categories',
           data: { name: 'Youth', slug: 'youth-admin', tenant: harness.tenantA.id } as never,
           user: harness.tenantAdminA as never,
         }),
