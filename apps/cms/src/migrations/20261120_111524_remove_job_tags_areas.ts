@@ -14,13 +14,13 @@ export async function up({ db, payload, req }: MigrateUpArgs): Promise<void> {
   DROP TABLE "areas_of_focus" CASCADE;
   DROP TABLE "areas_of_focus_locales" CASCADE;
   DROP TABLE "areas_of_focus_rels" CASCADE;
-  ALTER TABLE "organisations_rels" DROP CONSTRAINT "organisations_rels_areas_of_focus_fk";
+  ALTER TABLE "organisations_rels" DROP CONSTRAINT IF EXISTS "organisations_rels_areas_of_focus_fk";
   
-  ALTER TABLE "jobs_rels" DROP CONSTRAINT "jobs_rels_job_tags_fk";
+  ALTER TABLE "jobs_rels" DROP CONSTRAINT IF EXISTS "jobs_rels_job_tags_fk";
   
-  ALTER TABLE "payload_locked_documents_rels" DROP CONSTRAINT "payload_locked_documents_rels_job_tags_fk";
+  ALTER TABLE "payload_locked_documents_rels" DROP CONSTRAINT IF EXISTS "payload_locked_documents_rels_job_tags_fk";
   
-  ALTER TABLE "payload_locked_documents_rels" DROP CONSTRAINT "payload_locked_documents_rels_areas_of_focus_fk";
+  ALTER TABLE "payload_locked_documents_rels" DROP CONSTRAINT IF EXISTS "payload_locked_documents_rels_areas_of_focus_fk";
   
   DROP INDEX "organisations_rels_areas_of_focus_id_idx";
   DROP INDEX "tenant_slug_5_idx";
