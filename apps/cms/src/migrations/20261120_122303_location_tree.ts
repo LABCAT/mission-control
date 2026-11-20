@@ -48,19 +48,20 @@ export async function up({ db, payload, req }: MigrateUpArgs): Promise<void> {
 }
 
 export async function down({ db, payload, req }: MigrateDownArgs): Promise<void> {
-  // mission-control: the old schema holds one location per job. Rolling back a job that has
-  // several would silently drop all but one, which is a data decision, so refuse instead.
-  // The old `kind` is not stored any more, so it can only be restored for trees shaped like the
-  // legacy picker (roots and their children). A deeper tree has kinds that cannot be recovered.
-  const deep = await db.execute(sql`SELECT count(*)::int AS count FROM "locations" WHERE "depth" >= 2;`)
+  // The old `kind` (region, island, town) is not stored any more, so it cannot be restored
+  // faithfully, and guessing would silently reclassify places. Rolling back is only allowed on
+  // an empty tree; export or delete the locations first.
+  const places = await db.execute(sql`SELECT count(*)::int AS count FROM "locations";`)
 
-  if (deep.rows[0]?.count) {
+  if (places.rows[0]?.count) {
     throw new Error(
-      `Refusing to roll back: ${deep.rows[0].count} location(s) are more than two levels deep, ` +
-        'and their original kinds cannot be recovered. Flatten them, then run migrate:down again.',
+      `Refusing to roll back: ${places.rows[0].count} location(s) exist and their original kinds ` +
+        'cannot be recovered. Delete them (or restore from a backup), then run migrate:down again.',
     )
   }
 
+  // mission-control: the old schema holds one location per job. Rolling back a job that has
+  // several would silently drop all but one, which is a data decision, so refuse instead.
   const many = await db.execute(
     sql`SELECT count(*)::int AS count FROM (SELECT "parent_id" FROM "jobs_rels" WHERE "path" = 'location' GROUP BY "parent_id" HAVING count(*) > 1) t;`,
   )
@@ -87,15 +88,8 @@ export async function down({ db, payload, req }: MigrateDownArgs): Promise<void>
   CREATE INDEX "jobs_location_idx" ON "jobs" USING btree ("location_id");
   ALTER TABLE "tenants" DROP COLUMN "location_max_depth";`)
 
-  // The old `kind` is not stored any more, so it is restored from the tree by the rule the
-  // Vanuatu seed used: the catch-all roots `overseas` and `other` were regions, every other root
-  // an island, and everything below a root a town. A tenant that kept another kind by hand
-  // (a region above islands) is not recoverable and comes back as island/town.
+  // The tree is empty here (guarded above), so `kind` can be required again.
   await db.execute(sql`
-  UPDATE "locations" SET "kind" = CASE
-    WHEN ("depth" IS NULL OR "depth" = 0) AND "slug" IN ('overseas', 'other') THEN 'region'::"enum_locations_kind"
-    WHEN "depth" IS NULL OR "depth" = 0 THEN 'island'::"enum_locations_kind"
-    ELSE 'town'::"enum_locations_kind" END;
   ALTER TABLE "locations" ALTER COLUMN "kind" SET NOT NULL;
   UPDATE "jobs" SET "location_id" = r."locations_id"
     FROM "jobs_rels" r WHERE r."parent_id" = "jobs"."id" AND r."path" = 'location';
