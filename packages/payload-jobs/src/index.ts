@@ -535,8 +535,10 @@ export const payloadJobs =
           enabled: true,
           tenancy,
           features,
-          // The dashboard and other admin code read the slugs back from here (PJ-80).
-          slugs: { jobs: slugs.jobs, tenants: tenantsSlug },
+          // The dashboard and other admin code read the slugs back from here (PJ-80). Every
+          // resolved slug travels, so a collection another ticket adds (orders, PJ-23) is
+          // picked up without this call site changing, renamed or not.
+          slugs: { ...slugs, tenants: tenantsSlug },
         },
       },
     }

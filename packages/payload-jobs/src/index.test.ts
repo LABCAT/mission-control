@@ -6,6 +6,7 @@ import type { MissionControlUser } from './access'
 import { DASHBOARD_COMPONENT_PATH } from './admin'
 import { SITE_MANAGER_NAV_COLLECTIONS, siteManagerVisibleCollections } from './admin/nav'
 import { EXPIRE_PLACEMENTS_TASK, jobsTenantCollections, payloadJobs } from './index'
+import { DEFAULT_PAYLOAD_JOBS_SLUGS } from './slugs'
 import { TAXONOMY_SLUGS } from './taxonomies'
 
 const baseConfig = {
@@ -66,7 +67,7 @@ describe('payloadJobs', () => {
       payloadJobs: {
         enabled: true,
         features: { applications: true, alerts: true, credits: true, coupons: true, pages: true },
-        slugs: { jobs: 'jobs', tenants: 'tenants' },
+        slugs: { ...DEFAULT_PAYLOAD_JOBS_SLUGS, tenants: 'tenants' },
         tenancy: 'single',
       },
     })
@@ -86,7 +87,7 @@ describe('payloadJobs', () => {
       payloadJobs: {
         enabled: true,
 features: { applications: true, alerts: false, credits: true, coupons: false, pages: true },
-        slugs: { jobs: 'jobs', tenants: 'tenants' },
+        slugs: { ...DEFAULT_PAYLOAD_JOBS_SLUGS, tenants: 'tenants' },
         tenancy: 'single',
       },
     })
@@ -225,6 +226,24 @@ features: { applications: true, alerts: false, credits: true, coupons: false, pa
 
     expect(visible).toContain('vacancies')
     expect(visible).not.toContain('jobs')
+  })
+
+  it('records every collection slug for the dashboard, so a later collection needs no change here', async () => {
+    const result = await payloadJobs({ accountAuth: false, collections: OVERRIDES, tenancy: 'multi' })(
+      multiConfig,
+    )
+    const recorded = result.custom?.payloadJobs as { slugs: Record<string, string> }
+
+    // Anything the plugin registers and the dashboard might count is in the map, under its
+    // resolved name: `orders` arrives with PJ-23 without touching this call site (PJ-80).
+    const added = (result.collections ?? [])
+      .map((collection) => collection.slug)
+      .filter((slug) => !['users', 'tenants'].includes(slug))
+
+    expect(Object.values(recorded.slugs)).toEqual(expect.arrayContaining(added))
+    expect(recorded.slugs).toMatchObject({ jobs: 'vacancies', organisations: 'employers' })
+    // The host's own tenant collection keeps its slug too.
+    expect(recorded.slugs.tenants).toBe('tenants')
   })
 
   it('uses a rich-text job description only when the host has an editor', async () => {
