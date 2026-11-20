@@ -318,7 +318,7 @@ const enhanced: QuotableAddOn = {
   price: 2000,
 }
 
-describe('quote examples', () => {
+describe('quote examples @S-093', () => {
   it('prices a Vatu listing with an add-on and a 10% coupon', () => {
     const result = quote({
       addOns: [enhanced],

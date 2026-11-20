@@ -11,6 +11,7 @@ export default defineConfig({
             'packages/*/src/**/*.test.ts',
             'apps/*/src/**/*.test.ts',
             '.github/scripts/*.test.ts',
+            'scripts/**/*.test.ts', // mission-control: features catalogue report
             'tools/*/src/**/*.test.ts', // mission-control: include tools/
           ],
           exclude: ['packages/launchpad/**'],

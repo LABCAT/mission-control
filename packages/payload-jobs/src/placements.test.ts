@@ -79,7 +79,7 @@ describe('activePlacements and badges', () => {
   })
 })
 
-describe('expirePlacements (property-based)', () => {
+describe('expirePlacements (property-based) @S-142', () => {
   it('keeps exactly the rows that have not ended, and is idempotent', () => {
     fc.assert(
       fc.property(fc.array(rowArb, { maxLength: 8 }), (rows) => {
