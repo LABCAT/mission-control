@@ -23,7 +23,7 @@ import { createMediaTransformers } from './media'
 import { r2Storage } from '@payloadcms/storage-r2'
 import { multiTenantOptions } from './tenancy'
 // mission-control: generic page blocks (PJ-84). Registering them here lets page and
-// site-settings fields reference them by slug; no collection uses them yet.
+// site-settings fields reference them by slug; the pages collection (PJ-103) offers them.
 import {
   bannerBlock,
   cardGridBlock,

@@ -14,6 +14,9 @@ export const siteKeyAllowedCollections = [
   'job-categories',
   'job-types',
   'salary-bands',
+  // mission-control: pages and menus, read published only (PJ-103).
+  'pages',
+  'menus',
 ] as const
 
 export const siteKeyAccessOverride = createSiteKeyAccessOverride({

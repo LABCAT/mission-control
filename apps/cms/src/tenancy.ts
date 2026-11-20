@@ -44,6 +44,10 @@ export const multiTenantOptions = {
     'alert-subscriptions': {},
     // mission-control: jobs read site keys themselves (published and expired only) (PJ-19).
     jobs: { accessResultOverride: denySeekerOnly(({ accessResult }) => accessResult) },
+    // mission-control: content pages and menus (PJ-103). The generic override adds the site
+    // key's tenant and, for the draft-enabled pages, published only.
+    menus: { accessResultOverride: tenantContentOverride },
+    pages: { accessResultOverride: tenantContentOverride },
   },
   tenantsArrayField: {
     rowFields: [

@@ -16,12 +16,15 @@ describe('payloadJobs', () => {
     const result = await payloadJobs()(baseConfig)
 
     // mission-control: the users collection is extended (legacy password support PJ-34,
-    // organisation relation PJ-18), and locations (PJ-17), organisations (PJ-18), alerts
-    // (PJ-26), the taxonomies (PJ-16), plans (PJ-21) and coupons (PJ-22) are added.
+    // organisation relation PJ-18), and locations (PJ-17), organisations (PJ-18), pages and
+    // menus (PJ-103), alerts (PJ-26), the taxonomies (PJ-16), plans (PJ-21) and coupons
+    // (PJ-22) are added.
     expect(result.collections?.map((collection) => collection.slug)).toEqual([
       'users',
       'locations',
       'organisations',
+      'pages',
+      'menus',
       ALERT_SUBSCRIPTIONS_SLUG,
       ...TAXONOMY_SLUGS,
       'plans',
@@ -41,7 +44,7 @@ describe('payloadJobs', () => {
       existing: true,
       payloadJobs: {
         enabled: true,
-        features: { applications: true, alerts: true, credits: true, coupons: true },
+        features: { applications: true, alerts: true, credits: true, coupons: true, pages: true },
         tenancy: 'single',
       },
     })
@@ -53,14 +56,14 @@ describe('payloadJobs', () => {
 
   it('resolves feature toggles and records them in the config', async () => {
     const result = await payloadJobs({
-      features: { applications: true, alerts: false, credits: true, coupons: false },
+      features: { applications: true, alerts: false, credits: true, coupons: false, pages: true },
     })(baseConfig)
 
     expect(result.custom).toEqual({
       existing: true,
       payloadJobs: {
         enabled: true,
-        features: { applications: true, alerts: false, credits: true, coupons: false },
+        features: { applications: true, alerts: false, credits: true, coupons: false, pages: true },
         tenancy: 'single',
       },
     })
@@ -109,7 +112,9 @@ const OVERRIDES = {
   jobs: { slug: 'vacancies' },
   jobTypes: { slug: 'employment-types' },
   locations: { slug: 'job-locations' },
+  menus: { slug: 'navigation' },
   organisations: { slug: 'employers' },
+  pages: { slug: 'content-pages' },
   plans: { slug: 'packages' },
   salaryBands: { slug: 'salaries' },
 } as const
@@ -140,6 +145,8 @@ describe('collection slug overrides', () => {
       'users',
       'job-locations',
       'employers',
+      'content-pages',
+      'navigation',
       'subscribers',
       'categories',
       'employment-types',
@@ -155,11 +162,21 @@ describe('collection slug overrides', () => {
     )
 
     // No default plugin slug survives a rename, and each relation resolves to its new name.
-    for (const slug of ['locations', 'organisations', 'job-categories', 'job-types', 'salary-bands', 'plans', 'add-ons', 'jobs']) {
+    for (const slug of ['locations', 'organisations', 'pages', 'menus', 'job-categories', 'job-types', 'salary-bands', 'plans', 'add-ons', 'jobs']) {
       expect(targets).not.toContain(slug)
     }
+    // The pages' parent and menus' page items follow the renamed pages collection.
     expect(targets).toEqual(
-      new Set(['job-locations', 'employers', 'categories', 'employment-types', 'salaries', 'packages', 'extras']),
+      new Set([
+        'job-locations',
+        'employers',
+        'content-pages',
+        'categories',
+        'employment-types',
+        'salaries',
+        'packages',
+        'extras',
+      ]),
     )
 
     const users = result.collections?.find((collection) => collection.slug === 'users')
@@ -170,6 +187,8 @@ describe('collection slug overrides', () => {
     expect(jobsTenantCollections({ collections: OVERRIDES })).toEqual([
       'job-locations',
       'employers',
+      'content-pages',
+      'navigation',
       'categories',
       'employment-types',
       'salaries',

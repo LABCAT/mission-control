@@ -2,6 +2,8 @@ import type { CollectionConfig, Config } from 'payload'
 import { describe, expect, it } from 'vitest'
 
 import { ALERT_SUBSCRIPTIONS_SLUG } from '../alert-subscriptions'
+import { MENUS_SLUG } from './menus'
+import { PAGES_SLUG } from './pages'
 import { payloadJobs } from '../index'
 import { TAXONOMY_SLUGS } from '../taxonomies'
 import {
@@ -31,6 +33,8 @@ describe('locations collection @S-120', () => {
       'users',
       'locations',
       'organisations',
+      PAGES_SLUG,
+      MENUS_SLUG,
       ALERT_SUBSCRIPTIONS_SLUG,
       ...TAXONOMY_SLUGS,
       'plans',

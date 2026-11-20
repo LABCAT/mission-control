@@ -13,6 +13,8 @@ import { couponCollection, removeTenantCouponsFor, removeTenantCoupons } from '.
 import { withLegacyPasswords } from './legacy-password'
 import { addOnCollection } from './add-ons'
 import { jobsCollection } from './collections/jobs'
+import { menusCollection, removeTenantMenus } from './collections/menus'
+import { pagesCollection } from './collections/pages'
 import { expireJobPlacementsTask, PLACEMENTS_FIELD } from './placements'
 import { planCollection, withPlanRestrictionGuards } from './plans'
 import {
@@ -21,6 +23,7 @@ import {
   type PayloadJobsCollectionSlugs,
   type PayloadJobsCollectionsOptions,
 } from './slugs'
+import { removeTenantPages, seedTenantSystemPages } from './system-pages'
 import { taxonomyCollections } from './taxonomies'
 import { jobBoardSettingsGlobal, jobBoardTenantFields } from './tenancy'
 
@@ -28,7 +31,9 @@ export * from './access'
 export * from './account-auth'
 export * from './alert-subscriptions'
 export * from './collections/locations'
+export * from './collections/menus'
 export * from './collections/organisations'
+export * from './collections/pages'
 export * from './coupons'
 export * from './email'
 export * from './legacy-password'
@@ -46,6 +51,7 @@ export * from './rate-limit'
 export * from './seed/vanuatu'
 export * from './slugs'
 export * from './site-keys'
+export * from './system-pages'
 export * from './tax'
 export * from './tax-settings'
 export * from './taxonomies'
@@ -63,6 +69,8 @@ export const payloadJobsTenantCollections = (
 ): string[] => [
   slugs.locations,
   slugs.organisations,
+  slugs.pages,
+  slugs.menus,
   slugs.jobCategories,
   slugs.jobTypes,
   slugs.salaryBands,
@@ -100,6 +108,8 @@ export type PayloadJobsFeatures = {
   credits?: boolean
   /** Coupon codes and their discounts. Defaults to true. */
   coupons?: boolean
+  /** Content pages, the system pages seeded per site, and menus (PJ-103). Defaults to true. */
+  pages?: boolean
 }
 
 export type PayloadJobsOptions = {
@@ -144,6 +154,7 @@ const resolvedFeatures = (options: PayloadJobsOptions): Required<PayloadJobsFeat
   alerts: options.features?.alerts ?? true,
   credits: options.features?.credits ?? true,
   coupons: options.features?.coupons ?? true,
+  pages: options.features?.pages ?? true,
 })
 
 /** Job-board collections owned by this plugin. Later tasks append to this list. */
@@ -153,6 +164,7 @@ const jobBoardCollections = (
   mediaSlug: null | string,
   slugs: PayloadJobsCollectionSlugs,
   collections: PayloadJobsCollectionsOptions,
+  blockSlugs: readonly string[],
 ): CollectionConfig[] => [
   locationsCollection({
     access: collections.locations?.access,
@@ -166,6 +178,23 @@ const jobBoardCollections = (
     slug: slugs.organisations,
     tenantScoped: tenancy === 'multi',
   }),
+  ...(features.pages
+    ? [
+        pagesCollection({
+          access: collections.pages?.access,
+          blockSlugs,
+          mediaSlug,
+          slug: slugs.pages,
+          tenantScoped: tenancy === 'multi',
+        }),
+        menusCollection({
+          access: collections.menus?.access,
+          pagesSlug: slugs.pages,
+          slug: slugs.menus,
+          tenantScoped: tenancy === 'multi',
+        }),
+      ]
+    : []),
   ...(features.alerts
     ? [
         alertSubscriptionCollection({
@@ -176,6 +205,16 @@ const jobBoardCollections = (
       ]
     : []),
 ]
+
+/**
+ * Block slugs the host registered in `config.blocks` (rocketship-payload, PJ-84). The pages
+ * layout offers exactly those, so the plugin needs no dependency on the block library and a
+ * host with no blocks still gets a page whose layout is an empty list.
+ */
+const registeredBlockSlugs = (config: Config): string[] =>
+  (config.blocks ?? [])
+    .map((block) => (typeof block === 'string' ? null : block.slug))
+    .filter((slug): slug is string => typeof slug === 'string')
 
 /**
  * Job board plugin for Mission Control. It owns the job-board tenant settings and the
@@ -222,7 +261,14 @@ export const payloadJobs =
           : null
         : options.mediaSlug
 
-    const added = jobBoardCollections(tenancy, features, mediaSlug, slugs, collectionOptions)
+    const added = jobBoardCollections(
+      tenancy,
+      features,
+      mediaSlug,
+      slugs,
+      collectionOptions,
+      registeredBlockSlugs(config),
+    )
     const existingSlugs = new Set((config.collections ?? []).map((collection) => collection.slug))
     const clashes = added.filter((collection) => existingSlugs.has(collection.slug))
     if (clashes.length > 0) {
@@ -277,10 +323,29 @@ export const payloadJobs =
               fields: [...collection.fields, ...jobBoardTenantFields],
               hooks: {
                 ...collection.hooks,
+                ...(features.pages
+                  ? {
+                      // A new site starts with its four system pages (PJ-103).
+                      afterChange: [
+                        ...(collection.hooks?.afterChange ?? []),
+                        seedTenantSystemPages({
+                          collectionSlug: slugs.pages,
+                          tenantScoped: tenancy === 'multi',
+                        }),
+                      ],
+                    }
+                  : {}),
                 // Deleting a tenant must take its subscribers with it, not detach them.
                 // Coupons are removed too: the tenant foreign key would otherwise null them.
                 beforeDelete: [
                   ...(collection.hooks?.beforeDelete ?? []),
+                  // A deleted site takes its pages and menus with it.
+                  ...(features.pages
+                    ? [
+                        removeTenantPages({ collectionSlug: slugs.pages }),
+                        removeTenantMenus({ collectionSlug: slugs.menus }),
+                      ]
+                    : []),
                   ...(features.alerts
                     ? [
                         slugs.alertSubscriptions === ALERT_SUBSCRIPTIONS_SLUG
