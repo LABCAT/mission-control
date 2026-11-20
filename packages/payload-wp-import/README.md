@@ -102,6 +102,27 @@ Each imported collection needs an indexed optional `legacyId` number field and a
 (name configurable with `tenantField`, default `tenant`). `map` returning `null` counts as skipped.
 All writes use `overrideAccess: true`.
 
+## Users and organisations (PJ-62)
+
+`pnpm wp-import users --tenant <slug> [--dry-run]` runs `organisations` then `users`.
+
+- **Active rule**: a user is kept when they logged in within 3 years (`last_login` meta), OR
+  authored a `job_listing`/`transaction` since 2022-01-01, OR have `jr_alert_status = active`, OR
+  are an administrator/editor. Both date bounds are inclusive. Options on `usersImporters()`:
+  `activeLoginYears`, `activeJobsSince`, `keepPageVisibility`, `organisationsSlug`, `usersSlug`.
+- **Roles**: administrator/editor → tenant `tenant-admin`; `job_lister`/`recruiter` → `employer`;
+  `job_seeker`/`contributor` → `seeker`. Other roles are skipped.
+- **Organisations**: each kept employer joins an organisation named by their `nickname`;
+  employers with the same normalised name share one, and the lowest legacy user id owns it.
+  `can_pay_by_bank_transfer` (a present row) → `canPayByInvoice` (the "trusted" flag).
+- **Passwords**: `user_pass` goes to `legacyPasswordHash`; users are created through the database
+  adapter without a Payload password and sign in through the PJ-34 verifier. A re-run refreshes
+  names only (credentials, role and organisation are create-only).
+- **Report**: the dry run prints users read/kept, skipped by reason, and organisations merged.
+  No emails, names or hashes are logged.
+- Not imported: applications, CVs, resumes, logs, `user_IP`, logos/cover images (PJ-63), Yoast
+  SEO fields and physical location (no fields on organisations yet).
+
 ## Not covered yet
 
 - Job → term links (`wp_term_relationships`) belong to the job importer (PJ-64).
