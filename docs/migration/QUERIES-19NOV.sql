@@ -242,3 +242,10 @@ WHERE p.post_type='resume' GROUP BY created, p.post_status ORDER BY created;
 SELECT DATE_FORMAT(d.time,'%Y-%m') m, SUM(d.postcount) views, COUNT(DISTINCT d.postnum) resumes
 FROM wp_jr_counter_daily d JOIN wp_posts p ON p.ID=d.postnum AND p.post_type='resume'
 GROUP BY m ORDER BY m DESC LIMIT 24;
+
+-- 59. Do admins post jobs for other organisations? Jobs authored by administrator/editor accounts, by year (counts only)
+SELECT YEAR(p.post_date) y, COUNT(*) jobs
+FROM wp_posts p JOIN wp_usermeta m ON m.user_id=p.post_author AND m.meta_key='wp_capabilities'
+WHERE p.post_type='job_listing' AND p.post_status IN ('publish','expired')
+  AND (m.meta_value LIKE '%"administrator"%' OR m.meta_value LIKE '%"editor"%')
+GROUP BY y ORDER BY y;
