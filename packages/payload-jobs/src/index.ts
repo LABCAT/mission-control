@@ -1,4 +1,11 @@
-import type { CollectionConfig, Config, GlobalConfig, Plugin } from 'payload'
+import type {
+  CollectionConfig,
+  CollectionSlug,
+  Config,
+  GlobalConfig,
+  GlobalSlug,
+  Plugin,
+} from 'payload'
 
 import { accountAuthEndpoints, type AccountAuthOptions } from './account-auth'
 import {
@@ -7,10 +14,12 @@ import {
   removeTenantAlertSubscriptions,
   removeTenantAlertSubscriptionsFor,
 } from './alert-subscriptions'
+import type { LocationsOptions } from './collections/locations'
 import { locationsCollection, locationsTenantSlugIndex } from './collections/locations'
 import { organisationsCollection, withOrganisationField } from './collections/organisations'
 import { couponCollection, removeTenantCouponsFor, removeTenantCoupons } from './coupons'
 import { withLegacyPasswords } from './legacy-password'
+import { tenantLocationSettings, type TenantLocationSource } from './location-settings'
 import { addOnCollection } from './add-ons'
 import { jobsCollection } from './collections/jobs'
 import { menusCollection, removeTenantMenus } from './collections/menus'
@@ -37,6 +46,7 @@ export * from './collections/pages'
 export * from './coupons'
 export * from './email'
 export * from './legacy-password'
+export * from './location-settings'
 export * from './money'
 export * from './add-ons'
 export * from './collections/jobs'
@@ -162,11 +172,13 @@ const jobBoardCollections = (
   tenancy: TenancyMode,
   features: Required<PayloadJobsFeatures>,
   mediaSlug: null | string,
+  locationsOptions: LocationsOptions,
   slugs: PayloadJobsCollectionSlugs,
   collections: PayloadJobsCollectionsOptions,
   blockSlugs: readonly string[],
 ): CollectionConfig[] => [
   locationsCollection({
+    ...locationsOptions,
     access: collections.locations?.access,
     requireTenant: tenancy === 'multi',
     slug: slugs.locations,
@@ -251,6 +263,39 @@ export const payloadJobs =
 
     const settingsSlug = options.settingsSlug ?? 'job-board-settings'
 
+    // The location tree may be capped per tenant. Read the limit at write time, so an admin's
+    // change to the tenant settings takes effect on the next save.
+    const locationsOptions: LocationsOptions = {
+      limits: async ({ data, req }) => {
+        if (tenancy === 'multi') {
+          const ref = data.tenant
+          const tenantID = ref && typeof ref === 'object' ? ref.id : ref
+
+          if (tenantID === null || tenantID === undefined) return null
+
+          const tenant = await req.payload.findByID({
+            collection: tenantsSlug as CollectionSlug,
+            depth: 0,
+            id: tenantID,
+            overrideAccess: true,
+            req,
+          })
+
+          return tenantLocationSettings(tenant as TenantLocationSource)
+        }
+
+        const settings = await req.payload.findGlobal({
+          depth: 0,
+          overrideAccess: true,
+          req,
+          slug: settingsSlug as GlobalSlug,
+        })
+
+        return tenantLocationSettings(settings as TenantLocationSource)
+      },
+      requireTenant: tenancy === 'multi',
+    }
+
     // Organisation logos and covers point at the host's upload collection. Without one (a
     // minimal config or a test boot) the images are left out rather than failing the build.
     const hostSlugs = new Set((config.collections ?? []).map((collection) => collection.slug))
@@ -265,6 +310,7 @@ export const payloadJobs =
       tenancy,
       features,
       mediaSlug,
+      locationsOptions,
       slugs,
       collectionOptions,
       registeredBlockSlugs(config),

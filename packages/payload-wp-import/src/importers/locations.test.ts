@@ -31,7 +31,6 @@ const vanuatuDocs = (): LocationDoc[] => {
     const parent = seed.parentSlug === null ? null : (bySlug.get(seed.parentSlug) ?? null)
     const doc: LocationDoc = {
       id: docs.length + 1,
-      kind: seed.kind,
       name: seed.name,
       parent,
       slug: seed.slug,

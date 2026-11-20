@@ -431,6 +431,19 @@ export interface Tenant {
    */
   taxLabel?: string | null;
   /**
+   * Name the tree’s levels, top first: Island then Town on Vanuatu Wok, or Region, City. They are stored per tenant and read with `locationLevelLabel`; the admin and the public filters do not show them yet.
+   */
+  locationLevels?:
+    | {
+        label: string;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * Deepest level allowed, counting the top level as 0. Leave empty for any depth. Vanuatu Wok uses 1: Island then Town.
+   */
+  locationMaxDepth?: number | null;
+  /**
    * Tax on plans and add-ons. Off until turned on; the label above is shown on prices and invoices.
    */
   tax?: {
@@ -624,8 +637,11 @@ export interface Location {
   tenant?: (number | null) | Tenant;
   name: string;
   slug: string;
-  kind: 'region' | 'island' | 'town';
   parent?: (number | null) | Location;
+  /**
+   * Computed from the parent chain: 0 is the top level (Island on Vanuatu Wok), 1 its children, and so on.
+   */
+  depth?: number | null;
   /**
    * WordPress id, so the importer can match an existing location.
    */
@@ -1340,8 +1356,14 @@ export interface Job {
   companyName?: string | null;
   companyUrl?: string | null;
   howToApply?: string | null;
-  location?: (number | null) | Location;
-  address?: string | null;
+  /**
+   * One or more places in the tenant’s location tree. The job appears on every matching location page and its descendants.
+   */
+  location?: (number | Location)[] | null;
+  /**
+   * Optional free-text detail, e.g. a street address or the legacy “Multiple locations” text.
+   */
+  locationDetails?: string | null;
   applyOnline?: boolean | null;
   /**
    * Where online applications go. Empty: the organisation’s contacts.
@@ -1939,6 +1961,13 @@ export interface TenantsSelect<T extends boolean = true> {
       };
   defaultLocale?: T;
   taxLabel?: T;
+  locationLevels?:
+    | T
+    | {
+        label?: T;
+        id?: T;
+      };
+  locationMaxDepth?: T;
   tax?:
     | T
     | {
@@ -2024,8 +2053,8 @@ export interface LocationsSelect<T extends boolean = true> {
   tenant?: T;
   name?: T;
   slug?: T;
-  kind?: T;
   parent?: T;
+  depth?: T;
   legacyId?: T;
   createdBy?: T;
   updatedBy?: T;
@@ -2271,7 +2300,7 @@ export interface JobsSelect<T extends boolean = true> {
   companyUrl?: T;
   howToApply?: T;
   location?: T;
-  address?: T;
+  locationDetails?: T;
   applyOnline?: T;
   applicationsRecipient?: T;
   plan?: T;
