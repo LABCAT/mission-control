@@ -248,3 +248,4 @@ Not imported: applications/CVs, resumes, logs (order-log, job-alerts-log, resume
 - **Decision (20 Nov): site managers post/edit jobs for any organisation** (admin), job owned by that org, invoice to that org (legacy: admin picks Xero contact on the submit form). Query 59 for usage info only.
 - **Decision (20 Nov): public view counter kept** (parity, per-tenant setting, vwok on): the existing view beacon's response returns total/today counts, rendered after load in reserved space (no CLS, no extra request). PJ-37/PJ-110.
 - **Decision (20 Nov): 'view as user'** for super admins, late MVP, banner on every page via hint cookie (no cache impact), guard rails + audit log. PJ-119.
+- **Decision (20 Nov): no YCV consultation.** Spec = legacy code + data parity + founder decisions; YCV adapts. Final check = founder walk-through of the features catalogue (PJ-117) on staging.
