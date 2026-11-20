@@ -1,7 +1,8 @@
 import type { CollectionConfig, Config, GlobalConfig } from 'payload'
 
 import { hasAnyTenantRole, isSuperAdmin, type MissionControlUser } from '../access'
-import { APPLICATIONS_SLUG, COUPONS_SLUG, ORDERS_SLUG, PAGES_SLUG } from './collections'
+import { COUPONS_SLUG } from '../coupons'
+import { APPLICATIONS_SLUG, ORDERS_SLUG, PAGES_SLUG } from './collections'
 
 /**
  * The cut-down admin nav for site managers (PJ-30, S-117).
@@ -25,7 +26,8 @@ export const SITE_MANAGER_ROLES = ['tenant-admin', 'editor'] as const
  *
  * It is a superset of the task's list on purpose: S-120 is built and needs the location tree
  * and taxonomies in a site manager's menu, and media/documents are the tenant's own uploads.
- * The host can narrow or widen it through `siteManagerAdmin.collections`.
+ * The host can narrow or widen it through `siteManagerAdmin.collections`. The `job-tags` and
+ * `areas-of-focus` taxonomies are gone (PJ-80), so they are not in this list.
  */
 export const SITE_MANAGER_NAV_COLLECTIONS = [
   'jobs',
@@ -39,9 +41,7 @@ export const SITE_MANAGER_NAV_COLLECTIONS = [
   'locations',
   'job-categories',
   'job-types',
-  'job-tags',
   'salary-bands',
-  'areas-of-focus',
   'media',
   'documents',
   'folders',

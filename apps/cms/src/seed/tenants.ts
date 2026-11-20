@@ -19,6 +19,8 @@ type SeedTenant = {
   emailFromName?: string
   isAggregate: boolean
   locales?: { locale: string }[]
+  locationLevels?: string[]
+  locationMaxDepth?: number
   name: string
   slug: string
   taxLabel?: string
@@ -50,6 +52,8 @@ const seedTenants: SeedTenant[] = [
     emailFromName: 'Vanuatu Wok',
     isAggregate: false,
     locales: [{ locale: 'en' }],
+    locationLevels: ['Island', 'Town'],
+    locationMaxDepth: 1,
     name: 'Vanuatu Wok',
     slug: 'vwok',
     taxLabel: 'VAT',
@@ -88,6 +92,7 @@ try {
       tenant.branding?.colorPrimary ?? null,
       tenant.branding?.colorAccent ?? null,
       tenant.branding?.colorHover ?? null,
+      tenant.locationMaxDepth ?? null,
     ]
 
     const existing = await client.query('select id from tenants where slug = $1 limit 1', [tenant.slug])
@@ -100,20 +105,22 @@ try {
           name = $2, is_aggregate = $3, currency = $4, currency_minor_units = $5,
           timezone = $6, default_locale = $7, tax_label = $8, email_from_name = $9,
           email_from_address = $10, admin_email = $11, branding_color_primary = $12,
-          branding_color_accent = $13, branding_color_hover = $14, updated_at = now()
+          branding_color_accent = $13, branding_color_hover = $14, location_max_depth = $15,
+          updated_at = now()
         where id = $1`,
         [id, ...values.slice(0, 1), ...values.slice(2)],
       )
       await client.query('delete from tenants_domains where _parent_id = $1', [id])
       await client.query('delete from tenant_locale_list where _parent_id = $1', [id])
+      await client.query('delete from tenants_location_levels where _parent_id = $1', [id])
       console.log(`tenant ${tenant.slug}: updated`)
     } else {
       const inserted = await client.query(
         `insert into tenants (
           name, slug, is_aggregate, currency, currency_minor_units, timezone, default_locale,
           tax_label, email_from_name, email_from_address, admin_email,
-          branding_color_primary, branding_color_accent, branding_color_hover
-        ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+          branding_color_primary, branding_color_accent, branding_color_hover, location_max_depth
+        ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
         returning id`,
         values,
       )
@@ -132,6 +139,13 @@ try {
       await client.query(
         'insert into tenant_locale_list (_order, _parent_id, id, locale) values ($1, $2, $3, $4)',
         [index, id, randomUUID(), locale.locale],
+      )
+    }
+
+    for (const [index, label] of (tenant.locationLevels ?? []).entries()) {
+      await client.query(
+        'insert into tenants_location_levels (_order, _parent_id, id, label) values ($1, $2, $3, $4)',
+        [index, id, randomUUID(), label],
       )
     }
   }

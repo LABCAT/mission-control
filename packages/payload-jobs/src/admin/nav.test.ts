@@ -131,9 +131,7 @@ describe('site manager nav @S-117', () => {
       'locations',
       'job-categories',
       'job-types',
-      'job-tags',
       'salary-bands',
-      'areas-of-focus',
       'media',
       'documents',
       'folders',
@@ -144,6 +142,10 @@ describe('site manager nav @S-117', () => {
     }
     // Platform collections must never appear in a site manager's menu.
     for (const slug of ['tenants', 'site-keys']) {
+      expect(SITE_MANAGER_NAV_COLLECTIONS).not.toContain(slug)
+    }
+    // Removed in PJ-80; naming them would be a stale entry that hides nothing.
+    for (const slug of ['job-tags', 'areas-of-focus']) {
       expect(SITE_MANAGER_NAV_COLLECTIONS).not.toContain(slug)
     }
   })

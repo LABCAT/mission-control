@@ -548,7 +548,8 @@ stories:
       - plans.coupons
     mvp: true
     status: planned
-    tests: []
+    tests:
+      - packages/payload-jobs/src/coupons.test.ts
 
   - id: S-038
     area: Job posting
@@ -1365,7 +1366,8 @@ stories:
       - xero.paymentSync
     mvp: true
     status: planned
-    tests: []
+    tests:
+      - packages/payload-xero/src/payment-sync.test.ts
 
   - id: S-097
     area: Commerce
@@ -1689,7 +1691,8 @@ stories:
     steps:
       - "Add an island and a town, add a category, type and salary band."
       - "Try a duplicate slug in the same tenant."
-    expected: "Tree levels nest correctly, slugs are unique per tenant, and every taxonomy is editable in the admin."
+      - "Give a category the slug of a location or job type, or a reserved word such as page."
+    expected: "Tree levels nest correctly, slugs are unique per tenant across categories, locations (every level) and job types, reserved words are refused with a clear error, and every taxonomy is editable in the admin."
     settings:
       - locations.enabled
       - taxonomies.enabled
@@ -1698,6 +1701,7 @@ stories:
     tests:
       - packages/payload-jobs/src/collections/locations.test.ts
       - packages/payload-jobs/src/taxonomies.test.ts
+      - packages/payload-jobs/src/slug-rules.integration.test.ts
 
   - id: S-121
     area: Admin

@@ -26,40 +26,51 @@ describe('Vanuatu location seed', () => {
 
   it('mirrors the legacy two-level picker: island → town', () => {
     expect(bySlug.get('efate')).toEqual({
-      kind: 'island',
+      depth: 0,
       name: 'Efate',
       parentSlug: null,
       slug: 'efate',
     })
     expect(bySlug.get('port-vila')).toEqual({
-      kind: 'town',
+      depth: 1,
       name: 'Port Vila',
       parentSlug: 'efate',
       slug: 'port-vila',
     })
-    expect(bySlug.get('espiritu-santo')).toMatchObject({ kind: 'island', parentSlug: null })
+    expect(bySlug.get('espiritu-santo')).toMatchObject({ depth: 0, parentSlug: null })
     expect(bySlug.get('luganville')).toMatchObject({
-      kind: 'town',
+      depth: 1,
       parentSlug: 'espiritu-santo',
     })
   })
 
   it('treats the catch-alls as roots and keeps their real towns', () => {
     expect(bySlug.get('overseas')).toEqual({
-      kind: 'region',
+      depth: 0,
       name: 'Overseas',
       parentSlug: null,
       slug: 'overseas',
     })
-    expect(bySlug.get('other')).toMatchObject({ kind: 'region', parentSlug: null })
+    expect(bySlug.get('other')).toMatchObject({ depth: 0, parentSlug: null })
     expect(bySlug.get('anywhere-work-from-home')).toMatchObject({
-      kind: 'town',
+      depth: 1,
       parentSlug: 'other',
     })
 
     // The picker's `Overseas: ["Overseas"]` and `Other: ["Other"]` self-pairs are dropped.
     expect(seeds.filter((seed) => seed.slug === 'overseas')).toHaveLength(1)
     expect(seeds.filter((seed) => seed.slug === 'other')).toHaveLength(1)
+  })
+
+  it('seeds Nationwide and Remote / anywhere as childless roots', () => {
+    expect(bySlug.get('nationwide')).toEqual({
+      depth: 0,
+      name: 'Nationwide',
+      parentSlug: null,
+      slug: 'nationwide',
+    })
+    expect(bySlug.get('remote-anywhere')).toMatchObject({ depth: 0, parentSlug: null })
+    expect(seeds.some((seed) => seed.parentSlug === 'nationwide')).toBe(false)
   })
 
   it('hangs every legacy town off the island the picker lists it under', () => {
@@ -91,12 +102,18 @@ describe('Vanuatu location seed', () => {
     }
   })
 
-  it('creates no towns without an island or catch-all parent', () => {
-    for (const town of seeds.filter((seed) => seed.kind === 'town')) {
-      const parent = bySlug.get(town.parentSlug ?? '')
+  it('gives every child its parent’s depth plus one', () => {
+    for (const seed of seeds) {
+      if (seed.parentSlug === null) {
+        expect(seed.depth, `${seed.slug} should be a root`).toBe(0)
+        continue
+      }
 
-      expect(parent, `${town.slug} has no parent`).toBeDefined()
-      expect(['island', 'region']).toContain(parent?.kind)
+      const parent = bySlug.get(seed.parentSlug)
+      expect(parent, `${seed.slug} has no parent`).toBeDefined()
+      expect(seed.depth, `${seed.slug} should sit one level under ${seed.parentSlug}`).toBe(
+        (parent?.depth ?? -1) + 1,
+      )
     }
   })
 
