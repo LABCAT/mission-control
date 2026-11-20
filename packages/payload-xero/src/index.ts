@@ -9,6 +9,7 @@ import {
   type XeroScope,
 } from './xero-settings'
 
+export * from './contacts'
 export * from './crypto'
 export * from './oauth'
 export * from './oauth-endpoints'

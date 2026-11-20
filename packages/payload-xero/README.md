@@ -4,6 +4,7 @@ Xero invoicing for [Payload](https://payloadcms.com). Today it provides:
 
 - a settings collection (Xero organisation ID, account codes, branding theme, due days, reconciliation account, tracking category), global or per tenant;
 - OAuth2 connect and refresh per tenant, with tokens encrypted at rest;
+- find-or-create for the Xero contacts invoices are addressed to;
 - AES-256-GCM helpers (Web Crypto, so they run on Cloudflare Workers) for storing OAuth tokens encrypted.
 
 Invoicing comes in a later release. The plugin never knows about your content model (jobs, orders, products...): see [Invoicing adapter](#invoicing-adapter-planned).
@@ -178,6 +179,35 @@ const token = await decryptToken(stored, key, `tenant:${tenantId}`)
 - Wrong key, tampering and wrong context all fail with the same generic `XeroCryptoError`. Messages never contain tokens or keys.
 
 The OAuth endpoints use these helpers for you; you only need them directly if you store tokens somewhere other than the settings collection (for example a per-job connection).
+
+## Contacts
+
+Before an invoice is raised, the payer has to be a Xero contact. `findOrCreateXeroContact` looks one up in a fixed order, so re-running an invoicing job reuses the contact it found the first time instead of creating a duplicate:
+
+1. the payer's stored Xero contact code (`xeroContactCode`), as `ContactNumber`;
+2. the legacy WordPress user id as `AXI-{legacyUserId}`, which is what the old plugin wrote, so migrated employers invoice against the contacts that already exist;
+3. the email address.
+
+A lookup whose only match is archived does not count, because Xero will not put a new invoice on an archived contact. When all three miss, one contact is created from the name, the code and the email; a create needs a name, so callers must supply one.
+
+```ts
+import { findOrCreateXeroContact } from '@mission-control/payload-xero'
+
+const { contact, matchedBy } = await findOrCreateXeroContact({
+  accessToken, // from getXeroAccessToken
+  contact: {
+    code: organisation.xeroContactCode,
+    email: organisation.billingEmail,
+    legacyUserId: organisation.legacyId,
+    name: organisation.name,
+  },
+  tenantId: settings.xeroTenantId,
+})
+```
+
+`matchedBy` is `'code'`, `'legacyId'`, `'email'` or `'created'`, which is what an order log wants to record. Everything goes through `fetch` with the `xero-tenant-id` header, so it runs on Workers. Failures are `XeroContactError`s with a stable `code`: `not_connected` (no access token or organisation yet), `invalid_contact` (nothing to look up, or no name to create with), `contact_lookup_failed` and `contact_create_failed`.
+
+Xero's filter grammar has no documented escape for a double quote or backslash. A code or email that carries one is refused as `invalid_contact` rather than sent as a filter that may match another contact.
 
 ## Invoicing adapter (planned)
 

@@ -19,7 +19,7 @@
     "payload": "4.0.0-beta.7",
     "typescript": "6.0.3"
   },
-  "description": "Xero invoicing plugin for Payload: settings collection and AES-GCM token helpers.",
+  "description": "Xero invoicing plugin for Payload: settings collection, encrypted OAuth tokens, contacts and AES-GCM token helpers.",
   "keywords": [
     "payload",
     "payload-plugin",
