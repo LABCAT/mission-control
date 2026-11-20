@@ -233,3 +233,13 @@ type XeroInvoiceInput = {
 ```
 
 The plugin would watch `sourceCollection`, call `toInvoice`, create the draft invoice with the stored settings, and expose the result (invoice ID, online URL) for you to save. Mission Control's order-to-invoice work (PJ-57) is the first consumer.
+
+## Payment sync (PJ-118)
+
+`xeroPaymentSyncTask({ oauth, orders })` returns a Payload task that runs hourly (`0 0 * * * *`, six fields, seconds first). For every connected organisation it reads the status of the Xero invoices behind your open orders and calls your `InvoiceOrderStore`:
+
+- `PAID` → `markPaid(order, { amountPaid, paidAt })`. Your app records the history event, sends the "order paid" email and releases any job waiting on payment.
+- `VOIDED` / `DELETED` → `markCancelled(order, invoice)`.
+- `AUTHORISED` past its due day with money owing → `setOverdue(order, true)` (and `false` once it is no longer overdue).
+
+It is read-only: it never creates a payment in Xero. Calls are batched (40 invoice IDs), spaced one second apart, and a 429 or 5xx is retried up to three times (honouring `Retry-After`). One failing order or organisation does not stop the rest. Register the task in `jobs.tasks` and run the queue from your scheduled handler.
