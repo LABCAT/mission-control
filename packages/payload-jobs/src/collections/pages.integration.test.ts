@@ -382,7 +382,7 @@ describe('system pages', () => {
   })
 
   describe('deletion', () => {
-    it('refuses to delete a system page and says to unpublish instead @S-145', async () => {
+    it('refuses to delete a system page and says to unpublish instead @S-144', async () => {
       const contact = (await pagesOf(harness.tenantA.id)).find((page) => page.role === 'contact')!
 
       await expect(

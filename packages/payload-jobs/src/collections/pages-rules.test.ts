@@ -86,7 +86,7 @@ describe('menu item tenant check', () => {
     } as never)
   }
 
-  it('checks the stored items when an update moves the menu and leaves them out', async () => {
+  it('checks the stored items when an update moves the menu and leaves them out @S-145', async () => {
     const error = await run({
       data: { tenant: 2 },
       originalItems: [{ label: 'About', linkType: 'page', page: 1 }],
@@ -95,7 +95,7 @@ describe('menu item tenant check', () => {
     expect(fieldMessages(error)).toMatch(/belongs to another site/)
   })
 
-  it('allows the move when the stored items already point at the new site', async () => {
+  it('allows the move when the stored items already point at the new site @S-145', async () => {
     await expect(
       run({
         data: { tenant: 2 },
@@ -104,7 +104,7 @@ describe('menu item tenant check', () => {
     ).resolves.toBeDefined()
   })
 
-  it('leaves the stored items alone when the tenant does not change', async () => {
+  it('leaves the stored items alone when the tenant does not change @S-145', async () => {
     await expect(
       run({
         data: { name: 'Renamed' },
