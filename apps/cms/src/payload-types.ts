@@ -748,7 +748,7 @@ export interface FeatureBoxesBlock {
  */
 export interface RichTextBlock {
   heading?: string | null;
-  content: LexicalRichText<LexicalNodes_0DF1558F>;
+  content: LexicalRichText<LexicalNodes_710E7ECA>;
   id?: string | null;
   blockName?: string | null;
   blockType: 'rich-text';
@@ -804,7 +804,7 @@ export interface FaqBlock {
   heading?: string | null;
   items: {
     question: string;
-    answer: LexicalRichText<LexicalNodes_0DF1558F>;
+    answer: LexicalRichText<LexicalNodes_710E7ECA>;
     id?: string | null;
   }[];
   id?: string | null;
