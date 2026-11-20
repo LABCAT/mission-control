@@ -50,6 +50,17 @@ export async function up({ db, payload, req }: MigrateUpArgs): Promise<void> {
 export async function down({ db, payload, req }: MigrateDownArgs): Promise<void> {
   // mission-control: the old schema holds one location per job. Rolling back a job that has
   // several would silently drop all but one, which is a data decision, so refuse instead.
+  // The old `kind` is not stored any more, so it can only be restored for trees shaped like the
+  // legacy picker (roots and their children). A deeper tree has kinds that cannot be recovered.
+  const deep = await db.execute(sql`SELECT count(*)::int AS count FROM "locations" WHERE "depth" >= 2;`)
+
+  if (deep.rows[0]?.count) {
+    throw new Error(
+      `Refusing to roll back: ${deep.rows[0].count} location(s) are more than two levels deep, ` +
+        'and their original kinds cannot be recovered. Flatten them, then run migrate:down again.',
+    )
+  }
+
   const many = await db.execute(
     sql`SELECT count(*)::int AS count FROM (SELECT "parent_id" FROM "jobs_rels" WHERE "path" = 'location' GROUP BY "parent_id" HAVING count(*) > 1) t;`,
   )

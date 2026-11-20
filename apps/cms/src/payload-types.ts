@@ -425,7 +425,7 @@ export interface Tenant {
    */
   taxLabel?: string | null;
   /**
-   * Name the tree’s levels, top first: Island then Town on Vanuatu Wok, or Region, City. Used in the admin and on the public location filters.
+   * Name the tree’s levels, top first: Island then Town on Vanuatu Wok, or Region, City. They are stored per tenant and read with `locationLevelLabel`; the admin and the public filters do not show them yet.
    */
   locationLevels?:
     | {
