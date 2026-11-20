@@ -4,6 +4,9 @@ export async function up({ db, payload, req }: MigrateUpArgs): Promise<void> {
   // mission-control: this drops whole tables, which is a data-deletion decision. The legacy
   // site has no job tag or area-of-focus terms (STATUS, 19 Nov), so nothing should be lost. If
   // any row exists the migration stops instead of deleting it: export or move the rows first.
+  // Lock both tables first and keep the locks through the drops (a migration runs in one
+  // transaction), so an older app instance cannot insert a row between the check and the drop.
+  await db.execute(sql`LOCK TABLE "job_tags", "areas_of_focus" IN ACCESS EXCLUSIVE MODE;`)
   for (const table of ['job_tags', 'areas_of_focus']) {
     const found = await db.execute(sql.raw(`SELECT count(*)::int AS count FROM "${table}"`))
     if (found.rows[0]?.count) {
