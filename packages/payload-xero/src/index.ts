@@ -13,6 +13,7 @@ export * from './contacts'
 export * from './crypto'
 export * from './oauth'
 export * from './oauth-endpoints'
+export * from './payment-sync'
 export * from './token-store'
 export * from './xero-settings'
 

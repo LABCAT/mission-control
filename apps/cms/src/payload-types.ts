@@ -62,17 +62,18 @@ export type SupportedTimezones =
   | 'Pacific/Fiji';
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "LexicalNodes_361F5CE2".
+ * via the `definition` "LexicalNodes_F20892C1".
  */
-export type LexicalNodes_361F5CE2 =
+export type LexicalNodes_F20892C1 =
   | SerializedTextNode
   | SerializedTabNode
   | SerializedLineBreakNode
-  | SerializedParagraphNode<LexicalNodes_361F5CE2>
+  | SerializedParagraphNode<LexicalNodes_F20892C1>
   | SerializedHorizontalRuleNode
   | SerializedUploadNode<'media'>
   | SerializedUploadNode<'documents'>
-  | SerializedQuoteNode<LexicalNodes_361F5CE2>
+  | SerializedUploadNode<'application-files'>
+  | SerializedQuoteNode<LexicalNodes_F20892C1>
   | SerializedRelationshipNode<
       | 'users'
       | 'folders'
@@ -81,6 +82,8 @@ export type LexicalNodes_361F5CE2 =
       | 'site-keys'
       | 'locations'
       | 'organisations'
+      | 'pages'
+      | 'menus'
       | 'alert-subscriptions'
       | 'job-categories'
       | 'job-types'
@@ -89,17 +92,18 @@ export type LexicalNodes_361F5CE2 =
       | 'add-ons'
       | 'jobs'
       | 'coupons'
+      | 'applications'
       | 'payload-kv'
       | 'payload-jobs'
       | 'payload-locked-documents'
       | 'payload-preferences'
       | 'payload-migrations'
     >
-  | SerializedAutoLinkNode<LexicalNodes_361F5CE2, LexicalLinkFields>
-  | SerializedLinkNode<LexicalNodes_361F5CE2, LexicalLinkFields>
-  | SerializedListNode<LexicalNodes_361F5CE2>
-  | SerializedListItemNode<LexicalNodes_361F5CE2>
-  | SerializedHeadingNode<LexicalNodes_361F5CE2>;
+  | SerializedAutoLinkNode<LexicalNodes_F20892C1, LexicalLinkFields>
+  | SerializedLinkNode<LexicalNodes_F20892C1, LexicalLinkFields>
+  | SerializedListNode<LexicalNodes_F20892C1>
+  | SerializedListItemNode<LexicalNodes_F20892C1>
+  | SerializedHeadingNode<LexicalNodes_F20892C1>;
 /**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "LexicalNodes_3DE324E4".
@@ -136,6 +140,8 @@ export interface Config {
     documents: Document;
     locations: Location;
     organisations: Organisation;
+    pages: Page;
+    menus: Menu;
     'alert-subscriptions': AlertSubscription;
     'job-categories': JobCategory;
     'job-types': JobType;
@@ -144,6 +150,8 @@ export interface Config {
     'add-ons': AddOn;
     jobs: Job;
     coupons: Coupon;
+    'application-files': ApplicationFile;
+    applications: Application;
     'payload-kv': PayloadKv;
     'payload-jobs': PayloadJob;
     'payload-locked-documents': PayloadLockedDocument;
@@ -162,6 +170,8 @@ export interface Config {
     documents: DocumentsSelect<false> | DocumentsSelect<true>;
     locations: LocationsSelect<false> | LocationsSelect<true>;
     organisations: OrganisationsSelect<false> | OrganisationsSelect<true>;
+    pages: PagesSelect<false> | PagesSelect<true>;
+    menus: MenusSelect<false> | MenusSelect<true>;
     'alert-subscriptions': AlertSubscriptionsSelect<false> | AlertSubscriptionsSelect<true>;
     'job-categories': JobCategoriesSelect<false> | JobCategoriesSelect<true>;
     'job-types': JobTypesSelect<false> | JobTypesSelect<true>;
@@ -170,6 +180,8 @@ export interface Config {
     'add-ons': AddOnsSelect<false> | AddOnsSelect<true>;
     jobs: JobsSelect<false> | JobsSelect<true>;
     coupons: CouponsSelect<false> | CouponsSelect<true>;
+    'application-files': ApplicationFilesSelect<false> | ApplicationFilesSelect<true>;
+    applications: ApplicationsSelect<false> | ApplicationsSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-jobs': PayloadJobsSelect<false> | PayloadJobsSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
@@ -475,6 +487,10 @@ export interface Tenant {
    * Whether new jobs need an admin’s approval before they go live.
    */
   jobModeration?: ('legacy' | 'review' | 'auto') | null;
+  /**
+   * When on, only signed-in accounts can apply to a job. Off: guests can apply with an email address.
+   */
+  accountRequiredToApply?: boolean | null;
   emailFromName?: string | null;
   emailFromAddress?: string | null;
   /**
@@ -719,7 +735,6 @@ export interface FeatureBoxesBlock {
       label: string;
       href: string;
       variant?: ('primary' | 'secondary') | null;
-      id?: string | null;
     };
     id?: string | null;
   }[];
@@ -733,7 +748,7 @@ export interface FeatureBoxesBlock {
  */
 export interface RichTextBlock {
   heading?: string | null;
-  content: LexicalRichText<LexicalNodes_361F5CE2>;
+  content: LexicalRichText<LexicalNodes_F20892C1>;
   id?: string | null;
   blockName?: string | null;
   blockType: 'rich-text';
@@ -754,7 +769,6 @@ export interface CardGridBlock {
       label: string;
       href: string;
       variant?: ('primary' | 'secondary') | null;
-      id?: string | null;
     };
     id?: string | null;
   }[];
@@ -789,7 +803,7 @@ export interface FaqBlock {
   heading?: string | null;
   items: {
     question: string;
-    answer: LexicalRichText<LexicalNodes_361F5CE2>;
+    answer: LexicalRichText<LexicalNodes_F20892C1>;
     id?: string | null;
   }[];
   id?: string | null;
@@ -895,6 +909,126 @@ export interface Document {
   };
   focalX?: number | null;
   focalY?: number | null;
+}
+/**
+ * Content pages. Home, About, Contact and Organisations are created with the site; they can be unpublished but not deleted.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "pages".
+ */
+export interface Page {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  title: string;
+  /**
+   * The path on this site. Leave empty to derive it from the title. The home page has none.
+   */
+  slug?: string | null;
+  /**
+   * Marks a page the site structure relies on. Only a super admin can change it.
+   */
+  role?: ('home' | 'about' | 'contact' | 'organisations') | null;
+  /**
+   * The page this one sits under. Home and Organisations have no children.
+   */
+  parent?: (number | null) | Page;
+  /**
+   * The page body, built from blocks in the order shown.
+   */
+  layout?: (HeroBlock | FeatureBoxesBlock | RichTextBlock | CardGridBlock | CtaBlock | FaqBlock | BannerBlock)[] | null;
+  /**
+   * Overrides for the page metadata. Empty fields fall back to the title.
+   */
+  seo?: {
+    /**
+     * Browser tab and search result title.
+     */
+    title?: string | null;
+    /**
+     * Meta description, ideally 50 to 160 characters.
+     */
+    description?: string | null;
+    /**
+     * Open Graph image. Falls back to the site-wide default.
+     */
+    image?: (number | null) | Media;
+    /**
+     * Ask search engines not to index this page.
+     */
+    noIndex?: boolean | null;
+  };
+  /**
+   * WordPress post ID, so the importer can match an existing page.
+   */
+  legacyId?: number | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+  _status?: ('draft' | 'published') | null;
+}
+/**
+ * Site navigation: one menu per location, with items in display order. Drag the items to reorder them.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "menus".
+ */
+export interface Menu {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  /**
+   * Shown in the admin only, for example Main menu.
+   */
+  name: string;
+  /**
+   * Where the theme shows this menu. Each location has one menu per site.
+   */
+  location: 'top' | 'primary' | 'footer';
+  /**
+   * Menu items, in the order they appear. Drag to reorder.
+   */
+  items?:
+    | {
+        label: string;
+        /**
+         * Link to a page in this site, or to any allowed URL.
+         */
+        linkType?: ('page' | 'custom') | null;
+        /**
+         * The page to link to.
+         */
+        page?: (number | null) | Page;
+        /**
+         * For example /jobs, https://example.com or mailto:hello@example.com.
+         */
+        url?: string | null;
+        /**
+         * Open the link in a new tab. Use it for other sites.
+         */
+        newTab?: boolean | null;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * WordPress menu term ID, so the importer can match an existing menu.
+   */
+  legacyId?: number | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
 }
 /**
  * Job alert subscribers. They confirm by email and manage themselves through their link; staff only read this list.
@@ -1222,7 +1356,7 @@ export interface Job {
   publishedAt?: string | null;
   expiresAt?: string | null;
   organisation: number | Organisation;
-  description?: LexicalRichText<LexicalNodes_361F5CE2> | null;
+  description?: LexicalRichText<LexicalNodes_F20892C1> | null;
   /**
    * An optional PDF of the full job description.
    */
@@ -1310,6 +1444,91 @@ export interface Coupon {
    * Leave empty for unlimited uses.
    */
   maxUses?: number | null;
+  /**
+   * WordPress post id, for the import.
+   */
+  legacyId?: number | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "application-files".
+ */
+export interface ApplicationFile {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  organisation: number | Organisation;
+  applicant?: (number | null) | User;
+  prefix?: string | null;
+  _objectKey?: string | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+  url?: string | null;
+  thumbnailURL?: string | null;
+  filename?: string | null;
+  mimeType?: string | null;
+  filesize?: number | null;
+  width?: number | null;
+  height?: number | null;
+  original?: {
+    filename?: string | null;
+    url?: string | null;
+    mimeType?: string | null;
+    filesize?: number | null;
+    width?: number | null;
+    height?: number | null;
+    prefix?: string | null;
+    _objectKey?: string | null;
+  };
+  focalX?: number | null;
+  focalY?: number | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "applications".
+ */
+export interface Application {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  job: number | Job;
+  /**
+   * Copied from the job. Not editable.
+   */
+  organisation?: (number | null) | Organisation;
+  /**
+   * Set when the applicant was signed in; guests apply with an email only.
+   */
+  applicant?: (number | null) | User;
+  name: string;
+  email: string;
+  phone?: string | null;
+  /**
+   * Plain text. No formatting or HTML.
+   */
+  message?: string | null;
+  cv: number | ApplicationFile;
+  coverLetter?: (number | null) | ApplicationFile;
+  /**
+   * When the applicant agreed to the privacy policy.
+   */
+  consentAt: string;
   /**
    * WordPress post id, for the import.
    */
@@ -1496,6 +1715,14 @@ export interface PayloadLockedDocument {
         value: number | Organisation;
       } | null)
     | ({
+        relationTo: 'pages';
+        value: number | Page;
+      } | null)
+    | ({
+        relationTo: 'menus';
+        value: number | Menu;
+      } | null)
+    | ({
         relationTo: 'alert-subscriptions';
         value: number | AlertSubscription;
       } | null)
@@ -1526,6 +1753,14 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'coupons';
         value: number | Coupon;
+      } | null)
+    | ({
+        relationTo: 'application-files';
+        value: number | ApplicationFile;
+      } | null)
+    | ({
+        relationTo: 'applications';
+        value: number | Application;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -1862,6 +2097,7 @@ export interface TenantsSelect<T extends boolean = true> {
         exemptXeroTaxType?: T;
       };
   jobModeration?: T;
+  accountRequiredToApply?: T;
   emailFromName?: T;
   emailFromAddress?: T;
   adminEmail?: T;
@@ -1967,6 +2203,56 @@ export interface OrganisationsSelect<T extends boolean = true> {
   canPayByInvoice?: T;
   billingEmail?: T;
   xeroContactCode?: T;
+  legacyId?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "pages_select".
+ */
+export interface PagesSelect<T extends boolean = true> {
+  tenant?: T;
+  title?: T;
+  slug?: T;
+  role?: T;
+  parent?: T;
+  layout?: T | {};
+  seo?:
+    | T
+    | {
+        title?: T;
+        description?: T;
+        image?: T;
+        noIndex?: T;
+      };
+  legacyId?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+  _status?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "menus_select".
+ */
+export interface MenusSelect<T extends boolean = true> {
+  tenant?: T;
+  name?: T;
+  location?: T;
+  items?:
+    | T
+    | {
+        label?: T;
+        linkType?: T;
+        page?: T;
+        url?: T;
+        newTab?: T;
+        id?: T;
+      };
   legacyId?: T;
   createdBy?: T;
   updatedBy?: T;
@@ -2157,6 +2443,64 @@ export interface CouponsSelect<T extends boolean = true> {
   active?: T;
   useCount?: T;
   maxUses?: T;
+  legacyId?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "application-files_select".
+ */
+export interface ApplicationFilesSelect<T extends boolean = true> {
+  tenant?: T;
+  organisation?: T;
+  applicant?: T;
+  prefix?: T;
+  _objectKey?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+  url?: T;
+  thumbnailURL?: T;
+  filename?: T;
+  mimeType?: T;
+  filesize?: T;
+  width?: T;
+  height?: T;
+  original?:
+    | T
+    | {
+        filename?: T;
+        url?: T;
+        mimeType?: T;
+        filesize?: T;
+        width?: T;
+        height?: T;
+        prefix?: T;
+        _objectKey?: T;
+      };
+  focalX?: T;
+  focalY?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "applications_select".
+ */
+export interface ApplicationsSelect<T extends boolean = true> {
+  tenant?: T;
+  job?: T;
+  organisation?: T;
+  applicant?: T;
+  name?: T;
+  email?: T;
+  phone?: T;
+  message?: T;
+  cv?: T;
+  coverLetter?: T;
+  consentAt?: T;
   legacyId?: T;
   createdBy?: T;
   updatedBy?: T;
@@ -2356,6 +2700,8 @@ export interface CollectionQueryWidget {
       | 'documents'
       | 'locations'
       | 'organisations'
+      | 'pages'
+      | 'menus'
       | 'alert-subscriptions'
       | 'job-categories'
       | 'job-types'
@@ -2363,7 +2709,9 @@ export interface CollectionQueryWidget {
       | 'plans'
       | 'add-ons'
       | 'jobs'
-      | 'coupons';
+      | 'coupons'
+      | 'application-files'
+      | 'applications';
     where?:
       | {
           [k: string]: unknown;
@@ -2396,6 +2744,8 @@ export interface ActivityWidget {
           | 'documents'
           | 'locations'
           | 'organisations'
+          | 'pages'
+          | 'menus'
           | 'alert-subscriptions'
           | 'job-categories'
           | 'job-types'
@@ -2404,6 +2754,8 @@ export interface ActivityWidget {
           | 'add-ons'
           | 'jobs'
           | 'coupons'
+          | 'application-files'
+          | 'applications'
         )[]
       | null;
   };
@@ -2415,7 +2767,7 @@ export interface ActivityWidget {
  */
 export interface UploadDropzoneWidget {
   data?: {
-    excludedCollections?: ('media' | 'documents')[] | null;
+    excludedCollections?: ('media' | 'documents' | 'application-files')[] | null;
   };
   width: 'x-small' | 'small' | 'medium' | 'large' | 'x-large' | 'full';
 }
