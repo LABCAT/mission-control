@@ -364,10 +364,11 @@ export const xeroPaymentSyncTask = (options: XeroPaymentSyncTaskOptions): TaskCo
       const totals = { cancelled: 0, failed: 0, organisations: 0, overdue: 0, paid: 0 }
 
       for (const row of rows.docs as unknown as { id: number | string }[]) {
-        const settings = await findSettingsWithTokens({ collection, id: row.id, payload })
-        if (!settings?.xeroTenantId || !settings.tokens) continue
-
         try {
+          const settings = await findSettingsWithTokens({ collection, id: row.id, payload })
+          // A row that never connected Xero is a skip, not a failure.
+          if (!settings?.xeroTenantId || !settings.tokens) continue
+
           const { accessToken } = await getXeroAccessToken({
             collection,
             ...(options.now ? { now: options.now().getTime() } : {}),
@@ -390,10 +391,11 @@ export const xeroPaymentSyncTask = (options: XeroPaymentSyncTaskOptions): TaskCo
           totals.overdue += result.overdue
           totals.failed += result.failed.length
         } catch (error) {
-          // One organisation failing (revoked token, Xero down) must not stop the others.
+          // One organisation failing (unreadable settings, revoked token, Xero down) must not
+          // stop the others.
           totals.failed += 1
           payload.logger.error(
-            { code: (error as { code?: string }).code ?? 'unknown', settingsId: settings.id },
+            { code: (error as { code?: string }).code ?? 'unknown', settingsId: row.id },
             'xero payment sync failed for one organisation',
           )
         }

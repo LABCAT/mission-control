@@ -287,4 +287,25 @@ describe('xeroPaymentSyncTask @S-096', () => {
     expect(out.output).toMatchObject({ failed: 0, organisations: 0, paid: 0 })
     expect(orders).not.toHaveBeenCalled()
   })
+
+  it('records an unreadable settings row and keeps going with the next organisation', async () => {
+    const findByID = vi.fn(async ({ id: rowId }: { id: number | string }) => {
+      if (rowId === 1) throw new Error('db down')
+      return { id: rowId, tokens: null, xeroTenantId: null }
+    })
+    const payload = {
+      find: vi.fn(async () => ({ docs: [{ id: 1 }, { id: 2 }] })),
+      findByID,
+      logger: { error: vi.fn() },
+    }
+    const task = xeroPaymentSyncTask({ oauth: {}, orders: () => fakeStore([]).store })
+
+    const out = await (task.handler as unknown as (a: unknown) => Promise<{ output: Record<string, number> }>)({
+      req: { payload },
+    })
+
+    expect(out.output).toMatchObject({ failed: 1, organisations: 0 })
+    expect(findByID).toHaveBeenCalledTimes(2)
+    expect(payload.logger.error).toHaveBeenCalledTimes(1)
+  })
 })
