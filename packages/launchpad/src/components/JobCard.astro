@@ -26,6 +26,8 @@ const {
   volunteerLabel = 'Voluntary',
 } = Astro.props as Props
 
+const jobId = job.id != null ? String(job.id) : job.url
+
 const salary = job.salary
   ? formatMoney(
       { amountMinor: job.salary.amountMinor, currency: job.salary.currency },
@@ -38,7 +40,7 @@ const salaryLabel =
 const closes = job.closes ? formatDate(job.closes, { locale, timezone }) : undefined
 ---
 
-<Card as="article">
+<Card as="article" data-job-id={jobId}>
   <h3 class="rs-card__title">
     <a class="rs-card__link" href={job.url}>{job.title}</a>
   </h3>
@@ -55,6 +57,12 @@ const closes = job.closes ? formatDate(job.closes, { locale, timezone }) : undef
     {job.jobType && <li class="lp-job__tag">{job.jobType}</li>}
     {job.isVolunteer && <li class="lp-job__tag lp-job__tag--accent">{volunteerLabel}</li>}
     {job.featured && <li class="lp-job__tag lp-job__tag--accent">{featuredLabel}</li>}
+    {/*
+      Always in the tag row so the pill reserves its space before the idle script runs:
+      revealing it changes visibility, never the layout. Hidden from sight and from AT until
+      the script proves this job is in the browser's viewed history.
+    */}
+    <li class="lp-job__tag lp-job__viewed" data-viewed-label aria-hidden="true">Viewed</li>
   </ul>
   {
     (salaryLabel || closes) && (
@@ -69,6 +77,25 @@ const closes = job.closes ? formatDate(job.closes, { locale, timezone }) : undef
     )
   }
 </Card>
+
+<script>
+  import { has } from '../viewed-jobs'
+  import { whenIdle } from '../viewed-jobs/idle'
+
+  const revealViewed = (): void => {
+    for (const card of document.querySelectorAll<HTMLElement>('[data-job-id]')) {
+      const jobId = card.dataset.jobId
+      if (!jobId || !has(jobId)) continue
+
+      const label = card.querySelector<HTMLElement>('[data-viewed-label]')
+      if (!label) continue
+      label.classList.add('lp-job__viewed--shown')
+      label.removeAttribute('aria-hidden')
+    }
+  }
+
+  whenIdle(revealViewed)
+</script>
 
 <style>
   /* Composition only: everything visual comes from Card and the --rs-* tokens. */
@@ -112,5 +139,14 @@ const closes = job.closes ? formatDate(job.closes, { locale, timezone }) : undef
   .lp-job__tag--accent {
     background: var(--rs-color-accent);
     color: var(--rs-color-accent-contrast);
+  }
+
+  /* Reserves the pill's box so the label appearing causes no layout shift. */
+  .lp-job__viewed {
+    visibility: hidden;
+  }
+
+  .lp-job__viewed--shown {
+    visibility: visible;
   }
 </style>

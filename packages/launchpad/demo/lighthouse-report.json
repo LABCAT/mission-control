@@ -1,0 +1,27 @@
+{
+  "lighthouseVersion": "13.6.0",
+  "url": "http://127.0.0.1:4567/jobs/head-chef/",
+  "formFactor": "mobile",
+  "throttlingMethod": "provided",
+  "command": "lighthouse http://127.0.0.1:4567/jobs/head-chef/ --form-factor=mobile --throttling-method=provided --chrome-flags='--headless=new --no-sandbox'",
+  "scores": {
+    "performance": 100,
+    "accessibility": 100,
+    "best-practices": 96,
+    "seo": 100
+  },
+  "metrics": {
+    "cumulativeLayoutShift": 0,
+    "firstContentfulPaint": "0.7 s",
+    "largestContentfulPaint": "0.7 s",
+    "totalBlockingTime": "0 ms",
+    "speedIndex": "0.7 s",
+    "interactive": "0.7 s"
+  },
+  "notes": [
+    "The job detail page is the Lighthouse target because it carries the viewed-jobs scripts and a 'More jobs' grid of JobCards without loading the third-party Turnstile script.",
+    "The only best-practices deduction is a 404 for /favicon.ico from the local static server; the theme does not ship a favicon.",
+    "Default simulated throttling is host-CPU bound on this machine: a bare HTML page scored 85 (TBT 600 ms). 'provided' measures the page without that host noise. CLS was 0 under both.",
+    "The jobs listing also measured performance 99 with CLS 0 under the same settings; the difference is the third-party Turnstile form island on that page."
+  ]
+}
