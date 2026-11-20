@@ -113,7 +113,7 @@ describe('site manager dashboard @S-117', () => {
     if (harness) await harness.destroy()
   })
 
-  it('counts and lists only the active tenant’s jobs and orders', async () => {
+  it('counts and lists only the active tenant’s jobs and orders @S-146', async () => {
     const dashboard = await loadSiteManagerDashboard({
       payload: harness.payload,
       tenantID: harness.tenantA.id,
@@ -148,7 +148,7 @@ describe('site manager dashboard @S-117', () => {
     expect(dashboard.orders).toMatchObject({ count: 0, recent: [] })
   })
 
-  it('reports the tenant’s own orders as null when the host has no orders collection yet', async () => {
+  it('reports the tenant’s own orders as null when the host has no orders collection yet @S-146', async () => {
     const dashboard = await loadSiteManagerDashboard({
       payload: harness.payload,
       slugs: { orders: 'not-installed-yet' },
@@ -257,7 +257,7 @@ describe('site manager dashboard with renamed collections @S-117', () => {
     if (harness) await harness.destroy()
   })
 
-  it('counts the host’s renamed jobs and orders', async () => {
+  it('counts the host’s renamed jobs and orders @S-146', async () => {
     const dashboard = await loadSiteManagerDashboard({
       payload: harness.payload,
       slugs: { jobs: 'vacancies', orders: 'purchases' },

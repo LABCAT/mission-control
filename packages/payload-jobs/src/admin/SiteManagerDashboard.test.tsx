@@ -100,7 +100,7 @@ describe('site manager dashboard view @S-117', () => {
     if (harness) await harness.destroy()
   })
 
-  it('renders the active tenant’s pending jobs for a site manager', async () => {
+  it('renders the active tenant’s pending jobs and orders for a site manager @S-146', async () => {
     const view = await render({ payload: harness.payload, user: harness.tenantAdminA })
     const text = textOf(view)
 
