@@ -132,7 +132,7 @@ export type OrderActor = 'member' | 'owner' | 'staff' | 'system'
 
 export const ORDER_ACTORS = ['system', 'staff', 'owner', 'member'] as const satisfies readonly OrderActor[]
 
-export const ORDER_LOG_EVENTS = ['created', 'status', 'external-ref', 'jobs', 'organisation'] as const
+export const ORDER_LOG_EVENTS = ['created', 'status', 'external-ref', 'jobs', 'organisation', 'paid-at'] as const
 export type OrderLogEvent = (typeof ORDER_LOG_EVENTS)[number]
 
 /**
@@ -346,6 +346,13 @@ export const orderStaffFieldAccess =
     if (!user) return true
     return isStaffFor(user, tenantIDOf(doc?.tenant ?? (data as { tenant?: unknown } | undefined)?.tenant), tenantScoped)
   }
+
+/**
+ * Fields only system code writes: the payment date comes from the payment itself (Xero's paid
+ * date, or the moment the order is marked paid), never from a form.
+ */
+export const orderSystemFieldAccess: FieldAccess = ({ req }) =>
+  req.context?.[ORDER_SYSTEM_CONTEXT] === true || !userOf(req)
 
 /** The status (and its note): site managers, system code, and the organisation's owner. */
 export const orderStatusFieldAccess =
@@ -605,6 +612,8 @@ const valueAfterSave = (
 // Hooks
 
 export type OrderRulesOptions = {
+  /** `false` when the host turned coupons off: orders then keep only the applied code. */
+  couponsEnabled?: boolean
   isOrganisationOwner?: OrganisationOwnerCheck
   paymentProviders?: readonly PaymentProviderDefinition[]
   slugs?: PayloadJobsCollectionSlugs
@@ -723,6 +732,7 @@ export const orderRelationsInTenant =
  * payment; and each change is appended to the log, whatever the request sent for it.
  */
 export const orderRules = ({
+  couponsEnabled = true,
   isOrganisationOwner,
   paymentProviders = resolvePaymentProviders(),
   tenantScoped = true,
@@ -884,9 +894,27 @@ export const orderRules = ({
     if (errors.length > 0) fail()
 
     // Paid orders carry the date they were paid: the submitted one (system code passes Xero's),
-    // otherwise now.
+    // otherwise now. Only a paid order has one, and a later correction (system code only, by
+    // field access) is written to the history.
+    const paidAt = valueAfterSave(next, originalDoc, 'paidAt')
+    if (to !== 'paid' && paidAt) {
+      errors.push({ message: 'Only a paid order has a payment date', path: 'paidAt' })
+      fail()
+    }
     const paidNow = to === 'paid' && (operation === 'create' || originalDoc?.status !== 'paid')
-    if (paidNow && !valueAfterSave(next, originalDoc, 'paidAt')) next.paidAt = now
+    if (paidNow && !paidAt) next.paidAt = now
+    if (operation === 'update' && !paidNow && to === 'paid') {
+      const before = originalDoc?.paidAt ? new Date(originalDoc.paidAt as string).toISOString() : null
+      const after = paidAt ? new Date(paidAt as string).toISOString() : null
+      if (after === null) {
+        errors.push({ message: 'A paid order keeps its payment date', path: 'paidAt' })
+        fail()
+      }
+      if (before !== after) log.push(entry({ event: 'paid-at', from: before, to: after }))
+    }
+    if (!couponsEnabled) {
+      delete next.coupon
+    }
 
     return { ...next, log, status: to }
   }
@@ -934,6 +962,11 @@ export const refuseDeleteWhileOrdered =
 export type OrderCollectionOptions = {
   /** Overrides the collection's default access, operation by operation (PJ-80). */
   access?: CollectionAccess
+  /**
+   * `false` when the coupons collection is off (`features.coupons`): the `coupon` relationship is
+   * left out and orders keep only the applied `couponCode`. Defaults to true.
+   */
+  couponsEnabled?: boolean
   /** Who owns an organisation; without it only site managers and system code change orders. */
   isOrganisationOwner?: OrganisationOwnerCheck
   /** Registered providers (`resolvePaymentProviders`). Defaults to core's `invoice` only. */
@@ -956,6 +989,7 @@ const minorUnits = (name: string, description: string): Field => ({
 
 export const orderCollection = ({
   access,
+  couponsEnabled = true,
   isOrganisationOwner,
   paymentProviders = resolvePaymentProviders(),
   slugs = DEFAULT_PAYLOAD_JOBS_SLUGS,
@@ -1033,12 +1067,16 @@ export const orderCollection = ({
     {
       type: 'row',
       fields: [
-        {
-          name: 'coupon',
-          type: 'relationship',
-          access: staffWrite,
-          relationTo: slugs.coupons as CollectionSlug,
-        },
+        ...(couponsEnabled
+          ? [
+              {
+                name: 'coupon',
+                type: 'relationship',
+                access: staffWrite,
+                relationTo: slugs.coupons as CollectionSlug,
+              } as Field,
+            ]
+          : []),
         {
           name: 'couponCode',
           type: 'text',
@@ -1156,9 +1194,12 @@ export const orderCollection = ({
             {
               name: 'paidAt',
               type: 'date',
-              access: staffWrite,
+              access: { create: orderSystemFieldAccess, update: orderSystemFieldAccess },
               index: true,
-              admin: { description: 'Set when the order is paid.' },
+              admin: {
+                description: 'Set when the order is paid (Xero’s paid date, or when it is marked paid).',
+                readOnly: true,
+              },
             },
           ],
         },
@@ -1258,7 +1299,7 @@ export const orderCollection = ({
     hooks: {
       beforeChange: [
         orderRelationsInTenant({ slugs, tenantScoped }),
-        orderRules({ isOrganisationOwner, paymentProviders, tenantScoped, usersSlug }),
+        orderRules({ couponsEnabled, isOrganisationOwner, paymentProviders, tenantScoped, usersSlug }),
       ],
     },
     labels: { plural: 'Orders', singular: 'Order' },

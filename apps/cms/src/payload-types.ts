@@ -1253,6 +1253,14 @@ export interface Job {
    */
   plan?: (number | null) | Plan;
   /**
+   * The order paying for the current listing. Set at checkout.
+   */
+  order?: (number | null) | Order;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  /**
    * Where this job is featured, and until when. Expired rows are removed daily.
    */
   placements?:
@@ -1269,53 +1277,6 @@ export interface Job {
    * WordPress post id, for the import.
    */
   legacyId?: number | null;
-  createdBy?: {
-    relationTo: 'users';
-    value: number | User;
-  } | null;
-  updatedBy?: {
-    relationTo: 'users';
-    value: number | User;
-  } | null;
-  updatedAt: string;
-  createdAt: string;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "coupons".
- */
-export interface Coupon {
-  id: number;
-  tenant?: (number | null) | Tenant;
-  /**
-   * Saved in uppercase. Unique within the tenant, for example LINKPS.
-   */
-  code: string;
-  discountType: 'flat' | 'percent';
-  /**
-   * Flat: minor units of the tenant currency, so 500 is Vt 500. Percentage: a whole percentage, so 10 is 10%.
-   */
-  amount: number;
-  /**
-   * An inactive coupon is kept but cannot be applied.
-   */
-  active?: boolean | null;
-  /**
-   * How many orders have used the coupon. Only order processing changes it; other writes keep the stored value.
-   */
-  useCount: number;
-  /**
-   * Leave empty for unlimited uses.
-   */
-  maxUses?: number | null;
-  /**
-   * WordPress post id, for the import.
-   */
-  legacyId?: number | null;
-  createdBy?: {
-    relationTo: 'users';
-    value: number | User;
-  } | null;
   updatedBy?: {
     relationTo: 'users';
     value: number | User;
@@ -1423,7 +1384,7 @@ export interface Order {
    */
   paymentProvider?: string | null;
   /**
-   * Set when the order is paid.
+   * Set when the order is paid (Xero’s paid date, or when it is marked paid).
    */
   paidAt?: string | null;
   /**
@@ -1446,7 +1407,7 @@ export interface Order {
   log?:
     | {
         at: string;
-        event: 'created' | 'status' | 'external-ref' | 'jobs' | 'organisation';
+        event: 'created' | 'status' | 'external-ref' | 'jobs' | 'organisation' | 'paid-at';
         actor: 'system' | 'staff' | 'owner' | 'member';
         by?: (number | null) | User;
         from?: string | null;
@@ -1457,6 +1418,49 @@ export interface Order {
     | null;
   /**
    * WordPress transaction id, for the import.
+   */
+  legacyId?: number | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "coupons".
+ */
+export interface Coupon {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  /**
+   * Saved in uppercase. Unique within the tenant, for example LINKPS.
+   */
+  code: string;
+  discountType: 'flat' | 'percent';
+  /**
+   * Flat: minor units of the tenant currency, so 500 is Vt 500. Percentage: a whole percentage, so 10 is 10%.
+   */
+  amount: number;
+  /**
+   * An inactive coupon is kept but cannot be applied.
+   */
+  active?: boolean | null;
+  /**
+   * How many orders have used the coupon. Only order processing changes it; other writes keep the stored value.
+   */
+  useCount: number;
+  /**
+   * Leave empty for unlimited uses.
+   */
+  maxUses?: number | null;
+  /**
+   * WordPress post id, for the import.
    */
   legacyId?: number | null;
   createdBy?: {
@@ -2276,6 +2280,8 @@ export interface JobsSelect<T extends boolean = true> {
   applyOnline?: T;
   applicationsRecipient?: T;
   plan?: T;
+  order?: T;
+  createdBy?: T;
   placements?:
     | T
     | {
@@ -2287,7 +2293,6 @@ export interface JobsSelect<T extends boolean = true> {
       };
   views?: T;
   legacyId?: T;
-  createdBy?: T;
   updatedBy?: T;
   updatedAt?: T;
   createdAt?: T;

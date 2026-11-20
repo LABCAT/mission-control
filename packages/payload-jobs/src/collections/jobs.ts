@@ -1,4 +1,5 @@
 import {
+  createCreatedByField,
   ValidationError,
   type Access,
   type AccessResult,
@@ -51,8 +52,9 @@ import { validateUrl } from './organisations'
  * drafts and pending jobs (through the /account API or REST); checkout, moderation and the
  * expiry task move them on (`job-status.ts`); staff can do everything.
  *
- * Orders point at their jobs (`orders.jobs`, PJ-23), not the other way round: a relisted job is
- * paid for by more than one order.
+ * A job's `order` is the order that pays for its current listing (PJ-23); a relisted job is paid
+ * for by more than one order, and each order lists its jobs (`orders.jobs`). `createdBy` is the
+ * member who posted it, for audit: the job itself belongs to the organisation.
  */
 
 export const JOBS_SLUG = 'jobs'
@@ -328,6 +330,7 @@ const relationsFor = (
   { label: 'salary band', path: 'salaryBand', relationTo: slugs.salaryBands },
   { label: 'location', path: 'location', relationTo: slugs.locations },
   { label: 'plan', path: 'plan', relationTo: slugs.plans },
+  { label: 'order', path: 'order', relationTo: slugs.orders },
   ...(documentsSlug ? [{ label: 'job description file', path: 'jobDescriptionPdf', relationTo: documentsSlug }] : []),
 ]
 
@@ -481,6 +484,38 @@ export const jobPlanAllowsJobWith =
     return data
   }
 
+/**
+ * A job's order must be its own organisation's: an order another organisation pays must never
+ * release this job. Checked after `jobRelationsInTenant`, which keeps the order in the tenant.
+ */
+export const jobOrderMatchesOrganisation =
+  (slugs: PayloadJobsCollectionSlugs = DEFAULT_PAYLOAD_JOBS_SLUGS): CollectionBeforeChangeHook =>
+  async ({ collection, data, originalDoc, req }) => {
+    const orderID = tenantIDOf(valueAfterSave(data, originalDoc, 'order'))
+    if (orderID === null || !hasCollection(req, slugs.orders)) return data
+
+    const order = (await req.payload.findByID({
+      collection: slugs.orders as CollectionSlug,
+      depth: 0,
+      disableErrors: true,
+      id: orderID,
+      overrideAccess: true,
+      req,
+      select: { organisation: true },
+    })) as null | { organisation?: unknown }
+    const organisationID = tenantIDOf(valueAfterSave(data, originalDoc, 'organisation'))
+
+    if (order && organisationID !== null && String(tenantIDOf(order.organisation)) === String(organisationID)) {
+      return data
+    }
+
+    throw new ValidationError({
+      collection: collection.slug,
+      errors: [{ message: 'Pick an order of this job’s organisation', path: 'order' }],
+      req,
+    })
+  }
+
 /** The task's default plan rule, for hosts that keep the default slugs. */
 export const jobPlanAllowsJob: CollectionBeforeChangeHook = jobPlanAllowsJobWith()
 
@@ -551,6 +586,11 @@ export type JobsCollectionOptions = {
   /** Resolved collection slugs, so relationships and queries never use a literal. */
   slugs?: PayloadJobsCollectionSlugs
   tenantScoped?: boolean
+  /**
+   * Add the `order` relationship (PJ-23). The plugin always does, since it registers orders; a
+   * config that uses this collection without the orders collection leaves it off.
+   */
+  withOrder?: boolean
 }
 
 export const jobsCollection = ({
@@ -559,6 +599,7 @@ export const jobsCollection = ({
   richTextDescription = true,
   slugs = DEFAULT_PAYLOAD_JOBS_SLUGS,
   tenantScoped = true,
+  withOrder = false,
 }: JobsCollectionOptions = {}): CollectionConfig => {
   const staffOnly = jobStaffFieldAccess(tenantScoped)
   const staffWrite = { create: staffOnly, update: staffOnly }
@@ -679,6 +720,26 @@ export const jobsCollection = ({
       access: { ...staffWrite, read: privateRead },
       admin: { description: 'Set at checkout.', position: 'sidebar' },
     },
+    ...(withOrder
+      ? [
+          {
+            name: 'order',
+            type: 'relationship',
+            relationTo: slugs.orders as CollectionSlug,
+            access: { ...staffWrite, read: privateRead },
+            index: true,
+            admin: { description: 'The order paying for the current listing. Set at checkout.', position: 'sidebar' },
+          } as Field,
+        ]
+      : []),
+    // Payload stamps it on create; listed here so the organisation and staff can see who posted
+    // the job, and nobody else can (the default field is readable by anyone who reads the job).
+    createCreatedByField({
+      overrides: {
+        access: { read: privateRead },
+        admin: { hidden: false, position: 'sidebar', readOnly: true },
+      },
+    }),
     jobPlacementsField({ addOnRead: privateRead, addOnsSlug: slugs.addOns }),
     {
       name: 'views',
@@ -721,6 +782,7 @@ export const jobsCollection = ({
         jobOrganisationRules(tenantScoped, slugs),
         jobStatusRules(tenantScoped, slugs.plans),
         jobPlanAllowsJobWith(slugs),
+        jobOrderMatchesOrganisation(slugs),
         protectJobViews,
       ],
       beforeValidate: [

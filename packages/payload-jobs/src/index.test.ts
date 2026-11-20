@@ -99,6 +99,10 @@ describe('payloadJobs', () => {
 
     expect(on.collections?.map((collection) => collection.slug)).toContain('coupons')
     expect(off.collections?.map((collection) => collection.slug)).not.toContain('coupons')
+    // Orders stay on, without a relationship to the missing collection (PJ-23).
+    const orders = off.collections?.find((collection) => collection.slug === 'orders')
+    expect(orders).toBeDefined()
+    expect(relationTargets(orders!)).not.toContain('coupons')
   })
 
   it('adds jobs with placements, and the daily task that expires them, keeping host tasks', async () => {
@@ -188,8 +192,8 @@ describe('collection slug overrides', () => {
       expect(targets).not.toContain(slug)
     }
     expect(targets).toEqual(
-      // Orders relate to organisations, plans, add-ons, coupons, jobs and users.
-      new Set(['job-locations', 'employers', 'categories', 'employment-types', 'salaries', 'packages', 'extras', 'vouchers', 'vacancies', 'users']),
+      // Orders relate to organisations, plans, add-ons, coupons, jobs and users; jobs to orders.
+      new Set(['job-locations', 'employers', 'categories', 'employment-types', 'salaries', 'packages', 'extras', 'vouchers', 'vacancies', 'users', 'purchases']),
     )
 
     const users = result.collections?.find((collection) => collection.slug === 'users')

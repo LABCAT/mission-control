@@ -479,12 +479,14 @@ export const payloadJobs =
       richTextDescription: Boolean(config.editor),
       slugs,
       tenantScoped: tenancy === 'multi',
+      withOrder: true,
     }), 'jobs', 'job', slugs.orders)
 
     // Orders go last, after coupons, so the existing compound index names keep their numbers.
     const paymentProviders = resolvePaymentProviders(options.orders?.paymentProviders ?? [])
     const orders = orderCollection({
       access: collectionOptions.orders?.access,
+      couponsEnabled: features.coupons,
       isOrganisationOwner: options.orders?.isOrganisationOwner,
       paymentProviders,
       slugs,

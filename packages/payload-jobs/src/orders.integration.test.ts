@@ -45,7 +45,7 @@ const collections = (): CollectionConfig[] => [
     isOrganisationOwner: ({ user }) => owners.has(String(user.id)),
     paymentProviders: resolvePaymentProviders([{ key: 'stripe', label: 'Card' }]),
   }),
-  withGuard(jobsCollection({ richTextDescription: false }), 'jobs', 'job'),
+  withGuard(jobsCollection({ richTextDescription: false, withOrder: true }), 'jobs', 'job'),
   couponCollection(),
   withGuard(organisationsCollection({ mediaSlug: null }), 'organisation', 'organisation'),
   planCollection(),
@@ -346,6 +346,106 @@ describe('orders integration', () => {
       )
       await expect(asUser(users.ownerBrew, { status: 'pending' }, bankRequest.id)).rejects.toThrow()
       expect((await read(bankRequest.id)).status).toBe('waiting_for_purchase')
+    })
+  })
+
+  describe('payment date @S-144', () => {
+    it('stamps the payment date itself and ignores one a site manager sends', async () => {
+      const order = await createOrder(invoiceOrder(harness.tenantA.id, orgs.brewA.id, { status: 'invoiced' }))
+      await harness.payload.update({
+        collection: ORDERS_SLUG,
+        data: { paidAt: '2020-01-01T00:00:00.000Z', status: 'paid' },
+        id: order.id,
+        overrideAccess: false,
+        user: harness.tenantAdminA as never,
+      })
+      const paid = await read(order.id)
+      expect(new Date(paid.paidAt).getFullYear()).toBeGreaterThan(2020)
+
+      // A later attempt to move it is dropped by field access, and the history is unchanged.
+      await harness.payload.update({
+        collection: ORDERS_SLUG,
+        data: { paidAt: '2020-01-01T00:00:00.000Z' },
+        id: order.id,
+        overrideAccess: false,
+        user: harness.tenantAdminA as never,
+      })
+      const after = await read(order.id)
+      expect(after.paidAt).toBe(paid.paidAt)
+      expect(after.log).toHaveLength(paid.log.length)
+    })
+
+    it('takes the payment date from system code, and records a correction', async () => {
+      const order = await createOrder(invoiceOrder(harness.tenantA.id, orgs.brewA.id, { status: 'invoiced' }))
+      await harness.payload.update({
+        collection: ORDERS_SLUG,
+        data: { paidAt: '2026-11-19T00:00:00.000Z', status: 'paid' },
+        id: order.id,
+        ...system,
+      })
+      expect((await read(order.id)).paidAt).toBe('2026-11-19T00:00:00.000Z')
+
+      await harness.payload.update({
+        collection: ORDERS_SLUG,
+        data: { paidAt: '2026-11-18T00:00:00.000Z' },
+        id: order.id,
+        ...system,
+      })
+      const corrected = await read(order.id)
+      expect(corrected.log.at(-1)).toMatchObject({
+        event: 'paid-at',
+        from: '2026-11-19T00:00:00.000Z',
+        to: '2026-11-18T00:00:00.000Z',
+      })
+      await expect(
+        harness.payload.update({ collection: ORDERS_SLUG, data: { paidAt: null }, id: order.id, ...system }),
+      ).rejects.toSatisfy(failsWith(/keeps its payment date/))
+    })
+
+    it('refuses a payment date on an order that is not paid', async () => {
+      await expect(
+        createOrder(invoiceOrder(harness.tenantA.id, orgs.brewA.id, { paidAt: '2026-11-19T00:00:00.000Z' })),
+      ).rejects.toSatisfy(failsWith(/Only a paid order/))
+    })
+  })
+
+  describe('job order and author @S-144', () => {
+    it('links a job only to its own organisation’s order, and shows the order and author to its members', async () => {
+      const brewOrder = await createOrder(invoiceOrder(harness.tenantA.id, orgs.brewA.id))
+      const bankOrder = await createOrder(invoiceOrder(harness.tenantA.id, orgs.bankA.id))
+      const job = (await harness.payload.create({
+        collection: 'jobs',
+        data: { organisation: orgs.brewA.id, tenant: harness.tenantA.id, title: 'Cellar hand' },
+        overrideAccess: false,
+        user: users.memberBrew as never,
+      })) as Doc
+
+      await expect(
+        harness.payload.update({ collection: 'jobs', data: { order: bankOrder.id }, id: job.id, ...system }),
+      ).rejects.toSatisfy(failsWith(/order of this job’s organisation/))
+      await harness.payload.update({ collection: 'jobs', data: { order: brewOrder.id }, id: job.id, ...system })
+
+      const asMember = (await harness.payload.findByID({
+        collection: 'jobs',
+        depth: 0,
+        id: job.id,
+        overrideAccess: false,
+        user: users.memberBrew as never,
+      })) as Doc
+      expect(Number(asMember.order)).toBe(brewOrder.id)
+      expect(asMember.createdBy).toMatchObject({ relationTo: 'users', value: users.memberBrew.id })
+
+      // A member can't point the job at an order: it's set at checkout.
+      await harness.payload.update({
+        collection: 'jobs',
+        data: { order: null },
+        id: job.id,
+        overrideAccess: false,
+        user: users.memberBrew as never,
+      })
+      expect(Number((await harness.payload.findByID({ collection: 'jobs', id: job.id, depth: 0, ...system })).order)).toBe(
+        brewOrder.id,
+      )
     })
   })
 

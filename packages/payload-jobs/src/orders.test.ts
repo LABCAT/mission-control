@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   canonicalOrderValue,
+  orderCollection,
   ORDER_STATUSES,
   ORDER_TRANSITIONS,
   orderFieldsFromQuote,
@@ -212,5 +213,16 @@ describe('payment providers @S-144', () => {
     expect(isRegisteredPaymentProvider('invoice', providers)).toBe(true)
     expect(isRegisteredPaymentProvider('paypal', providers)).toBe(false)
     expect(isRegisteredPaymentProvider(undefined, providers)).toBe(false)
+  })
+})
+
+const fieldsJSON = (couponsEnabled: boolean) => JSON.stringify(orderCollection({ couponsEnabled }).fields)
+
+describe('orders without coupons @S-144', () => {
+  it('leaves out the coupon relationship when coupons are off, keeping the applied code', () => {
+    const names = fieldsJSON
+    expect(names(true)).toContain('"name":"coupon"')
+    expect(names(false)).not.toContain('"name":"coupon"')
+    expect(names(false)).toContain('"name":"couponCode"')
   })
 })
