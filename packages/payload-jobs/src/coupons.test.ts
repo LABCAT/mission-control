@@ -527,6 +527,35 @@ describe('coupons in Postgres @S-037', () => {
     ).rejects.toThrow(/not allowed/i)
   })
 
+  it('refuses an update that clears the tenant, for a tenant admin and a super admin, and keeps an omitted one', async () => {
+    const made = (await harness.payload.create({
+      collection: COUPONS_SLUG,
+      data: { amount: 500, code: 'KEEPTENANT', discountType: 'flat', tenant: harness.tenantA.id } as never,
+      overrideAccess: true,
+    })) as unknown as { id: number }
+
+    for (const user of [harness.tenantAdminA, harness.superAdmin]) {
+      await expect(
+        harness.payload.update({
+          collection: COUPONS_SLUG,
+          data: { tenant: null } as never,
+          id: made.id,
+          overrideAccess: false,
+          user: user as never,
+        }),
+      ).rejects.toThrow()
+    }
+
+    const after = (await harness.payload.update({
+      collection: COUPONS_SLUG,
+      data: { amount: 600 } as never,
+      id: made.id,
+      overrideAccess: false,
+      user: harness.tenantAdminA as never,
+    })) as unknown as { tenant: number | { id: number } }
+    expect(typeof after.tenant === 'object' ? after.tenant.id : after.tenant).toBe(harness.tenantA.id)
+  })
+
   it('keeps a tenant admin from resetting useCount over the API', async () => {
     const coupon = await harness.payload.create({
       collection: COUPONS_SLUG,

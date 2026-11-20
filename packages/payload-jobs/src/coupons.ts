@@ -141,6 +141,22 @@ export const uniqueCodePerTenant =
   }
 
 /**
+ * A multi-tenant coupon always keeps a tenant. Access cannot stop an update that sets `tenant`
+ * to null (its `where` only scopes which coupon is touched), so this guard refuses it for every
+ * role, super admins included. An omitted tenant keeps the stored value.
+ */
+export const requireCouponTenant: CollectionBeforeChangeHook = ({ data, operation, originalDoc }) => {
+  const stored = originalDoc?.tenant
+  const resulting = data && 'tenant' in data ? data.tenant : operation === 'update' ? stored : undefined
+
+  if (resulting === null || resulting === undefined || resulting === '') {
+    throw new ValidationError({ errors: [{ message: 'A coupon must belong to a tenant', path: 'tenant' }] })
+  }
+
+  return data
+}
+
+/**
  * Set this on `req.context` to let trusted order code change `useCount`. Without it the count is
  * pinned, because `admin.readOnly` only hides a field in the admin UI: a tenant admin could
  * otherwise lower the count through REST or GraphQL and make an exhausted coupon usable again.
@@ -296,7 +312,7 @@ export const couponCollection = ({
     },
   ],
   hooks: {
-    beforeChange: [protectCouponUseCount],
+    beforeChange: [...(tenantScoped ? [requireCouponTenant] : []), protectCouponUseCount],
     beforeValidate: [normalizeCouponCodeHook, uniqueCodePerTenant(COUPONS_SLUG)],
   },
   // The unique index spans the tenant, so the same code may exist on two tenants.
