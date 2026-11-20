@@ -108,7 +108,7 @@ export default buildConfig({
   storage: [
     r2Storage({
       bucket: workerEnv?.MEDIA as R2Bucket,
-      collections: { documents: true, media: true },
+      collections: { 'application-files': true, documents: true, media: true },
       enabled: Boolean(workerEnv?.MEDIA),
     }),
   ],

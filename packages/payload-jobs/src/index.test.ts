@@ -27,6 +27,8 @@ describe('payloadJobs', () => {
       'plans',
       'add-ons',
       'jobs',
+      'application-files',
+      'applications',
     ])
     expect(result.collections?.[0]?.fields.map((f) => ('name' in f ? f.name : null))).toContain(
       'legacyPasswordHash',

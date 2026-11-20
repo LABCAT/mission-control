@@ -14,6 +14,12 @@ import {
 } from './collections/organisations'
 import { withLegacyPasswords } from './legacy-password'
 import { addOnCollection, ADD_ONS_SLUG } from './add-ons'
+import {
+  APPLICATION_FILES_SLUG,
+  APPLICATIONS_SLUG,
+  applicationFilesCollection,
+  applicationsCollection,
+} from './collections/applications'
 import { jobsCollection, JOBS_SLUG } from './collections/jobs'
 import { expireJobPlacementsTask, PLACEMENTS_FIELD } from './placements'
 import { planCollection, PLANS_SLUG, withPlanRestrictionGuards } from './plans'
@@ -30,6 +36,7 @@ export * from './legacy-password'
 export * from './money'
 export * from './add-ons'
 export * from './collections/jobs'
+export * from './collections/applications'
 export * from './job-status'
 export * from './add-ons-seed'
 export * from './catalog'
@@ -60,10 +67,12 @@ export const PAYLOAD_JOBS_TENANT_COLLECTIONS = [
   PLANS_SLUG,
   ALERT_SUBSCRIPTIONS_SLUG,
   JOBS_SLUG,
+  APPLICATIONS_SLUG,
+  APPLICATION_FILES_SLUG,
 ] as const
 
 export type PayloadJobsFeatures = {
-  /** Job applications. The collection is added by a later task. Defaults to true. */
+  /** Applications and their private CV files (PJ-25). Defaults to true. */
   applications?: boolean
   /** Email-only job alert subscriptions (PJ-26). Defaults to true. */
   alerts?: boolean
@@ -295,7 +304,25 @@ export const payloadJobs =
       ...config,
       // Plans before add-ons: Payload numbers compound index names in collection order, and
       // plans' existing `tenant_key_idx` must keep its name.
-      collections: [...(config.collections ?? []), ...taxonomies, plans, addOns, jobs],
+      // Applications and their files go after jobs: they relate to it, and the compound
+      // index names of the collections before them must not shift.
+      collections: [
+        ...(config.collections ?? []),
+        ...taxonomies,
+        plans,
+        addOns,
+        jobs,
+        ...(features.applications
+          ? [
+              applicationFilesCollection({ applicantsSlug: usersSlug, tenantScoped: tenancy === 'multi' }),
+              applicationsCollection({
+                applicantsSlug: usersSlug,
+                jobsSlug: options.jobsSlug ?? JOBS_SLUG,
+                tenantScoped: tenancy === 'multi',
+              }),
+            ]
+          : []),
+      ],
       jobs: jobsConfig,
       custom: {
         ...config.custom,

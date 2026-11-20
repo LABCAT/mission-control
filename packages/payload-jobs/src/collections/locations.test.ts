@@ -36,6 +36,8 @@ describe('locations collection @S-120', () => {
       'plans',
       'add-ons',
       'jobs',
+      'application-files',
+      'applications',
     ])
     expect(Locations.slug).toBe('locations')
     expect(Locations.versions).toBe(false)
