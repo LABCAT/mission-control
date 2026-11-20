@@ -222,6 +222,7 @@ describe('the users and organisations importers @S-130', () => {
     const resort = store.organisations!.find((doc) => doc.legacyId === 2)!
     expect(resort).toMatchObject({
       about: 'Beach & bungalows',
+      approved: true,
       billingEmail: 'billing@example.com',
       canPayByInvoice: true,
       legacyId: 2,
@@ -239,14 +240,15 @@ describe('the users and organisations importers @S-130', () => {
     })
 
     const charters = store.organisations!.find((doc) => doc.legacyId === 6)!
-    expect(charters).toMatchObject({ canPayByInvoice: false, pageEnabled: false, size: '1-10' })
+    expect(charters).toMatchObject({ approved: false, canPayByInvoice: false, pageEnabled: false, size: '1-10' })
     expect(charters).not.toHaveProperty('billingEmail')
     expect(store.organisations!.find((doc) => doc.legacyId === 13)?.type).toBe('recruiter')
   })
 
   it('makes pages private when the tenant asks not to keep legacy visibility', async () => {
     const { store } = await run(false, createFakePayload(), { keepPageVisibility: false })
-    expect(store.organisations!.find((doc) => doc.legacyId === 2)?.pageEnabled).toBe(false)
+    const resort = store.organisations!.find((doc) => doc.legacyId === 2)
+    expect(resort).toMatchObject({ approved: false, pageEnabled: false })
   })
 
   it('creates users with the owner first, a role per tenant, and the legacy hash', async () => {

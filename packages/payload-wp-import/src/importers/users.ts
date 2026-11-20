@@ -380,13 +380,17 @@ export const mapOrganisationGroup = (
   // A flag any account of the merged organisation had keeps it (the legacy site honoured each).
   const any = (key: 'canPayByInvoice' | 'listingRequested' | 'pageEnabled') => fields.some((f) => f[key])
 
+  const pageEnabled = (options.keepPageVisibility ?? true) ? any('pageEnabled') : false
   const type = group.members.some((m) => m.roles.includes('recruiter')) ? 'recruiter' : pick('type')
   const data: Record<string, unknown> = {
     canPayByInvoice: any('canPayByInvoice'),
     listingRequested: any('listingRequested'),
     name: group.name,
     // Pages are private by default; an organisation that was public stays public (a setting).
-    pageEnabled: (options.keepPageVisibility ?? true) ? any('pageEnabled') : false,
+    pageEnabled,
+    // The collection shows a page only when it is both approved and enabled, so a page that was
+    // public on the legacy site is approved too. A tenant that resets visibility imports neither.
+    approved: pageEnabled,
     slug: group.slug,
   }
   for (const [key, value] of Object.entries({
