@@ -16,6 +16,7 @@ import {
   isSuperAdmin,
   type MissionControlUser,
 } from './access'
+import { isMinorUnits, percentOf } from './money'
 
 /**
  * Discount codes, replacing the WordPress `appthemes-coupons` plugin (see AUDIT.md).
@@ -176,14 +177,14 @@ export const validateCouponAmount = (
 
   if (discountType === 'percent') {
     if (value === null || value === undefined) return 'Percentage is required'
-    if (!Number.isInteger(value) || value < 1 || value > 100) {
+    if (!Number.isSafeInteger(value) || value < 1 || value > 100) {
       return 'Use a whole percentage between 1 and 100'
     }
     return true
   }
 
   if (value === null || value === undefined) return 'Discount amount is required'
-  if (!Number.isInteger(value) || value < 1) {
+  if (!Number.isSafeInteger(value) || value < 1) {
     return 'Use a whole number of minor units, 1 or more'
   }
   return true
@@ -191,12 +192,12 @@ export const validateCouponAmount = (
 
 /** The count starts at 0 and only order processing changes it, so it always holds a number. */
 export const validateCouponUseCount = (value: null | number | undefined): string | true =>
-  value === undefined || (typeof value === 'number' && Number.isInteger(value) && value >= 0)
+  value === undefined || (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0)
     ? true
     : 'Use a whole number, 0 or more'
 
 export const validateCouponMaxUses = (value: null | number | undefined): string | true =>
-  value === null || value === undefined || (Number.isInteger(value) && value >= 1)
+  value === null || value === undefined || (Number.isSafeInteger(value) && value >= 1)
     ? true
     : 'Use a whole number, 1 or more, or leave it empty for unlimited'
 
@@ -340,7 +341,7 @@ export type ApplyCouponArgs = {
  * negative. An inactive coupon, or one that has reached `maxUses`, gives no discount.
  */
 export const applyCoupon = ({ coupon, subtotal }: ApplyCouponArgs): CouponApplication => {
-  if (!Number.isInteger(subtotal) || subtotal < 0) {
+  if (!isMinorUnits(subtotal)) {
     throw new RangeError('subtotal must be a whole number of minor units, 0 or more')
   }
 
@@ -351,14 +352,20 @@ export const applyCoupon = ({ coupon, subtotal }: ApplyCouponArgs): CouponApplic
   if (coupon.active === false) return { ...unchanged, reason: 'inactive' }
 
   const useCount = coupon.useCount ?? 0
-  if (coupon.maxUses !== null && coupon.maxUses !== undefined && useCount >= coupon.maxUses) {
+  const maxUses = coupon.maxUses ?? null
+  // Counts are whole numbers too: a fractional or unsafe count is bad data, not "unlimited".
+  if (!Number.isSafeInteger(useCount) || useCount < 0) return { ...unchanged, reason: 'invalid-amount' }
+  if (maxUses !== null && (!Number.isSafeInteger(maxUses) || maxUses < 1)) {
+    return { ...unchanged, reason: 'invalid-amount' }
+  }
+  if (maxUses !== null && useCount >= maxUses) {
     return { ...unchanged, reason: 'used-up' }
   }
 
   // The collection validator requires 1 or more, so a zero-value coupon is not valid here
   // either: data that skips field validation would otherwise read as a working discount.
   const amount = coupon.amount ?? null
-  if (amount === null || !Number.isInteger(amount) || amount < 1) {
+  if (amount === null || !Number.isSafeInteger(amount) || amount < 1) {
     return { ...unchanged, reason: 'invalid-amount' }
   }
 
@@ -370,7 +377,8 @@ export const applyCoupon = ({ coupon, subtotal }: ApplyCouponArgs): CouponApplic
       break
     case 'percent':
       if (amount > 100) return { ...unchanged, reason: 'invalid-amount' }
-      discount = Math.round((subtotal * amount) / 100)
+      // The one shared rounding rule (exact, halves up), so a coupon never disagrees with tax.
+      discount = percentOf(subtotal, amount)
       break
     default:
       return { ...unchanged, reason: 'unsupported-discount-type' }

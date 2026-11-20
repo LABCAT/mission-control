@@ -32,7 +32,7 @@ const userWith = (
 const argsFor = (user: MissionControlUser | null, data?: Record<string, unknown>) =>
   ({ data, req: { user } }) as unknown as AccessArgs
 
-describe('coupon collection config', () => {
+describe('coupon collection config @S-037', () => {
   const collection = couponCollection()
 
   it('defines the coupon fields the legacy plugin had', () => {
@@ -90,7 +90,7 @@ describe('coupon collection config', () => {
   })
 })
 
-describe('coupon code handling', () => {
+describe('coupon code handling @S-037', () => {
   it('normalises a code to uppercase and trims it', () => {
     expect(normalizeCouponCode(' linkps ')).toBe('LINKPS')
     expect(normalizeCouponCode('linkps')).toBe('LINKPS')
@@ -112,7 +112,7 @@ const sibling = (discountType: 'flat' | 'percent'): { siblingData: Record<string
   siblingData: { discountType },
 })
 
-describe('coupon field validation', () => {
+describe('coupon field validation @S-037', () => {
   it('requires a positive flat amount in minor units', () => {
     expect(validateCouponAmount(500, sibling('flat'))).toBe(true)
     expect(validateCouponAmount(0, sibling('flat'))).toMatch(/1 or more/)
@@ -236,7 +236,7 @@ describe('coupon access control', () => {
 
 const guard = (args: Record<string, unknown>) => protectCouponUseCount(args as never)
 
-describe('useCount guard', () => {
+describe('useCount guard @S-037', () => {
   it('starts a new coupon at zero however the request asks for more', () => {
     expect(guard({ data: { code: 'LINKPS', useCount: 0 }, operation: 'create' })).toEqual({
       code: 'LINKPS',
@@ -290,7 +290,28 @@ describe('useCount guard', () => {
   })
 })
 
-describe('applyCoupon', () => {
+describe('applyCoupon @S-037', () => {
+  it('rejects a subtotal that is not exact in a JS number', () => {
+    expect(() => applyCoupon({ subtotal: 1e20 })).toThrow(RangeError)
+    expect(() => applyCoupon({ subtotal: Number.MAX_SAFE_INTEGER + 2 })).toThrow(RangeError)
+  })
+
+  it('refuses unsafe amounts and counts instead of returning imprecise money', () => {
+    const base = { active: true, discountType: 'flat' as const }
+
+    expect(applyCoupon({ coupon: { ...base, amount: 1e20 }, subtotal: 5000 }).reason).toBe('invalid-amount')
+    expect(applyCoupon({ coupon: { ...base, amount: 100, maxUses: 1.5 }, subtotal: 5000 }).reason).toBe('invalid-amount')
+    expect(applyCoupon({ coupon: { ...base, amount: 100, useCount: -1 }, subtotal: 5000 }).reason).toBe('invalid-amount')
+  })
+
+  it('takes a percentage with the shared exact rounding, even on large safe subtotals', () => {
+    const subtotal = 9_007_199_254_740_991 // Number.MAX_SAFE_INTEGER
+    const result = applyCoupon({ coupon: { active: true, amount: 50, discountType: 'percent' }, subtotal })
+
+    expect(result.discount).toBe(4_503_599_627_370_496) // exactly half, halves rounded up
+    expect(result.total).toBe(subtotal - result.discount)
+  })
+
   it('returns the subtotal untouched when no coupon is given', () => {
     expect(applyCoupon({ subtotal: 5000 })).toEqual({
       applied: false,
@@ -402,7 +423,7 @@ describe('applyCoupon', () => {
   })
 })
 
-describe('coupons in Postgres', () => {
+describe('coupons in Postgres @S-037', () => {
   let harness: TestHarness
   let employer: { id: number | string }
 
