@@ -229,3 +229,16 @@ JOIN (SELECT 'jr_ad_stats_all' name UNION ALL SELECT 'apply_reg_users_only' UNIO
       UNION ALL SELECT 'plan_type' UNION ALL SELECT 'include_nowhere' UNION ALL SELECT 'jr_submit_how_to_apply_display'
       UNION ALL SELECT 'jr_nu_admin_email' UNION ALL SELECT 'jr_new_ad_email' UNION ALL SELECT 'jr_nu_custom_email') k
 WHERE o.option_name='jr_options';
+
+-- 57. Are resumes actually viewed? Resume page views are recorded only for viewers who can open them
+--     (employers/admins; the author's own views are excluded). Counts only, no personal data.
+SELECT YEAR(p.post_date) created, p.post_status, COUNT(*) resumes,
+  SUM(COALESCE(t.postcount,0) > 0) viewed_at_least_once,
+  SUM(COALESCE(t.postcount,0)) total_views,
+  MAX(COALESCE(t.postcount,0)) max_views
+FROM wp_posts p LEFT JOIN wp_jr_counter_total t ON t.postnum = p.ID
+WHERE p.post_type='resume' GROUP BY created, p.post_status ORDER BY created;
+-- 58. Recent daily resume views (if the daily table keeps history): views per month
+SELECT DATE_FORMAT(d.time,'%Y-%m') m, SUM(d.postcount) views, COUNT(DISTINCT d.postnum) resumes
+FROM wp_jr_counter_daily d JOIN wp_posts p ON p.ID=d.postnum AND p.post_type='resume'
+GROUP BY m ORDER BY m DESC LIMIT 24;
