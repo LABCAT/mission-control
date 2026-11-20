@@ -7,6 +7,7 @@ import {
   type CollectionConfig,
   type CollectionSlug,
   type Field,
+  type PayloadRequest,
   type Where,
 } from 'payload'
 
@@ -64,6 +65,49 @@ const idOf = (value: unknown): null | number | string => {
 
 const hasKey = (data: unknown, key: string): boolean =>
   typeof data === 'object' && data !== null && Object.prototype.hasOwnProperty.call(data, key)
+
+/**
+ * True when walking `parent` links up from `startID` reaches `targetID`. Saving a page under one
+ * of its own descendants would turn the tree into a loop, so breadcrumb and URL builders that
+ * follow parents would never terminate. The `seen` set also stops the walk if the data is
+ * somehow already cyclic.
+ */
+const parentChainReaches = async ({
+  collectionSlug,
+  req,
+  startID,
+  targetID,
+}: {
+  collectionSlug: CollectionSlug
+  req: PayloadRequest
+  startID: number | string
+  targetID: number | string
+}): Promise<boolean> => {
+  const seen = new Set<string>()
+  let current: null | number | string = startID
+
+  while (current !== null && !seen.has(String(current))) {
+    seen.add(String(current))
+
+    const doc = (await req.payload
+      .findByID({
+        collection: collectionSlug,
+        depth: 0,
+        id: current as never,
+        overrideAccess: true,
+        req,
+      })
+      .catch(() => null)) as PageData | null
+
+    if (!doc) return false
+
+    const next = idOf(doc.parent)
+    if (next !== null && String(next) === String(targetID)) return true
+    current = next
+  }
+
+  return false
+}
 
 type PageData = {
   id?: null | number | string
@@ -210,6 +254,18 @@ export const pageUrlRules =
     if (parentID !== null) {
       if (selfID !== undefined && selfID !== null && String(parentID) === String(selfID)) {
         errors.push({ message: 'A page cannot be its own parent', path: 'parent' })
+      } else if (
+        selfID !== undefined &&
+        selfID !== null &&
+        // The parent must not sit below this page, or the pair would form a loop.
+        (await parentChainReaches({
+          collectionSlug,
+          req,
+          startID: parentID,
+          targetID: selfID,
+        }))
+      ) {
+        errors.push({ message: 'A page cannot be its own ancestor', path: 'parent' })
       } else {
         const parent = (await req.payload
           .findByID({

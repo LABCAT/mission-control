@@ -258,6 +258,49 @@ describe('system pages', () => {
       expect(fieldMessages(error)).toMatch(/cannot be its own parent/)
     })
 
+    it('refuses a two-page parent cycle', async () => {
+      const first = await createPage({ slug: 'cycle-a', title: 'Cycle A' }, harness.tenantA.id)
+      const second = await createPage(
+        { parent: first.id, slug: 'cycle-b', title: 'Cycle B' },
+        harness.tenantA.id,
+      )
+
+      // B already sits under A, so making A a child of B would close the loop.
+      const error = await harness.payload
+        .update({
+          collection: 'pages',
+          data: { parent: second.id } as never,
+          id: first.id,
+          user: harness.tenantAdminA as never,
+        })
+        .catch((caught: unknown) => caught)
+
+      expect(fieldMessages(error)).toMatch(/cannot be its own ancestor/)
+    })
+
+    it('refuses a cycle through a longer chain of ancestors', async () => {
+      const top = await createPage({ slug: 'chain-top', title: 'Chain top' }, harness.tenantA.id)
+      const middle = await createPage(
+        { parent: top.id, slug: 'chain-middle', title: 'Chain middle' },
+        harness.tenantA.id,
+      )
+      const bottom = await createPage(
+        { parent: middle.id, slug: 'chain-bottom', title: 'Chain bottom' },
+        harness.tenantA.id,
+      )
+
+      const error = await harness.payload
+        .update({
+          collection: 'pages',
+          data: { parent: bottom.id } as never,
+          id: top.id,
+          user: harness.tenantAdminA as never,
+        })
+        .catch((caught: unknown) => caught)
+
+      expect(fieldMessages(error)).toMatch(/cannot be its own ancestor/)
+    })
+
     it('blocks moving a page with children under organisations', async () => {
       const organisations = (await pagesOf(harness.tenantA.id)).find(
         (page) => page.role === 'organisations',
