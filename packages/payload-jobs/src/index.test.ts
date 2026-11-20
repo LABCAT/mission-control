@@ -181,6 +181,13 @@ describe('collection slug overrides', () => {
     ])
   })
 
+  it('honours the legacy jobsSlug option in the tenant-collection helper', () => {
+    const slugs = jobsTenantCollections({ jobsSlug: 'vacancies' })
+
+    expect(slugs).toContain('vacancies')
+    expect(slugs).not.toContain('jobs')
+  })
+
   it('merges per-collection access overrides over the operation defaults', async () => {
     const defaults = await payloadJobs()(baseConfig)
     const result = await payloadJobs({

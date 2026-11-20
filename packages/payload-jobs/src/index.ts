@@ -73,9 +73,20 @@ export const payloadJobsTenantCollections = (
   slugs.coupons,
 ]
 
+/**
+ * The one place the plugin options become slugs, shared by the plugin and the helpers.
+ * `jobsSlug` predates the per-collection options and still wins for the jobs collection.
+ */
+const resolveSlugsFromOptions = (options: PayloadJobsOptions): PayloadJobsCollectionSlugs => {
+  const slugs = resolvePayloadJobsSlugs(options.collections ?? {})
+  if (options.jobsSlug !== undefined) slugs.jobs = options.jobsSlug
+
+  return slugs
+}
+
 /** `jobsTenantCollections` alias, named for the multi-tenant plugin option it fills. */
 export const jobsTenantCollections = (options: PayloadJobsOptions = {}): string[] =>
-  payloadJobsTenantCollections(resolvePayloadJobsSlugs(options.collections))
+  payloadJobsTenantCollections(resolveSlugsFromOptions(options))
 
 /** Tenant collections under the default slugs. */
 export const PAYLOAD_JOBS_TENANT_COLLECTIONS = payloadJobsTenantCollections() as string[]
@@ -179,9 +190,7 @@ export const payloadJobs =
     const tenantsSlug = options.tenantsSlug ?? 'tenants'
     const features = resolvedFeatures(options)
     const collectionOptions = options.collections ?? {}
-    const slugs = resolvePayloadJobsSlugs(collectionOptions)
-    // `jobsSlug` predates the per-collection options; keep it working.
-    if (options.jobsSlug !== undefined) slugs.jobs = options.jobsSlug
+    const slugs = resolveSlugsFromOptions(options)
 
     let config = incoming
 

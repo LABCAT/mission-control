@@ -1,6 +1,19 @@
 import { MigrateUpArgs, MigrateDownArgs, sql } from '@payloadcms/db-postgres'
 
 export async function up({ db, payload, req }: MigrateUpArgs): Promise<void> {
+  // mission-control: this drops whole tables, which is a data-deletion decision. The legacy
+  // site has no job tag or area-of-focus terms (STATUS, 19 Nov), so nothing should be lost. If
+  // any row exists the migration stops instead of deleting it: export or move the rows first.
+  for (const table of ['job_tags', 'areas_of_focus']) {
+    const found = await db.execute(sql.raw(`SELECT count(*)::int AS count FROM "${table}"`))
+    if (found.rows[0]?.count) {
+      throw new Error(
+        `Refusing to drop "${table}": it holds ${found.rows[0].count} row(s). ` +
+          'Export or remove them deliberately, then run the migration again.',
+      )
+    }
+  }
+
   await db.execute(sql`
    ALTER TABLE "job_tags" DISABLE ROW LEVEL SECURITY;
   ALTER TABLE "job_tags_locales" DISABLE ROW LEVEL SECURITY;
