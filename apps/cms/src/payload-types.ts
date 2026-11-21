@@ -1532,8 +1532,12 @@ export interface Order {
   externalRefs?:
     | {
         provider: string;
-        id: string | null;
+        /**
+         * The record’s id in that system, e.g. the Xero InvoiceID.
+         */
+        externalId: string;
         url?: string | null;
+        id?: string | null;
       }[]
     | null;
   /**
@@ -2717,8 +2721,9 @@ export interface OrdersSelect<T extends boolean = true> {
     | T
     | {
         provider?: T;
-        id?: T;
+        externalId?: T;
         url?: T;
+        id?: T;
       };
   jobs?: T;
   log?:

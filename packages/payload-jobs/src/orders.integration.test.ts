@@ -557,7 +557,11 @@ describe('orders integration', () => {
 
     it('records external references in the history and never drops one', async () => {
       const order = await createOrder(invoiceOrder(harness.tenantA.id, orgs.brewA.id))
-      const xero = { id: '0b0b5b8e-3a8b-4bd1-9f43-1f3f2b6c9a10', provider: 'xero', url: 'https://in.xero.com/abc' }
+      const xero = {
+        externalId: '0b0b5b8e-3a8b-4bd1-9f43-1f3f2b6c9a10',
+        provider: 'xero',
+        url: 'https://in.xero.com/abc',
+      }
       await harness.payload.update({
         collection: ORDERS_SLUG,
         data: { externalRefs: [xero], status: 'invoiced' },
@@ -565,11 +569,20 @@ describe('orders integration', () => {
         ...system,
       })
       const stored = await read(order.id)
-      expect(stored.externalRefs).toEqual([expect.objectContaining({ id: xero.id, provider: 'xero' })])
+      expect(stored.externalRefs).toEqual([expect.objectContaining({ externalId: xero.externalId, provider: 'xero' })])
       expect(stored.log.map((e: Doc) => e.event)).toEqual(['created', 'status', 'external-ref'])
 
       await expect(
         harness.payload.update({ collection: ORDERS_SLUG, data: { externalRefs: [] }, id: order.id, ...system }),
+      ).rejects.toSatisfy(failsWith(/kept once recorded/))
+      // Changing the provider or id is dropping the recorded reference.
+      await expect(
+        harness.payload.update({
+          collection: ORDERS_SLUG,
+          data: { externalRefs: [{ ...xero, externalId: 'something-else' }] },
+          id: order.id,
+          ...system,
+        }),
       ).rejects.toSatisfy(failsWith(/kept once recorded/))
       await expect(
         harness.payload.update({
@@ -579,6 +592,51 @@ describe('orders integration', () => {
           ...system,
         }),
       ).rejects.toSatisfy(failsWith(/only once/))
+    })
+
+    it('writes a changed link to the history', async () => {
+      const order = await createOrder(invoiceOrder(harness.tenantA.id, orgs.brewA.id))
+      const ref = { externalId: 'INV-1', provider: 'xero', url: 'https://in.xero.com/old' }
+      await harness.payload.update({ collection: ORDERS_SLUG, data: { externalRefs: [ref] }, id: order.id, ...system })
+      await harness.payload.update({
+        collection: ORDERS_SLUG,
+        data: { externalRefs: [{ ...ref, url: 'https://in.xero.com/new' }] },
+        id: order.id,
+        overrideAccess: false,
+        user: harness.tenantAdminA as never,
+      })
+      const stored = await read(order.id)
+      expect(stored.externalRefs[0].url).toBe('https://in.xero.com/new')
+      expect(stored.log.at(-1)).toMatchObject({
+        actor: 'staff',
+        event: 'external-ref',
+        from: 'https://in.xero.com/old',
+        note: 'xero INV-1',
+        to: 'https://in.xero.com/new',
+      })
+    })
+
+    it('keeps the same external id under two providers apart', async () => {
+      const order = await createOrder(invoiceOrder(harness.tenantA.id, orgs.brewA.id))
+      await harness.payload.update({
+        collection: ORDERS_SLUG,
+        data: {
+          externalRefs: [
+            { externalId: 'shared-42', provider: 'xero' },
+            { externalId: 'shared-42', provider: 'stripe' },
+          ],
+        },
+        id: order.id,
+        ...system,
+      })
+      const stored = await read(order.id)
+      expect(stored.externalRefs.map((r: Doc) => `${r.provider}:${r.externalId}`)).toEqual([
+        'xero:shared-42',
+        'stripe:shared-42',
+      ])
+      // Each row keeps its own row id, separate from the external id.
+      expect(new Set(stored.externalRefs.map((r: Doc) => r.id)).size).toBe(2)
+      expect(stored.externalRefs.every((r: Doc) => String(r.id) !== 'shared-42')).toBe(true)
     })
   })
 

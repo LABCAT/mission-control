@@ -602,12 +602,20 @@ const refKey = (value: unknown): null | string => {
   return id === null ? null : String(id)
 }
 
+/**
+ * An external reference's identity: its provider and the record's id there. `externalId`, not
+ * `id`: inside an array, `id` is the row's own primary key in Postgres, so the same id under two
+ * providers would collide.
+ */
 const externalRefKey = (ref: unknown): null | string => {
   if (!isRecord(ref)) return null
   const provider = typeof ref.provider === 'string' ? ref.provider.trim() : ''
-  const id = typeof ref.id === 'string' ? ref.id.trim() : ''
-  return provider && id ? `${provider}\u0000${id}` : null
+  const externalId = typeof ref.externalId === 'string' ? ref.externalId.trim() : ''
+  return provider && externalId ? `${provider}\u0000${externalId}` : null
 }
+
+const externalRefUrl = (ref: unknown): null | string =>
+  isRecord(ref) && typeof ref.url === 'string' && ref.url.trim() ? ref.url.trim() : null
 
 const valueAfterSave = (
   data: Record<string, unknown> | undefined,
@@ -878,10 +886,17 @@ export const orderRules = ({
           break
         }
       }
+      // A reference's provider and id are its identity (changing either is a removal, refused
+      // above); its link may be added or replaced, and that is written to the history too.
+      const storedUrls = new Map(storedRefs.map((ref) => [externalRefKey(ref), externalRefUrl(ref)]))
       for (const ref of Array.isArray(refs) ? refs : []) {
         const key = externalRefKey(ref)
-        if (key !== null && !before.has(key) && isRecord(ref)) {
-          log.push(entry({ event: 'external-ref', note: `${String(ref.provider)} ${String(ref.id)}` }))
+        if (key === null || !isRecord(ref)) continue
+        const label = `${String(ref.provider)} ${String(ref.externalId)}`
+        if (!before.has(key)) {
+          log.push(entry({ event: 'external-ref', note: label, to: externalRefUrl(ref) }))
+        } else if (storedUrls.get(key) !== externalRefUrl(ref)) {
+          log.push(entry({ event: 'external-ref', from: storedUrls.get(key) ?? null, note: label, to: externalRefUrl(ref) }))
         }
       }
 
@@ -1222,7 +1237,13 @@ export const orderCollection = ({
               type: 'row',
               fields: [
                 { name: 'provider', type: 'text', required: true },
-                { name: 'id', type: 'text', required: true },
+                {
+                  // Not `id`: that is the array row's own key (see `externalRefKey`).
+                  name: 'externalId',
+                  type: 'text',
+                  required: true,
+                  admin: { description: 'The record’s id in that system, e.g. the Xero InvoiceID.' },
+                },
                 { name: 'url', type: 'text', validate: validateUrl },
               ],
             },
