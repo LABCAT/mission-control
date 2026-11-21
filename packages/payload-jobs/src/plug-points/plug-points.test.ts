@@ -32,7 +32,7 @@ const newRegistry = (tenancy: 'multi' | 'single' = 'multi'): PayloadJobsRegistry
     tenantsSlug: 'tenants',
   })
 
-describe('registry @S-144', () => {
+describe('registry @S-147', () => {
   it('lists by order, then by registration', () => {
     const registry = createRegistry<{ key: string; order?: number }>('thing')
     registry.register({ key: 'c' })
@@ -86,7 +86,7 @@ describe('registry @S-144', () => {
   })
 })
 
-describe('per-tenant add-on switch @S-144', () => {
+describe('per-tenant add-on switch @S-147', () => {
   it('treats a tenant that never chose as having every add-on on', () => {
     expect(isAddOnEnabled({}, 'alerts')).toBe(true)
     expect(isAddOnEnabled(null, 'alerts')).toBe(true)
@@ -148,7 +148,7 @@ describe('per-tenant add-on switch @S-144', () => {
   })
 })
 
-describe('checkout pipeline @S-144', () => {
+describe('checkout pipeline @S-147', () => {
   const context = (): CheckoutContext =>
     ({ currency: 'VUV', lines: [], tenantID: 1, total: 1000 }) as unknown as CheckoutContext
 
@@ -189,7 +189,7 @@ describe('checkout pipeline @S-144', () => {
   })
 })
 
-describe('invoice sync and lifecycle hooks @S-144', () => {
+describe('invoice sync and lifecycle hooks @S-147', () => {
   const orderEvent = { orderID: 7, payload: {} as never, status: 'paid', tenantID: 1 }
 
   it('tells adapters about orders, and one failing does not stop the next', async () => {
@@ -285,7 +285,7 @@ describe('invoice sync and lifecycle hooks @S-144', () => {
   })
 })
 
-describe('add-on gate @S-144', () => {
+describe('add-on gate @S-147', () => {
   const tenants = [
     { addOns: ['alerts'], id: 1 },
     { addOns: [], id: 2 },

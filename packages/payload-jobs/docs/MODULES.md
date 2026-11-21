@@ -130,7 +130,7 @@ minor units plus `ctx.currency`.
 ### 6. Payment providers and invoice sync
 
 ```ts
-type PaymentProviderDefinition = {
+type PaymentProviderRegistration = {
   key: string; label: string; currencies: '*' | string[]; addOn?: string
   createPayment(req: { amount; currency; orderID; payload; req?; tenantID }):
     { status: 'paid' | 'pending' | 'failed'; reference?: string; redirectURL?: string } | Promise<...>
@@ -143,7 +143,7 @@ type InvoiceSyncAdapter = {
 }
 ```
 
-Core ships `invoice` (pending until marked paid), `free` and `credit` (settle at once). Stripe
+Core ships `invoice` (pending until marked paid), `free` and `credit` (settle at once). The orders collection (PJ-23) still validates an order's provider against `orders.paymentProviders` in the plugin options (key and label only); `PaymentProviderRegistration` is the richer registry entry add-ons use to create payments. Hosts that add a provider to the options should register the same key here. Stripe
 is a later add-on (PJ-106). `emitOrderEvent(registry, 'created' | 'statusChanged', event, tenant)`
 calls the adapters; one failing adapter does not stop the others and its error is returned.
 

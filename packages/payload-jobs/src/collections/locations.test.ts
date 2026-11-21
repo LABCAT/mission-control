@@ -1,8 +1,11 @@
 import type { CollectionConfig, Config } from 'payload'
 import { describe, expect, it } from 'vitest'
 
+import { MENUS_SLUG } from './menus'
+import { PAGES_SLUG } from './pages'
 import { payloadJobs } from '../index'
 import { tenantLocationSettings } from '../location-settings'
+import { slugRulesFor } from '../slug-rules'
 import { TAXONOMY_SLUGS } from '../taxonomies'
 import { locationsCollection, slugifyLocationName } from './locations'
 
@@ -46,11 +49,16 @@ describe('locations collection @S-120', () => {
       'users',
       'locations',
       'organisations',
+      PAGES_SLUG,
+      MENUS_SLUG,
       ...TAXONOMY_SLUGS,
       'plans',
       'add-ons',
       'jobs',
       'coupons',
+      'application-files',
+      'applications',
+      'orders',
     ])
     expect(Locations.slug).toBe('locations')
     expect(Locations.versions).toBe(false)
@@ -156,6 +164,32 @@ const errorMessages = async (collection: CollectionConfig, args: unknown): Promi
 
 const tenantlessCollection = locationsCollection({ requireTenant: true })
 const singleTenantCollection = locationsCollection()
+
+describe('locations shared slug rules in single-tenant mode @S-120', () => {
+  const collection = locationsCollection({
+    slugRules: slugRulesFor({
+      jobCategories: 'job-categories',
+      jobTypes: 'job-types',
+      locations: 'locations',
+    }),
+  })
+
+  it('applies the reserved words and the shared namespace with no tenant', async () => {
+    const validateSlug = validateOf(collection, 'slug')
+
+    expect(await validateSlug('page', { data: {}, id: 1, req: validatingReq() })).toMatch(
+      /reserved/,
+    )
+    expect(
+      await validateSlug('hospitality', {
+        data: {},
+        id: 1,
+        req: validatingReq([{ id: 9, slug: 'hospitality' }]),
+      }),
+    ).toMatch(/already used/)
+    expect(await validateSlug('free-slug', { data: {}, id: 1, req: validatingReq() })).toBe(true)
+  })
+})
 
 describe('locations tenant requirements', () => {
   const scenarios = [

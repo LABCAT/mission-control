@@ -7,7 +7,7 @@ import { payloadJobsReports, REPORTS_ADD_ON_KEY } from './index'
 
 const base = { collections: [{ slug: 'users', fields: [] }], secret: 'x' } as unknown as Config
 
-describe('payload-jobs-reports skeleton @S-144', () => {
+describe('payload-jobs-reports skeleton @S-147', () => {
   it('registers the add-on, adds no collections and no reports yet', async () => {
     const core = await payloadJobs()(base)
     const result = await payloadJobsReports()(core)

@@ -90,7 +90,7 @@ export type PaymentResult = {
   /** Where the buyer continues, for hosted payments. */
   redirectURL?: string
 }
-export type PaymentProviderDefinition = AddOnOwned &
+export type PaymentProviderRegistration = AddOnOwned &
   Keyed & {
     createPayment: (request: PaymentRequest) => PaymentResult | Promise<PaymentResult>
     /** `'*'` accepts every currency. */

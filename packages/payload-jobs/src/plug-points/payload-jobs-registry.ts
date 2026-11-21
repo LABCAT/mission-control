@@ -12,7 +12,7 @@ import type {
   JobLifecycleContext,
   JobLifecycleHook,
   OrderEvent,
-  PaymentProviderDefinition,
+  PaymentProviderRegistration,
   ReportDefinition,
 } from './definitions'
 import { createRegistry, RegistryError, type Keyed, type Registry } from './registry'
@@ -33,7 +33,7 @@ export type PayloadJobsRegistry = {
   emailEvents: Registry<EmailEventDefinition>
   invoiceSync: Registry<InvoiceSyncAdapter>
   jobLifecycle: Registry<JobLifecycleHook>
-  paymentProviders: Registry<PaymentProviderDefinition>
+  paymentProviders: Registry<PaymentProviderRegistration>
   reports: Registry<ReportDefinition>
 }
 
@@ -41,7 +41,7 @@ export type PayloadJobsRegistry = {
  * Core ships `invoice` (the buyer is invoiced, staff mark it paid) plus the internal `free` and
  * `credit` providers, which settle at once. Stripe is a later add-on (PJ-106).
  */
-const coreProviders = (): PaymentProviderDefinition[] => [
+const coreProviders = (): PaymentProviderRegistration[] => [
   {
     createPayment: ({ orderID }) => ({ reference: `INV-${orderID}`, status: 'pending' }),
     currencies: '*',

@@ -21,6 +21,9 @@ import {
 } from '@mission-control/payload-jobs'
 import { bootTestPayload, type TestHarness, type TestUser } from '@mission-control/payload-jobs/test'
 
+/** The host's own tenant hook, to prove the plugin appends rather than replaces. */
+const hostHook = () => undefined
+
 const fieldNamed = (collection: CollectionConfig, name: string): Field => {
   const field = collection.fields.find((candidate) => 'name' in candidate && candidate.name === name)
   if (!field) throw new Error(`${collection.slug} is missing ${name}`)
@@ -163,7 +166,7 @@ describe('alert subscription collection config', () => {
     const baseConfig = {
       collections: [
         { slug: 'users', fields: [], auth: { verify: true } },
-        { slug: 'tenants', fields: [], hooks: { beforeDelete: [() => undefined] } },
+        { slug: 'tenants', fields: [], hooks: { beforeDelete: [hostHook] } },
       ],
       secret: 'test',
     } as never
@@ -175,14 +178,17 @@ describe('alert subscription collection config', () => {
     }
 
     const withAlerts = await tenantsOf(true)
-    expect(withAlerts?.hooks?.beforeDelete).toEqual(
-      expect.arrayContaining([removeTenantAlertSubscriptions]),
-    )
+    const hooks = withAlerts?.hooks?.beforeDelete ?? []
+    expect(hooks).toEqual(expect.arrayContaining([removeTenantAlertSubscriptions]))
     // The host's own hook keeps running: the plugin appends, it does not replace.
-    expect(withAlerts?.hooks?.beforeDelete).toHaveLength(3)
+    expect(hooks[0]).toBe(hostHook)
 
     const withoutAlerts = await tenantsOf(false)
-    expect(withoutAlerts?.hooks?.beforeDelete).not.toContain(removeTenantAlertSubscriptions)
+    const hooksWithoutAlerts = withoutAlerts?.hooks?.beforeDelete ?? []
+    expect(hooksWithoutAlerts).not.toContain(removeTenantAlertSubscriptions)
+    expect(hooksWithoutAlerts).toContain(hostHook)
+    // Pages, menus and orders keep their own cleanup; the only difference is the subscription hook.
+    expect(hooks.length).toBe(hooksWithoutAlerts.length + 1)
   })
 })
 

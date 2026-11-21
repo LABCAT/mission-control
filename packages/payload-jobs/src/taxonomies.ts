@@ -13,6 +13,7 @@ import {
   isSuperAdmin,
   type MissionControlUser,
 } from './access'
+import { sharedSlugHook, slugRulesFor, type SlugRules } from './slug-rules'
 import {
   mergeCollectionAccess,
   type CollectionAccess,
@@ -116,6 +117,8 @@ type TaxonomyOptions = {
   /** Extra fields that only one taxonomy needs, such as `isVolunteer` on job types. */
   extraFields?: Field[]
   labels: { plural: string; singular: string }
+  /** Slugs shared with other collections (categories, locations, job types), if any. */
+  slugRules?: SlugRules
   /** `false` drops the tenant scope, for single-tenant setups with no tenants collection. */
   tenantScoped?: boolean
   slug: string
@@ -130,6 +133,7 @@ export const taxonomyCollection = ({
   extraFields = [],
   labels,
   slug,
+  slugRules,
   tenantScoped = true,
 }: TaxonomyOptions): CollectionConfig => ({
   slug,
@@ -176,7 +180,9 @@ export const taxonomyCollection = ({
     ...extraFields,
   ],
   hooks: {
-    beforeValidate: [uniqueSlugPerTenant(slug as CollectionSlug)],
+    beforeValidate: [
+      slugRules ? sharedSlugHook(slug, slugRules) : uniqueSlugPerTenant(slug as CollectionSlug),
+    ],
   },
   // The unique index spans the tenant, so the same slug may exist on two tenants.
   indexes: tenantScoped ? [{ fields: ['tenant', 'slug'], unique: true }] : [],
@@ -202,7 +208,10 @@ export type TaxonomyCollectionOptions = {
     salaryBands?: CollectionAccess
   }
   /** Resolved collection slugs. Defaults to the plugin's own names. */
-  slugs?: Pick<PayloadJobsCollectionSlugs, 'jobCategories' | 'jobTypes' | 'salaryBands'>
+  slugs?: Pick<PayloadJobsCollectionSlugs, 'jobCategories' | 'jobTypes' | 'salaryBands'> &
+    Partial<Pick<PayloadJobsCollectionSlugs, 'locations'>>
+  /** Words no category or job type slug may be. Defaults to `DEFAULT_RESERVED_SLUGS`. */
+  reservedSlugs?: readonly string[]
   /** Set to `false` in single-tenant mode, where there is no `tenants` collection. */
   tenantScoped?: boolean
 }
@@ -218,12 +227,17 @@ export const taxonomyCollections = ({
     jobTypes: 'job-types',
     salaryBands: 'salary-bands',
   },
+  reservedSlugs,
   tenantScoped = true,
-}: TaxonomyCollectionOptions = {}): CollectionConfig[] => [
+}: TaxonomyCollectionOptions = {}): CollectionConfig[] => {
+  // Categories, locations and job types share one slug namespace per tenant (PJ-98).
+  const slugRules = slugRulesFor({ ...slugs, locations: slugs.locations ?? 'locations' }, reservedSlugs)
+  return [
   taxonomyCollection({
     access: access.jobCategories,
     labels: { plural: 'Job categories', singular: 'Job category' },
     slug: slugs.jobCategories,
+    slugRules,
     tenantScoped,
   }),
   taxonomyCollection({
@@ -231,6 +245,7 @@ export const taxonomyCollections = ({
     extraFields: [isVolunteerField],
     labels: { plural: 'Job types', singular: 'Job type' },
     slug: slugs.jobTypes,
+    slugRules,
     tenantScoped,
   }),
   taxonomyCollection({
@@ -240,3 +255,4 @@ export const taxonomyCollections = ({
     tenantScoped,
   }),
 ]
+}
