@@ -2,12 +2,13 @@
 
 Xero invoicing for [Payload](https://payloadcms.com). Today it provides:
 
-- a settings collection (Xero organisation ID, account codes, branding theme, due days, reconciliation account, tracking category), global or per tenant;
+- a settings collection (Xero organisation ID, account codes, branding theme, due days, reconciliation account, tracking category, whether invoices are authorised), global or per tenant;
+- invoice sync: your documents become Xero sales invoices (draft, then authorised) through an adapter, with a retry task and no duplicates;
 - OAuth2 connect and refresh per tenant, with tokens encrypted at rest;
 - find-or-create for the Xero contacts invoices are addressed to;
 - AES-256-GCM helpers (Web Crypto, so they run on Cloudflare Workers) for storing OAuth tokens encrypted.
 
-Invoicing comes in a later release. The plugin never knows about your content model (jobs, orders, products...): see [Invoicing adapter](#invoicing-adapter-planned).
+The plugin never knows about your content model (jobs, orders, products...): see [Invoicing](#invoicing).
 
 > Currently published inside a monorepo as `@mission-control/payload-xero`; the name will change if it goes to npm. Payload `4.0.0-beta.7` is the tested version.
 
@@ -209,30 +210,49 @@ const { contact, matchedBy } = await findOrCreateXeroContact({
 
 Xero's filter grammar has no documented escape for a double quote or backslash. A code or email that carries one is refused as `invalid_contact` rather than sent as a filter that may match another contact.
 
-## Invoicing adapter (planned)
+## Invoicing
 
-Invoicing (a later release) will be driven by an adapter you supply, so the plugin needs no knowledge of your collections. Planned shape, not implemented yet:
+Pass an adapter and the plugin invoices any collection. It adds a read-only `xero-invoices` collection (one row per invoiced document: Xero invoice id, number, status, online link, the last error) and the retry task.
 
 ```ts
 payloadXero({
+  scope: 'tenant',
   invoicing: {
-    // Any collection: orders, bookings, subscriptions...
-    sourceCollection: 'orders',
-    // Map one of your documents to a neutral invoice. Return null to skip it.
-    toInvoice: (doc, { settings }) => XeroInvoiceInput | null,
+    adapter: {
+      sourceCollection: 'orders',
+      // Map a document to a neutral invoice, or null for "no invoice (yet)".
+      toInvoice: (doc, { settings }) => ({
+        confirmed: doc.status === 'invoiced', // authorise once the sale is final
+        contact: { name: doc.customerName, email: doc.billingEmail },
+        currency: 'NZD',
+        expectedTotal: doc.total, // minor units
+        lineAmountTypes: 'NoTax',
+        lines: [{ accountCode: settings.accountCodes.plan, description: 'Listing', quantity: 1, unitAmount: doc.total }],
+        reference: `Order ${doc.id}`, // unique per document, stable across runs
+      }),
+      // Record the result on your document; called after every successful run.
+      onSynced: async ({ doc, invoice, payload, req }) => { /* invoice.invoiceId, invoice.onlineUrl */ },
+    },
   },
 })
-
-type XeroInvoiceInput = {
-  contact: { name: string; email?: string; code?: string }
-  currency: string
-  reference?: string
-  lines: { description: string; quantity: number; unitAmount: number; accountCode?: string }[]
-  discount?: { description: string; amount: number }
-}
 ```
 
-The plugin would watch `sourceCollection`, call `toInvoice`, create the draft invoice with the stored settings, and expose the result (invoice ID, online URL) for you to save. Mission Control's order-to-invoice work (PJ-57) is the first consumer.
+Then call `syncOrQueueXeroInvoice({ config, payload, req, sourceId })` from your own hook (or `syncXeroInvoice` to handle errors yourself); `resolveXeroInvoicing(options)` gives the `config`.
+
+What a sync does:
+
+1. Loads the document, the tenant's settings row (none: skipped) and the adapter's invoice (`null`: skipped).
+2. Creates the Xero contact if needed (see [Contacts](#contacts)), then an `ACCREC` **draft** with the settings' branding theme and tracking category. Xero's total must equal `expectedTotal`.
+3. When the adapter says `confirmed` and the settings' `invoicing.authorise` is on (the default), **authorises** the invoice with a due date `dueDays` after the invoice date, and fetches its online link.
+4. Calls `onSynced`. A run with nothing to do makes no Xero call at all.
+
+Money is integer minor units in and out: amounts go to Xero as decimals built from the digits for the currency's decimal places (VUV 0, NZD 2), and Xero's total is converted back and compared exactly.
+
+**Never twice.** One row per document (unique index); one run at a time per document (a lease taken with a single conditional `UPDATE`, like the token refresh); the invoice id saved the moment Xero answers; every write sent with an `Idempotency-Key`; and a run that has no stored id first looks for the invoice by its reference, adopting it only when contact, currency and total also match. So a lost answer, a retry and a concurrent run all end with one invoice.
+
+**Failures** are recorded on the row (`attempts`, `lastError` as `code: message`). `syncOrQueueXeroInvoice` never throws: a retryable failure (`xero_unavailable` for network, timeout, 401, 429, 5xx; `sync_in_progress`) queues the `xero-invoice-sync` task, which Payload retries with exponential backoff from five minutes. Failures a retry cannot fix are left for a person: `xero_rejected` (Xero refused the request), `total_mismatch` (the invoice stays a draft), `invoice_voided`, `reference_conflict`, `invalid_invoice`, `not_connected`.
+
+The task runs on the `hourly` queue by default (`invoicing.queue`): run that queue from your scheduler.
 
 ## Payment sync (PJ-118)
 
