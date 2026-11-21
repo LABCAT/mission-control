@@ -74,7 +74,7 @@ describe('payloadJobs', () => {
     })
   })
 
-  it('registers payment providers on top of invoice and checks them @S-144', async () => {
+  it('registers payment providers on top of invoice and checks them @S-146', async () => {
     const result = await payloadJobs({ orders: { paymentProviders: [{ key: 'stripe', label: 'Card' }] } })(baseConfig)
 
     const custom = result.custom as { payloadJobs: { paymentProviders: string[] } }
@@ -89,7 +89,7 @@ describe('payloadJobs', () => {
     ).rejects.toThrow(/registered twice/)
   })
 
-  it('lets an organisation owner (organisationRole) update its orders by default @S-144', async () => {
+  it('lets an organisation owner (organisationRole) update its orders by default @S-146', async () => {
     const result = await payloadJobs({ tenancy: 'multi' })({
       ...baseConfig,
       collections: [
@@ -108,7 +108,7 @@ describe('payloadJobs', () => {
     expect(await update({ ...employer, organisationRole: 'member' })).toBe(false)
   })
 
-  it('keeps ordered organisations and jobs from being deleted @S-144', async () => {
+  it('keeps ordered organisations and jobs from being deleted @S-146', async () => {
     const result = await payloadJobs()(baseConfig)
     const hooksOf = (slug: string) =>
       result.collections?.find((collection) => collection.slug === slug)?.hooks?.beforeDelete ?? []

@@ -158,7 +158,7 @@ describe('orders integration', () => {
     if (harness) await harness.destroy()
   })
 
-  describe('access @S-144', () => {
+  describe('access @S-146', () => {
     let brewOrder: Doc
     let bankOrder: Doc
     let shopOrder: Doc
@@ -258,7 +258,7 @@ describe('orders integration', () => {
     })
   })
 
-  describe('status and history @S-144', () => {
+  describe('status and history @S-146', () => {
     it('records who created the order and every status move, and stamps the payment date', async () => {
       const order = await createOrder(invoiceOrder(harness.tenantA.id, orgs.brewA.id), {
         overrideAccess: false,
@@ -349,7 +349,7 @@ describe('orders integration', () => {
     })
   })
 
-  describe('payment date @S-144', () => {
+  describe('payment date @S-146', () => {
     it('stamps the payment date itself and ignores one a site manager sends', async () => {
       const order = await createOrder(invoiceOrder(harness.tenantA.id, orgs.brewA.id, { status: 'invoiced' }))
       await harness.payload.update({
@@ -409,7 +409,7 @@ describe('orders integration', () => {
     })
   })
 
-  describe('job order and author @S-144', () => {
+  describe('job order and author @S-146', () => {
     it('links a job only to its own organisation’s order, and shows the order and author to its members', async () => {
       const brewOrder = await createOrder(invoiceOrder(harness.tenantA.id, orgs.brewA.id))
       const bankOrder = await createOrder(invoiceOrder(harness.tenantA.id, orgs.bankA.id))
@@ -449,7 +449,7 @@ describe('orders integration', () => {
     })
   })
 
-  describe('money @S-144', () => {
+  describe('money @S-146', () => {
     it('fills the money from a quote snapshot and keeps it fixed', async () => {
       const snapshot = snapshotQuote(
         quote({
@@ -532,7 +532,7 @@ describe('orders integration', () => {
     })
   })
 
-  describe('payment providers and external references @S-144', () => {
+  describe('payment providers and external references @S-146', () => {
     it('accepts only registered providers, and an invoice needs one', async () => {
       await expect(
         createOrder(invoiceOrder(harness.tenantA.id, orgs.brewA.id, { paymentProvider: 'paypal' })),
@@ -582,7 +582,7 @@ describe('orders integration', () => {
     })
   })
 
-  describe('tenancy of relations @S-144', () => {
+  describe('tenancy of relations @S-146', () => {
     it('keeps the organisation, plan, coupon and jobs inside the order’s tenant and organisation', async () => {
       await expect(createOrder(invoiceOrder(harness.tenantA.id, orgs.shopB.id))).rejects.toSatisfy(failsWith(/organisation/))
       await expect(

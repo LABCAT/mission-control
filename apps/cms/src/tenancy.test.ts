@@ -675,7 +675,7 @@ describe('coupons', () => {
 })
 
 describe('orders', () => {
-  it('registers the orders collection with its tenant field @S-144', async () => {
+  it('registers the orders collection with its tenant field @S-146', async () => {
     const config = await buildConfig()
     const orders = config.collections?.find((collection) => collection.slug === 'orders')
 
@@ -683,7 +683,7 @@ describe('orders', () => {
     expect(orders?.fields.some((field) => 'name' in field && field.name === 'tenant')).toBe(true)
   })
 
-  it('keeps orders out of reach for anonymous requests and site keys @S-144', async () => {
+  it('keeps orders out of reach for anonymous requests and site keys @S-146', async () => {
     const config = await buildConfig()
     const orders = config.collections?.find((candidate) => candidate.slug === 'orders')
     const read = orders?.access?.read as (args: unknown) => Promise<unknown>
@@ -695,7 +695,7 @@ describe('orders', () => {
     expect(await read({ req, slug: 'orders' })).toBe(false)
   })
 
-  it('refuses to delete a tenant that has orders before the plugin removes anything @S-144', async () => {
+  it('refuses to delete a tenant that has orders before the plugin removes anything @S-146', async () => {
     const config = await buildConfig()
     const tenants = config.collections?.find((collection) => collection.slug === 'tenants')
     // The app's own two hooks run first (the delete's transaction rolls them back); the order

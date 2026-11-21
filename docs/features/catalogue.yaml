@@ -1423,7 +1423,7 @@ stories:
     status: planned
     tests: []
 
-  - id: S-144
+  - id: S-146
     area: Commerce
     role: site manager
     story: "Orders belong to the organisation, keep their money fixed and record every change in an append-only history."

@@ -44,7 +44,7 @@ const gst = {
   rounding: 'invoice' as const,
 }
 
-describe('order status transitions @S-144', () => {
+describe('order status transitions @S-146', () => {
   it('lets staff and system code follow the transition table and nothing else', () => {
     for (const actor of ['staff', 'system'] as OrderActor[]) {
       for (const from of ORDER_STATUSES) {
@@ -81,7 +81,7 @@ describe('order status transitions @S-144', () => {
   })
 })
 
-describe('legacy order statuses @S-144', () => {
+describe('legacy order statuses @S-146', () => {
   it('imports a pending WordPress transaction as invoiced, not unpaid', () => {
     expect(orderStatusFromLegacy('tr_pending')).toBe('invoiced')
     expect(orderStatusFromLegacy('tr_completed')).toBe('paid')
@@ -96,7 +96,7 @@ describe('legacy order statuses @S-144', () => {
   })
 })
 
-describe('order money @S-144', () => {
+describe('order money @S-146', () => {
   const money = {
     currency: 'NZD',
     discount: 1_000,
@@ -139,7 +139,7 @@ describe('order money @S-144', () => {
   })
 })
 
-describe('orders from a quote snapshot @S-144', () => {
+describe('orders from a quote snapshot @S-146', () => {
   it('takes the money, plan, add-ons, coupon and tax lines from the quote', () => {
     const snapshot = snapshotQuote(
       quote({
@@ -196,7 +196,7 @@ describe('canonicalOrderValue', () => {
   })
 })
 
-describe('payment providers @S-144', () => {
+describe('payment providers @S-146', () => {
   it('always registers invoice first', () => {
     expect(resolvePaymentProviders()).toEqual([INVOICE_PAYMENT_PROVIDER])
     expect(resolvePaymentProviders([{ key: 'stripe', label: 'Card' }]).map((p) => p.key)).toEqual(['invoice', 'stripe'])
@@ -218,7 +218,7 @@ describe('payment providers @S-144', () => {
 
 const fieldsJSON = (couponsEnabled: boolean) => JSON.stringify(orderCollection({ couponsEnabled }).fields)
 
-describe('orders without coupons @S-144', () => {
+describe('orders without coupons @S-146', () => {
   it('leaves out the coupon relationship when coupons are off, keeping the applied code', () => {
     const names = fieldsJSON
     expect(names(true)).toContain('"name":"coupon"')
