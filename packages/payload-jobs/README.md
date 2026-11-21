@@ -105,7 +105,6 @@ payloadJobs({
     salaryBands: { slug: 'salaries' },
     plans: { slug: 'packages' },
     addOns: { slug: 'extras' },
-    alertSubscriptions: { slug: 'subscribers' },
     coupons: { slug: 'vouchers' },
     orders: { slug: 'purchases' },
   },

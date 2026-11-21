@@ -8,12 +8,6 @@ import type {
 } from 'payload'
 
 import { accountAuthEndpoints, type AccountAuthOptions } from './account-auth'
-import {
-  ALERT_SUBSCRIPTIONS_SLUG,
-  alertSubscriptionCollection,
-  removeTenantAlertSubscriptions,
-  removeTenantAlertSubscriptionsFor,
-} from './alert-subscriptions'
 import type { LocationsOptions } from './collections/locations'
 import { locationsCollection, locationsTenantSlugIndex } from './collections/locations'
 import { organisationsCollection, withOrganisationField } from './collections/organisations'
@@ -49,11 +43,13 @@ import {
 import { slugRulesFor } from './slug-rules'
 import { removeTenantPages, seedTenantSystemPages } from './system-pages'
 import { taxonomyCollections } from './taxonomies'
+import { jobLifecycleHook } from './plug-points/gate'
+import { createPayloadJobsRegistry } from './plug-points/payload-jobs-registry'
+import { jobBoardAddOnsField } from './plug-points/tenant-field'
 import { jobBoardSettingsGlobal, jobBoardTenantFields } from './tenancy'
 
 export * from './access'
 export * from './account-auth'
-export * from './alert-subscriptions'
 export * from './collections/locations'
 export * from './collections/menus'
 export * from './collections/organisations'
@@ -63,6 +59,7 @@ export * from './email'
 export * from './legacy-password'
 export * from './location-settings'
 export * from './money'
+export * from './plug-points'
 export * from './orders'
 export * from './payment-providers'
 export * from './slug-rules'
@@ -122,7 +119,6 @@ export const payloadJobsTenantCollections = (
   slugs.salaryBands,
   slugs.addOns,
   slugs.plans,
-  slugs.alertSubscriptions,
   slugs.jobs,
   slugs.coupons,
   APPLICATION_FILES_SLUG,
@@ -151,8 +147,6 @@ export const PAYLOAD_JOBS_TENANT_COLLECTIONS = payloadJobsTenantCollections() as
 export type PayloadJobsFeatures = {
   /** Applications and their private CV files (PJ-25). Defaults to true. */
   applications?: boolean
-  /** Email-only job alert subscriptions (PJ-26). Defaults to true. */
-  alerts?: boolean
   /** Organisation job credits. Added by a later task. Defaults to true. */
   credits?: boolean
   /** Coupon codes and their discounts. Defaults to true. */
@@ -246,7 +240,6 @@ const withApplicationDeleteGuard = (
 
 const resolvedFeatures = (options: PayloadJobsOptions): Required<PayloadJobsFeatures> => ({
   applications: options.features?.applications ?? true,
-  alerts: options.features?.alerts ?? true,
   credits: options.features?.credits ?? true,
   coupons: options.features?.coupons ?? true,
   pages: options.features?.pages ?? true,
@@ -297,15 +290,6 @@ const jobBoardCollections = (
         }),
       ]
     : []),
-  ...(features.alerts
-    ? [
-        alertSubscriptionCollection({
-          access: collections.alertSubscriptions?.access,
-          slugs,
-          tenantScoped: tenancy === 'multi',
-        }),
-      ]
-    : []),
 ]
 
 /**
@@ -332,6 +316,10 @@ export const payloadJobs =
     const features = resolvedFeatures(options)
     const collectionOptions = options.collections ?? {}
     const slugs = resolveSlugsFromOptions(options)
+
+    // The registry add-on plugins register their plug points on (PJ-115).
+    const registry = createPayloadJobsRegistry({ settingsSlug: options.settingsSlug ?? 'job-board-settings', slugs, tenancy, tenantsSlug })
+    const addOnsField = jobBoardAddOnsField(registry)
 
     let config = incoming
 
@@ -457,7 +445,7 @@ export const payloadJobs =
                 ...(Array.isArray(collection.endpoints) ? collection.endpoints : []),
                 ...accountEndpoints,
               ],
-              fields: [...collection.fields, ...jobBoardTenantFields],
+              fields: [...collection.fields, ...jobBoardTenantFields, addOnsField],
               hooks: {
                 ...collection.hooks,
                 ...(features.pages
@@ -472,8 +460,8 @@ export const payloadJobs =
                       ],
                     }
                   : {}),
-                // Deleting a tenant must take its subscribers with it, not detach them.
-                // Coupons are removed too: the tenant foreign key would otherwise null them.
+                // Coupons are removed with the tenant: the tenant foreign key would otherwise
+                // null them. Add-ons clean up their own data the same way (PJ-115).
                 beforeDelete: [
                   ...(collection.hooks?.beforeDelete ?? []),
                   // Orders are kept for accounting: a tenant that has any can't be deleted. This
@@ -485,13 +473,6 @@ export const payloadJobs =
                     ? [
                         removeTenantPages({ collectionSlug: slugs.pages }),
                         removeTenantMenus({ collectionSlug: slugs.menus }),
-                      ]
-                    : []),
-                  ...(features.alerts
-                    ? [
-                        slugs.alertSubscriptions === ALERT_SUBSCRIPTIONS_SLUG
-                          ? removeTenantAlertSubscriptions
-                          : removeTenantAlertSubscriptionsFor(slugs.alertSubscriptions),
                       ]
                     : []),
                   ...(features.coupons
@@ -521,7 +502,7 @@ export const payloadJobs =
         ...config,
         globals: [
           ...(config.globals ?? []),
-          jobBoardSettingsGlobal(settingsSlug) as GlobalConfig,
+          jobBoardSettingsGlobal(settingsSlug, [addOnsField]) as GlobalConfig,
         ],
       }
     }
@@ -580,7 +561,7 @@ export const payloadJobs =
           ? 'documents'
           : null
         : options.documentsSlug
-    const jobs = withOrderDeleteGuard(jobsCollection({
+    const baseJobs = withOrderDeleteGuard(jobsCollection({
       access: collectionOptions.jobs?.access,
       documentsSlug,
       richTextDescription: Boolean(config.editor),
@@ -600,6 +581,14 @@ export const payloadJobs =
       tenantScoped: tenancy === 'multi',
       usersSlug,
     })
+    // Add-ons hear about jobs being published, expired or cancelled (PJ-115).
+    const jobs: CollectionConfig = {
+      ...baseJobs,
+      hooks: {
+        ...baseJobs.hooks,
+        afterChange: [...(baseJobs.hooks?.afterChange ?? []), jobLifecycleHook(registry, slugs.jobs)],
+      },
+    }
 
     const jobsWithPlacements = [...(config.collections ?? []), jobs].find(
       (collection) => collection.slug === slugs.jobs,
@@ -657,6 +646,7 @@ export const payloadJobs =
         payloadJobs: {
           enabled: true,
           features,
+          registry,
           paymentProviders: paymentProviders.map((provider) => provider.key),
           tenancy,
         },

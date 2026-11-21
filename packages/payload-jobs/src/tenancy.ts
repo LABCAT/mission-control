@@ -228,7 +228,10 @@ export const jobBoardTenantFields: Field[] = [
   },
 ]
 
-export const jobBoardSettingsGlobal = (slug = 'job-board-settings'): GlobalConfig => ({
+export const jobBoardSettingsGlobal = (
+  slug = 'job-board-settings',
+  extraFields: Field[] = [],
+): GlobalConfig => ({
   slug,
   admin: {
     group: 'Settings',
@@ -237,6 +240,6 @@ export const jobBoardSettingsGlobal = (slug = 'job-board-settings'): GlobalConfi
     read: authenticatedAccess,
     update: superAdminAccess,
   },
-  fields: jobBoardTenantFields,
+  fields: [...jobBoardTenantFields, ...extraFields],
   versions: false,
 })

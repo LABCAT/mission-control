@@ -1,7 +1,6 @@
 import type { CollectionConfig, Config, Field } from 'payload'
 import { describe, expect, it } from 'vitest'
 
-import { ALERT_SUBSCRIPTIONS_SLUG } from './alert-subscriptions'
 import { EXPIRE_PLACEMENTS_TASK, jobsTenantCollections, payloadJobs } from './index'
 import { TAXONOMY_SLUGS } from './taxonomies'
 
@@ -17,7 +16,7 @@ describe('payloadJobs', () => {
 
     // mission-control: the users collection is extended (legacy password support PJ-34,
     // organisation relation PJ-18), and locations (PJ-17), organisations (PJ-18), pages and
-    // menus (PJ-103), alerts (PJ-26), the taxonomies (PJ-16), plans (PJ-21), coupons (PJ-22),
+    // menus (PJ-103), the taxonomies (PJ-16), plans (PJ-21), coupons (PJ-22),
     // applications (PJ-25) and orders (PJ-23) are added.
     expect(result.collections?.map((collection) => collection.slug)).toEqual([
       'users',
@@ -25,7 +24,6 @@ describe('payloadJobs', () => {
       'organisations',
       'pages',
       'menus',
-      ALERT_SUBSCRIPTIONS_SLUG,
       ...TAXONOMY_SLUGS,
       'plans',
       'add-ons',
@@ -47,8 +45,9 @@ describe('payloadJobs', () => {
       existing: true,
       payloadJobs: {
         enabled: true,
-        features: { applications: true, alerts: true, credits: true, coupons: true, pages: true },
+        features: { applications: true, credits: true, coupons: true, pages: true },
         paymentProviders: ['invoice'],
+        registry: expect.any(Object),
         tenancy: 'single',
       },
     })
@@ -60,15 +59,16 @@ describe('payloadJobs', () => {
 
   it('resolves feature toggles and records them in the config', async () => {
     const result = await payloadJobs({
-      features: { applications: true, alerts: false, credits: true, coupons: false, pages: true },
+      features: { applications: true, credits: true, coupons: false, pages: true },
     })(baseConfig)
 
     expect(result.custom).toEqual({
       existing: true,
       payloadJobs: {
         enabled: true,
-        features: { applications: true, alerts: false, credits: true, coupons: false, pages: true },
+        features: { applications: true, credits: true, coupons: false, pages: true },
         paymentProviders: ['invoice'],
+        registry: expect.any(Object),
         tenancy: 'single',
       },
     })
@@ -162,7 +162,6 @@ const deny = () => false
 
 const OVERRIDES = {
   addOns: { slug: 'extras' },
-  alertSubscriptions: { slug: 'subscribers' },
   coupons: { slug: 'vouchers' },
   jobCategories: { slug: 'categories' },
   jobs: { slug: 'vacancies' },
@@ -204,7 +203,6 @@ describe('collection slug overrides', () => {
       'employers',
       'content-pages',
       'navigation',
-      'subscribers',
       'categories',
       'employment-types',
       'salaries',
@@ -262,7 +260,6 @@ describe('collection slug overrides', () => {
       'salaries',
       'extras',
       'packages',
-      'subscribers',
       'vacancies',
       'vouchers',
       'application-files',

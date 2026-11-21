@@ -1203,7 +1203,7 @@ stories:
     mvp: true
     status: built
     tests:
-      - packages/payload-jobs/src/alert-subscriptions.test.ts
+      - packages/payload-jobs-alerts/src/subscriptions.test.ts
 
   - id: S-085
     area: Job alerts
@@ -2066,3 +2066,21 @@ stories:
     tests:
       - packages/payload-jobs/src/collections/pages.integration.test.ts
       - packages/payload-jobs/src/collections/pages-rules.test.ts
+
+  # ---------------------------------------------------------------------------
+  # Platform
+  # ---------------------------------------------------------------------------
+  - id: S-147
+    area: Platform
+    role: super admin
+    story: "Add-ons (job alerts, reports, invoicing) are switched on or off per tenant, and a disabled add-on shows nothing for that tenant."
+    steps:
+      - "Leave a tenant's add-ons setting empty, then list [\"reports\"] only."
+      - "Open the alert subscribers list and try to add one."
+    expected: "Empty means every installed add-on is on; a list means only those. A disabled add-on's collections list empty, refuse writes, its endpoints answer 404, and its tabs and reports are not offered."
+    settings:
+      - addOns
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/plug-points/plug-points.test.ts

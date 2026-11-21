@@ -1,4 +1,4 @@
-import type { AccessArgs, CollectionConfig, Field, TextField } from 'payload'
+import type { AccessArgs, CollectionConfig, Config, Field, TextField } from 'payload'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
@@ -11,12 +11,15 @@ import {
   normalizeAlertKeywords,
   removeTenantAlertSubscriptions,
   uniqueAlertEmailPerTenant,
-} from './alert-subscriptions'
-import type { MissionControlUser } from './access'
-import { payloadJobs } from './index'
-import { locationsCollection } from './collections/locations'
-import { taxonomyCollections } from './taxonomies'
-import { bootTestPayload, type TestHarness, type TestUser } from './test'
+} from './subscriptions'
+import { alertsTenantCollections, payloadJobsAlerts } from './index'
+import {
+  locationsCollection,
+  payloadJobs,
+  taxonomyCollections,
+  type MissionControlUser,
+} from '@mission-control/payload-jobs'
+import { bootTestPayload, type TestHarness, type TestUser } from '@mission-control/payload-jobs/test'
 
 /** The host's own tenant hook, to prove the plugin appends rather than replaces. */
 const hostHook = () => undefined
@@ -47,19 +50,53 @@ const fieldMessages = (error: unknown): string =>
 describe('alert subscription collection config', () => {
   const collection = alertSubscriptionCollection()
 
-  it('is registered by the plugin and can be switched off', async () => {
+  it('is registered by the add-on plugin and can be switched off', async () => {
     const baseConfig = {
       collections: [{ slug: 'users', fields: [] }],
       secret: 'test',
     } as never
 
-    const on = await payloadJobs()(baseConfig)
+    const core = await payloadJobs()(baseConfig)
+    const on = await payloadJobsAlerts()(core)
     expect(on.collections?.map((candidate) => candidate.slug)).toContain(ALERT_SUBSCRIPTIONS_SLUG)
+    // Core no longer adds it by itself.
+    expect(core.collections?.map((candidate) => candidate.slug)).not.toContain(
+      ALERT_SUBSCRIPTIONS_SLUG,
+    )
 
-    const off = await payloadJobs({ features: { alerts: false } })(baseConfig)
+    const off = await payloadJobsAlerts({ enabled: false })(core)
     expect(off.collections?.map((candidate) => candidate.slug)).not.toContain(
       ALERT_SUBSCRIPTIONS_SLUG,
     )
+  })
+
+  it('honours a slug override and gates its access and writes by add-on', async () => {
+    const core = await payloadJobs()({ collections: [{ slug: 'users', fields: [] }], secret: 'test' } as never)
+    const config = payloadJobsAlerts({ slug: 'subscribers' })(core) as Config
+    const added = config.collections?.find((candidate) => candidate.slug === 'subscribers')
+
+    expect(added?.hooks?.beforeValidate).toHaveLength(4)
+    expect(
+      added?.fields.find((field) => 'name' in field && field.name === 'categories'),
+    ).toMatchObject({ relationTo: 'job-categories' })
+    // Single-tenant read: super admin reads, unless the settings switch alerts off.
+    const read = added?.access?.read as (args: unknown) => Promise<unknown>
+    const reqFor = (addOns: unknown) => ({
+      payload: { findGlobal: async () => ({ addOns }) },
+      user: { id: 1, role: 'super-admin', tenants: [] },
+    })
+    expect(await read({ req: reqFor(['alerts']) })).toBe(true)
+    expect(await read({ req: reqFor(['reports']) })).toBe(false)
+    expect(alertsTenantCollections({ slug: 'subscribers' })).toEqual(['subscribers'])
+    expect(alertsTenantCollections()).toEqual([ALERT_SUBSCRIPTIONS_SLUG])
+  })
+
+  it('needs payloadJobs() before it, and refuses a clashing slug', async () => {
+    const bare = { collections: [], secret: 'test' } as never
+    expect(() => payloadJobsAlerts()(bare)).toThrow(/no registry/)
+
+    const core = await payloadJobs()(bare)
+    expect(() => payloadJobsAlerts({ slug: 'jobs' })(core)).toThrow(/already exists/)
   })
 
   it('has the fields the task asks for, plus legacyId for the importer', () => {
@@ -134,23 +171,23 @@ describe('alert subscription collection config', () => {
       secret: 'test',
     } as never
 
-    const tenantsOf = async (options: Parameters<typeof payloadJobs>[0]) => {
-      const config = await payloadJobs(options)(baseConfig)
+    const tenantsOf = async (withAlerts: boolean) => {
+      const core = await payloadJobs({ tenancy: 'multi' })(baseConfig)
+      const config = withAlerts ? await payloadJobsAlerts()(core) : core
       return config.collections?.find((candidate) => candidate.slug === 'tenants')
     }
 
-    const withAlerts = await tenantsOf({ tenancy: 'multi' })
+    const withAlerts = await tenantsOf(true)
     const hooks = withAlerts?.hooks?.beforeDelete ?? []
     expect(hooks).toEqual(expect.arrayContaining([removeTenantAlertSubscriptions]))
     // The host's own hook keeps running: the plugin appends, it does not replace.
     expect(hooks[0]).toBe(hostHook)
 
-    const withoutAlerts = await tenantsOf({ features: { alerts: false }, tenancy: 'multi' })
+    const withoutAlerts = await tenantsOf(false)
     const hooksWithoutAlerts = withoutAlerts?.hooks?.beforeDelete ?? []
     expect(hooksWithoutAlerts).not.toContain(removeTenantAlertSubscriptions)
     expect(hooksWithoutAlerts).toContain(hostHook)
-    // Pages and menus (PJ-103) keep their own cleanup when alerts are off; the only
-    // difference is the subscription hook.
+    // Pages, menus and orders keep their own cleanup; the only difference is the subscription hook.
     expect(hooks.length).toBe(hooksWithoutAlerts.length + 1)
   })
 })

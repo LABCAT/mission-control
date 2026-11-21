@@ -2,7 +2,6 @@ import type { CollectionConfig } from 'payload'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { addOnCollection } from './add-ons'
-import { alertSubscriptionCollection } from './alert-subscriptions'
 import { jobsCollection } from './collections/jobs'
 import { locationsCollection } from './collections/locations'
 import { organisationField, organisationsCollection } from './collections/organisations'
@@ -18,7 +17,6 @@ import { bootTestPayload, type TestHarness } from './test'
  */
 const overrides = {
   addOns: { slug: 'extras' },
-  alertSubscriptions: { slug: 'subscribers' },
   jobCategories: { slug: 'categories' },
   jobs: { slug: 'vacancies' },
   jobTypes: { slug: 'employment-types' },
@@ -41,7 +39,6 @@ const collections = (): CollectionConfig[] => [
   ...taxonomyCollections({ slugs, tenantScoped: true }),
   planCollection({ slugs, tenantScoped: true }),
   addOnCollection({ slugs, tenantScoped: true }),
-  alertSubscriptionCollection({ slugs, tenantScoped: true }),
   jobsCollection({ slugs, tenantScoped: true }),
 ]
 
@@ -99,12 +96,6 @@ describe('every collection slug overridden', () => {
       name: 'Regular',
       price: 5000,
     })
-    const subscriber = await create(slugs.alertSubscriptions, {
-      categories: [category.id],
-      email: 'seeker@example.invalid',
-      locations: [location.id],
-      types: [jobType.id],
-    })
 
     const job = await create(slugs.jobs, {
       categories: [category.id],
@@ -131,7 +122,6 @@ describe('every collection slug overridden', () => {
       plan: plan.id,
       salaryBand: salaryBand.id,
     })
-    expect(subscriber.id).toBeDefined()
     expect(payload.collections[slugs.jobs]).toBeDefined()
     expect(payload.collections['jobs']).toBeUndefined()
   })
