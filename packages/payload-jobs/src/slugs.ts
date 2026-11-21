@@ -17,13 +17,13 @@ export type PayloadJobsCollectionOptions = {
 
 export type PayloadJobsCollectionKey =
   | 'addOns'
-  | 'alertSubscriptions'
   | 'coupons'
   | 'jobCategories'
   | 'jobs'
   | 'jobTypes'
   | 'locations'
   | 'menus'
+  | 'orders'
   | 'organisations'
   | 'pages'
   | 'plans'
@@ -43,13 +43,13 @@ export type PayloadJobsCollectionSlugs = Record<PayloadJobsCollectionKey, string
  */
 export const DEFAULT_PAYLOAD_JOBS_SLUGS: PayloadJobsCollectionSlugs = {
   addOns: 'add-ons',
-  alertSubscriptions: 'alert-subscriptions',
   coupons: 'coupons',
   jobCategories: 'job-categories',
   jobs: 'jobs',
   jobTypes: 'job-types',
   locations: 'locations',
   menus: 'menus',
+  orders: 'orders',
   organisations: 'organisations',
   pages: 'pages',
   plans: 'plans',

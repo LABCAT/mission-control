@@ -62,17 +62,18 @@ export type SupportedTimezones =
   | 'Pacific/Fiji';
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "LexicalNodes_334D3D85".
+ * via the `definition` "LexicalNodes_C6AA4078".
  */
-export type LexicalNodes_334D3D85 =
+export type LexicalNodes_C6AA4078 =
   | SerializedTextNode
   | SerializedTabNode
   | SerializedLineBreakNode
-  | SerializedParagraphNode<LexicalNodes_334D3D85>
+  | SerializedParagraphNode<LexicalNodes_C6AA4078>
   | SerializedHorizontalRuleNode
   | SerializedUploadNode<'media'>
   | SerializedUploadNode<'documents'>
-  | SerializedQuoteNode<LexicalNodes_334D3D85>
+  | SerializedUploadNode<'application-files'>
+  | SerializedQuoteNode<LexicalNodes_C6AA4078>
   | SerializedRelationshipNode<
       | 'users'
       | 'folders'
@@ -83,7 +84,6 @@ export type LexicalNodes_334D3D85 =
       | 'organisations'
       | 'pages'
       | 'menus'
-      | 'alert-subscriptions'
       | 'job-categories'
       | 'job-types'
       | 'salary-bands'
@@ -91,17 +91,20 @@ export type LexicalNodes_334D3D85 =
       | 'add-ons'
       | 'jobs'
       | 'coupons'
+      | 'applications'
+      | 'orders'
+      | 'alert-subscriptions'
       | 'payload-kv'
       | 'payload-jobs'
       | 'payload-locked-documents'
       | 'payload-preferences'
       | 'payload-migrations'
     >
-  | SerializedAutoLinkNode<LexicalNodes_334D3D85, LexicalLinkFields>
-  | SerializedLinkNode<LexicalNodes_334D3D85, LexicalLinkFields>
-  | SerializedListNode<LexicalNodes_334D3D85>
-  | SerializedListItemNode<LexicalNodes_334D3D85>
-  | SerializedHeadingNode<LexicalNodes_334D3D85>;
+  | SerializedAutoLinkNode<LexicalNodes_C6AA4078, LexicalLinkFields>
+  | SerializedLinkNode<LexicalNodes_C6AA4078, LexicalLinkFields>
+  | SerializedListNode<LexicalNodes_C6AA4078>
+  | SerializedListItemNode<LexicalNodes_C6AA4078>
+  | SerializedHeadingNode<LexicalNodes_C6AA4078>;
 /**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "LexicalNodes_3DE324E4".
@@ -140,7 +143,6 @@ export interface Config {
     organisations: Organisation;
     pages: Page;
     menus: Menu;
-    'alert-subscriptions': AlertSubscription;
     'job-categories': JobCategory;
     'job-types': JobType;
     'salary-bands': SalaryBand;
@@ -148,6 +150,10 @@ export interface Config {
     'add-ons': AddOn;
     jobs: Job;
     coupons: Coupon;
+    'application-files': ApplicationFile;
+    applications: Application;
+    orders: Order;
+    'alert-subscriptions': AlertSubscription;
     'payload-kv': PayloadKv;
     'payload-jobs': PayloadJob;
     'payload-locked-documents': PayloadLockedDocument;
@@ -168,7 +174,6 @@ export interface Config {
     organisations: OrganisationsSelect<false> | OrganisationsSelect<true>;
     pages: PagesSelect<false> | PagesSelect<true>;
     menus: MenusSelect<false> | MenusSelect<true>;
-    'alert-subscriptions': AlertSubscriptionsSelect<false> | AlertSubscriptionsSelect<true>;
     'job-categories': JobCategoriesSelect<false> | JobCategoriesSelect<true>;
     'job-types': JobTypesSelect<false> | JobTypesSelect<true>;
     'salary-bands': SalaryBandsSelect<false> | SalaryBandsSelect<true>;
@@ -176,6 +181,10 @@ export interface Config {
     'add-ons': AddOnsSelect<false> | AddOnsSelect<true>;
     jobs: JobsSelect<false> | JobsSelect<true>;
     coupons: CouponsSelect<false> | CouponsSelect<true>;
+    'application-files': ApplicationFilesSelect<false> | ApplicationFilesSelect<true>;
+    applications: ApplicationsSelect<false> | ApplicationsSelect<true>;
+    orders: OrdersSelect<false> | OrdersSelect<true>;
+    'alert-subscriptions': AlertSubscriptionsSelect<false> | AlertSubscriptionsSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-jobs': PayloadJobsSelect<false> | PayloadJobsSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
@@ -481,12 +490,28 @@ export interface Tenant {
    * Whether new jobs need an admin’s approval before they go live.
    */
   jobModeration?: ('legacy' | 'review' | 'auto') | null;
+  /**
+   * When on, only signed-in accounts can apply to a job. Off: guests can apply with an email address.
+   */
+  accountRequiredToApply?: boolean | null;
   emailFromName?: string | null;
   emailFromAddress?: string | null;
   /**
    * Receives contact and moderation notifications.
    */
   adminEmail?: string | null;
+  /**
+   * Which add-ons this site uses, for example ["alerts", "reports"]. Leave empty for all installed add-ons; [] switches them all off.
+   */
+  addOns?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
   createdBy?: {
     relationTo: 'users';
     value: number | User;
@@ -508,10 +533,15 @@ export interface User {
   firstName?: string | null;
   lastName?: string | null;
   legacyPasswordHash?: string | null;
+  legacyId?: number | null;
   /**
    * The organisation this employer belongs to.
    */
   organisation?: (number | null) | Organisation;
+  /**
+   * Owners manage billing, the profile and members.
+   */
+  organisationRole?: ('owner' | 'member') | null;
   tenants?:
     | {
         tenant: number | Tenant;
@@ -733,7 +763,7 @@ export interface FeatureBoxesBlock {
  */
 export interface RichTextBlock {
   heading?: string | null;
-  content: LexicalRichText<LexicalNodes_334D3D85>;
+  content: LexicalRichText<LexicalNodes_C6AA4078>;
   id?: string | null;
   blockName?: string | null;
   blockType: 'rich-text';
@@ -788,7 +818,7 @@ export interface FaqBlock {
   heading?: string | null;
   items: {
     question: string;
-    answer: LexicalRichText<LexicalNodes_334D3D85>;
+    answer: LexicalRichText<LexicalNodes_C6AA4078>;
     id?: string | null;
   }[];
   id?: string | null;
@@ -1002,60 +1032,6 @@ export interface Menu {
     | null;
   /**
    * WordPress menu term ID, so the importer can match an existing menu.
-   */
-  legacyId?: number | null;
-  createdBy?: {
-    relationTo: 'users';
-    value: number | User;
-  } | null;
-  updatedBy?: {
-    relationTo: 'users';
-    value: number | User;
-  } | null;
-  updatedAt: string;
-  createdAt: string;
-}
-/**
- * Job alert subscribers. They confirm by email and manage themselves through their link; staff only read this list.
- *
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "alert-subscriptions".
- */
-export interface AlertSubscription {
-  id: number;
-  tenant?: (number | null) | Tenant;
-  /**
-   * Stored lowercase. The subscriber confirms it before any alert is sent.
-   */
-  email: string;
-  /**
-   * Set when the subscriber follows the double opt-in link. Only confirmed subscribers get alerts.
-   */
-  confirmed?: boolean | null;
-  confirmToken?: string | null;
-  manageToken?: string | null;
-  /**
-   * Words a job must mention, separated by spaces. Empty means any job.
-   */
-  keywords?: string | null;
-  /**
-   * Only jobs in these job categories. Empty means any.
-   */
-  categories?: (number | JobCategory)[] | null;
-  /**
-   * Only jobs in these job types. Empty means any.
-   */
-  types?: (number | JobType)[] | null;
-  /**
-   * Only jobs in these locations. Empty means any.
-   */
-  locations?: (number | Location)[] | null;
-  /**
-   * When the daily digest last went out. The next digest starts from here.
-   */
-  lastSentAt?: string | null;
-  /**
-   * WordPress user id for the alert meta, so the importer can match it.
    */
   legacyId?: number | null;
   createdBy?: {
@@ -1341,7 +1317,7 @@ export interface Job {
   publishedAt?: string | null;
   expiresAt?: string | null;
   organisation: number | Organisation;
-  description?: LexicalRichText<LexicalNodes_334D3D85> | null;
+  description?: LexicalRichText<LexicalNodes_C6AA4078> | null;
   jobType?: (number | null) | JobType;
   categories?: (number | JobCategory)[] | null;
   salaryBand?: (number | null) | SalaryBand;
@@ -1374,6 +1350,14 @@ export interface Job {
    */
   plan?: (number | null) | Plan;
   /**
+   * The order paying for the current listing. Set at checkout.
+   */
+  order?: (number | null) | Order;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  /**
    * Where this job is featured, and until when. Expired rows are removed daily.
    */
   placements?:
@@ -1388,6 +1372,153 @@ export interface Job {
   views?: number | null;
   /**
    * WordPress post id, for the import.
+   */
+  legacyId?: number | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * Orders belong to an organisation. Their money is fixed; the history is append-only.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "orders".
+ */
+export interface Order {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  status: 'waiting_for_purchase' | 'pending' | 'invoiced' | 'paid' | 'cancelled' | 'failed';
+  /**
+   * Why the status changed. Saved in the history, not on the order.
+   */
+  statusNote?: string | null;
+  /**
+   * The organisation that owes and owns the order.
+   */
+  organisation: number | Organisation;
+  /**
+   * Fixed once the order is created.
+   */
+  plan?: (number | null) | Plan;
+  /**
+   * What the add-ons were sold as. Fixed once the order is created.
+   */
+  addOns?:
+    | {
+        addOn?: (number | null) | AddOn;
+        name: string;
+        key?: string | null;
+        placement?: string | null;
+        durationDays: number;
+        unitPrice: number;
+        amount: number;
+        included?: boolean | null;
+        id?: string | null;
+      }[]
+    | null;
+  coupon?: (number | null) | Coupon;
+  /**
+   * The code as applied, kept if the coupon is later changed.
+   */
+  couponCode?: string | null;
+  /**
+   * ISO 4217, e.g. VUV.
+   */
+  currency: string;
+  /**
+   * Before discounts.
+   */
+  subtotal: number;
+  /**
+   * Credits and coupon.
+   */
+  discount: number;
+  /**
+   * Sum of the tax lines.
+   */
+  tax: number;
+  /**
+   * What the organisation pays.
+   */
+  total: number;
+  /**
+   * Prices included tax, so the total does not add it.
+   */
+  taxInclusive?: boolean | null;
+  taxLines?:
+    | {
+        key: string;
+        name: string;
+        /**
+         * Basis points: 1500 is 15%.
+         */
+        rate: number;
+        xeroTaxType?: string | null;
+        net: number;
+        tax: number;
+        gross: number;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * The full quote the order was priced from (`snapshotQuote`).
+   */
+  quote?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  paymentMethod: 'invoice' | 'free' | 'credit';
+  /**
+   * The registered provider that collects the money: invoice.
+   */
+  paymentProvider?: string | null;
+  /**
+   * Set when the order is paid (Xero’s paid date, or when it is marked paid).
+   */
+  paidAt?: string | null;
+  /**
+   * Records in other systems, e.g. the Xero invoice. Kept once recorded.
+   */
+  externalRefs?:
+    | {
+        provider: string;
+        /**
+         * The record’s id in that system, e.g. the Xero InvoiceID.
+         */
+        externalId: string;
+        url?: string | null;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * The jobs this order pays for. Must be the organisation’s.
+   */
+  jobs?: (number | Job)[] | null;
+  /**
+   * Every change, oldest first. Nobody can edit it.
+   */
+  log?:
+    | {
+        at: string;
+        event: 'created' | 'status' | 'external-ref' | 'jobs' | 'organisation' | 'paid-at';
+        actor: 'system' | 'staff' | 'owner' | 'member';
+        by?: (number | null) | User;
+        from?: string | null;
+        to?: string | null;
+        note?: string | null;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * WordPress transaction id, for the import.
    */
   legacyId?: number | null;
   createdBy?: {
@@ -1431,6 +1562,145 @@ export interface Coupon {
   maxUses?: number | null;
   /**
    * WordPress post id, for the import.
+   */
+  legacyId?: number | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "application-files".
+ */
+export interface ApplicationFile {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  organisation: number | Organisation;
+  applicant?: (number | null) | User;
+  prefix?: string | null;
+  _objectKey?: string | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+  url?: string | null;
+  thumbnailURL?: string | null;
+  filename?: string | null;
+  mimeType?: string | null;
+  filesize?: number | null;
+  width?: number | null;
+  height?: number | null;
+  original?: {
+    filename?: string | null;
+    url?: string | null;
+    mimeType?: string | null;
+    filesize?: number | null;
+    width?: number | null;
+    height?: number | null;
+    prefix?: string | null;
+    _objectKey?: string | null;
+  };
+  focalX?: number | null;
+  focalY?: number | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "applications".
+ */
+export interface Application {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  job: number | Job;
+  /**
+   * Copied from the job. Not editable.
+   */
+  organisation?: (number | null) | Organisation;
+  /**
+   * Set when the applicant was signed in; guests apply with an email only.
+   */
+  applicant?: (number | null) | User;
+  name: string;
+  email: string;
+  phone?: string | null;
+  /**
+   * Plain text. No formatting or HTML.
+   */
+  message?: string | null;
+  cv: number | ApplicationFile;
+  coverLetter?: (number | null) | ApplicationFile;
+  /**
+   * When the applicant agreed to the privacy policy.
+   */
+  consentAt: string;
+  /**
+   * WordPress post id, for the import.
+   */
+  legacyId?: number | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * Job alert subscribers. They confirm by email and manage themselves through their link; staff only read this list.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "alert-subscriptions".
+ */
+export interface AlertSubscription {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  /**
+   * Stored lowercase. The subscriber confirms it before any alert is sent.
+   */
+  email: string;
+  /**
+   * Set when the subscriber follows the double opt-in link. Only confirmed subscribers get alerts.
+   */
+  confirmed?: boolean | null;
+  confirmToken?: string | null;
+  manageToken?: string | null;
+  /**
+   * Words a job must mention, separated by spaces. Empty means any job.
+   */
+  keywords?: string | null;
+  /**
+   * Only jobs in these job categories. Empty means any.
+   */
+  categories?: (number | JobCategory)[] | null;
+  /**
+   * Only jobs in these job types. Empty means any.
+   */
+  types?: (number | JobType)[] | null;
+  /**
+   * Only jobs in these locations. Empty means any.
+   */
+  locations?: (number | Location)[] | null;
+  /**
+   * When the daily digest last went out. The next digest starts from here.
+   */
+  lastSentAt?: string | null;
+  /**
+   * WordPress user id for the alert meta, so the importer can match it.
    */
   legacyId?: number | null;
   createdBy?: {
@@ -1623,10 +1893,6 @@ export interface PayloadLockedDocument {
         value: number | Menu;
       } | null)
     | ({
-        relationTo: 'alert-subscriptions';
-        value: number | AlertSubscription;
-      } | null)
-    | ({
         relationTo: 'job-categories';
         value: number | JobCategory;
       } | null)
@@ -1653,6 +1919,22 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'coupons';
         value: number | Coupon;
+      } | null)
+    | ({
+        relationTo: 'application-files';
+        value: number | ApplicationFile;
+      } | null)
+    | ({
+        relationTo: 'applications';
+        value: number | Application;
+      } | null)
+    | ({
+        relationTo: 'orders';
+        value: number | Order;
+      } | null)
+    | ({
+        relationTo: 'alert-subscriptions';
+        value: number | AlertSubscription;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -1727,7 +2009,9 @@ export interface UsersSelect<T extends boolean = true> {
   firstName?: T;
   lastName?: T;
   legacyPasswordHash?: T;
+  legacyId?: T;
   organisation?: T;
+  organisationRole?: T;
   tenants?:
     | T
     | {
@@ -1987,9 +2271,11 @@ export interface TenantsSelect<T extends boolean = true> {
         exemptXeroTaxType?: T;
       };
   jobModeration?: T;
+  accountRequiredToApply?: T;
   emailFromName?: T;
   emailFromAddress?: T;
   adminEmail?: T;
+  addOns?: T;
   createdBy?: T;
   updatedBy?: T;
   updatedAt?: T;
@@ -2150,27 +2436,6 @@ export interface MenusSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "alert-subscriptions_select".
- */
-export interface AlertSubscriptionsSelect<T extends boolean = true> {
-  tenant?: T;
-  email?: T;
-  confirmed?: T;
-  confirmToken?: T;
-  manageToken?: T;
-  keywords?: T;
-  categories?: T;
-  types?: T;
-  locations?: T;
-  lastSentAt?: T;
-  legacyId?: T;
-  createdBy?: T;
-  updatedBy?: T;
-  updatedAt?: T;
-  createdAt?: T;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "job-categories_select".
  */
 export interface JobCategoriesSelect<T extends boolean = true> {
@@ -2304,6 +2569,8 @@ export interface JobsSelect<T extends boolean = true> {
   applicationsRecipient?: T;
   jobDescriptionPdf?: T;
   plan?: T;
+  order?: T;
+  createdBy?: T;
   placements?:
     | T
     | {
@@ -2315,7 +2582,6 @@ export interface JobsSelect<T extends boolean = true> {
       };
   views?: T;
   legacyId?: T;
-  createdBy?: T;
   updatedBy?: T;
   updatedAt?: T;
   createdAt?: T;
@@ -2332,6 +2598,159 @@ export interface CouponsSelect<T extends boolean = true> {
   active?: T;
   useCount?: T;
   maxUses?: T;
+  legacyId?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "application-files_select".
+ */
+export interface ApplicationFilesSelect<T extends boolean = true> {
+  tenant?: T;
+  organisation?: T;
+  applicant?: T;
+  prefix?: T;
+  _objectKey?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+  url?: T;
+  thumbnailURL?: T;
+  filename?: T;
+  mimeType?: T;
+  filesize?: T;
+  width?: T;
+  height?: T;
+  original?:
+    | T
+    | {
+        filename?: T;
+        url?: T;
+        mimeType?: T;
+        filesize?: T;
+        width?: T;
+        height?: T;
+        prefix?: T;
+        _objectKey?: T;
+      };
+  focalX?: T;
+  focalY?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "applications_select".
+ */
+export interface ApplicationsSelect<T extends boolean = true> {
+  tenant?: T;
+  job?: T;
+  organisation?: T;
+  applicant?: T;
+  name?: T;
+  email?: T;
+  phone?: T;
+  message?: T;
+  cv?: T;
+  coverLetter?: T;
+  consentAt?: T;
+  legacyId?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "orders_select".
+ */
+export interface OrdersSelect<T extends boolean = true> {
+  tenant?: T;
+  status?: T;
+  statusNote?: T;
+  organisation?: T;
+  plan?: T;
+  addOns?:
+    | T
+    | {
+        addOn?: T;
+        name?: T;
+        key?: T;
+        placement?: T;
+        durationDays?: T;
+        unitPrice?: T;
+        amount?: T;
+        included?: T;
+        id?: T;
+      };
+  coupon?: T;
+  couponCode?: T;
+  currency?: T;
+  subtotal?: T;
+  discount?: T;
+  tax?: T;
+  total?: T;
+  taxInclusive?: T;
+  taxLines?:
+    | T
+    | {
+        key?: T;
+        name?: T;
+        rate?: T;
+        xeroTaxType?: T;
+        net?: T;
+        tax?: T;
+        gross?: T;
+        id?: T;
+      };
+  quote?: T;
+  paymentMethod?: T;
+  paymentProvider?: T;
+  paidAt?: T;
+  externalRefs?:
+    | T
+    | {
+        provider?: T;
+        externalId?: T;
+        url?: T;
+        id?: T;
+      };
+  jobs?: T;
+  log?:
+    | T
+    | {
+        at?: T;
+        event?: T;
+        actor?: T;
+        by?: T;
+        from?: T;
+        to?: T;
+        note?: T;
+        id?: T;
+      };
+  legacyId?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "alert-subscriptions_select".
+ */
+export interface AlertSubscriptionsSelect<T extends boolean = true> {
+  tenant?: T;
+  email?: T;
+  confirmed?: T;
+  confirmToken?: T;
+  manageToken?: T;
+  keywords?: T;
+  categories?: T;
+  types?: T;
+  locations?: T;
+  lastSentAt?: T;
   legacyId?: T;
   createdBy?: T;
   updatedBy?: T;
@@ -2533,14 +2952,17 @@ export interface CollectionQueryWidget {
       | 'organisations'
       | 'pages'
       | 'menus'
-      | 'alert-subscriptions'
       | 'job-categories'
       | 'job-types'
       | 'salary-bands'
       | 'plans'
       | 'add-ons'
       | 'jobs'
-      | 'coupons';
+      | 'coupons'
+      | 'application-files'
+      | 'applications'
+      | 'orders'
+      | 'alert-subscriptions';
     where?:
       | {
           [k: string]: unknown;
@@ -2575,7 +2997,6 @@ export interface ActivityWidget {
           | 'organisations'
           | 'pages'
           | 'menus'
-          | 'alert-subscriptions'
           | 'job-categories'
           | 'job-types'
           | 'salary-bands'
@@ -2583,6 +3004,10 @@ export interface ActivityWidget {
           | 'add-ons'
           | 'jobs'
           | 'coupons'
+          | 'application-files'
+          | 'applications'
+          | 'orders'
+          | 'alert-subscriptions'
         )[]
       | null;
   };
@@ -2594,7 +3019,7 @@ export interface ActivityWidget {
  */
 export interface UploadDropzoneWidget {
   data?: {
-    excludedCollections?: ('media' | 'documents')[] | null;
+    excludedCollections?: ('media' | 'documents' | 'application-files')[] | null;
   };
   width: 'x-small' | 'small' | 'medium' | 'large' | 'x-large' | 'full';
 }

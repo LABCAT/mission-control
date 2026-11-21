@@ -1,7 +1,6 @@
 import type { CollectionConfig, Config, Field } from 'payload'
 import { describe, expect, it } from 'vitest'
 
-import { ALERT_SUBSCRIPTIONS_SLUG } from './alert-subscriptions'
 import type { MissionControlUser } from './access'
 import { DASHBOARD_COMPONENT_PATH } from './admin'
 import { SITE_MANAGER_NAV_COLLECTIONS, siteManagerVisibleCollections } from './admin/nav'
@@ -39,20 +38,22 @@ describe('payloadJobs', () => {
 
     // mission-control: the users collection is extended (legacy password support PJ-34,
     // organisation relation PJ-18), and locations (PJ-17), organisations (PJ-18), pages and
-    // menus (PJ-103), alerts (PJ-26), the taxonomies (PJ-16), plans (PJ-21) and coupons
-    // (PJ-22) are added.
+    // menus (PJ-103), the taxonomies (PJ-16), plans (PJ-21), coupons (PJ-22),
+    // applications (PJ-25) and orders (PJ-23) are added.
     expect(result.collections?.map((collection) => collection.slug)).toEqual([
       'users',
       'locations',
       'organisations',
       'pages',
       'menus',
-      ALERT_SUBSCRIPTIONS_SLUG,
       ...TAXONOMY_SLUGS,
       'plans',
       'add-ons',
       'jobs',
       'coupons',
+      'application-files',
+      'applications',
+      'orders',
     ])
     expect(result.collections?.[0]?.fields.map((f) => ('name' in f ? f.name : null))).toContain(
       'legacyPasswordHash',
@@ -66,7 +67,9 @@ describe('payloadJobs', () => {
       existing: true,
       payloadJobs: {
         enabled: true,
-        features: { applications: true, alerts: true, credits: true, coupons: true, pages: true },
+        features: { applications: true, credits: true, coupons: true, pages: true },
+        paymentProviders: ['invoice'],
+        registry: expect.any(Object),
         slugs: { ...DEFAULT_PAYLOAD_JOBS_SLUGS, tenants: 'tenants' },
         tenancy: 'single',
       },
@@ -79,18 +82,67 @@ describe('payloadJobs', () => {
 
   it('resolves feature toggles and records them in the config', async () => {
     const result = await payloadJobs({
-      features: { applications: true, alerts: false, credits: true, coupons: false, pages: true },
+      features: { applications: true, credits: true, coupons: false, pages: true },
     })(baseConfig)
 
     expect(result.custom).toEqual({
       existing: true,
       payloadJobs: {
         enabled: true,
-features: { applications: true, alerts: false, credits: true, coupons: false, pages: true },
+        features: { applications: true, credits: true, coupons: false, pages: true },
+        paymentProviders: ['invoice'],
+        registry: expect.any(Object),
         slugs: { ...DEFAULT_PAYLOAD_JOBS_SLUGS, tenants: 'tenants' },
         tenancy: 'single',
       },
     })
+  })
+
+  it('registers payment providers on top of invoice and checks them @S-146', async () => {
+    const result = await payloadJobs({ orders: { paymentProviders: [{ key: 'stripe', label: 'Card' }] } })(baseConfig)
+
+    const custom = result.custom as { payloadJobs: { paymentProviders: string[] } }
+    expect(custom.payloadJobs.paymentProviders).toEqual([
+      'invoice',
+      'stripe',
+    ])
+    await expect(
+      Promise.resolve().then(() =>
+        payloadJobs({ orders: { paymentProviders: [{ key: 'invoice', label: 'Again' }] } })(baseConfig),
+      ),
+    ).rejects.toThrow(/registered twice/)
+  })
+
+  it('lets an organisation owner (organisationRole) update its orders by default @S-146', async () => {
+    const result = await payloadJobs({ tenancy: 'multi' })({
+      ...baseConfig,
+      collections: [
+        { slug: 'users', fields: [], auth: { verify: true } },
+        { slug: 'tenants', fields: [] },
+      ],
+    } as unknown as Config)
+    const orders = result.collections?.find((collection) => collection.slug === 'orders')
+    const update = (user: Record<string, unknown>) =>
+      orders?.access?.update?.({ data: {}, req: { context: {}, user } } as never)
+    const employer = { id: 3, organisation: 9, role: 'user', tenants: [{ role: 'employer', tenant: 1 }] }
+
+    expect(await update({ ...employer, organisationRole: 'owner' })).toEqual({
+      and: [{ organisation: { equals: 9 } }, { tenant: { in: [1] } }],
+    })
+    expect(await update({ ...employer, organisationRole: 'member' })).toBe(false)
+  })
+
+  it('keeps ordered organisations and jobs from being deleted @S-146', async () => {
+    const result = await payloadJobs()(baseConfig)
+    const hooksOf = (slug: string) =>
+      result.collections?.find((collection) => collection.slug === slug)?.hooks?.beforeDelete ?? []
+
+    // The order guard runs first on each; it refuses while any order points at the document.
+    const req = { payload: { collections: { orders: {} }, count: async () => ({ totalDocs: 1 }) } }
+    for (const slug of ['organisations', 'jobs']) {
+      const [guard] = hooksOf(slug) as ((args: unknown) => Promise<void>)[]
+      await expect(guard({ collection: { slug }, id: 1, req })).rejects.toThrow()
+    }
   })
 
   it('adds coupons only when the feature is on', async () => {
@@ -99,6 +151,10 @@ features: { applications: true, alerts: false, credits: true, coupons: false, pa
 
     expect(on.collections?.map((collection) => collection.slug)).toContain('coupons')
     expect(off.collections?.map((collection) => collection.slug)).not.toContain('coupons')
+    // Orders stay on, without a relationship to the missing collection (PJ-23).
+    const orders = off.collections?.find((collection) => collection.slug === 'orders')
+    expect(orders).toBeDefined()
+    expect(relationTargets(orders!)).not.toContain('coupons')
   })
 
   it('adds jobs with placements, and the daily task that expires them, keeping host tasks', async () => {
@@ -234,13 +290,13 @@ features: { applications: true, alerts: false, credits: true, coupons: false, pa
     )
     const recorded = result.custom?.payloadJobs as { slugs: Record<string, string> }
 
-    // Anything the plugin registers and the dashboard might count is in the map, under its
-    // resolved name: `orders` arrives with PJ-23 without touching this call site (PJ-80).
-    const added = (result.collections ?? [])
-      .map((collection) => collection.slug)
-      .filter((slug) => !['users', 'tenants'].includes(slug))
+    // Every recorded slug is a collection the plugin registered, under its resolved name,
+    // including main's real orders collection (PJ-23).
+    const registered = (result.collections ?? []).map((collection) => collection.slug)
+    const { tenants: _tenants, ...owned } = recorded.slugs
 
-    expect(Object.values(recorded.slugs)).toEqual(expect.arrayContaining(added))
+    expect(registered).toEqual(expect.arrayContaining(Object.values(owned)))
+    expect(registered).toContain(recorded.slugs.orders)
     expect(recorded.slugs).toMatchObject({ jobs: 'vacancies', organisations: 'employers' })
     // The host's own tenant collection keeps its slug too.
     expect(recorded.slugs.tenants).toBe('tenants')
@@ -256,13 +312,13 @@ const deny = () => false
 
 const OVERRIDES = {
   addOns: { slug: 'extras' },
-  alertSubscriptions: { slug: 'subscribers' },
   coupons: { slug: 'vouchers' },
   jobCategories: { slug: 'categories' },
   jobs: { slug: 'vacancies' },
   jobTypes: { slug: 'employment-types' },
   locations: { slug: 'job-locations' },
   menus: { slug: 'navigation' },
+  orders: { slug: 'purchases' },
   organisations: { slug: 'employers' },
   pages: { slug: 'content-pages' },
   plans: { slug: 'packages' },
@@ -298,7 +354,6 @@ describe('collection slug overrides', () => {
       'employers',
       'content-pages',
       'navigation',
-      'subscribers',
       'categories',
       'employment-types',
       'salaries',
@@ -306,6 +361,9 @@ describe('collection slug overrides', () => {
       'extras',
       'vacancies',
       'vouchers',
+      'application-files',
+      'applications',
+      'purchases',
     ])
 
     const targets = new Set(
@@ -313,7 +371,7 @@ describe('collection slug overrides', () => {
     )
 
     // No default plugin slug survives a rename, and each relation resolves to its new name.
-    for (const slug of ['locations', 'organisations', 'pages', 'menus', 'job-categories', 'job-types', 'salary-bands', 'plans', 'add-ons', 'jobs']) {
+    for (const slug of ['locations', 'organisations', 'pages', 'menus', 'job-categories', 'job-types', 'salary-bands', 'plans', 'add-ons', 'jobs', 'coupons']) {
       expect(targets).not.toContain(slug)
     }
     // The pages' parent and menus' page items follow the renamed pages collection.
@@ -327,6 +385,14 @@ describe('collection slug overrides', () => {
         'salaries',
         'packages',
         'extras',
+        // Applications relate to the renamed jobs and organisations, their own private files
+        // (a slug of their own, not overridable), and the applicant's users collection.
+        'vacancies',
+        'application-files',
+        'users',
+        // Orders relate to organisations, plans, add-ons, coupons, jobs and users; jobs to orders.
+        'vouchers',
+        'purchases',
       ]),
     )
 
@@ -345,9 +411,11 @@ describe('collection slug overrides', () => {
       'salaries',
       'extras',
       'packages',
-      'subscribers',
       'vacancies',
       'vouchers',
+      'application-files',
+      'applications',
+      'purchases',
     ])
   })
 

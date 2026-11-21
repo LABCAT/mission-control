@@ -1,6 +1,5 @@
 import type { SiteManagerNavOptions } from './nav'
 
-export * from './collections'
 export * from './dashboard'
 export * from './links'
 export * from './nav'

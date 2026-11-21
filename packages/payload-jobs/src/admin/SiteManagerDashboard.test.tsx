@@ -9,22 +9,12 @@ import { organisationsCollection } from '../collections/organisations'
 import { planCollection, withPlanRestrictionGuards } from '../plans'
 import { taxonomyCollections } from '../taxonomies'
 import { bootTestPayload, type TestHarness } from '../test'
-import { ORDERS_SLUG } from './collections'
+import { orderCollection } from '../orders'
 import { SiteManagerDashboard } from './SiteManagerDashboard'
 
 const tenantFields: Field[] = [{ name: 'currency', type: 'text' }]
 
-const Orders: CollectionConfig = {
-  slug: ORDERS_SLUG,
-  admin: { useAsTitle: 'id' },
-  fields: [
-    { name: 'organisation', type: 'relationship', relationTo: 'organisations' },
-    { name: 'status', type: 'text' },
-    { name: 'total', type: 'number' },
-    { name: 'currency', type: 'text' },
-  ],
-  versions: false,
-}
+const Orders: CollectionConfig = orderCollection({ couponsEnabled: false })
 
 /** Every piece of text an element tree renders, including the props this dashboard passes. */
 const textOf = (node: ReactNode): string => {
@@ -51,13 +41,13 @@ describe('site manager dashboard view @S-117', () => {
   beforeAll(async () => {
     harness = await bootTestPayload({
       collections: [
+        Orders,
         organisationsCollection({ mediaSlug: null, tenantScoped: true }),
         locationsCollection({ requireTenant: true }),
         ...withPlanRestrictionGuards(taxonomyCollections({ tenantScoped: true })),
         planCollection(),
         addOnCollection(),
         jobsCollection({ tenantScoped: true }),
-        Orders,
       ],
       tenantData: () => ({ currency: 'VUV' }),
       tenantFields,
@@ -100,7 +90,7 @@ describe('site manager dashboard view @S-117', () => {
     if (harness) await harness.destroy()
   })
 
-  it('renders the active tenant’s pending jobs and orders for a site manager @S-146', async () => {
+  it('renders the active tenant’s pending jobs and orders for a site manager @S-148', async () => {
     const view = await render({ payload: harness.payload, user: harness.tenantAdminA })
     const text = textOf(view)
 

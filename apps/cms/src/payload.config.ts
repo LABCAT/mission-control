@@ -11,6 +11,8 @@ import { Tags } from './collections/Tags'
 
 // mission-control: job board plugins. Keep this block small so orbit merges stay clean.
 import { payloadJobs, type RateLimiter } from '@mission-control/payload-jobs'
+import { payloadJobsAlerts } from '@mission-control/payload-jobs-alerts'
+import { payloadJobsReports } from '@mission-control/payload-jobs-reports'
 import { multiTenantPlugin } from '@payloadcms/plugin-multi-tenant'
 import { Tenants } from './collections/Tenants'
 import { SiteKeys } from './collections/SiteKeys'
@@ -110,7 +112,7 @@ export default buildConfig({
   storage: [
     r2Storage({
       bucket: workerEnv?.MEDIA as R2Bucket,
-      collections: { documents: true, media: true },
+      collections: { 'application-files': true, documents: true, media: true },
       enabled: Boolean(workerEnv?.MEDIA),
     }),
   ],
@@ -124,6 +126,9 @@ export default buildConfig({
       collections: payloadJobsCollectionOptions,
       tenancy: 'multi',
     }),
+    // mission-control: add-ons (PJ-115), after payloadJobs(). Tenants switch them with `addOns`.
+    payloadJobsAlerts(),
+    payloadJobsReports(),
     multiTenantPlugin(multiTenantOptionsFor(payloadJobsCollectionSlugs)),
   ],
   localization: {

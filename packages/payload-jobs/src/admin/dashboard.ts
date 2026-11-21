@@ -2,7 +2,7 @@ import type { CollectionSlug, Payload, Where } from 'payload'
 
 import { getUserTenantIDsByRole, isSuperAdmin, type MissionControlUser } from '../access'
 import { JOBS_SLUG } from '../collections/jobs'
-import { ORDERS_SLUG } from './collections'
+import { DEFAULT_PAYLOAD_JOBS_SLUGS } from '../slugs'
 import { SITE_MANAGER_ROLES } from './nav'
 
 /**
@@ -45,7 +45,7 @@ export type SiteManagerDashboard = {
   jobCounts: { ended: number; live: number; pending: number }
   /** The resolved jobs collection slug, for links back into the admin. */
   jobsSlug: string
-  /** Null when the host has no orders collection yet (PJ-31). */
+  /** Null only when a host leaves the orders collection out of its config. */
   orders: null | { count: number; recent: DashboardOrder[]; slug: string }
   pendingJobs: DashboardJob[]
   tenant: DashboardTenant
@@ -125,7 +125,7 @@ export const loadSiteManagerDashboard = async ({
 }: LoadArgs): Promise<SiteManagerDashboard> => {
   const jobs = (slugs.jobs ?? JOBS_SLUG) as CollectionSlug
   const tenants = (slugs.tenants ?? 'tenants') as CollectionSlug
-  const ordersSlug = (slugs.orders ?? ORDERS_SLUG) as CollectionSlug
+  const ordersSlug = (slugs.orders ?? DEFAULT_PAYLOAD_JOBS_SLUGS.orders) as CollectionSlug
   const as = { overrideAccess: false, user: user as never }
   const tenant = inTenant(tenantID)
 

@@ -2,7 +2,7 @@ import type { CollectionConfig, Config, GlobalConfig } from 'payload'
 
 import { hasAnyTenantRole, isSuperAdmin, type MissionControlUser } from '../access'
 import { DEFAULT_PAYLOAD_JOBS_SLUGS, type PayloadJobsCollectionSlugs } from '../slugs'
-import { APPLICATIONS_SLUG, ORDERS_SLUG } from './collections'
+import { APPLICATIONS_SLUG } from '../collections/applications'
 
 /**
  * The cut-down admin nav for site managers (PJ-30, S-117).
@@ -39,8 +39,8 @@ export type SiteManagerNavSlugs = {
  *
  * Every slug the plugin owns comes from its resolved options (PJ-80), so a host that renames
  * `jobs` to `vacancies` keeps it in a site manager's menu. The host upload collections follow
- * `mediaSlug`/`documentsSlug`/`usersSlug` the same way; `orders` and `applications` are
- * placeholders until PJ-31 and PJ-22 land, and `folders`/`tags` belong to the host's own CMS.
+ * `mediaSlug`/`documentsSlug`/`usersSlug` the same way; `applications` has no slug option yet,
+ * and `folders`/`tags` belong to the host's own CMS.
  *
  * It is a superset of the task's list on purpose: S-120 is built and needs the location tree
  * and taxonomies in a site manager's menu, and media/documents are the tenant's own uploads.
@@ -55,7 +55,7 @@ export const siteManagerNavCollections = ({
 }: SiteManagerNavSlugs = {}): string[] => [
   slugs.jobs,
   slugs.organisations,
-  ORDERS_SLUG,
+  slugs.orders,
   APPLICATIONS_SLUG,
   slugs.pages,
   slugs.menus,

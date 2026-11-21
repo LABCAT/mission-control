@@ -1,7 +1,6 @@
 import type { CollectionConfig, Config } from 'payload'
 import { describe, expect, it } from 'vitest'
 
-import { ALERT_SUBSCRIPTIONS_SLUG } from '../alert-subscriptions'
 import { MENUS_SLUG } from './menus'
 import { PAGES_SLUG } from './pages'
 import { payloadJobs } from '../index'
@@ -52,12 +51,14 @@ describe('locations collection @S-120', () => {
       'organisations',
       PAGES_SLUG,
       MENUS_SLUG,
-      ALERT_SUBSCRIPTIONS_SLUG,
       ...TAXONOMY_SLUGS,
       'plans',
       'add-ons',
       'jobs',
       'coupons',
+      'application-files',
+      'applications',
+      'orders',
     ])
     expect(Locations.slug).toBe('locations')
     expect(Locations.versions).toBe(false)

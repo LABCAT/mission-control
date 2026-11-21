@@ -5,7 +5,7 @@ import { addOnCollection } from '../add-ons'
 import { planCollection, withPlanRestrictionGuards } from '../plans'
 import { taxonomyCollections } from '../taxonomies'
 import { bootTestPayload, type TestHarness } from '../test'
-import { ORDERS_SLUG } from './collections'
+import { orderCollection, ORDERS_SLUG } from '../orders'
 import {
   activeTenantID,
   currencyMinorUnits,
@@ -14,7 +14,7 @@ import {
   loadSiteManagerDashboard,
 } from './dashboard'
 import { JOBS_SLUG, jobsCollection } from '../collections/jobs'
-import { resolvePayloadJobsSlugs } from '../slugs'
+import { DEFAULT_PAYLOAD_JOBS_SLUGS, resolvePayloadJobsSlugs } from '../slugs'
 import { locationsCollection } from '../collections/locations'
 import { organisationsCollection } from '../collections/organisations'
 
@@ -24,23 +24,11 @@ const tenantFields: Field[] = [
   { name: 'defaultLocale', type: 'text' },
 ]
 
-/** A stand-in for PJ-31's orders, only carrying what the dashboard reads. */
-const ordersStandIn = ({
-  organisationsSlug = 'organisations',
-  slug = ORDERS_SLUG,
-}: { organisationsSlug?: string; slug?: string } = {}): CollectionConfig => ({
-  slug,
-  admin: { useAsTitle: 'id' },
-  fields: [
-    { name: 'organisation', type: 'relationship', relationTo: organisationsSlug },
-    { name: 'status', type: 'text' },
-    { name: 'total', type: 'number' },
-    { name: 'currency', type: 'text' },
-  ],
-  versions: false,
-})
+/** Main's real orders collection (PJ-23), under the slugs a test names. */
+const realOrders = (slugs = DEFAULT_PAYLOAD_JOBS_SLUGS): CollectionConfig =>
+  orderCollection({ couponsEnabled: false, slugs })
 
-const Orders = ordersStandIn()
+const Orders = realOrders()
 
 describe('site manager dashboard @S-117', () => {
   let harness: TestHarness
@@ -52,13 +40,13 @@ describe('site manager dashboard @S-117', () => {
   beforeAll(async () => {
     harness = await bootTestPayload({
       collections: [
+        Orders,
         organisationsCollection({ mediaSlug: null, tenantScoped: true }),
         locationsCollection({ requireTenant: true }),
         ...withPlanRestrictionGuards(taxonomyCollections({ tenantScoped: true })),
         planCollection(),
         addOnCollection(),
         jobsCollection({ tenantScoped: true }),
-        Orders,
       ],
       tenantData: (which) => ({
         currency: which === 'A' ? 'VUV' : 'NZD',
@@ -98,6 +86,11 @@ describe('site manager dashboard @S-117', () => {
       organisation: ids.orgA,
       status: 'paid',
       tenant: tenantA.id,
+      subtotal: 150000,
+      tax: 0,
+      discount: 0,
+      paymentMethod: 'invoice',
+      paymentProvider: 'invoice',
       total: 150000,
     })
     ids.orderB = await create(ORDERS_SLUG, {
@@ -105,6 +98,11 @@ describe('site manager dashboard @S-117', () => {
       organisation: ids.orgB,
       status: 'paid',
       tenant: tenantB.id,
+      subtotal: 2500,
+      tax: 0,
+      discount: 0,
+      paymentMethod: 'invoice',
+      paymentProvider: 'invoice',
       total: 2500,
     })
   })
@@ -113,7 +111,7 @@ describe('site manager dashboard @S-117', () => {
     if (harness) await harness.destroy()
   })
 
-  it('counts and lists only the active tenant’s jobs and orders @S-146', async () => {
+  it('counts and lists only the active tenant’s jobs and orders @S-148', async () => {
     const dashboard = await loadSiteManagerDashboard({
       payload: harness.payload,
       tenantID: harness.tenantA.id,
@@ -148,7 +146,7 @@ describe('site manager dashboard @S-117', () => {
     expect(dashboard.orders).toMatchObject({ count: 0, recent: [] })
   })
 
-  it('reports the tenant’s own orders as null when the host has no orders collection yet @S-146', async () => {
+  it('reports the tenant’s own orders as null when the host has no orders collection yet @S-148', async () => {
     const dashboard = await loadSiteManagerDashboard({
       payload: harness.payload,
       slugs: { orders: 'not-installed-yet' },
@@ -209,13 +207,13 @@ describe('site manager dashboard with renamed collections @S-117', () => {
   beforeAll(async () => {
     harness = await bootTestPayload({
       collections: [
+        realOrders({ ...slugs, orders: 'purchases' }),
         organisationsCollection({ mediaSlug: null, slug: 'employers', tenantScoped: true }),
         locationsCollection({ requireTenant: true }),
         ...withPlanRestrictionGuards(taxonomyCollections({ tenantScoped: true })),
         planCollection(),
         addOnCollection(),
         jobsCollection({ slugs, tenantScoped: true }),
-        ordersStandIn({ organisationsSlug: 'employers', slug: 'purchases' }),
       ],
       tenantData: () => ({ currency: 'VUV', currencyMinorUnits: 0, defaultLocale: 'en' }),
       tenantFields,
@@ -247,7 +245,12 @@ describe('site manager dashboard with renamed collections @S-117', () => {
         organisation: org.id,
         status: 'pending',
         tenant: harness.tenantA.id,
-        total: 1500,
+        subtotal: 1500,
+      tax: 0,
+      discount: 0,
+      paymentMethod: 'invoice',
+      paymentProvider: 'invoice',
+      total: 1500,
       },
       overrideAccess: true,
     })
@@ -257,7 +260,7 @@ describe('site manager dashboard with renamed collections @S-117', () => {
     if (harness) await harness.destroy()
   })
 
-  it('counts the host’s renamed jobs and orders @S-146', async () => {
+  it('counts the host’s renamed jobs and orders @S-148', async () => {
     const dashboard = await loadSiteManagerDashboard({
       payload: harness.payload,
       slugs: { jobs: 'vacancies', orders: 'purchases' },
