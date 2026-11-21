@@ -291,6 +291,20 @@ describe('runMediaImport @S-148', () => {
     }
   })
 
+  it('fails the second of two files that would share a bucket name, instead of serving the wrong bytes', async () => {
+    const t = run()
+    // `2024/02/about-hero.jpg` (page 201) and `2024/02-about/hero.jpg` (page 202) both flatten to
+    // 2024-02-about-hero.jpg: the `-` that joins folders is also legal inside a name.
+    const tables = structuredClone(mediaTables)
+    tables.wp_postmeta!.find((r) => r.post_id === 509 && r.meta_key === '_wp_attached_file')!.meta_value = '2024/02-about/hero.jpg'
+    const report = await t.go({ reader: new MysqlReader({ connect: async () => createFixtureConnection(tables) }) })
+    expect(report.failures).toEqual([
+      expect.objectContaining({ message: expect.stringContaining('Bucket name clash'), owner: 'pages #202' }),
+    ])
+    expect(new TextDecoder().decode(t.bucket.objects.get('2024-02-about-hero.jpg')!.data)).toBe('JPG-hero')
+    expect(t.payload.store.pages!.find((p) => p.legacyId === 202)!.seo.image).toBeUndefined()
+  })
+
   it('uses the slugs it is given', async () => {
     const payload = createFakePayload({
       acme_orgs: [{ id: 1, legacyId: 2, tenant: TENANT }],
@@ -375,5 +389,6 @@ describe('arguments @S-148', () => {
     expect(() => parseMediaArgs([...base, '--target-dir', '/o', '--r2-local'])).toThrow('exactly one')
     expect(() => parseMediaArgs(['--source', '/u', '--r2-local'])).toThrow('--tenant')
     expect(() => parseMediaArgs([...base, '--r2-local', '--bogus'])).toThrow('Unknown')
+    expect(() => parseMediaArgs([...base, '--target-dir', ''])).toThrow('needs a directory')
   })
 })

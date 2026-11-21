@@ -152,6 +152,7 @@ export const mediaFiles: Record<string, string> = {
   'uploaded_cvs/someone.pdf': 'PERSONAL',
   'uploaded_cvs/me.png': 'PERSONAL',
   '2022/05/job-logo.png': 'PNG-job-logo',
+  '2024/02-about/hero.jpg': 'JPG-other',
   // A generated thumbnail that must never be copied.
   'company_logos/charters-150x150.jpg': 'THUMB',
 }

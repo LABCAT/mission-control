@@ -195,6 +195,7 @@ export const runMediaImport = async (options: RunMediaImportOptions): Promise<Me
   }
 
   const legacyIds = new Map<number, string>()
+  const keys = new Map<string, string>()
   for (const ref of plan.refs) {
     const label = `${ref.owner.collection} #${ref.owner.legacyId}`
     const fail = (message: string) => report.failures.push({ message, owner: label, path: ref.path })
@@ -222,6 +223,13 @@ export const runMediaImport = async (options: RunMediaImportOptions): Promise<Me
           continue
         }
       }
+
+      // Two different legacy files can flatten to one bucket key (`my logo.png`, `my_logo.png`).
+      // Copying the second would serve one owner the other's bytes, so it fails instead.
+      const key = stableFilename(ref.path)
+      const holder = keys.get(key)
+      if (holder && holder !== ref.path) throw new Error(`Bucket name clash: ${ref.path} and ${holder} are both ${key}`)
+      keys.set(key, ref.path)
 
       const copied = await copyOnce(ref, contentType)
       if (copied instanceof Error) {

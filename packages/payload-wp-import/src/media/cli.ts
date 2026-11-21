@@ -32,6 +32,7 @@ export const parseMediaArgs = (argv: string[]): MediaCliArgs => {
   }
   if (!args.tenant) throw new Error('--tenant <slug> is required')
   if (!args.source) throw new Error('--source <uploads-dir> is required')
+  if (args.targetDir === '') throw new Error('--target-dir needs a directory')
   if (Boolean(args.targetDir) === args.r2Local) throw new Error('Give exactly one of --target-dir and --r2-local')
   return args as MediaCliArgs
 }

@@ -126,7 +126,9 @@ export const r2Target = (bucket: R2BucketLike): MediaTarget => ({
     let value: ReadableStream | Uint8Array
     if (FixedLength) {
       const fixed = new FixedLength(meta.size)
-      void source.pipeTo(fixed.writable)
+      source.pipeTo(fixed.writable).catch(() => {
+        // The put below fails on the short body; this only keeps the rejection from escaping.
+      })
       value = fixed.readable
     } else {
       value = new Uint8Array(await new Response(source).arrayBuffer())
