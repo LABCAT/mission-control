@@ -21,6 +21,8 @@
   "dependencies": {
     "@mission-control/payload-email-cloudflare": "workspace:*",
     "@mission-control/payload-jobs": "workspace:*",
+    "@mission-control/payload-jobs-alerts": "workspace:*",
+    "@mission-control/payload-jobs-reports": "workspace:*",
     "@mission-control/payload-wp-import": "workspace:*",
     "@mission-control/rocketship-payload": "workspace:*",
     "@payloadcms/db-postgres": "4.0.0-beta.7",

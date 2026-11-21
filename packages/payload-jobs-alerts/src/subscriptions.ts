@@ -10,13 +10,15 @@ import {
   type PayloadRequest,
 } from 'payload'
 
-import { getUserTenantIDsByRole, isSuperAdmin, type MissionControlUser } from './access'
 import {
   DEFAULT_PAYLOAD_JOBS_SLUGS,
+  getUserTenantIDsByRole,
+  isSuperAdmin,
   mergeCollectionAccess,
   type CollectionAccess,
+  type MissionControlUser,
   type PayloadJobsCollectionSlugs,
-} from './slugs'
+} from '@mission-control/payload-jobs'
 
 /**
  * Job alert subscriptions (PJ-26). Job seekers do not need an account: a subscription is an
@@ -367,8 +369,10 @@ const fields = (tenantScoped: boolean, slugs: PayloadJobsCollectionSlugs): Field
 export type AlertSubscriptionsOptions = {
   /** Overrides the collection's default access, operation by operation. */
   access?: CollectionAccess
-  /** Resolved collection slugs, so the filter relations use the tenant's names. */
+  /** Resolved core collection slugs, so the filter relations use the tenant's names. */
   slugs?: PayloadJobsCollectionSlugs
+  /** This collection's own slug (PJ-80 style override). Defaults to `alert-subscriptions`. */
+  slug?: string
   /** Set to `false` in single-tenant mode, where there is no `tenants` collection. */
   tenantScoped?: boolean
 }
@@ -379,10 +383,11 @@ export type AlertSubscriptionsOptions = {
  */
 export const alertSubscriptionCollection = ({
   access,
+  slug = ALERT_SUBSCRIPTIONS_SLUG,
   slugs = DEFAULT_PAYLOAD_JOBS_SLUGS,
   tenantScoped = true,
 }: AlertSubscriptionsOptions = {}): CollectionConfig => ({
-  slug: slugs.alertSubscriptions,
+  slug,
   access: mergeCollectionAccess(
     {
       create: alertSubscriptionWriteAccess,
@@ -406,7 +411,7 @@ export const alertSubscriptionCollection = ({
     beforeValidate: [
       generateAlertTokensOnCreate,
       normalizeAlertSubscription,
-      uniqueAlertEmailPerTenant(tenantScoped, slugs.alertSubscriptions),
+      uniqueAlertEmailPerTenant(tenantScoped, slug),
     ],
   },
   // One subscription per address per tenant. Tokens are unique on their own columns.

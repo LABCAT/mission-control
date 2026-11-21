@@ -58,6 +58,16 @@ Dev schema push is **off** (drizzle-kit can't run in workerd), so every collecti
 4. If you need to redo a migration, migrate it down first. Then delete its `.ts`/`.json` files, remove it from `migrations/index.ts`, and create it again. Never edit a migration that's already on `main`.
 5. Never run migrations against Neon. Releases do that.
 
+### Migration last (binding for reviewers too)
+
+Schema PRs are built and reviewed **without** a migration:
+
+- The PR changes the config and types only, and carries the `needs-migration` label. A missing migration on a `needs-migration` PR is expected. It is **not** a finding, so reviewers must not raise it.
+- When the PR is next to merge, the orchestrator has the migration generated on top of the latest `main` (steps 2–4 above). The migration goes on its own commit, gets an up/down/up check, and the label changes to `migration`.
+- A PR labelled `migration`, or one with no migration label that changes the schema, must include its migration. That is a valid finding.
+
+This keeps migrations in merge order and avoids conflicting migration files across parallel PRs.
+
 ## Payload 4 beta gotchas (learned the hard way)
 
 - **Globals and collections get versions by default.** Set `versions: false` unless you need history. Otherwise you get extra `_v` tables.

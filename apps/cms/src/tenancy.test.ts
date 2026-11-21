@@ -7,10 +7,10 @@ import {
   hashSiteKey,
   PAYLOAD_JOBS_TENANT_COLLECTIONS,
   payloadJobs,
-  removeTenantAlertSubscriptions,
   resolvePayloadJobsSlugs,
   type MissionControlUser,
 } from '@mission-control/payload-jobs'
+import { payloadJobsAlerts, removeTenantAlertSubscriptions } from '@mission-control/payload-jobs-alerts'
 
 import { Documents } from './collections/Documents'
 import { Folders } from './collections/Folders'
@@ -54,16 +54,19 @@ const superAdmin: TestUser = {
 }
 
 const buildConfig = async (): Promise<Config> => {
-  const withJobs = await payloadJobs({ tenancy: 'multi' })({
+  const base = await payloadJobs({ tenancy: 'multi' })({
     admin: { user: 'users' },
     collections: [Users, Media, Folders, Tags, Tenants, Documents],
   } as Config)
+  // mission-control: the alerts add-on is its own plugin since PJ-115.
+  const withJobs = await payloadJobsAlerts()(base)
 
   return (await multiTenantPlugin(multiTenantOptions)(withJobs)) as Config
 }
 
 const requestFor = (user: MissionControlUser | null) => ({
-  payload: {},
+  // The add-on gate asks which tenants have the add-on on; every tenant here does.
+  payload: { find: async () => ({ docs: [{ id: tenantA.id }] }) },
   payloadAPI: 'REST',
   t: (key: string) => key,
   user,
@@ -527,8 +530,9 @@ describe('alert subscriptions (PJ-26)', () => {
     )
 
     expect(alerts?.fields.some((field) => 'name' in field && field.name === 'tenant')).toBe(true)
+    // The add-on gate narrows the read to tenants that have alerts switched on.
     expect(await collectionAccess(config, 'read', 'alert-subscriptions', tenantAdminA)).toEqual({
-      tenant: { in: [tenantA.id] },
+      and: [{ tenant: { in: [tenantA.id] } }, { tenant: { in: [tenantA.id] } }],
     })
     // The plugin's own tenant constraint sits in front of the collection's read access.
     expect(await baseAccess(config, 'read', 'alert-subscriptions', tenantAdminA)).toEqual({
@@ -671,6 +675,42 @@ describe('coupons', () => {
     const req = await siteKeyRequest({ key: 'sk_tenant', tenant: tenantA.id })
 
     expect(await read({ req, slug: 'coupons' })).toBe(false)
+  })
+})
+
+describe('orders', () => {
+  it('registers the orders collection with its tenant field @S-146', async () => {
+    const config = await buildConfig()
+    const orders = config.collections?.find((collection) => collection.slug === 'orders')
+
+    expect(orders).toBeDefined()
+    expect(orders?.fields.some((field) => 'name' in field && field.name === 'tenant')).toBe(true)
+  })
+
+  it('keeps orders out of reach for anonymous requests and site keys @S-146', async () => {
+    const config = await buildConfig()
+    const orders = config.collections?.find((candidate) => candidate.slug === 'orders')
+    const read = orders?.access?.read as (args: unknown) => Promise<unknown>
+
+    expect(await read({ req: requestFor(null), slug: 'orders' })).toBe(false)
+
+    const req = await siteKeyRequest({ key: 'sk_tenant', tenant: tenantA.id })
+
+    expect(await read({ req, slug: 'orders' })).toBe(false)
+  })
+
+  it('refuses to delete a tenant that has orders before the plugin removes anything @S-146', async () => {
+    const config = await buildConfig()
+    const tenants = config.collections?.find((collection) => collection.slug === 'tenants')
+    // The app's own two hooks run first (the delete's transaction rolls them back); the order
+    // guard comes next, before the plugin's clean-ups.
+    const guard = tenants?.hooks?.beforeDelete?.[2]
+    const count = async () => ({ totalDocs: 2 })
+    const req = { payload: { collections: { orders: {} }, count } }
+
+    await expect(
+      (guard as (args: unknown) => Promise<void>)({ collection: { slug: 'tenants' }, id: 1, req }),
+    ).rejects.toMatchObject({ data: { errors: [expect.objectContaining({ message: expect.stringMatching(/kept for accounting/) })] } })
   })
 })
 

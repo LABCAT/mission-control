@@ -26,6 +26,8 @@ type AccessResultOverride = NonNullable<
  */
 export const multiTenantOptionsFor = (
   slugs: PayloadJobsCollectionSlugs = resolvePayloadJobsSlugs(),
+  // mission-control: the alerts add-on's own slug (PJ-115), from `payloadJobsAlerts({ slug })`.
+  alertSubscriptionsSlug = 'alert-subscriptions',
 ): MultiTenantPluginConfig => {
   // mission-control: the plugin gives every tenant member access to the tenant's documents, so
   // seekers (site accounts, PJ-81) are denied here. Staff roles are unchanged.
@@ -60,7 +62,7 @@ export const multiTenantOptionsFor = (
       [slugs.addOns]: { accessResultOverride: privateToTenant },
       // mission-control: alert subscribers are personal data (PJ-26). The collection's own access
       // already denies site keys, seekers and anonymous callers, so no override is needed here.
-      [slugs.alertSubscriptions]: {},
+      [alertSubscriptionsSlug]: {},
       // mission-control: applications and their CV files are personal data (PJ-25). Their own
       // access allows only super admins, site managers, the job's organisation and the applicant,
       // and denies site keys and anonymous callers, so no override is needed here.
@@ -68,6 +70,9 @@ export const multiTenantOptionsFor = (
       'application-files': {},
       // mission-control: jobs read site keys themselves (published and expired only) (PJ-19).
       [slugs.jobs]: { accessResultOverride: privateToTenant },
+      // mission-control: orders are private to the organisation and site managers, never readable
+      // with a site key; seekers are denied (PJ-23).
+      [slugs.orders]: { accessResultOverride: privateToTenant },
       // mission-control: content pages and menus (PJ-103). The generic override adds the site
       // key's tenant and, for the draft-enabled pages, published only.
       [slugs.menus]: { accessResultOverride: tenantContentOverride },

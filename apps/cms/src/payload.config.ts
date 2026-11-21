@@ -11,6 +11,8 @@ import { Tags } from './collections/Tags'
 
 // mission-control: job board plugins. Keep this block small so orbit merges stay clean.
 import { payloadJobs, type RateLimiter } from '@mission-control/payload-jobs'
+import { payloadJobsAlerts } from '@mission-control/payload-jobs-alerts'
+import { payloadJobsReports } from '@mission-control/payload-jobs-reports'
 import { multiTenantPlugin } from '@payloadcms/plugin-multi-tenant'
 import { Tenants } from './collections/Tenants'
 import { SiteKeys } from './collections/SiteKeys'
@@ -124,6 +126,9 @@ export default buildConfig({
       collections: payloadJobsCollectionOptions,
       tenancy: 'multi',
     }),
+    // mission-control: add-ons (PJ-115), after payloadJobs(). Tenants switch them with `addOns`.
+    payloadJobsAlerts(),
+    payloadJobsReports(),
     multiTenantPlugin(multiTenantOptionsFor(payloadJobsCollectionSlugs)),
   ],
   localization: {

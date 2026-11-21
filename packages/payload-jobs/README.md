@@ -19,6 +19,8 @@ Tested with Payload `4.0.0-beta.7`.
 | Add-ons | `add-ons` | Featured listings and other extras. |
 | Alert subscriptions | `alert-subscriptions` | Email job alerts. |
 | Jobs | `jobs` | Listings, statuses, placements. |
+| Coupons | `coupons` | Discount codes. |
+| Orders | `orders` | An organisation's orders: fixed money, status, append-only history. |
 
 In single-tenant mode it also adds the `job-board-settings` global. In multi-tenant mode the
 tenant fields (currency, timezone, locales, tax, sender, moderation) are appended to the host's
@@ -103,13 +105,40 @@ payloadJobs({
     salaryBands: { slug: 'salaries' },
     plans: { slug: 'packages' },
     addOns: { slug: 'extras' },
-    alertSubscriptions: { slug: 'subscribers' },
+    coupons: { slug: 'vouchers' },
+    orders: { slug: 'purchases' },
   },
 })
 ```
 
 Keeping the defaults in the table above needs no migration. Choosing a slug before your first schema migration needs nothing extra, but renaming one on an installation that already has the tables changes the schema: generate and apply your own app migration for it.
 `jobsSlug` still works for older configs; `collections.jobs.slug` takes the same slot.
+
+## Orders and payment providers
+
+An order belongs to an organisation. It keeps a frozen copy of what was sold (the
+`snapshotQuote()` value, the add-ons and the tax lines) and its money in whole minor units; none
+of that changes after create. The status moves only along `ORDER_TRANSITIONS` (`paid` and
+`cancelled` are final), and every change lands in the append-only `log`. Members read their
+organisation's orders, tenant admins change them, and nobody deletes one, or a tenant,
+organisation or job an order points at.
+
+Core registers the `invoice` provider. A payment add-on registers its own, and an order may only
+name a registered one. An owner (by default a user whose `organisationRole` is `owner`) can answer
+a member's purchase request (`waiting_for_purchase` → `pending` or `cancelled`); pass
+`isOrganisationOwner` to decide ownership another way:
+
+```ts
+payloadJobs({
+  orders: {
+    isOrganisationOwner: ({ organisationID, user }) => isOwner(user, organisationID),
+    paymentProviders: [{ key: 'stripe', label: 'Card' }],
+  },
+})
+```
+
+System code acting for a signed-in user under `overrideAccess` sets
+`req.context[ORDER_SYSTEM_CONTEXT] = true`; a request with no user is system code already.
 
 ## Access overrides
 
