@@ -1,8 +1,15 @@
 import type { Config, Plugin } from 'payload'
 
+import {
+  buildXeroInvoicesCollection,
+  resolveXeroInvoicing,
+  xeroInvoiceSyncTask,
+  type XeroInvoicingOptions,
+} from './invoice-sync'
 import { xeroOAuthEndpoints } from './oauth-endpoints'
 import type { XeroOAuthOptions } from './oauth'
 import {
+  authenticatedAdminAccess,
   buildXeroSettingsCollection,
   DEFAULT_SETTINGS_SLUG,
   type XeroSettingsOptions,
@@ -11,6 +18,8 @@ import {
 
 export * from './contacts'
 export * from './crypto'
+export * from './invoice-sync'
+export * from './invoices'
 export * from './oauth'
 export * from './oauth-endpoints'
 export * from './payment-sync'
@@ -20,6 +29,11 @@ export * from './xero-settings'
 export type PayloadXeroOptions = XeroSettingsOptions & {
   /** Turn the plugin off without removing it from the config. Defaults to true. */
   enabled?: boolean
+  /**
+   * Invoice sync (PJ-57): an adapter that maps your documents to invoices. Adds the
+   * `xero-invoices` collection and the retry task. Left out: no invoicing.
+   */
+  invoicing?: XeroInvoicingOptions
   /**
    * Credentials for the `/api/xero/connect` and `/api/xero/callback` endpoints (PJ-55).
    * Anything left out falls back to the `XERO_*` env vars. Pass `false` to leave the
@@ -32,6 +46,7 @@ export type PayloadXeroOptions = XeroSettingsOptions & {
 
 export type PayloadXeroCustom = {
   enabled: true
+  invoicesSlug: null | string
   oauthEndpoints: boolean
   scope: XeroScope
   settingsSlug: string
@@ -56,8 +71,22 @@ export const payloadXero =
       throw new Error(`payload-xero: a "${slug}" collection already exists.`)
     }
 
+    const invoicing = options.invoicing
+      ? resolveXeroInvoicing({
+          invoicing: options.invoicing,
+          oauth: options.oauth,
+          scope,
+          settingsSlug: slug,
+          ...(options.tenantField ? { tenantField: options.tenantField } : {}),
+        })
+      : null
+    if (invoicing && incoming.collections?.some((collection) => collection.slug === invoicing.invoicesSlug)) {
+      throw new Error(`payload-xero: a "${invoicing.invoicesSlug}" collection already exists.`)
+    }
+
     const custom: PayloadXeroCustom = {
       enabled: true,
+      invoicesSlug: invoicing?.invoicesSlug ?? null,
       oauthEndpoints: options.oauth !== false,
       scope,
       settingsSlug: slug,
@@ -65,7 +94,23 @@ export const payloadXero =
 
     return {
       ...incoming,
-      collections: [...(incoming.collections ?? []), buildXeroSettingsCollection(options)],
+      collections: [
+        ...(incoming.collections ?? []),
+        buildXeroSettingsCollection(options),
+        ...(invoicing
+          ? [
+              buildXeroInvoicesCollection({
+                ...(options.group ? { group: options.group } : {}),
+                // Whoever may read the settings may read the invoice records.
+                read: options.access?.read ?? authenticatedAdminAccess,
+                slug: invoicing.invoicesSlug,
+              }),
+            ]
+          : []),
+      ],
+      jobs: invoicing
+        ? { ...incoming.jobs, tasks: [...(incoming.jobs?.tasks ?? []), xeroInvoiceSyncTask(invoicing)] }
+        : incoming.jobs,
       // Payload routes `/api/xero/*` to the root endpoints. Nesting them under the settings
       // collection instead would give `/api/xero-settings/xero/connect`.
       endpoints: [

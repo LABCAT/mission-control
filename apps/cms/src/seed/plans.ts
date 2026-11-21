@@ -1,20 +1,22 @@
 import { getPayload } from 'payload'
 
 import { seedAddOns, seedPlans, seedTenantTax } from '@mission-control/payload-jobs'
+import { seedXeroSettings } from '@mission-control/payload-jobs-xero'
 
 import config from '../payload.config'
 import { vwokAddOns } from './vwok-add-ons'
 import { vwokPlans } from './vwok-plans'
 import { vwokTax } from './vwok-tax'
+import { vwokXero } from './vwok-xero'
 
 /**
  * Seed a tenant's tax settings, add-ons, then plans (plans and add-ons name tax rates, and plans
- * include add-ons):
+ * include add-ons), then its Xero settings (PJ-57):
  * `SEED_PLANS_CONFIRM=1 SEED_PLANS_TENANT=vwok pnpm seed:plans`.
- * Idempotent: tax settings already set, and existing add-ons and plans (same key or legacy id),
- * are never changed.
+ * Idempotent: tax settings already set, existing add-ons and plans (same key or legacy id), and
+ * an existing Xero settings row are never changed.
  */
-const seeds = { vwok: { addOns: vwokAddOns, plans: vwokPlans, tax: vwokTax } }
+const seeds = { vwok: { addOns: vwokAddOns, plans: vwokPlans, tax: vwokTax, xero: vwokXero } }
 
 if (process.env.SEED_PLANS_CONFIRM !== '1') {
   throw new Error('Refusing to seed plans. Set SEED_PLANS_CONFIRM=1 for the intended database.')
@@ -47,6 +49,8 @@ try {
   payload.logger.info(
     `Plans for ${tenantSlug}: created [${plans.created.join(', ')}], kept [${plans.existing.join(', ')}]`,
   )
+  const xero = await seedXeroSettings({ payload, seed: seed.xero, tenantID: tenant.id })
+  payload.logger.info(`Xero settings for ${tenantSlug}: ${xero.applied ? 'set' : 'already set, kept'}`)
 } finally {
   await payload.destroy()
 }

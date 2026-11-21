@@ -16,7 +16,7 @@
  * Using `fetch` only, so this runs unchanged on Cloudflare Workers.
  */
 
-import type { Endpoint, Payload, PayloadRequest } from 'payload'
+import type { CollectionSlug, Endpoint, Payload, PayloadRequest } from 'payload'
 import { formatAdminURL } from 'payload/shared'
 
 import {
@@ -150,7 +150,7 @@ const userFromState = async (
 ): Promise<Record<string, unknown>> => {
   try {
     return (await payload.findByID({
-      collection: state.collection,
+      collection: state.collection as CollectionSlug,
       depth: 0,
       id: state.user,
       overrideAccess: true,
@@ -262,7 +262,7 @@ const resolveTenantID = async ({
   // overrideAccess only turns "no such tenant" into a 404. Whether this user may manage it is
   // decided by the tenancy layer when the settings row is read or created.
   const result = await payload.find({
-    collection: options.tenantsSlug,
+    collection: options.tenantsSlug as CollectionSlug,
     depth: 0,
     limit: 1,
     overrideAccess: true,

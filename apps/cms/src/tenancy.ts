@@ -8,6 +8,8 @@ import {
   tenantRoleOptions,
 } from '@mission-control/payload-jobs'
 
+import { xeroTenantCollections } from '@mission-control/payload-jobs-xero'
+
 import { siteKeyAccessOverrideFor } from './site-keys'
 
 type AccessResultOverride = NonNullable<
@@ -28,6 +30,8 @@ export const multiTenantOptionsFor = (
   slugs: PayloadJobsCollectionSlugs = resolvePayloadJobsSlugs(),
   // mission-control: the alerts add-on's own slug (PJ-115), from `payloadJobsAlerts({ slug })`.
   alertSubscriptionsSlug = 'alert-subscriptions',
+  // mission-control: the Xero add-on's settings and invoice records (PJ-57).
+  xeroSlugs: string[] = xeroTenantCollections(),
 ): MultiTenantPluginConfig => {
   // mission-control: the plugin gives every tenant member access to the tenant's documents, so
   // seekers (site accounts, PJ-81) are denied here. Staff roles are unchanged.
@@ -76,6 +80,9 @@ export const multiTenantOptionsFor = (
       // mission-control: the credit ledger is private to the organisation and site managers, never
       // readable with a site key; seekers are denied (PJ-24).
       [slugs.creditLedger]: { accessResultOverride: privateToTenant },
+      // mission-control: Xero settings and invoice records are billing data: tenant admins and
+      // super admins only (their own access), never a site key; seekers are denied (PJ-57).
+      ...Object.fromEntries(xeroSlugs.map((slug) => [slug, { accessResultOverride: privateToTenant }])),
       // mission-control: content pages and menus (PJ-103). The generic override adds the site
       // key's tenant and, for the draft-enabled pages, published only.
       [slugs.menus]: { accessResultOverride: tenantContentOverride },

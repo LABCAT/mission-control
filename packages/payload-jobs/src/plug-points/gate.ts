@@ -12,7 +12,7 @@ import type {
 import { ValidationError } from 'payload'
 
 import { isAddOnEnabled, type AddOnSettings } from './add-ons'
-import { emitJobLifecycle, type PayloadJobsRegistry } from './payload-jobs-registry'
+import { emitJobLifecycle, emitOrderEvent, type PayloadJobsRegistry } from './payload-jobs-registry'
 import type { JobLifecycleEvent } from './definitions'
 
 /**
@@ -168,6 +168,34 @@ export const jobLifecycleHook =
     )
 
     for (const error of errors) req.payload.logger.error({ err: error }, 'payload-jobs: lifecycle hook failed')
+
+    return doc
+  }
+
+/**
+ * Tell the invoice-sync adapters (PJ-115 plug point 6) that an order was created or changed
+ * status. Runs in the order's `afterChange`, so adapters get the request (and its transaction).
+ * Like the lifecycle hooks, a failing adapter is logged and never fails the order's save.
+ */
+export const orderEventHook =
+  (registry: PayloadJobsRegistry): CollectionAfterChangeHook =>
+  async ({ doc, operation, previousDoc, req }) => {
+    if (registry.invoiceSync.list().length === 0) return doc
+
+    const status = String(doc?.status ?? '')
+    const from = operation === 'create' ? null : ((previousDoc?.status as string | undefined) ?? null)
+    if (operation !== 'create' && from === status) return doc
+
+    const tenantID = registry.context.tenancy === 'multi' ? idOf(doc.tenant) : null
+    const settings = await loadTenantSettings(registry, req.payload, tenantID, req)
+    const errors = await emitOrderEvent(
+      registry,
+      operation === 'create' ? 'created' : 'statusChanged',
+      { orderID: doc.id, payload: req.payload, req, status, tenantID, ...(from === null ? {} : { from }) },
+      settings,
+    )
+
+    for (const error of errors) req.payload.logger.error({ err: error }, 'payload-jobs: invoice sync adapter failed')
 
     return doc
   }
