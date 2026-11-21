@@ -1037,13 +1037,98 @@ stories:
     role: super admin
     story: "A super admin views the site as another user with a visible banner and an audit entry."
     steps:
-      - "Start View as user from the admin, browse, then stop."
-    expected: "The hint cookie switches the public site view, a banner names the impersonated user, and the action is logged."
+      - "Open a seeker or employer in the admin and choose View as this user."
+      - "Browse the site, then choose Exit in the banner."
+    expected: "The site opens signed in as that user for 30 minutes; the hint cookie shows a banner on every page naming the user, with Exit; Exit ends the session and returns to the admin; start and exit are in the audit log with the super admin's id."
     settings:
       - security.viewAsUser
     mvp: true
-    status: planned
-    tests: []
+    status: built
+    tests:
+      - packages/payload-jobs/src/view-as.test.ts
+      - apps/vwok/src/view-as-handlers.test.ts
+
+  - id: S-156
+    area: Organisations
+    role: super admin
+    story: "Only a signed-in super admin can view the site as a user, and only as a plain site account, from our own admin."
+    steps:
+      - "Try to start a view as a tenant admin, an editor, an employer and a seeker."
+      - "Try to view as a super admin, as yourself, as staff, and as a user with no account on the tenant."
+      - "Send the start request from another origin, without the CSRF header, or as a form post."
+    expected: "Every one of those is refused and no code is issued; refused starts are logged with the reason; a demoted super admin is refused at once; only a seeker or employer whose memberships are all site roles can be viewed."
+    settings:
+      - security.viewAsUser
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/view-as.integration.test.ts
+
+  - id: S-157
+    area: Organisations
+    role: super admin
+    story: "A view-as session lasts 30 minutes at most, works only on its own tenant, and Exit ends it at once."
+    steps:
+      - "Redeem the one-time code twice, on the wrong tenant, and after 60 seconds."
+      - "Use the token on another tenant, as a cookie, after 30 minutes, and after Exit or logout."
+      - "Demote the super admin or make the user staff while viewing."
+    expected: "The code works once, for 60 seconds, on its own tenant; the token is bearer-only, tenant-bound and cannot be refreshed; expiry, Exit, logout, a demotion or the user becoming staff each stop it on the next request; the super admin's own session and the user's own sessions are untouched."
+    settings:
+      - security.viewAsUser
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/view-as.integration.test.ts
+      - packages/payload-jobs/src/view-as.test.ts
+      - packages/launchpad/src/view-as/index.test.ts
+      - apps/vwok/src/view-as-handlers.test.ts
+
+  - id: S-158
+    area: Organisations
+    role: super admin
+    story: "While viewing as a user, sign-in details, account deletion and purchases are blocked."
+    steps:
+      - "While viewing, change the email, password, role or memberships."
+      - "Delete the account, refresh the token, request a password reset, register, or create an order."
+    expected: "Each is refused with 403 and logged as blocked with the super admin's id; only the profile name can be changed; the admin panel and the audit log are not reachable."
+    settings:
+      - security.viewAsUser
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/view-as.integration.test.ts
+
+  - id: S-159
+    area: Admin
+    role: super admin
+    story: "Everything done through a view-as session is in the audit log, which only super admins can read and nobody can change."
+    steps:
+      - "Start a view, change the profile name, try a blocked action, then exit."
+      - "Try to read the log as staff and to edit or delete a row."
+    expected: "Start, redeem, every write, every blocked attempt and exit are recorded with the super admin's id, the user, the tenant and the session, and never a token or code; the log is readable by super admins only and is append only."
+    settings:
+      - admin.auditLog
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/view-as.integration.test.ts
+
+  - id: S-160
+    area: Site
+    role: super admin
+    story: "While viewing as a user, a banner names them on every page, and cached pages are not affected."
+    steps:
+      - "Start a view and open pages of the site, including cached ones."
+      - "Let the view expire or exit, and reload."
+    expected: "The banner is in every page's HTML, hidden; the non-HttpOnly impersonating hint cookie shows it and /api/me fills in the name; nothing personal is in the HTML; a stale hint removes itself; Exit is a POST form."
+    settings:
+      - security.viewAsUser
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/view-as/index.test.ts
+      - packages/launchpad/src/components/components.test.ts
+      - apps/vwok/src/view-as-handlers.test.ts
 
   # ---------------------------------------------------------------------------
   # Accounts and authentication

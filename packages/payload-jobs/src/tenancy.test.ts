@@ -91,6 +91,8 @@ describe('payloadJobs tenancy modes', () => {
       'post /:slug/account/reset-password',
       'post /:slug/account/register',
       'post /:slug/account/verify-email',
+      'post /:slug/account/view-as/redeem',
+      'post /:slug/account/view-as/exit',
     ])
     // Payload routes /api/tenants/* to the collection's endpoints, so nothing goes at the root.
     expect(result.endpoints).toBeUndefined()

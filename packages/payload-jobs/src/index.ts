@@ -8,6 +8,7 @@ import type {
 } from 'payload'
 
 import { accountAuthEndpoints, type AccountAuthOptions } from './account-auth'
+import { withViewAs } from './view-as'
 import { DASHBOARD_COMPONENT_PATH, type SiteManagerAdminOptions } from './admin'
 import type { LocationsOptions } from './collections/locations'
 import { locationsCollection, locationsTenantSlugIndex } from './collections/locations'
@@ -59,6 +60,8 @@ import { withSiteManagerNav } from './admin/nav'
 export * from './access'
 export * from './admin'
 export * from './account-auth'
+export * from './audit-log'
+export * from './view-as'
 export * from './collections/locations'
 export * from './collections/menus'
 export * from './collections/organisations'
@@ -189,6 +192,11 @@ export type PayloadJobsOptions = {
    * The users collection must enable `auth.verify`. Pass `false` to leave them out.
    */
   accountAuth?: AccountAuthOptions | false
+  /**
+   * Super admins can view the site as a site account (PJ-119): adds the `audit-log` collection
+   * and the guard rails. Needs multi-tenant mode and account auth. Defaults to on.
+   */
+  viewAsUser?: boolean
   /**
    * Per-collection overrides: rename any slug and/or override its access. Every internal
    * relationship and query uses the resolved slug, so choosing a slug before your first schema migration needs nothing extra. Renaming one on an installation that already has the tables changes the schema: generate and apply your own app migration for it.
@@ -352,7 +360,7 @@ const registeredBlockSlugs = (config: Config): string[] =>
  * Job board plugin for Mission Control. It owns the job-board tenant settings and the
  * job-board collections; later tasks (PJ-16 onwards) add the rest.
  */
-export const payloadJobs =
+const jobBoardPlugin =
   (options: PayloadJobsOptions = {}): Plugin =>
   (incoming: Config): Config => {
     if (options.enabled === false) return incoming
@@ -761,4 +769,26 @@ export const payloadJobs =
         },
       },
     }
+  }
+
+/**
+ * Job board plugin for Mission Control (see `jobBoardPlugin`), plus "view as user" (PJ-119) in
+ * multi-tenant mode: the audit log, the view-as auth strategy and the guard rails. Applied last
+ * so it sees every collection the job board added. Pass `viewAsUser: false` to leave it out.
+ */
+export const payloadJobs =
+  (options: PayloadJobsOptions = {}): Plugin =>
+  (incoming: Config): Config => {
+    // Synchronous on purpose: a bad config throws here, not as a rejected promise.
+    const config = jobBoardPlugin(options)(incoming) as Config
+
+    if (options.enabled === false || options.viewAsUser === false) return config
+    if ((options.tenancy ?? 'single') !== 'multi' || options.accountAuth === false) return config
+
+    return withViewAs(config, {
+      accountRoles: options.accountAuth?.accountRoles,
+      ordersSlug: resolveSlugsFromOptions(options).orders,
+      tenantsSlug: options.tenantsSlug ?? 'tenants',
+      usersSlug: options.accountAuth?.usersSlug ?? options.usersSlug ?? 'users',
+    })
   }

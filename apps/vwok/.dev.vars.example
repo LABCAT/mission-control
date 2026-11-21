@@ -1,7 +1,7 @@
 # Local values for `astro dev` and `wrangler dev`. Copy to `.dev.vars` (git-ignored).
 #
-# Nothing here is needed yet: the home page is a placeholder and nothing in this app reads the
-# CMS. PJ-35 adds the CMS client, which will need
+# The home page is a placeholder and nothing renders CMS content yet, but 'view as user'
+# (PJ-119, docs/VIEW-AS-USER.md) already needs both of these. PJ-35's CMS client will use them too:
 #   CMS_URL=https://mc-cms.labcat.workers.dev
 #   SITE_KEY=sk_…                  the vwok tenant's site key (a secret, never public)
 # and the form islands (PJ-45, PJ-47) will need the public Turnstile site key, whose documented
