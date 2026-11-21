@@ -36,6 +36,7 @@ import { TenantSelectionProvider as TenantSelectionProvider_d6d5f193a167989e2ee7
 import { FolderIcon as FolderIcon_3817bf644402e67bfe6577f60ef982de } from '@payloadcms/ui'
 import { HierarchySidebarTabServer as HierarchySidebarTabServer_ab83ff7e88da8d3530831f296ec4756a } from '@payloadcms/ui/rsc'
 import { TagIcon as TagIcon_3817bf644402e67bfe6577f60ef982de } from '@payloadcms/ui'
+import { ReportsView as ReportsView_e8b7a9da7806fea83b4e3df37f89b441 } from '@mission-control/payload-jobs-reports/client'
 import { WelcomeWidget as WelcomeWidget_ab83ff7e88da8d3530831f296ec4756a } from '@payloadcms/ui/rsc'
 import { CollectionCards as CollectionCards_ab83ff7e88da8d3530831f296ec4756a } from '@payloadcms/ui/rsc'
 import { CollectionQueryWidget as CollectionQueryWidget_ab83ff7e88da8d3530831f296ec4756a } from '@payloadcms/ui/rsc'
@@ -86,6 +87,7 @@ export const importMap = {
   "@payloadcms/ui#FolderIcon": FolderIcon_3817bf644402e67bfe6577f60ef982de,
   "@payloadcms/ui/rsc#HierarchySidebarTabServer": HierarchySidebarTabServer_ab83ff7e88da8d3530831f296ec4756a,
   "@payloadcms/ui#TagIcon": TagIcon_3817bf644402e67bfe6577f60ef982de,
+  "@mission-control/payload-jobs-reports/client#ReportsView": ReportsView_e8b7a9da7806fea83b4e3df37f89b441,
   "@payloadcms/ui/rsc#WelcomeWidget": WelcomeWidget_ab83ff7e88da8d3530831f296ec4756a,
   "@payloadcms/ui/rsc#CollectionCards": CollectionCards_ab83ff7e88da8d3530831f296ec4756a,
   "@payloadcms/ui/rsc#CollectionQueryWidget": CollectionQueryWidget_ab83ff7e88da8d3530831f296ec4756a,
