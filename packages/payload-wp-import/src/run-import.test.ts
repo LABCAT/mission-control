@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { runImport, sortImporters } from './run-import'
+import { runImport, sortImporters, wrapLocalizedFields } from './run-import'
 import { createFakePayload, fakeReader, rowsImporter } from './test-utils'
 
 const run = (
@@ -215,5 +215,33 @@ describe('runImport', () => {
     })
     const summary = await run([importer], payload)
     expect(summary.errors[0]!.message).toBe('duplicate key (email)=([email]) already exists')
+  })
+})
+
+describe('wrapLocalizedFields @S-155', () => {
+  const config = {
+    collections: [
+      {
+        slug: 'things',
+        fields: [
+          { name: 'title', type: 'text', localized: true },
+          { type: 'tabs', tabs: [{ label: 'A', fields: [{ name: 'body', type: 'richText', localized: true }] }] },
+          { type: 'row', fields: [{ name: 'note', type: 'text', localized: true }, { name: 'plain', type: 'text' }] },
+        ],
+      },
+    ],
+    localization: { defaultLocale: 'en' },
+  }
+  const withConfig = (c: any) => ({ config: c }) as never
+
+  it('wraps localized fields (also in tabs and rows) in the default locale', () => {
+    const out = wrapLocalizedFields(withConfig(config), 'things', { body: { root: {} }, note: 'n', plain: 'p', title: 't' })
+    expect(out).toEqual({ body: { en: { root: {} } }, note: { en: 'n' }, plain: 'p', title: { en: 't' } })
+  })
+
+  it('leaves data alone when localization is off, and skips absent values', () => {
+    expect(wrapLocalizedFields(withConfig({ ...config, localization: false }), 'things', { title: 't' })).toEqual({ title: 't' })
+    expect(wrapLocalizedFields(withConfig(config), 'things', { plain: 'p' })).toEqual({ plain: 'p' })
+    expect(wrapLocalizedFields({} as never, 'things', { title: 't' })).toEqual({ title: 't' })
   })
 })

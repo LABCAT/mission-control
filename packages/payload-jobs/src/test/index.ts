@@ -87,6 +87,8 @@ type BootTestPayloadArgs = {
   databaseUrl?: string
   /** Collections that are not tenant-scoped, e.g. a site-keys stand-in. */
   globalCollections?: CollectionConfig[]
+  /** Turn localization on, as the CMS does. Default off. */
+  localization?: { defaultLocale: string; locales: string[] }
   /** Extra data for the seeded tenants, e.g. a currency. Needs matching `tenantFields`. */
   tenantData?: (which: 'A' | 'B') => Record<string, unknown>
   /** Extra fields on the tenants collection. */
@@ -113,6 +115,7 @@ export const bootTestPayload = async ({
   collections,
   databaseUrl,
   globalCollections = [],
+  localization,
   tenantData = () => ({}),
   tenantFields = [],
   tenantHooks,
@@ -139,6 +142,7 @@ export const bootTestPayload = async ({
     collections: [Users(userFields), tenantsCollection(tenantFields, tenantHooks), ...globalCollections, ...collections],
     // Jobs have a rich-text description; the CMS uses Lexical, so the harness does too.
     editor: lexicalEditor(),
+    ...(localization ? { localization } : {}),
     db: postgresAdapter({
       pool: {
         connectionString: testDatabaseUrl,

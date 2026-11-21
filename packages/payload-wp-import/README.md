@@ -208,6 +208,15 @@ it links `jobDescriptionPdf` to jobs that now exist.
   Never read: `user_IP`, applications, `_edit_lock`.
 - **Created through the adapter** (`rawCreate`): the status state machine refuses to create an
   expired job. Re-runs use `payload.update` with the view-counter context.
+- **Localization**: `rawCreate` skips Payload's locale handling, so the runner wraps each localized
+  field (`title`, `description`, `howToApply`, …) in the default locale when localization is on.
+- **Re-runs are for before cutover.** A re-run refreshes every imported field from the legacy site
+  (status, dates, slug, placements, title), so after cutover it would overwrite edits made in the
+  new system. Only the view counter is protected (it never goes down).
+- **Snapshot assumptions**: a company organisation's `legacyId` is minus the lowest job id of that
+  name, stable while the source does not change between runs. Import the locations tree (seed) before
+  the jobs: a tenant with none imports every job without location chips and nothing fails; the
+  dry run shows `location: unmatched`.
 - **Report** (dry run and real run): counts per status, job type, salary band, category, location
   outcome, slug suffixes, dropped terms, featured placements, views and skip reasons.
 

@@ -141,6 +141,11 @@ export const closeDateOf = (args: {
   if ((early || planned.getTime() > args.now.getTime()) && modified && modified > args.publishedAt && modified < planned) {
     return modified
   }
+  // Never in the future for an expired job, or the 12-month 410 clock would not have started.
+  if (planned.getTime() > args.now.getTime()) {
+    const ended = modified && modified > args.publishedAt ? modified : args.now
+    return ended < planned ? ended : planned
+  }
   return planned
 }
 
@@ -547,6 +552,8 @@ export const jobsImporters = (
       for (const category of categories) count(`category: ${legacyText(category.name)}`)
       const link = (map: Map<number, number | string>, term: LegacyTerm | undefined) => (term ? idOf(map, term) : undefined)
       if (!ctx.dryRun) {
+        const missing = categories.find((term) => !look.categories.has(term.term_id))
+        if (missing) throw new Error(`The category "${legacyText(missing.name)}" was not found: run the taxonomies first`)
         for (const [label, term, map] of [['job type', jobType, look.jobTypes], ['salary band', salary, look.salaryBands]] as const) {
           if (term && !map.has(term.term_id)) throw new Error(`The ${label} "${legacyText(term.name)}" was not found: run the taxonomies first`)
         }
@@ -621,9 +628,8 @@ export const jobsImporters = (
       set('howToApply', htmlToPlainText(job.meta._how_to_apply))
       set('applicationsRecipient', cleanEmail(job.meta.jr_fx_apps_recipient_address))
       set('companyUrl', cleanUrl(job.meta._CompanyURL))
-      // The company name is kept only when it is not the organisation's own name.
-      const orgName = organisationLegacyId < 0 || (job.companyKey && current.companyOrganisation.get(job.companyKey) === organisationLegacyId)
-      if (company && !orgName) set('companyName', company)
+      // The job's own company name, set explicitly: `rawCreate` skips the hook that defaults it.
+      set('companyName', company)
       set('locationDetails', address && !match.exact ? address : undefined)
 
       return {

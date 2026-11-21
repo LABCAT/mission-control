@@ -25,7 +25,9 @@ describe('jobs import against Payload @S-155', () => {
   const system = { overrideAccess: true } as const
 
   beforeAll(async () => {
+    // Localization on, as in the CMS: the adapter writes localized fields differently.
     harness = await bootTestPayload({
+      localization: { defaultLocale: 'en', locales: ['en'] },
       collections: [
         orderCollection({ couponsEnabled: false }),
         jobsCollection({ withOrder: true }),
@@ -88,7 +90,17 @@ describe('jobs import against Payload @S-155', () => {
     const published = docs.find((job: any) => job.legacyId === 1001) as any
     expect(published).toMatchObject({ organisation: orgs[2], status: 'published', views: 120 })
     expect(published.placements).toHaveLength(1)
+    // Localized fields are written by the very first run, not healed by a second one.
+    expect(published).toMatchObject({
+      companyName: 'Example Resort Ltd',
+      displayedSalary: 'VT 100,000 – 120,000 a month',
+      howToApply: 'Email us now\nor call',
+      title: 'Front Desk Clerk',
+    })
     expect(JSON.stringify(published.description)).toContain('guests')
+    expect(docs.every((job: any) => typeof job.title === 'string' && job.title.length > 0)).toBe(true)
+    expect(docs.find((job: any) => job.legacyId === 1005)).toMatchObject({ locationDetails: 'Nowhere, Atlantis' })
+    expect(JSON.stringify(docs.find((job: any) => job.legacyId === 1007)!.description)).toContain('Hi')
 
     // The views guard only lets the counter through, and the re-run must not duplicate anything.
     await payload.update({ collection: 'jobs', id: published.id, data: { views: 999 }, context: { jobViews: true }, ...system })

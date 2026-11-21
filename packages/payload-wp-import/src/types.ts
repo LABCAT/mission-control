@@ -3,6 +3,14 @@ import type { MysqlReader } from './mysql-reader'
 /** The subset of the Payload local API the framework needs. Real `Payload` satisfies it. */
 export type ImportPayload = {
   /**
+   * The Payload config, so a `rawCreate` can wrap localized fields. Real `payload.config`
+   * satisfies it; without it nothing is wrapped (localization off).
+   */
+  config?: {
+    collections?: { fields: any[]; slug: string }[]
+    localization?: false | { defaultLocale: string }
+  }
+  /**
    * The database adapter. Needed only by importers that create documents with `rawCreate`.
    * Real `payload.db` satisfies it.
    */

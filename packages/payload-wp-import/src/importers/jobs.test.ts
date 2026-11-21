@@ -74,6 +74,15 @@ describe('legacy status, dates and close date @S-155', () => {
     expect(days({ defaultDays: 45 })).toBe(45)
   })
 
+  it('never gives an expired job a future close date', () => {
+    const planned = { ...base, status: 'expired' as const, reason: 'job_has_expired_cron' }
+    // Planned close is after "now", and there is no usable modified date: it closed now at the latest.
+    expect(closeDateOf({ ...planned, now: new Date('2026-10-10T00:00:00Z') }).toISOString()).toBe('2026-10-10T00:00:00.000Z')
+    expect(
+      closeDateOf({ ...planned, modifiedAt: new Date('2026-09-01T00:00:00Z'), now: new Date('2026-10-10T00:00:00Z') }).toISOString(),
+    ).toBe('2026-10-10T00:00:00.000Z')
+  })
+
   it('closes an expired job that was ended early when it was last modified', () => {
     const modifiedAt = new Date('2026-10-05T00:00:00Z')
     const ended = closeDateOf({ ...base, modifiedAt, reason: 'user_ended', status: 'expired' })
@@ -175,6 +184,20 @@ describe('location chips @S-155', () => {
 })
 
 describe('the jobs importer @S-155', () => {
+  it('fails a job whose category is missing, like a missing job type', async () => {
+    const payload = createFakePayload(seed())
+    const planProvider = createPlanProvider({ now: () => NOW })
+    const { jobOrganisations, jobs } = jobsImporters({ now: () => NOW, planProvider })
+    const only = [
+      { ...jobOrganisations, dependsOn: [] },
+      { ...jobs, dependsOn: ['job-organisations'] },
+    ]
+    // No taxonomies imported: the job type is checked first, so drop it to reach the category.
+    const summary = await runImport({ importers: only, payload: payload.payload, reader: readerFor(), tenant: TENANT })
+    expect(summary.importers.jobs!.failed).toBeGreaterThan(0)
+    expect(summary.errors.some((e) => /was not found/.test(e.message))).toBe(true)
+  })
+
   it('imports published and expired jobs and counts what it leaves out', async () => {
     const { store, summary } = await run(false)
 
@@ -207,7 +230,7 @@ describe('the jobs importer @S-155', () => {
       views: 120,
     })
     expect(job.expiresAt).toBe('2026-11-14T22:00:00.000Z') // 14 days: the employer's choice
-    expect(job.companyName).toBeUndefined() // same company as the organisation
+    expect(job.companyName).toBe('Example Resort Ltd') // set explicitly: rawCreate skips the hook that defaults it
     expect(job.jobType).toBe(store['job-types']!.find((t) => t.legacyId === 21)!.id)
     expect(job.categories).toHaveLength(2)
     expect(job.salaryBand).toBe(store['salary-bands']!.find((t) => t.legacyId === 41)!.id)
@@ -232,7 +255,7 @@ describe('the jobs importer @S-155', () => {
     // Ended early (user_ended): closed when it was last modified, so the dates stay usable for the 12-month rule.
     expect(expired.expiresAt).toBe('2025-01-19T22:00:00.000Z')
     expect(expired.publishedAt).toBe('2025-01-09T22:00:00.000Z')
-    expect(expired.companyName).toBeUndefined() // the organisation is named after the company
+    expect(expired.companyName).toBe('Client Agency Co')
   })
 
   it('falls back to the author’s organisation, and keeps unmatched text as details', async () => {
