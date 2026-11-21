@@ -31,6 +31,13 @@ import {
 import { jobsCollection } from './collections/jobs'
 import { menusCollection, removeTenantMenus } from './collections/menus'
 import { pagesCollection } from './collections/pages'
+import {
+  isOrganisationOwnerByRole,
+  orderCollection,
+  refuseDeleteWhileOrdered,
+  type OrganisationOwnerCheck,
+} from './orders'
+import { resolvePaymentProviders, type PaymentProviderDefinition } from './payment-providers'
 import { expireJobPlacementsTask, PLACEMENTS_FIELD } from './placements'
 import { planCollection, withPlanRestrictionGuards } from './plans'
 import {
@@ -56,6 +63,8 @@ export * from './email'
 export * from './legacy-password'
 export * from './location-settings'
 export * from './money'
+export * from './orders'
+export * from './payment-providers'
 export * from './slug-rules'
 export * from './add-ons'
 export * from './collections/jobs'
@@ -79,6 +88,23 @@ export * from './tenancy'
 
 export type TenancyMode = 'multi' | 'single'
 
+/** Add a delete guard so a document that orders point at is kept (PJ-23). */
+const withOrderDeleteGuard = (
+  collection: CollectionConfig,
+  field: 'jobs' | 'organisation',
+  noun: string,
+  ordersSlug: string,
+): CollectionConfig => ({
+  ...collection,
+  hooks: {
+    ...collection.hooks,
+    beforeDelete: [
+      refuseDeleteWhileOrdered({ field, noun, ordersSlug }),
+      ...(collection.hooks?.beforeDelete ?? []),
+    ],
+  },
+})
+
 /**
  * Every collection this plugin adds that belongs to a tenant, with the resolved slugs.
  * In `multi` mode the host must list each one in the multi-tenant plugin's `collections`,
@@ -101,6 +127,7 @@ export const payloadJobsTenantCollections = (
   slugs.coupons,
   APPLICATION_FILES_SLUG,
   APPLICATIONS_SLUG,
+  slugs.orders,
 ]
 
 /**
@@ -134,6 +161,20 @@ export type PayloadJobsFeatures = {
   pages?: boolean
 }
 
+/** Orders (PJ-23). Always on: every job board sells listings, even if all are free. */
+export type PayloadJobsOrdersOptions = {
+  /**
+   * Who owns an organisation, so they can answer a member's purchase request. Defaults to
+   * `isOrganisationOwnerByRole`: the user's `organisationRole` is `owner` (PJ-62).
+   */
+  isOrganisationOwner?: OrganisationOwnerCheck
+  /**
+   * Payment providers beyond core's `invoice`, e.g. `{ key: 'stripe', label: 'Card' }` from a
+   * payment add-on. An order may only name a registered provider.
+   */
+  paymentProviders?: PaymentProviderDefinition[]
+}
+
 export type PayloadJobsOptions = {
   /**
    * Front-end account auth endpoints for the Astro sites (PJ-81), multi-tenant mode only.
@@ -156,6 +197,8 @@ export type PayloadJobsOptions = {
   enabled?: boolean
   /** Which job-board collections to enable. All default to true. */
   features?: PayloadJobsFeatures
+  /** Orders: organisation owners and payment providers (PJ-23). */
+  orders?: PayloadJobsOrdersOptions
   /** Slug of the host's upload collection for PDF job descriptions. Defaults to `documents`. */
   documentsSlug?: null | string
   /** Slug of the host's upload collection for organisation logos and covers. Defaults to `media`. */
@@ -225,13 +268,18 @@ const jobBoardCollections = (
     requireTenant: tenancy === 'multi',
     slug: slugs.locations,
   }),
-  organisationsCollection({
-    access: collections.organisations?.access,
-    locationsSlug: slugs.locations,
-    mediaSlug,
-    slug: slugs.organisations,
-    tenantScoped: tenancy === 'multi',
-  }),
+  withOrderDeleteGuard(
+    organisationsCollection({
+      access: collections.organisations?.access,
+      locationsSlug: slugs.locations,
+      mediaSlug,
+      slug: slugs.organisations,
+      tenantScoped: tenancy === 'multi',
+    }),
+    'organisation',
+    'organisation',
+    slugs.orders,
+  ),
   ...(features.pages
     ? [
         pagesCollection({
@@ -428,6 +476,10 @@ export const payloadJobs =
                 // Coupons are removed too: the tenant foreign key would otherwise null them.
                 beforeDelete: [
                   ...(collection.hooks?.beforeDelete ?? []),
+                  // Orders are kept for accounting: a tenant that has any can't be deleted. This
+                  // runs before the plugin removes anything; the delete's transaction rolls back
+                  // whatever the host's own hooks did.
+                  refuseDeleteWhileOrdered({ field: 'tenant', noun: 'tenant', ordersSlug: slugs.orders }),
                   // A deleted site takes its pages and menus with it.
                   ...(features.pages
                     ? [
@@ -528,12 +580,25 @@ export const payloadJobs =
           ? 'documents'
           : null
         : options.documentsSlug
-    const jobs = jobsCollection({
+    const jobs = withOrderDeleteGuard(jobsCollection({
       access: collectionOptions.jobs?.access,
       documentsSlug,
       richTextDescription: Boolean(config.editor),
       slugs,
       tenantScoped: tenancy === 'multi',
+      withOrder: true,
+    }), 'jobs', 'job', slugs.orders)
+
+    // Orders go last, after coupons, so the existing compound index names keep their numbers.
+    const paymentProviders = resolvePaymentProviders(options.orders?.paymentProviders ?? [])
+    const orders = orderCollection({
+      access: collectionOptions.orders?.access,
+      couponsEnabled: features.coupons,
+      isOrganisationOwner: options.orders?.isOrganisationOwner ?? isOrganisationOwnerByRole,
+      paymentProviders,
+      slugs,
+      tenantScoped: tenancy === 'multi',
+      usersSlug,
     })
 
     const jobsWithPlacements = [...(config.collections ?? []), jobs].find(
@@ -583,11 +648,18 @@ export const payloadJobs =
               }),
             ]
           : []),
+        // Orders go last (PJ-23), so no existing compound index name shifts.
+        orders,
       ],
       jobs: jobsConfig,
       custom: {
         ...config.custom,
-        payloadJobs: { enabled: true, tenancy, features },
+        payloadJobs: {
+          enabled: true,
+          features,
+          paymentProviders: paymentProviders.map((provider) => provider.key),
+          tenancy,
+        },
       },
     }
   }

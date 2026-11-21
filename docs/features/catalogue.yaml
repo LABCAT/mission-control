@@ -1423,6 +1423,25 @@ stories:
     status: planned
     tests: []
 
+  - id: S-146
+    area: Commerce
+    role: site manager
+    story: "Orders belong to the organisation, keep their money fixed and record every change in an append-only history."
+    steps:
+      - "Open an organisation's order as a member, as the owner and as a site manager."
+      - "Move it from pending to invoiced to paid, and try to change its total or delete it."
+    expected: "Members read only their organisation's orders; only the owner (purchase requests) and site managers change the status along the allowed moves; the money, quote and tax lines never change; the history lists who did what; nobody deletes an order or a tenant, organisation or job it points at; and only registered payment providers are accepted."
+    settings:
+      - billing.invoiceOnly
+      - billing.memberCanBuy
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/orders.test.ts
+      - packages/payload-jobs/src/orders.integration.test.ts
+      - packages/payload-jobs/src/index.test.ts
+      - apps/cms/src/tenancy.test.ts
+
   - id: S-101
     area: Commerce
     role: employer

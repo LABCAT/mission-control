@@ -62,18 +62,18 @@ export type SupportedTimezones =
   | 'Pacific/Fiji';
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "LexicalNodes_F20892C1".
+ * via the `definition` "LexicalNodes_85356EDF".
  */
-export type LexicalNodes_F20892C1 =
+export type LexicalNodes_85356EDF =
   | SerializedTextNode
   | SerializedTabNode
   | SerializedLineBreakNode
-  | SerializedParagraphNode<LexicalNodes_F20892C1>
+  | SerializedParagraphNode<LexicalNodes_85356EDF>
   | SerializedHorizontalRuleNode
   | SerializedUploadNode<'media'>
   | SerializedUploadNode<'documents'>
   | SerializedUploadNode<'application-files'>
-  | SerializedQuoteNode<LexicalNodes_F20892C1>
+  | SerializedQuoteNode<LexicalNodes_85356EDF>
   | SerializedRelationshipNode<
       | 'users'
       | 'folders'
@@ -93,17 +93,18 @@ export type LexicalNodes_F20892C1 =
       | 'jobs'
       | 'coupons'
       | 'applications'
+      | 'orders'
       | 'payload-kv'
       | 'payload-jobs'
       | 'payload-locked-documents'
       | 'payload-preferences'
       | 'payload-migrations'
     >
-  | SerializedAutoLinkNode<LexicalNodes_F20892C1, LexicalLinkFields>
-  | SerializedLinkNode<LexicalNodes_F20892C1, LexicalLinkFields>
-  | SerializedListNode<LexicalNodes_F20892C1>
-  | SerializedListItemNode<LexicalNodes_F20892C1>
-  | SerializedHeadingNode<LexicalNodes_F20892C1>;
+  | SerializedAutoLinkNode<LexicalNodes_85356EDF, LexicalLinkFields>
+  | SerializedLinkNode<LexicalNodes_85356EDF, LexicalLinkFields>
+  | SerializedListNode<LexicalNodes_85356EDF>
+  | SerializedListItemNode<LexicalNodes_85356EDF>
+  | SerializedHeadingNode<LexicalNodes_85356EDF>;
 /**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "LexicalNodes_3DE324E4".
@@ -152,6 +153,7 @@ export interface Config {
     coupons: Coupon;
     'application-files': ApplicationFile;
     applications: Application;
+    orders: Order;
     'payload-kv': PayloadKv;
     'payload-jobs': PayloadJob;
     'payload-locked-documents': PayloadLockedDocument;
@@ -182,6 +184,7 @@ export interface Config {
     coupons: CouponsSelect<false> | CouponsSelect<true>;
     'application-files': ApplicationFilesSelect<false> | ApplicationFilesSelect<true>;
     applications: ApplicationsSelect<false> | ApplicationsSelect<true>;
+    orders: OrdersSelect<false> | OrdersSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-jobs': PayloadJobsSelect<false> | PayloadJobsSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
@@ -748,7 +751,7 @@ export interface FeatureBoxesBlock {
  */
 export interface RichTextBlock {
   heading?: string | null;
-  content: LexicalRichText<LexicalNodes_F20892C1>;
+  content: LexicalRichText<LexicalNodes_85356EDF>;
   id?: string | null;
   blockName?: string | null;
   blockType: 'rich-text';
@@ -803,7 +806,7 @@ export interface FaqBlock {
   heading?: string | null;
   items: {
     question: string;
-    answer: LexicalRichText<LexicalNodes_F20892C1>;
+    answer: LexicalRichText<LexicalNodes_85356EDF>;
     id?: string | null;
   }[];
   id?: string | null;
@@ -1356,7 +1359,7 @@ export interface Job {
   publishedAt?: string | null;
   expiresAt?: string | null;
   organisation: number | Organisation;
-  description?: LexicalRichText<LexicalNodes_F20892C1> | null;
+  description?: LexicalRichText<LexicalNodes_85356EDF> | null;
   /**
    * An optional PDF of the full job description.
    */
@@ -1389,6 +1392,14 @@ export interface Job {
    */
   plan?: (number | null) | Plan;
   /**
+   * The order paying for the current listing. Set at checkout.
+   */
+  order?: (number | null) | Order;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  /**
    * Where this job is featured, and until when. Expired rows are removed daily.
    */
   placements?:
@@ -1403,6 +1414,153 @@ export interface Job {
   views?: number | null;
   /**
    * WordPress post id, for the import.
+   */
+  legacyId?: number | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * Orders belong to an organisation. Their money is fixed; the history is append-only.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "orders".
+ */
+export interface Order {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  status: 'waiting_for_purchase' | 'pending' | 'invoiced' | 'paid' | 'cancelled' | 'failed';
+  /**
+   * Why the status changed. Saved in the history, not on the order.
+   */
+  statusNote?: string | null;
+  /**
+   * The organisation that owes and owns the order.
+   */
+  organisation: number | Organisation;
+  /**
+   * Fixed once the order is created.
+   */
+  plan?: (number | null) | Plan;
+  /**
+   * What the add-ons were sold as. Fixed once the order is created.
+   */
+  addOns?:
+    | {
+        addOn?: (number | null) | AddOn;
+        name: string;
+        key?: string | null;
+        placement?: string | null;
+        durationDays: number;
+        unitPrice: number;
+        amount: number;
+        included?: boolean | null;
+        id?: string | null;
+      }[]
+    | null;
+  coupon?: (number | null) | Coupon;
+  /**
+   * The code as applied, kept if the coupon is later changed.
+   */
+  couponCode?: string | null;
+  /**
+   * ISO 4217, e.g. VUV.
+   */
+  currency: string;
+  /**
+   * Before discounts.
+   */
+  subtotal: number;
+  /**
+   * Credits and coupon.
+   */
+  discount: number;
+  /**
+   * Sum of the tax lines.
+   */
+  tax: number;
+  /**
+   * What the organisation pays.
+   */
+  total: number;
+  /**
+   * Prices included tax, so the total does not add it.
+   */
+  taxInclusive?: boolean | null;
+  taxLines?:
+    | {
+        key: string;
+        name: string;
+        /**
+         * Basis points: 1500 is 15%.
+         */
+        rate: number;
+        xeroTaxType?: string | null;
+        net: number;
+        tax: number;
+        gross: number;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * The full quote the order was priced from (`snapshotQuote`).
+   */
+  quote?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  paymentMethod: 'invoice' | 'free' | 'credit';
+  /**
+   * The registered provider that collects the money: invoice.
+   */
+  paymentProvider?: string | null;
+  /**
+   * Set when the order is paid (Xero’s paid date, or when it is marked paid).
+   */
+  paidAt?: string | null;
+  /**
+   * Records in other systems, e.g. the Xero invoice. Kept once recorded.
+   */
+  externalRefs?:
+    | {
+        provider: string;
+        /**
+         * The record’s id in that system, e.g. the Xero InvoiceID.
+         */
+        externalId: string;
+        url?: string | null;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * The jobs this order pays for. Must be the organisation’s.
+   */
+  jobs?: (number | Job)[] | null;
+  /**
+   * Every change, oldest first. Nobody can edit it.
+   */
+  log?:
+    | {
+        at: string;
+        event: 'created' | 'status' | 'external-ref' | 'jobs' | 'organisation' | 'paid-at';
+        actor: 'system' | 'staff' | 'owner' | 'member';
+        by?: (number | null) | User;
+        from?: string | null;
+        to?: string | null;
+        note?: string | null;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * WordPress transaction id, for the import.
    */
   legacyId?: number | null;
   createdBy?: {
@@ -1761,6 +1919,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'applications';
         value: number | Application;
+      } | null)
+    | ({
+        relationTo: 'orders';
+        value: number | Order;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -2415,6 +2577,8 @@ export interface JobsSelect<T extends boolean = true> {
   applyOnline?: T;
   applicationsRecipient?: T;
   plan?: T;
+  order?: T;
+  createdBy?: T;
   placements?:
     | T
     | {
@@ -2426,7 +2590,6 @@ export interface JobsSelect<T extends boolean = true> {
       };
   views?: T;
   legacyId?: T;
-  createdBy?: T;
   updatedBy?: T;
   updatedAt?: T;
   createdAt?: T;
@@ -2501,6 +2664,80 @@ export interface ApplicationsSelect<T extends boolean = true> {
   cv?: T;
   coverLetter?: T;
   consentAt?: T;
+  legacyId?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "orders_select".
+ */
+export interface OrdersSelect<T extends boolean = true> {
+  tenant?: T;
+  status?: T;
+  statusNote?: T;
+  organisation?: T;
+  plan?: T;
+  addOns?:
+    | T
+    | {
+        addOn?: T;
+        name?: T;
+        key?: T;
+        placement?: T;
+        durationDays?: T;
+        unitPrice?: T;
+        amount?: T;
+        included?: T;
+        id?: T;
+      };
+  coupon?: T;
+  couponCode?: T;
+  currency?: T;
+  subtotal?: T;
+  discount?: T;
+  tax?: T;
+  total?: T;
+  taxInclusive?: T;
+  taxLines?:
+    | T
+    | {
+        key?: T;
+        name?: T;
+        rate?: T;
+        xeroTaxType?: T;
+        net?: T;
+        tax?: T;
+        gross?: T;
+        id?: T;
+      };
+  quote?: T;
+  paymentMethod?: T;
+  paymentProvider?: T;
+  paidAt?: T;
+  externalRefs?:
+    | T
+    | {
+        provider?: T;
+        externalId?: T;
+        url?: T;
+        id?: T;
+      };
+  jobs?: T;
+  log?:
+    | T
+    | {
+        at?: T;
+        event?: T;
+        actor?: T;
+        by?: T;
+        from?: T;
+        to?: T;
+        note?: T;
+        id?: T;
+      };
   legacyId?: T;
   createdBy?: T;
   updatedBy?: T;
@@ -2711,7 +2948,8 @@ export interface CollectionQueryWidget {
       | 'jobs'
       | 'coupons'
       | 'application-files'
-      | 'applications';
+      | 'applications'
+      | 'orders';
     where?:
       | {
           [k: string]: unknown;
@@ -2756,6 +2994,7 @@ export interface ActivityWidget {
           | 'coupons'
           | 'application-files'
           | 'applications'
+          | 'orders'
         )[]
       | null;
   };

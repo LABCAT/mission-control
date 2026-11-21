@@ -674,6 +674,42 @@ describe('coupons', () => {
   })
 })
 
+describe('orders', () => {
+  it('registers the orders collection with its tenant field @S-146', async () => {
+    const config = await buildConfig()
+    const orders = config.collections?.find((collection) => collection.slug === 'orders')
+
+    expect(orders).toBeDefined()
+    expect(orders?.fields.some((field) => 'name' in field && field.name === 'tenant')).toBe(true)
+  })
+
+  it('keeps orders out of reach for anonymous requests and site keys @S-146', async () => {
+    const config = await buildConfig()
+    const orders = config.collections?.find((candidate) => candidate.slug === 'orders')
+    const read = orders?.access?.read as (args: unknown) => Promise<unknown>
+
+    expect(await read({ req: requestFor(null), slug: 'orders' })).toBe(false)
+
+    const req = await siteKeyRequest({ key: 'sk_tenant', tenant: tenantA.id })
+
+    expect(await read({ req, slug: 'orders' })).toBe(false)
+  })
+
+  it('refuses to delete a tenant that has orders before the plugin removes anything @S-146', async () => {
+    const config = await buildConfig()
+    const tenants = config.collections?.find((collection) => collection.slug === 'tenants')
+    // The app's own two hooks run first (the delete's transaction rolls them back); the order
+    // guard comes next, before the plugin's clean-ups.
+    const guard = tenants?.hooks?.beforeDelete?.[2]
+    const count = async () => ({ totalDocs: 2 })
+    const req = { payload: { collections: { orders: {} }, count } }
+
+    await expect(
+      (guard as (args: unknown) => Promise<void>)({ collection: { slug: 'tenants' }, id: 1, req }),
+    ).rejects.toMatchObject({ data: { errors: [expect.objectContaining({ message: expect.stringMatching(/kept for accounting/) })] } })
+  })
+})
+
 describe('credential updates', () => {
   const target = { id: 20, email: 'b@example.com' }
 
