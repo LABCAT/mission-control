@@ -1695,12 +1695,33 @@ stories:
     story: "A site manager's admin only shows their tenant, with a cut-down menu and a pending-jobs dashboard."
     steps:
       - "Sign in as a site manager and open the admin."
-    expected: "Only that tenant's jobs, orders, organisations and users are visible, and the dashboard shows pending jobs and recent orders."
+    expected: "Only that tenant's jobs, organisations and users are visible, and the dashboard shows that tenant's pending jobs."
     settings:
       - admin.siteManagerScope
     mvp: true
-    status: planned
-    tests: []
+    status: built
+    tests:
+      - packages/payload-jobs/src/admin/nav.test.ts
+      - packages/payload-jobs/src/admin/dashboard.test.ts
+      - packages/payload-jobs/src/admin/SiteManagerDashboard.test.tsx
+      - packages/payload-jobs/src/admin/links.test.ts
+      - packages/payload-jobs/src/index.test.ts
+      - packages/payload-jobs/src/collections/jobs.test.ts
+
+  - id: S-150
+    area: Admin
+    role: site manager
+    story: "A site manager's dashboard lists the tenant's recent orders."
+    steps:
+      - "Sign in as a site manager whose tenant has orders and open the admin."
+    expected: "The dashboard counts the tenant's orders and lists the most recent ones with their organisation, status and total; another tenant's orders never appear."
+    settings:
+      - admin.siteManagerScope
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/admin/dashboard.test.ts
+      - packages/payload-jobs/src/admin/SiteManagerDashboard.test.tsx
 
   - id: S-118
     area: Admin
