@@ -1909,7 +1909,7 @@ stories:
     status: planned
     tests: []
 
-  - id: S-146
+  - id: S-148
     area: Import and cutover
     role: super admin
     story: "The importer copies the logos, covers, job PDFs and page images that imported records use into R2 and links them."

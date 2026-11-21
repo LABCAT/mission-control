@@ -47,7 +47,7 @@ const run = (overrides: Record<string, unknown> = {}) => {
   return { bucket, go, payload, source }
 }
 
-describe('paths @S-146', () => {
+describe('paths @S-148', () => {
   it('reads uploads paths from URLs and maps a generated thumbnail to its original', () => {
     expect(uploadsPathOf('https://vanuatuwok.vu/app/uploads/2020/05/a%20b.png?x=1')).toBe('2020/05/a b.png')
     expect(uploadsPathOf('2020/05/a.png')).toBe('2020/05/a.png')
@@ -70,7 +70,7 @@ describe('paths @S-146', () => {
   })
 })
 
-describe('plan @S-146', () => {
+describe('plan @S-148', () => {
   it('finds only what imported records use, never CVs, extra documents or thumbnails', async () => {
     const plan = await buildMediaPlan(readerFor())
     const summary = plan.refs.map((r) => `${r.owner.collection}#${r.owner.legacyId} ${r.kind} ${r.path}`).sort()
@@ -98,7 +98,7 @@ describe('plan @S-146', () => {
   })
 })
 
-describe('copyFile @S-146', () => {
+describe('copyFile @S-148', () => {
   const setup = () => ({ bucket: fakeBucket(), src: fakeSource({ 'a/x.png': 'hello world' }) })
   const options = (s: ReturnType<typeof setup>, extra = {}) => ({
     contentType: 'image/png',
@@ -152,7 +152,7 @@ describe('copyFile @S-146', () => {
   })
 })
 
-describe('runMediaImport @S-146', () => {
+describe('runMediaImport @S-148', () => {
   it('copies referenced files into the bucket under stable names and links every relation', async () => {
     const t = run()
     const report = await t.go()
@@ -310,7 +310,7 @@ describe('runMediaImport @S-146', () => {
   })
 })
 
-describe('stores @S-146', () => {
+describe('stores @S-148', () => {
   it('copies through a real directory target and verifies it', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'wpmedia-'))
     try {
@@ -363,7 +363,7 @@ describe('stores @S-146', () => {
   })
 })
 
-describe('arguments @S-146', () => {
+describe('arguments @S-148', () => {
   it('needs a tenant, a source and exactly one target', () => {
     const base = ['--tenant', 'vwok', '--source', '/uploads']
     expect(parseMediaArgs([...base, '--target-dir', '/out', '--dry-run', '--verify'])).toMatchObject({
