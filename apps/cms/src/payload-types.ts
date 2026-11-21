@@ -1328,10 +1328,6 @@ export interface Job {
   expiresAt?: string | null;
   organisation: number | Organisation;
   description?: LexicalRichText<LexicalNodes_E31716F5> | null;
-  /**
-   * An optional PDF of the full job description.
-   */
-  jobDescriptionPdf?: (number | null) | Document;
   jobType?: (number | null) | JobType;
   categories?: (number | JobCategory)[] | null;
   salaryBand?: (number | null) | SalaryBand;
@@ -1341,7 +1337,6 @@ export interface Job {
    */
   companyName?: string | null;
   companyUrl?: string | null;
-  howToApply?: string | null;
   /**
    * One or more places in the tenant’s location tree. The job appears on every matching location page and its descendants.
    */
@@ -1350,11 +1345,16 @@ export interface Job {
    * Optional free-text detail, e.g. a street address or the legacy “Multiple locations” text.
    */
   locationDetails?: string | null;
+  howToApply?: string | null;
   applyOnline?: boolean | null;
   /**
    * Where online applications go. Empty: the organisation’s contacts.
    */
   applicationsRecipient?: string | null;
+  /**
+   * An optional PDF of the full job description.
+   */
+  jobDescriptionPdf?: (number | null) | Document;
   /**
    * Set at checkout.
    */
@@ -2743,18 +2743,18 @@ export interface JobsSelect<T extends boolean = true> {
   expiresAt?: T;
   organisation?: T;
   description?: T;
-  jobDescriptionPdf?: T;
   jobType?: T;
   categories?: T;
   salaryBand?: T;
   displayedSalary?: T;
   companyName?: T;
   companyUrl?: T;
-  howToApply?: T;
   location?: T;
   locationDetails?: T;
+  howToApply?: T;
   applyOnline?: T;
   applicationsRecipient?: T;
+  jobDescriptionPdf?: T;
   plan?: T;
   order?: T;
   createdBy?: T;

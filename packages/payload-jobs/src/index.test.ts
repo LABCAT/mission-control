@@ -1,7 +1,11 @@
 import type { CollectionConfig, Config, Field } from 'payload'
 import { describe, expect, it } from 'vitest'
 
+import type { MissionControlUser } from './access'
+import { DASHBOARD_COMPONENT_PATH } from './admin'
+import { SITE_MANAGER_NAV_COLLECTIONS, siteManagerVisibleCollections } from './admin/nav'
 import { EXPIRE_PLACEMENTS_TASK, jobsTenantCollections, payloadJobs } from './index'
+import { DEFAULT_PAYLOAD_JOBS_SLUGS } from './slugs'
 import { TAXONOMY_SLUGS } from './taxonomies'
 
 const baseConfig = {
@@ -9,6 +13,24 @@ const baseConfig = {
   custom: { existing: true },
   secret: 'test',
 } as unknown as Config
+
+const multiConfig = {
+  collections: [
+    { slug: 'users', fields: [] },
+    { slug: 'tenants', fields: [] },
+  ],
+  custom: { existing: true },
+  secret: 'test',
+} as unknown as Config
+
+// The description sits in the Details tab of the job edit view (PJ-30).
+const description = async (config: Config) =>
+  (await payloadJobs()(config)).collections
+    ?.find((collection) => collection.slug === 'jobs')
+    ?.fields.flatMap((field) => (field.type === 'tabs' ? field.tabs.flatMap((tab) => tab.fields) : [field]))
+    .find((field) => 'name' in field && field.name === 'description')?.type
+
+const taskSlugs = (config: Config) => (config.jobs?.tasks ?? []).map((task) => task.slug)
 
 describe('payloadJobs', () => {
   it('keeps the existing config collections and custom keys when it registers itself', async () => {
@@ -49,6 +71,7 @@ describe('payloadJobs', () => {
         features: { applications: true, credits: true, coupons: true, pages: true },
         paymentProviders: ['invoice'],
         registry: expect.any(Object),
+        slugs: { ...DEFAULT_PAYLOAD_JOBS_SLUGS, tenants: 'tenants' },
         tenancy: 'single',
       },
     })
@@ -70,6 +93,7 @@ describe('payloadJobs', () => {
         features: { applications: true, credits: true, coupons: false, pages: true },
         paymentProviders: ['invoice'],
         registry: expect.any(Object),
+        slugs: { ...DEFAULT_PAYLOAD_JOBS_SLUGS, tenants: 'tenants' },
         tenancy: 'single',
       },
     })
@@ -167,7 +191,6 @@ describe('payloadJobs', () => {
   })
 
   it('adds jobs with placements, and the daily task that expires them, keeping host tasks', async () => {
-    const taskSlugs = (config: Config) => (config.jobs?.tasks ?? []).map((task) => task.slug)
     const withHostTask = {
       ...baseConfig,
       jobs: { tasks: [{ handler: () => ({ output: {} }), slug: 'heartbeat' }] },
@@ -180,12 +203,139 @@ describe('payloadJobs', () => {
     expect(taskSlugs(result)).toEqual(['heartbeat', EXPIRE_PLACEMENTS_TASK])
   })
 
-  it('uses a rich-text job description only when the host has an editor', async () => {
-    const description = async (config: Config) =>
-      (await payloadJobs()(config)).collections
-        ?.find((collection) => collection.slug === 'jobs')
-        ?.fields.find((field) => 'name' in field && field.name === 'description')?.type
+  it('gives a site manager a cut-down nav and a dashboard of their own @S-117', async () => {
+    const result = await payloadJobs({ accountAuth: false, tenancy: 'multi' })(multiConfig)
+    const dashboard = result.admin?.components?.beforeDashboard ?? []
 
+    expect(dashboard).toEqual([{ path: DASHBOARD_COMPONENT_PATH }])
+    // Platform collections drop out of a site manager's menu, tenant content stays.
+    const siteManager = {
+      role: 'user',
+      tenants: [{ role: 'tenant-admin', tenant: 1 }],
+    } as MissionControlUser
+    const visible = siteManagerVisibleCollections(result, siteManager)
+
+    expect(visible).toEqual(expect.arrayContaining(['jobs', 'organisations', 'plans', 'users']))
+    expect(visible).not.toContain('tenants')
+    // A super admin keeps every collection.
+    expect(siteManagerVisibleCollections(result, { role: 'super-admin' })).toEqual(
+      result.collections?.map((collection) => collection.slug),
+    )
+  })
+
+  it('leaves the admin alone in single-tenant mode and when switched off', async () => {
+    const single = await payloadJobs()(baseConfig)
+    const off = await payloadJobs({ siteManagerAdmin: false, accountAuth: false, tenancy: 'multi' })(
+      multiConfig,
+    )
+
+    expect(single.admin?.components?.beforeDashboard).toBeUndefined()
+    expect(off.admin?.components?.beforeDashboard).toBeUndefined()
+    expect(siteManagerVisibleCollections(off, { role: 'user', tenants: [{ role: 'tenant-admin', tenant: 1 }] })).toEqual(
+      off.collections?.map((collection) => collection.slug),
+    )
+  })
+
+  it('keeps a host collection in the menu when the host asks for it', async () => {
+    const withMedia = {
+      collections: [...(multiConfig.collections ?? []), { slug: 'media', fields: [] }],
+      custom: {},
+      secret: 'test',
+    } as unknown as Config
+    const result = await payloadJobs({
+      accountAuth: false,
+      siteManagerAdmin: { collections: [...SITE_MANAGER_NAV_COLLECTIONS, 'media'] },
+      tenancy: 'multi',
+    })(withMedia)
+
+    expect(
+      siteManagerVisibleCollections(result, { role: 'user', tenants: [{ role: 'tenant-admin', tenant: 1 }] }),
+    ).toContain('media')
+  })
+
+  it('keeps renamed job-board collections in a site manager’s menu @S-117', async () => {
+    const result = await payloadJobs({
+      accountAuth: false,
+      collections: OVERRIDES,
+      tenancy: 'multi',
+    })(multiConfig)
+
+    const visible = siteManagerVisibleCollections(result, {
+      role: 'user',
+      tenants: [{ role: 'tenant-admin', tenant: 1 }],
+    })
+
+    // Every renamed collection is the site manager's own content, so all of them stay.
+    expect(visible).toEqual(
+      expect.arrayContaining([
+        'vacancies',
+        'employers',
+        'job-locations',
+        'categories',
+        'employment-types',
+        'salaries',
+        'packages',
+        'extras',
+        'vouchers',
+        'content-pages',
+        'navigation',
+      ]),
+    )
+    // The platform collections stay hidden, and no default slug leaks back in.
+    expect(visible).not.toContain('tenants')
+    expect(visible).not.toContain('subscribers')
+    for (const slug of [
+      'jobs',
+      'organisations',
+      'locations',
+      'plans',
+      'add-ons',
+      'coupons',
+      'pages',
+      'menus',
+      'job-categories',
+      'job-types',
+      'salary-bands',
+    ]) {
+      expect(visible).not.toContain(slug)
+    }
+  })
+
+  it('honours the legacy jobsSlug option in the site manager’s menu @S-117', async () => {
+    const result = await payloadJobs({
+      accountAuth: false,
+      jobsSlug: 'vacancies',
+      tenancy: 'multi',
+    })(multiConfig)
+
+    const visible = siteManagerVisibleCollections(result, {
+      role: 'user',
+      tenants: [{ role: 'tenant-admin', tenant: 1 }],
+    })
+
+    expect(visible).toContain('vacancies')
+    expect(visible).not.toContain('jobs')
+  })
+
+  it('records every collection slug for the dashboard, so a later collection needs no change here', async () => {
+    const result = await payloadJobs({ accountAuth: false, collections: OVERRIDES, tenancy: 'multi' })(
+      multiConfig,
+    )
+    const recorded = result.custom?.payloadJobs as { slugs: Record<string, string> }
+
+    // Every recorded slug is a collection the plugin registered, under its resolved name,
+    // including main's real orders collection (PJ-23).
+    const registered = (result.collections ?? []).map((collection) => collection.slug)
+    const { tenants: _tenants, ...owned } = recorded.slugs
+
+    expect(registered).toEqual(expect.arrayContaining(Object.values(owned)))
+    expect(registered).toContain(recorded.slugs.orders)
+    expect(recorded.slugs).toMatchObject({ jobs: 'vacancies', organisations: 'employers' })
+    // The host's own tenant collection keeps its slug too.
+    expect(recorded.slugs.tenants).toBe('tenants')
+  })
+
+  it('uses a rich-text job description only when the host has an editor', async () => {
     expect(await description(baseConfig)).toBe('textarea')
     expect(await description({ ...baseConfig, editor: {} } as unknown as Config)).toBe('richText')
   })
@@ -209,16 +359,17 @@ const OVERRIDES = {
   salaryBands: { slug: 'salaries' },
 } as const
 
-/** Every `relationTo` in a collection, including fields nested in rows and collapsibles. */
+/** Every `relationTo` in a collection, including fields nested in rows, tabs and collapsibles. */
 const relationTargets = (collection: CollectionConfig): string[] => {
   const targets: string[] = []
   const visit = (fields: Field[] | undefined) => {
     for (const field of fields ?? []) {
-      const relation = field as { fields?: Field[]; relationTo?: unknown }
+      const relation = field as { fields?: Field[]; relationTo?: unknown; tabs?: { fields: Field[] }[] }
       if (relation.relationTo !== undefined) {
         targets.push(...[relation.relationTo].flat().map(String))
       }
       if (relation.fields) visit(relation.fields)
+      for (const tab of relation.tabs ?? []) visit(tab.fields)
     }
   }
 

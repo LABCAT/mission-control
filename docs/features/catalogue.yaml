@@ -1720,12 +1720,33 @@ stories:
     story: "A site manager's admin only shows their tenant, with a cut-down menu and a pending-jobs dashboard."
     steps:
       - "Sign in as a site manager and open the admin."
-    expected: "Only that tenant's jobs, orders, organisations and users are visible, and the dashboard shows pending jobs and recent orders."
+    expected: "Only that tenant's jobs, organisations and users are visible, and the dashboard shows that tenant's pending jobs."
     settings:
       - admin.siteManagerScope
     mvp: true
-    status: planned
-    tests: []
+    status: built
+    tests:
+      - packages/payload-jobs/src/admin/nav.test.ts
+      - packages/payload-jobs/src/admin/dashboard.test.ts
+      - packages/payload-jobs/src/admin/SiteManagerDashboard.test.tsx
+      - packages/payload-jobs/src/admin/links.test.ts
+      - packages/payload-jobs/src/index.test.ts
+      - packages/payload-jobs/src/collections/jobs.test.ts
+
+  - id: S-150
+    area: Admin
+    role: site manager
+    story: "A site manager's dashboard lists the tenant's recent orders."
+    steps:
+      - "Sign in as a site manager whose tenant has orders and open the admin."
+    expected: "The dashboard counts the tenant's orders and lists the most recent ones with their organisation, status and total; another tenant's orders never appear."
+    settings:
+      - admin.siteManagerScope
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/admin/dashboard.test.ts
+      - packages/payload-jobs/src/admin/SiteManagerDashboard.test.tsx
 
   - id: S-118
     area: Admin
@@ -1963,6 +1984,21 @@ stories:
     mvp: true
     status: planned
     tests: []
+
+  - id: S-148
+    area: Import and cutover
+    role: super admin
+    story: "The importer copies the logos, covers, job PDFs and page images that imported records use into R2 and links them."
+    steps:
+      - "Run wp-import-media with --dry-run and read the files, bytes, skipped reasons and failures."
+      - "Run it for real, then run it again."
+    expected: "Only files used by imported organisations, jobs and pages are copied, with checksum and size verified and stable names; thumbnails and uploaded_cvs are never copied; the logo, cover, job PDF and page image relations are set; a second run copies nothing."
+    settings:
+      - import.media
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-wp-import/src/media/media.test.ts
 
   # ---------------------------------------------------------------------------
   # Security and spam

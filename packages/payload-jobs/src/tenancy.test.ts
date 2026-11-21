@@ -2,6 +2,7 @@ import type { CollectionConfig, Config, Field } from 'payload'
 import { describe, expect, it } from 'vitest'
 
 import { payloadJobs } from './index'
+import { DEFAULT_PAYLOAD_JOBS_SLUGS } from './slugs'
 import { jobBoardTenantFields, validateCurrency } from './tenancy'
 
 const tenants: CollectionConfig = {
@@ -53,6 +54,7 @@ describe('payloadJobs tenancy modes', () => {
       features: { applications: true, credits: true, coupons: true, pages: true },
       paymentProviders: ['invoice'],
       registry: expect.any(Object),
+      slugs: { ...DEFAULT_PAYLOAD_JOBS_SLUGS, tenants: 'tenants' },
       tenancy: 'multi',
     })
   })
@@ -122,6 +124,7 @@ describe('payloadJobs tenancy modes', () => {
       features: { applications: true, credits: true, coupons: true, pages: true },
       paymentProviders: ['invoice'],
       registry: expect.any(Object),
+      slugs: { ...DEFAULT_PAYLOAD_JOBS_SLUGS, tenants: 'tenants' },
       tenancy: 'single',
     })
 

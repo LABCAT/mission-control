@@ -10,6 +10,8 @@ export default defineConfig({
           // rocketship-payload projects load.
           include: [
             'packages/*/src/**/*.test.ts',
+            // mission-control: admin components are TSX (PJ-30, S-117).
+            'packages/*/src/**/*.test.tsx',
             'apps/*/src/**/*.test.ts',
             '.github/scripts/*.test.ts',
             'scripts/**/*.test.ts', // mission-control: features catalogue report

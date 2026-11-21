@@ -120,8 +120,50 @@ All writes use `overrideAccess: true`.
   names only (credentials, role and organisation are create-only).
 - **Report**: the dry run prints users read/kept, skipped by reason, and organisations merged.
   No emails, names or hashes are logged.
-- Not imported: applications, CVs, resumes, logs, `user_IP`, logos/cover images (PJ-63), Yoast
+- Not imported: applications, CVs, resumes, logs, `user_IP`, logos/cover images (PJ-63, see below), Yoast
   SEO fields and physical location (no fields on organisations yet).
+
+## Media, logos and PDFs (PJ-63)
+
+```bash
+pnpm wp-import-media --tenant <slug> --source <uploads-dir> (--target-dir <dir> | --r2-local) [--dry-run] [--verify]
+```
+
+Copies the legacy files that **imported records** use, then links them. Run it after the
+organisation importer, and again after the job (PJ-64) and page (PJ-67) importers: records that
+do not exist yet are skipped (`owner-not-imported`, and their file is not copied), so a later run
+picks them up. `--source` is a **copy** of `wp-content/uploads` on disk, never the live server.
+
+| Legacy reference | Becomes |
+|---|---|
+| user meta `company-logo` (attachment id, or an uploads URL/path), first member of the merged organisation that has one | `organisations.logo` (a `media` document) |
+| user meta named by `coverMetaKey` (none by default: the legacy site has no cover key) | `organisations.cover` |
+| a document attachment (PDF, DOC, DOCX) whose parent is a job; the newest wins | `jobs.jobDescriptionPdf` (a `documents` document, max 10 MB) |
+| page featured image, else the Yoast share image | `pages.seo.image` |
+
+- **Stable names**: the bucket key and the document `filename` are `t<tenant>-<12-char hash of the
+  legacy path>-<legacy path flattened with '-'>` (`t1-3f9a0c1b2d4e-company_logos-12-logo.png`). The
+  storage adapter serves files by one path segment, hence the flattening; the hash keeps two paths
+  that flatten alike apart (`my logo.png` / `my_logo.png`), and the tenant keeps tenants apart in
+  the shared bucket. Derived from the inputs alone, so a re-run, or a second record that uses the
+  same file, lands on the same object, and no two files are ever written to one object. The
+  document's `legacyId` is the attachment id (a file that is only a path gets a stable negative id).
+- **Resumable and idempotent**: the bucket is the only state. An object that exists with the
+  right size counts as copied (`--verify` re-hashes the source and compares the stored SHA-256).
+  Stores write nothing under the key until the checksum matches, so a killed run leaves no partial
+  object. A relation is set only when empty; another file chosen by a person is left alone.
+- **Verified**: the source is hashed, streamed with that SHA-256 and size (R2 and the directory
+  store reject a mismatch), and the stored size is read back.
+- **Never imported**: generated thumbnails (a URL that names one maps back to its original),
+  `uploaded_cvs`, `wp-staging`, `at-logs` (`excludePaths`), image variants (decision 5), and a job's
+  own featured image (its logo is the organisation's). Documents over `maxDocumentBytes` (10 MB,
+  the collection's cap) are skipped and reported.
+- **Report**: references found, files and bytes copied or already in place, documents created,
+  relations set or left, skipped by reason, failures with owner and path. Exit code 1 on failures.
+- **Targets**: `--target-dir` writes to a local directory; `--r2-local` writes to wrangler's local
+  R2 emulation (binding `MEDIA`). Neither touches the real bucket. Copying into `mission-control-media`
+  is a founder-run step with `r2Target(binding)`, which streams where workerd allows it.
+- Not covered: images embedded in page body text (the page importer, PJ-67, rewrites those URLs).
 
 ## Not covered yet
 
