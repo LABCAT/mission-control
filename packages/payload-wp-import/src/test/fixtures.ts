@@ -248,3 +248,119 @@ export const userTables: Record<string, Row[]> = {
     { ID: 904, post_type: 'page', post_status: 'publish', post_author: 4, post_date: '2025-05-01 00:00:00' },
   ],
 }
+
+/**
+ * Legacy jobs (PJ-64) on top of the PJ-62 users. "Today" in the tests is 2026-11-20.
+ * 1001 published, matches an imported organisation; 1002 expired for a client that has no
+ * organisation; 1003 draft and 1004 trash (not imported); 1005 has no company, so its author's
+ * organisation is used; 1006 has neither (skipped); 1007 clashes with a category slug and has
+ * malicious markup; 1008 uses the broken salary term, `Independant`, and several locations.
+ */
+export const jobTables: Record<string, Row[]> = (() => {
+  const post = (ID: number, post_status: string, extra: Row = {}): Row => ({
+    ID,
+    post_author: 1,
+    post_content: '',
+    post_date: '2026-11-01 09:00:00',
+    post_date_gmt: '2026-10-31 22:00:00',
+    post_modified: '2026-11-01 09:00:00',
+    post_modified_gmt: '2026-10-31 22:00:00',
+    post_name: `job-${ID}`,
+    post_status,
+    post_title: `Job ${ID}`,
+    post_type: 'job_listing',
+    ...extra,
+  })
+  let id = 5000
+  const pm = (post_id: number, meta_key: string, meta_value: string): Row => ({ meta_id: ++id, meta_key, meta_value, post_id })
+  const rel = (object_id: number, term_taxonomy_id: number): Row => ({ object_id, term_taxonomy_id })
+
+  return {
+    wp_posts: [
+      ...(userTables.wp_posts ?? []),
+      post(1001, 'publish', {
+        post_content: '<p>Greet <strong>guests</strong> &amp; <em>answer</em> the phone.</p><ul><li>Roster</li><li>Tidy</li></ul>',
+        post_name: 'front-desk-clerk',
+        post_title: 'Front Desk Clerk',
+      }),
+      post(1002, 'expired', {
+        post_date: '2025-01-10 09:00:00',
+        post_date_gmt: '2025-01-09 22:00:00',
+        post_modified: '2025-01-20 09:00:00',
+        post_modified_gmt: '2025-01-19 22:00:00',
+        post_name: 'boat-skipper',
+        post_title: 'Boat Skipper',
+      }),
+      post(1003, 'draft'),
+      post(1004, 'trash'),
+      post(1005, 'publish', { post_author: 6, post_name: 'deckhand' }),
+      post(1006, 'publish'),
+      post(1007, 'publish', {
+        post_content: '<p>Hi<script>alert(1)</script><a href="javascript:alert(2)">click</a></p><img src=x onerror=alert(3)>',
+        post_name: 'hospitality-tourism',
+      }),
+      post(1008, 'publish', { post_name: 'cook' }),
+    ],
+    wp_postmeta: [
+      ...(userTables.wp_postmeta ?? []),
+      pm(1001, '_Company', 'Example Resort Ltd'),
+      pm(1001, '_CompanyURL', 'example-resort.test'),
+      pm(1001, '_how_to_apply', 'Email us <b>now</b>\r\nor call'),
+      pm(1001, '_jr_job_duration', '30'),
+      pm(1001, '_jr_fx_expire_days', '14'),
+      pm(1001, 'jr_fx_apps_recipient_address', 'Jobs@Example.com'),
+      pm(1001, 'jr_fx_disable_apply_online', '1'),
+      pm(1001, '_displayed_salary', 'VT 100,000 &#8211; 120,000 a month'),
+      pm(1001, '_jr_featured-listings', '1'),
+      pm(1001, '_jr_featured-listings_start_date', '2026-11-01'),
+      pm(1001, '_jr_featured-listings_duration', '30'),
+      pm(1001, '_jr_featured-cat', '1'),
+      pm(1001, '_jr_address', 'Port Vila, Efate'),
+      pm(1001, 'jr_total_count', '120'),
+      pm(1001, 'user_IP', '203.0.113.9'),
+      pm(1002, '_Company', 'Client Agency Co'),
+      pm(1002, '_jr_job_duration', '45'),
+      pm(1002, '_jr_expired_reason', 'user_ended'),
+      pm(1002, '_jr_featured-listings', '1'),
+      pm(1002, '_jr_address', 'Luganville - SANTO'),
+      pm(1002, 'jr_total_count', '7'),
+      pm(1005, '_jr_address', 'Nowhere, Atlantis'),
+      pm(1006, '_Company', ''),
+      pm(1007, '_Company', 'Client Agency Co'),
+      pm(1007, '_jr_address', 'Efate, Santo and Tanna'),
+      pm(1008, '_Company', 'Sample Charters'),
+      pm(1008, '_jr_address', 'Efate,Port Vila'),
+    ],
+    wp_terms: [
+      { term_id: 11, name: 'Hospitality &amp; Tourism', slug: 'hospitality-tourism' },
+      { term_id: 12, name: 'Construction &amp; roading', slug: 'construction-roading' },
+      { term_id: 21, name: 'Full-Time', slug: 'full-time' },
+      { term_id: 26, name: 'Independant', slug: 'independant' },
+      { term_id: 27, name: 'Independent', slug: 'independent' },
+      { term_id: 41, name: '0 - 1,000,000', slug: '0-100000' },
+      { term_id: 42, name: '000', slug: '000' },
+      { term_id: 43, name: '1,000,000-1,500,000', slug: '1000000-1500000' },
+      { term_id: 44, name: '1,000,000-2,000,000', slug: '1000000-2000000' },
+    ],
+    wp_term_taxonomy: [
+      { term_taxonomy_id: 101, term_id: 11, taxonomy: 'job_cat', parent: 0 },
+      { term_taxonomy_id: 102, term_id: 12, taxonomy: 'job_cat', parent: 0 },
+      { term_taxonomy_id: 201, term_id: 21, taxonomy: 'job_type', parent: 0 },
+      { term_taxonomy_id: 202, term_id: 26, taxonomy: 'job_type', parent: 0 },
+      { term_taxonomy_id: 203, term_id: 27, taxonomy: 'job_type', parent: 0 },
+      { term_taxonomy_id: 401, term_id: 41, taxonomy: 'job_salary', parent: 0 },
+      { term_taxonomy_id: 402, term_id: 42, taxonomy: 'job_salary', parent: 0 },
+      { term_taxonomy_id: 403, term_id: 43, taxonomy: 'job_salary', parent: 0 },
+      { term_taxonomy_id: 404, term_id: 44, taxonomy: 'job_salary', parent: 0 },
+    ],
+    wp_term_relationships: [
+      rel(1001, 201), rel(1001, 101), rel(1001, 102), rel(1001, 401),
+      rel(1002, 201),
+      rel(1005, 201),
+      rel(1007, 101),
+      rel(1008, 202), rel(1008, 402), rel(1008, 403),
+    ],
+    wp_users: userTables.wp_users ?? [],
+    wp_usermeta: userTables.wp_usermeta ?? [],
+  }
+})()

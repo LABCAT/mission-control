@@ -22,6 +22,8 @@ export type ImportPayload = {
   }) => Promise<{ docs: ({ id: number | string } & Record<string, any>)[] }>
   update: (args: {
     collection: any
+    /** Request context for the collection's hooks (see `MappedDoc.updateContext`). */
+    context?: Record<string, unknown>
     data: any
     id: number | string
     overrideAccess?: boolean
@@ -48,6 +50,11 @@ export type MappedDoc = {
    * in. Updates still go through `payload.update`.
    */
   rawCreate?: boolean
+  /**
+   * Hook context passed to `payload.update` on a re-run. For a hook that guards a field the
+   * import must set, such as the job view counter.
+   */
+  updateContext?: Record<string, unknown>
   /** Fields for the collection. `legacyId` and the tenant are set by the runner. */
   data: Record<string, unknown>
   /** The WordPress primary key of the source row. */

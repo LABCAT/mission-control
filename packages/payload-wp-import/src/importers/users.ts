@@ -25,6 +25,11 @@ export type UserImportOptions = {
   organisationsSlug?: string
   /** Clock, for tests. */
   now?: () => Date
+  /**
+   * Where the plan comes from. The job importer (PJ-64) shares the plan of the users importers,
+   * so both agree on which organisations exist. Default: one built per reader.
+   */
+  planProvider?: PlanProvider
   /** Slug of the users collection. Default `users`. */
   usersSlug?: string
 }
@@ -196,7 +201,7 @@ export const cleanUrl = (value: null | string | undefined): string | undefined =
   return /^https?:\/\/[^/.\s]+\.[^/\s]+/i.test(url) ? url : undefined
 }
 
-const cleanEmail = (value: null | string | undefined): string | undefined => {
+export const cleanEmail = (value: null | string | undefined): string | undefined => {
   const text = String(value ?? '').trim().toLowerCase()
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text) ? text : undefined
 }
@@ -256,6 +261,17 @@ export type OrganisationGroup = {
   members: LegacyUserFacts[]
   name: string
   slug: string
+}
+
+export type PlanProvider = (reader: MysqlReader) => Promise<ImportPlan>
+
+/** A plan provider that builds the plan once per reader and hands the same one to every caller. */
+export const createPlanProvider = (options: UserImportOptions = {}): PlanProvider => {
+  let cached: { plan: Promise<ImportPlan>; reader: MysqlReader } | undefined
+  return (reader) => {
+    if (!cached || cached.reader !== reader) cached = { plan: buildImportPlan(reader, options), reader }
+    return cached.plan
+  }
 }
 
 export type ImportPlan = {
@@ -421,15 +437,11 @@ export const usersImporters = (
   options: UserImportOptions = {},
 ): { organisations: Importer<OrganisationGroup>; users: Importer<LegacyUserFacts> } => {
   const organisationsSlug = options.organisationsSlug ?? 'organisations'
-  let cached: { plan: Promise<ImportPlan>; reader: MysqlReader } | undefined
+  const provider = options.planProvider ?? createPlanProvider(options)
   let lastPlan: ImportPlan | undefined
 
-  const planFor = (reader: MysqlReader): Promise<ImportPlan> => {
-    if (!cached || cached.reader !== reader) {
-      cached = { plan: buildImportPlan(reader, options).then((plan) => (lastPlan = plan)), reader }
-    }
-    return cached.plan
-  }
+  const planFor = (reader: MysqlReader): Promise<ImportPlan> =>
+    provider(reader).then((plan) => (lastPlan = plan))
 
   const organisations: Importer<OrganisationGroup> = {
     collection: organisationsSlug,

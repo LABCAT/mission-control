@@ -153,7 +153,13 @@ const importRow = async (
 
     if (found) {
       if (!ctx.dryRun) {
-        await ctx.payload.update({ collection, data, id: found.id, overrideAccess: true })
+        await ctx.payload.update({
+          collection,
+          ...(mapped.updateContext ? { context: mapped.updateContext } : {}),
+          data,
+          id: found.id,
+          overrideAccess: true,
+        })
       }
       counts.updated++
     } else {

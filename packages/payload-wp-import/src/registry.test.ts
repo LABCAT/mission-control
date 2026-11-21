@@ -9,9 +9,9 @@ describe('registry', () => {
     expect(() => validateRegistry(registry)).not.toThrow()
   })
 
-  it('offers every entity PJ-61 and PJ-62 import, plus the location audit', () => {
+  it('offers every entity PJ-61, PJ-62 and PJ-64 import, plus the location audit', () => {
     expect(Object.keys(registry).toSorted()).toEqual(
-      ['job-categories', 'job-types', 'locations', 'organisations', 'salary-bands', 'users'].toSorted(),
+      ['job-categories', 'job-organisations', 'job-types', 'jobs', 'locations', 'organisations', 'salary-bands', 'users'].toSorted(),
     )
   })
 

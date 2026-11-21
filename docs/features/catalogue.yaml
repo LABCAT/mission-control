@@ -1975,6 +1975,22 @@ stories:
     tests:
       - packages/payload-wp-import/src/media/media.test.ts
 
+  - id: S-151
+    area: Import and cutover
+    role: super admin
+    story: "The importer brings the legacy published and expired jobs into a tenant with their organisation, taxonomies, locations, description, dates, featured placements and view counts."
+    steps:
+      - "Run wp-import jobs with --dry-run and read the counts per status, job type, salary band, category and location."
+      - "Run it for real, then run it again."
+    expected: "Only published and expired jobs are imported, each attached to the organisation named in its company field (created when it has none); descriptions are converted to Lexical with scripts and unsafe links removed; salary and job-type clean-up is applied; slugs are kept; expired jobs keep their dates; a second run creates nothing and never lowers a job's view count."
+    settings:
+      - import.jobs
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-wp-import/src/importers/jobs.test.ts
+      - packages/payload-wp-import/src/html-to-lexical.test.ts
+
   # ---------------------------------------------------------------------------
   # Security and spam
   # ---------------------------------------------------------------------------

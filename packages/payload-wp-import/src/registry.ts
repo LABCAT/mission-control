@@ -1,6 +1,7 @@
+import { jobsImporters } from './importers/jobs'
 import { locationsImporter } from './importers/locations'
 import { taxonomyImporters } from './importers/taxonomies'
-import { usersImporters } from './importers/users'
+import { createPlanProvider, usersImporters } from './importers/users'
 import type { Importer } from './types'
 
 /**
@@ -9,8 +10,15 @@ import type { Importer } from './types'
  * `locations` audits the legacy job locations against the tenant's own tree; it writes nothing.
  * The taxonomies import into the five `payload-jobs` taxonomy collections. `organisations` and
  * `users` (PJ-62) import the active legacy users and the organisations derived from the employers.
+ * `job-organisations` and `jobs` (PJ-64) import the published and expired jobs.
  */
+const planProvider = createPlanProvider()
 export const registry: Record<string, Importer> = Object.fromEntries(
-  [locationsImporter(), ...taxonomyImporters(), ...Object.values(usersImporters())].map((importer) => [importer.name, importer]),
+  [
+    locationsImporter(),
+    ...taxonomyImporters(),
+    ...Object.values(usersImporters({ planProvider })),
+    ...Object.values(jobsImporters({ planProvider })),
+  ].map((importer) => [importer.name, importer]),
 )
 

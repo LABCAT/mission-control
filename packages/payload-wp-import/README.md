@@ -165,9 +165,55 @@ picks them up. `--source` is a **copy** of `wp-content/uploads` on disk, never t
   is a founder-run step with `r2Target(binding)`, which streams where workerd allows it.
 - Not covered: images embedded in page body text (the page importer, PJ-67, rewrites those URLs).
 
+## Jobs (PJ-64)
+
+`pnpm wp-import jobs --tenant <slug> [--dry-run]` runs everything a job needs first (taxonomies,
+users, organisations) and then `job-organisations` and `jobs`. Run `wp-import-media` afterwards:
+it links `jobDescriptionPdf` to jobs that now exist.
+
+- **Which jobs**: `job_listing` posts with status `publish` or `expired`. Drafts, pending and
+  trash are skipped and counted by status in the report.
+- **Organisation**: the job's `_Company` name, matched (same normalisation as PJ-62) to an
+  organisation from the users import. Admins post about two thirds of the jobs with the real
+  employer in `_Company`, so a name with no organisation becomes one (`job-organisations`:
+  approved, page private, `legacyId` = minus the lowest job id of that name). A job with no
+  `_Company` uses its author's organisation; with neither it is skipped (`no-organisation`).
+  `companyName` is kept only when it differs from the organisation's name.
+- **Description**: `post_content` is converted once to Lexical (`html-to-lexical.ts`): paragraphs,
+  headings (`h2`–`h4`), bold, italic, lists, line breaks and links to http/https/mailto/tel. Scripts,
+  styles, frames, images, event handlers and every other link protocol are removed. Plain text is
+  split like WordPress did (blank line = paragraph). `how to apply` is plain text.
+- **Slugs** keep the legacy `post_name`; one that equals a category, location or job-type slug (or a
+  reserved word) gets `-2`, `-3`, … (decision 19 Nov).
+- **Taxonomies** are linked through `wp_term_relationships` after the 19 Nov clean-up: `Independant`
+  folds into `Independent`, the 1–1.5M and 1.5–2M salary bands into 1–2M, and the broken salary
+  terms `000`, `000 or more`, `1`, `2` are dropped (the job gets no band). The leftover legacy terms
+  still exist in the taxonomy collections (PJ-61 imports them all) for a site manager to remove.
+- **Locations**: one or many chips from `_jr_address` (else `geo_short_address`, `geo_address`) by
+  `job-locations.ts`: `Town, Island` pairs, `Efate,Port Vila`, `and` / `&` / `;` / ` - ` separators,
+  one-letter typos, and provinces expanded to islands (an option; vwok default). A place is dropped
+  when one of its descendants is also a chip. The original text is kept as `locationDetails`
+  unless the chips say exactly what it said.
+- **Dates**: `publishedAt` from `post_date_gmt`. `expiresAt` = published + the employer's close days
+  (`_jr_fx_expire_days`), else the plan duration (`_jr_job_duration`), else 30; an expired job that
+  was ended early (`user_ended`, `user_canceled`, …) closes when it was last modified. Expired jobs
+  keep their dates, so the 12-month 410 rule works.
+- **Featured**: `_jr_featured-listings` → a `featured-in-listings` placement from its start date for
+  its paid duration (until close when none). Placements that already ended are not imported (the
+  daily clean-up removes them). `featured-in-category` is not seeded (`featuredInCategory` option).
+- **Views**: `wp_jr_counter_total` (`postnum`, `postcount`) when the table exists, else the
+  `jr_total_count` meta. A re-run never lowers the counter.
+- **Other fields**: `_displayed_salary` as text, `jr_fx_apps_recipient_address` →
+  `applicationsRecipient`, `jr_fx_disable_apply_online` → `applyOnline`, `_CompanyURL`.
+  Never read: `user_IP`, applications, `_edit_lock`.
+- **Created through the adapter** (`rawCreate`): the status state machine refuses to create an
+  expired job. Re-runs use `payload.update` with the view-counter context.
+- **Report** (dry run and real run): counts per status, job type, salary band, category, location
+  outcome, slug suffixes, dropped terms, featured placements, views and skip reasons.
+
 ## Not covered yet
 
-- Job → term links (`wp_term_relationships`) belong to the job importer (PJ-64).
+- Geo coordinates (`_jr_geo_latitude/longitude`): the jobs collection has no field for them.
 - In a dry run, documents created by an earlier importer do not exist, so a mapper that resolves
   relations by `legacyId` sees them as missing.
 - The legacy taxonomy keys for `job-cat`/`job-tag`/`areas-of-focus` are read from AUDIT.md; the
