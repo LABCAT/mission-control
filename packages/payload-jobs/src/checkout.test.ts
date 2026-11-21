@@ -21,7 +21,7 @@ const refused = (fn: () => unknown) => {
 }
 
 describe('parseCheckoutInput', () => {
-  it('reads ids, a normalised coupon code, a date and the credit flag @S-151', () => {
+  it('reads ids, a normalised coupon code, a date and the credit flag @S-152', () => {
     expect(
       parseCheckoutInput({ addOnIds: [3, '4'], closeDate: '2026-12-01', couponCode: ' linkps ', jobId: 1, planId: '2', useCredit: true }),
     ).toEqual({ addOnIds: [3, '4'], closeDate: '2026-12-01', couponCode: 'LINKPS', jobId: 1, planId: '2', useCredit: true })
@@ -35,14 +35,14 @@ describe('parseCheckoutInput', () => {
     })
   })
 
-  it('drops amounts the client sends instead of trusting them @S-151', () => {
+  it('drops amounts the client sends instead of trusting them @S-152', () => {
     const input = parseCheckoutInput({ discount: 999, jobId: 1, planId: 2, price: 0, total: 0 }) as Record<string, unknown>
     expect(input).not.toHaveProperty('total')
     expect(input).not.toHaveProperty('price')
     expect(input).not.toHaveProperty('discount')
   })
 
-  it('refuses malformed bodies @S-151', () => {
+  it('refuses malformed bodies @S-152', () => {
     for (const body of [
       null,
       [],
@@ -94,7 +94,7 @@ describe('close date', () => {
 })
 
 describe('payment method', () => {
-  it('is credit when a credit pays it all, free at zero, otherwise invoice @S-151', () => {
+  it('is credit when a credit pays it all, free at zero, otherwise invoice @S-152', () => {
     expect(paymentMethodFor({ credits: { available: 1, discount: 3900, used: 1 }, total: 0 })).toBe('credit')
     expect(paymentMethodFor({ credits: { available: 0, discount: 0, used: 0 }, total: 0 })).toBe('free')
     expect(paymentMethodFor({ credits: { available: 1, discount: 3900, used: 1 }, total: 2000 })).toBe('invoice')
@@ -106,7 +106,7 @@ describe('purchase rights', () => {
   const rights = (actor: 'member' | 'owner' | 'staff' | 'system', user: Record<string, unknown> | null = {}) =>
     defaultPurchaseRights({ actor, organisationID: 1, req: {} as never, user: user as never })
 
-  it('lets members use credits but not buy unless the owner allows it @S-152', () => {
+  it('lets members use credits but not buy unless the owner allows it @S-153', () => {
     expect(rights('member')).toEqual({ buy: false, useCredits: true })
     expect(rights('member', { canBuy: true })).toEqual({ buy: true, useCredits: true })
     expect(rights('member', { useCredits: false })).toEqual({ buy: false, useCredits: false })

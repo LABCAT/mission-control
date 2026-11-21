@@ -73,7 +73,7 @@ describe('payloadJobs tenancy modes', () => {
     ).toBeUndefined()
   })
 
-  it('adds the account auth and checkout endpoints to the tenants collection in multi mode @S-151', async () => {
+  it('adds the account auth and checkout endpoints to the tenants collection in multi mode @S-152', async () => {
     const result = await payloadJobs({ tenancy: 'multi' })({
       collections: [tenants, users],
     } as unknown as Config)

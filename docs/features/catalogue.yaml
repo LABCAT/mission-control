@@ -1728,7 +1728,7 @@ stories:
       - packages/payload-jobs/src/admin/dashboard.test.ts
       - packages/payload-jobs/src/admin/SiteManagerDashboard.test.tsx
 
-  - id: S-151
+  - id: S-152
     area: Commerce
     role: employer
     story: "An employer checks out a job: the CMS prices the plan, add-ons and coupon itself and creates exactly one order."
@@ -1746,7 +1746,7 @@ stories:
       - packages/payload-jobs/src/checkout.test.ts
       - packages/payload-jobs/src/checkout.integration.test.ts
 
-  - id: S-152
+  - id: S-153
     area: Commerce
     role: org owner
     story: "A member without purchase rights submits a job and the owner approves or declines the purchase."
@@ -1763,7 +1763,7 @@ stories:
       - packages/payload-jobs/src/checkout.test.ts
       - packages/payload-jobs/src/checkout.integration.test.ts
 
-  - id: S-153
+  - id: S-154
     area: Commerce
     role: employer
     story: "Buying a job pack at checkout adds its credits to the ledger and uses one for the job."

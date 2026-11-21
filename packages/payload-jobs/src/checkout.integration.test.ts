@@ -249,7 +249,7 @@ describe('checkout integration', () => {
   })
 
   describe('pricing and orders', () => {
-    it('prices the plan, add-ons and coupon on the server and invoices one order @S-151', async () => {
+    it('prices the plan, add-ons and coupon on the server and invoices one order @S-152', async () => {
       const listing = await job(orgs.brew)
       const result = await checkout(users.owner, { addOnIds: [enhanced.id], couponCode: ' linkps ', jobId: listing.id })
 
@@ -281,13 +281,13 @@ describe('checkout integration', () => {
       expect(coupon.useCount).toBe(1)
     })
 
-    it('ignores any amount the client sends; the price comes from the plan @S-151', async () => {
+    it('ignores any amount the client sends; the price comes from the plan @S-152', async () => {
       const listing = await job(orgs.brew)
       const result = await checkout(users.owner, { jobId: listing.id, total: 1, price: 1 } as never)
       expect(result.order.total).toBe(3900)
     })
 
-    it('creates one order however often the same checkout is submitted, even at once @S-151', async () => {
+    it('creates one order however often the same checkout is submitted, even at once @S-152', async () => {
       const listing = await job(orgs.brew)
       const results = await Promise.all([1, 2, 3].map(() => checkout(users.owner, { jobId: listing.id })))
 
@@ -299,7 +299,7 @@ describe('checkout integration', () => {
       expect(again).toMatchObject({ created: false, order: { id: results[0].order.id, status: 'invoiced' } })
     })
 
-    it('refuses a different checkout for a job whose order is still open, and allows one after it is cancelled @S-151', async () => {
+    it('refuses a different checkout for a job whose order is still open, and allows one after it is cancelled @S-152', async () => {
       const listing = await job(orgs.brew)
       const first = await checkout(users.owner, { jobId: listing.id })
       await expect(checkout(users.owner, { addOnIds: [enhanced.id], jobId: listing.id })).rejects.toSatisfy(refused('already_checked_out'))
@@ -311,14 +311,14 @@ describe('checkout integration', () => {
       expect(second.order.total).toBe(5900)
     })
 
-    it('makes a zero total a free order, paid at once @S-151', async () => {
+    it('makes a zero total a free order, paid at once @S-152', async () => {
       const listing = await job(orgs.brew)
       const result = await checkout(users.member, { jobId: listing.id, planId: plans.free.id })
       expect(result.order).toMatchObject({ paymentMethod: 'free', paymentProvider: null, status: 'paid', total: 0 })
       expect((await read('orders', result.order.id as number)).paidAt).toBeTruthy()
     })
 
-    it('applies the plan’s job restrictions and refuses archived plans @S-151', async () => {
+    it('applies the plan’s job restrictions and refuses archived plans @S-152', async () => {
       const listing = await job(orgs.brew)
       await expect(checkout(users.owner, { jobId: listing.id, planId: plans.finance.id })).rejects.toSatisfy(
         (error) => error instanceof CheckoutError && error.code === 'pricing_error' && error.detail?.pricing === 'job_not_allowed',
@@ -354,7 +354,7 @@ describe('checkout integration', () => {
       expect(coupon.useCount).toBe(1)
     })
 
-    it('previews the same price without writing anything @S-151', async () => {
+    it('previews the same price without writing anything @S-152', async () => {
       const listing = await job(orgs.brew)
       const preview = await previewCheckout({
         input: { addOnIds: [enhanced.id], closeDate: null, couponCode: 'LINKPS', jobId: listing.id, planId: plans.regular.id, useCredit: false },
@@ -440,7 +440,7 @@ describe('checkout integration', () => {
       await expect(checkout(users.noCredits, { jobId: (await job(orgs.brew)).id, useCredit: true })).rejects.toSatisfy(refused('forbidden'))
     })
 
-    it('grants a pack’s credits through the ledger and uses one for the job @S-153', async () => {
+    it('grants a pack’s credits through the ledger and uses one for the job @S-154', async () => {
       const organisation = await org(harness.tenantA.id, 'Packco')
       const owner = await makeUser('pack-owner', [{ role: 'employer', tenant: harness.tenantA.id }], {
         organisation: organisation.id,
@@ -464,12 +464,12 @@ describe('checkout integration', () => {
   })
 
   describe('purchase rights', () => {
-    it('lets a member who may buy check out directly @S-152', async () => {
+    it('lets a member who may buy check out directly @S-153', async () => {
       const result = await checkout(users.buyer, { jobId: (await job(orgs.brew)).id })
       expect(result).toMatchObject({ order: { status: 'invoiced' }, waitingForPurchase: false })
     })
 
-    it('holds a member’s purchase for the owner, who approves it once @S-152', async () => {
+    it('holds a member’s purchase for the owner, who approves it once @S-153', async () => {
       const listing = await job(orgs.brew)
       const result = await checkout(users.member, { couponCode: 'LINKPS', jobId: listing.id })
       expect(result).toMatchObject({ order: { status: 'waiting_for_purchase', total: 2000 }, waitingForPurchase: true })
@@ -497,7 +497,7 @@ describe('checkout integration', () => {
       ])
     })
 
-    it('lets the owner decline a purchase, after which the job can be checked out again @S-152', async () => {
+    it('lets the owner decline a purchase, after which the job can be checked out again @S-153', async () => {
       const listing = await job(orgs.brew)
       const held = await checkout(users.member, { jobId: listing.id })
       const declined = await declinePurchase({ orderId: held.order.id, payload, req: await reqFor(users.owner), tenantID: harness.tenantA.id, user: users.owner })
@@ -510,7 +510,7 @@ describe('checkout integration', () => {
       expect(bought.order.status).toBe('invoiced')
     })
 
-    it('lets a member pay with a credit without buy rights @S-152', async () => {
+    it('lets a member pay with a credit without buy rights @S-153', async () => {
       await giveCredits(orgs.brew, 1)
       const result = await checkout(users.member, { jobId: (await job(orgs.brew)).id, useCredit: true })
       expect(result).toMatchObject({ order: { paymentMethod: 'credit', status: 'paid' }, waitingForPurchase: false })
@@ -518,7 +518,7 @@ describe('checkout integration', () => {
   })
 
   describe('access and tenancy', () => {
-    it('hides another organisation’s or tenant’s job, and refuses seekers @S-151', async () => {
+    it('hides another organisation’s or tenant’s job, and refuses seekers @S-152', async () => {
       const listing = await job(orgs.brew)
       await expect(checkout(users.stranger, { jobId: listing.id })).rejects.toSatisfy(refused('not_found'))
       await expect(checkout(users.ownerB, { jobId: listing.id, planId: plans.b.id }, harness.tenantB.id)).rejects.toSatisfy(refused('not_found'))
@@ -528,12 +528,12 @@ describe('checkout integration', () => {
       expect(await ordersOf(listing.id)).toHaveLength(0)
     })
 
-    it('refuses another tenant’s plan and add-on @S-151', async () => {
+    it('refuses another tenant’s plan and add-on @S-152', async () => {
       const listing = await job(orgs.brew)
       await expect(checkout(users.owner, { jobId: listing.id, planId: plans.b.id })).rejects.toSatisfy(refused('not_found'))
     })
 
-    it('lets a site manager check out any organisation’s job in their tenant, but not another tenant’s @S-151', async () => {
+    it('lets a site manager check out any organisation’s job in their tenant, but not another tenant’s @S-152', async () => {
       const listing = await job(orgs.bank)
       const result = await checkout(harness.tenantAdminA as never, { jobId: listing.id })
       expect(result.order.status).toBe('invoiced')
@@ -545,7 +545,7 @@ describe('checkout integration', () => {
       )
     })
 
-    it('refuses jobs that are no longer drafts or pending @S-151', async () => {
+    it('refuses jobs that are no longer drafts or pending @S-152', async () => {
       const live = await job(orgs.brew, { status: 'published' })
       await expect(checkout(users.owner, { jobId: live.id })).rejects.toSatisfy(refused('job_not_checkoutable'))
     })
@@ -567,7 +567,7 @@ describe('checkout integration', () => {
       return { body: (await response.json()) as Record<string, any>, status: response.status }
     }
 
-    it('checks out with a site key and a signed-in employer, and repeats safely @S-151', async () => {
+    it('checks out with a site key and a signed-in employer, and repeats safely @S-152', async () => {
       const listing = await job(orgs.brew)
       const body = { addOnIds: [enhanced.id], jobId: listing.id, planId: plans.regular.id }
 
@@ -580,7 +580,7 @@ describe('checkout integration', () => {
       expect(second).toMatchObject({ body: { created: false, order: { id: first.body.order.id } }, status: 200 })
     })
 
-    it('refuses a missing site key, a signed-out caller and a bad body @S-151', async () => {
+    it('refuses a missing site key, a signed-out caller and a bad body @S-152', async () => {
       const listing = await job(orgs.brew)
       const body = { jobId: listing.id, planId: plans.regular.id }
       expect((await call('checkout', body, { key: '' })).status).toBe(401)
@@ -589,7 +589,7 @@ describe('checkout integration', () => {
       expect((await call('checkout', body, { user: users.stranger })).status).toBe(404)
     })
 
-    it('lets the owner approve a purchase request through the endpoint @S-152', async () => {
+    it('lets the owner approve a purchase request through the endpoint @S-153', async () => {
       const listing = await job(orgs.brew)
       const held = await call('checkout', { jobId: listing.id, planId: plans.regular.id }, { user: users.member })
       expect(held.body.waitingForPurchase).toBe(true)
