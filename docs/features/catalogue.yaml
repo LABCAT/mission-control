@@ -1442,6 +1442,27 @@ stories:
       - packages/payload-jobs/src/index.test.ts
       - apps/cms/src/tenancy.test.ts
 
+  - id: S-149
+    area: Commerce
+    role: site manager
+    story: "An organisation's job credits are an append-only ledger: every pack bought, credit used, refund and adjustment is one row that never changes, and the balance is always the sum of the rows."
+    steps:
+      - "Grant a paid 5 Job Pack order's credits, then grant it again."
+      - "Use credits for several jobs at once, more jobs than there are credits."
+      - "Cancel a pending job that used a credit, and cancel a published one."
+      - "As a site manager, record an adjustment without a note, then with one; try to edit or delete any row."
+      - "Open the organisation's History as a member, as the tenant's site manager, and as another organisation's member."
+    expected: "An order grants its credits once; the balance never goes below 0, even under concurrent uses; a job cancelled before it was published gets its credit back exactly once, a published one does not; adjustments need a note and record who and when; nobody (not even system code) updates or deletes a row, or the organisation, job or tenant it points at; credits never expire; members see only their own organisation's rows and History (orders, credit movements and job events in time order with a running balance and totals), site managers only their tenant's, everyone else gets a 404."
+    settings:
+      - features.credits
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/credits.test.ts
+      - packages/payload-jobs/src/credits.integration.test.ts
+      - packages/payload-jobs/src/index.test.ts
+      - apps/cms/src/tenancy.test.ts
+
   - id: S-101
     area: Commerce
     role: employer

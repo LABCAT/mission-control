@@ -18,6 +18,7 @@ export type PayloadJobsCollectionOptions = {
 export type PayloadJobsCollectionKey =
   | 'addOns'
   | 'coupons'
+  | 'creditLedger'
   | 'jobCategories'
   | 'jobs'
   | 'jobTypes'
@@ -44,6 +45,7 @@ export type PayloadJobsCollectionSlugs = Record<PayloadJobsCollectionKey, string
 export const DEFAULT_PAYLOAD_JOBS_SLUGS: PayloadJobsCollectionSlugs = {
   addOns: 'add-ons',
   coupons: 'coupons',
+  creditLedger: 'credit-ledger',
   jobCategories: 'job-categories',
   jobs: 'jobs',
   jobTypes: 'job-types',

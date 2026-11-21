@@ -73,6 +73,9 @@ export const multiTenantOptionsFor = (
       // mission-control: orders are private to the organisation and site managers, never readable
       // with a site key; seekers are denied (PJ-23).
       [slugs.orders]: { accessResultOverride: privateToTenant },
+      // mission-control: the credit ledger is private to the organisation and site managers, never
+      // readable with a site key; seekers are denied (PJ-24).
+      [slugs.creditLedger]: { accessResultOverride: privateToTenant },
       // mission-control: content pages and menus (PJ-103). The generic override adds the site
       // key's tenant and, for the draft-enabled pages, published only.
       [slugs.menus]: { accessResultOverride: tenantContentOverride },
