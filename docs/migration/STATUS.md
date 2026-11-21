@@ -274,3 +274,5 @@ Not imported: applications/CVs, resumes, logs (order-log, job-alerts-log, resume
 - 21 Nov 13:35 ICT pass: #87 Deploy OK (e2ba132). Merged #86 PJ-115 (54cba5f), Kinsho PASS on 2dd4c5a, migration tenant_add_ons. PJ-63 PR #92 green; /oc re-run on GLM. #83 PJ-30: OpenHands asked to merge main (no push yet). #91 PJ-88 (OpenHands): no PR yet. #93 waits for founder's human review.
 
 - 21 Nov 14:30 ICT pass: #86 Deploy OK (54cba5f). #92 PJ-63: GLM Kinsho blocked on story-id clash (S-146); session pushed ddb5005, re-review pending. #83 PJ-30: OpenHands working on main merge (since 13:06). Dispatched PJ-24 credits (Opus, review:deep) and PJ-53 reports (Sonnet). PJ-57 held until PJ-24 lands (both touch orders).
+
+- 21 Nov 15:30 ICT: FOUNDER — Kinsho GLM key "Daruma Dashboard" hit its $0.50 monthly budget (resets 11 Dec); #92, #94, #95 got automation failures on their new heads. GLM had found a real bug in #94 (orders duplicated across 200-job chunks), fix pushed. Queue stalled on reviews until budget raised or OpenCode Go resets (~22 Nov). #83: OpenHands prodded once (no push since 13:06 ICT). Open PRs: 5 (#83, #92, #93, #94, #95).
