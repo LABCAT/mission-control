@@ -17,6 +17,7 @@ export { copyFile, sha256Of, SourceMissingError } from './media/copy'
 export {
   DEFAULT_MAX_DOCUMENT_BYTES,
   formatMediaReport,
+  objectName,
   pathLegacyId,
   runMediaImport,
   stableFilename,

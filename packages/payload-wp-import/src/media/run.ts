@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto'
+
 import type { MysqlReader } from '../mysql-reader'
 import type { ImportPayload } from '../types'
 import { copyFile, SourceMissingError, type CopyResult } from './copy'
@@ -42,18 +44,28 @@ const DOCUMENT_TYPES: Record<string, string> = {
 
 const extensionOf = (relative: string): string => /\.([A-Za-z0-9]+)$/.exec(relative)?.[1]?.toLowerCase() ?? ''
 
-/**
- * The name of a file in the bucket and in its media or documents document. The legacy folders
- * are flattened with `-` (`company_logos/12/logo.png` → `company_logos-12-logo.png`) because the
- * storage adapter serves files by one path segment. Derived from the legacy path alone, so a
- * re-run, or a second record that uses the same file, lands on the same object.
- */
+/** The legacy path flattened to one readable segment, capped so the full name stays a legal file name. */
 export const stableFilename = (relative: string): string =>
   relative
     .split('/')
     .filter(Boolean)
     .map((part) => part.replaceAll(/[^A-Za-z0-9._-]+/g, '_'))
     .join('-')
+    .slice(-120)
+
+/**
+ * The name of a file in the bucket and in its media or documents document:
+ * `t<tenant>-<hash of the legacy path>-<flattened path>`. The storage adapter serves files by one
+ * path segment, so the folders are flattened, which alone is not injective (`my logo.png` and
+ * `my_logo.png`, or `a/b-c` and `a-b/c`, flatten alike). The hash of the exact legacy path makes
+ * the name unique per file, the tenant makes it unique per tenant in the shared bucket, and both
+ * are derived from the inputs alone, so a re-run, or a second record using the same file, lands on
+ * the same object, and no two files can ever be written to one object.
+ */
+export const objectName = (tenant: number | string, relative: string): string => {
+  const hash = createHash('sha256').update(relative).digest('hex').slice(0, 12)
+  return `t${String(tenant).replaceAll(/[^A-Za-z0-9]+/g, '_')}-${hash}-${stableFilename(relative)}`
+}
 
 /**
  * A stable negative id for a file that is not a WordPress attachment (a logo that is only a path),
@@ -174,7 +186,7 @@ export const runMediaImport = async (options: RunMediaImportOptions): Promise<Me
       result = await copyFile({
         contentType,
         dryRun,
-        key: stableFilename(ref.path),
+        key: objectName(tenant, ref.path),
         path: ref.path,
         source,
         target,
@@ -195,7 +207,8 @@ export const runMediaImport = async (options: RunMediaImportOptions): Promise<Me
   }
 
   const legacyIds = new Map<number, string>()
-  const keys = new Map<string, string>()
+  // A dry run creates nothing, so it remembers which documents a real run would have created.
+  const planned = new Set<string>()
   for (const ref of plan.refs) {
     const label = `${ref.owner.collection} #${ref.owner.legacyId}`
     const fail = (message: string) => report.failures.push({ message, owner: label, path: ref.path })
@@ -224,13 +237,6 @@ export const runMediaImport = async (options: RunMediaImportOptions): Promise<Me
         }
       }
 
-      // Two different legacy files can flatten to one bucket key (`my logo.png`, `my_logo.png`).
-      // Copying the second would serve one owner the other's bytes, so it fails instead.
-      const key = stableFilename(ref.path)
-      const holder = keys.get(key)
-      if (holder && holder !== ref.path) throw new Error(`Bucket name clash: ${ref.path} and ${holder} are both ${key}`)
-      keys.set(key, ref.path)
-
       const copied = await copyOnce(ref, contentType)
       if (copied instanceof Error) {
         fail(copied instanceof SourceMissingError ? 'source file not found' : copied.message)
@@ -243,12 +249,14 @@ export const runMediaImport = async (options: RunMediaImportOptions): Promise<Me
       const claimed = legacyIds.get(legacyId)
       if (claimed && claimed !== ref.path) throw new Error(`Legacy id clash between ${claimed} and ${ref.path}`)
       legacyIds.set(legacyId, ref.path)
-      const filename = stableFilename(ref.path)
+      const filename = objectName(tenant, ref.path)
       let file = await find(collection, legacyId)
-      if (file) {
+      const plannedKey = `${collection}:${legacyId}`
+      if (file || planned.has(plannedKey)) {
         report.documents.existing++
       } else {
         report.documents.created++
+        if (dryRun) planned.add(plannedKey)
         if (!dryRun) {
           if (!payload.db) throw new Error('The media import needs payload.db')
           // Created through the adapter: the bytes are in the bucket already, and `create` with a

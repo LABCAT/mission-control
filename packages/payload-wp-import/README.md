@@ -141,10 +141,13 @@ picks them up. `--source` is a **copy** of `wp-content/uploads` on disk, never t
 | a document attachment (PDF, DOC, DOCX) whose parent is a job; the newest wins | `jobs.jobDescriptionPdf` (a `documents` document, max 10 MB) |
 | page featured image, else the Yoast share image | `pages.seo.image` |
 
-- **Stable names**: the bucket key and the document `filename` are the legacy path flattened with
-  `-` (`company_logos/12/logo.png` → `company_logos-12-logo.png`), so a file used twice is one
-  object and re-runs land on the same key. The document's `legacyId` is the attachment id (a file
-  that is only a path gets a stable negative id).
+- **Stable names**: the bucket key and the document `filename` are `t<tenant>-<12-char hash of the
+  legacy path>-<legacy path flattened with '-'>` (`t1-3f9a0c1b2d4e-company_logos-12-logo.png`). The
+  storage adapter serves files by one path segment, hence the flattening; the hash keeps two paths
+  that flatten alike apart (`my logo.png` / `my_logo.png`), and the tenant keeps tenants apart in
+  the shared bucket. Derived from the inputs alone, so a re-run, or a second record that uses the
+  same file, lands on the same object, and no two files are ever written to one object. The
+  document's `legacyId` is the attachment id (a file that is only a path gets a stable negative id).
 - **Resumable and idempotent**: the bucket is the only state. An object that exists with the
   right size counts as copied (`--verify` re-hashes the source and compares the stored SHA-256).
   Stores write nothing under the key until the checksum matches, so a killed run leaves no partial

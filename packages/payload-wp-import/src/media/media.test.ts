@@ -10,7 +10,7 @@ import { createFixtureConnection } from '../test/fixtures'
 import { parseMediaArgs } from './cli'
 import { copyFile } from './copy'
 import { buildMediaPlan, isExcluded, originalOfThumbnail, uploadsPathOf } from './plan'
-import { pathLegacyId, runMediaImport, stableFilename } from './run'
+import { objectName, pathLegacyId, runMediaImport, stableFilename } from './run'
 import { directorySource, directoryTarget, r2Target } from './stores'
 import { fakeBucket, fakeSource, mediaFiles, mediaTables } from './test-support'
 
@@ -59,7 +59,13 @@ describe('paths @S-148', () => {
 
   it('names bucket objects from the legacy path alone, and never repeats a legacy id for two paths', () => {
     expect(stableFilename('company_logos/12/My logo.png')).toBe('company_logos-12-My_logo.png')
-    expect(stableFilename('2022/03/a.pdf')).toBe(stableFilename('2022/03/a.pdf'))
+    expect(objectName(1, '2022/03/a.pdf')).toBe(objectName(1, '2022/03/a.pdf'))
+    expect(objectName(1, '2022/03/a.pdf')).toMatch(/^t1-[0-9a-f]{12}-2022-03-a\.pdf$/)
+    // Paths that flatten alike still get different names, and so do the same paths of two tenants.
+    expect(objectName(1, 'a/my logo.png')).not.toBe(objectName(1, 'a/my_logo.png'))
+    expect(objectName(1, 'a/b-c.png')).not.toBe(objectName(1, 'a-b/c.png'))
+    expect(objectName(1, 'a/b.png')).not.toBe(objectName(2, 'a/b.png'))
+    expect(objectName(1, `${'deep/'.repeat(80)}x.png`).length).toBeLessThan(160)
     expect(pathLegacyId('a/b.png')).toBeLessThan(0)
     expect(pathLegacyId('a/b.png')).not.toBe(pathLegacyId('a/c.png'))
   })
@@ -157,29 +163,34 @@ describe('runMediaImport @S-148', () => {
     const t = run()
     const report = await t.go()
 
-    expect([...t.bucket.objects.keys()].sort()).toEqual([
-      '2020-05-logo-resort.png',
-      '2021-01-share.png',
-      '2022-03-front-desk.pdf',
-      '2023-01-skipper.pdf',
-      '2024-02-about-hero.jpg',
-      'company_logos-charters.jpg',
-    ])
+    const name = (path: string) => objectName(TENANT, path)
+    expect([...t.bucket.objects.keys()].sort()).toEqual(
+      [
+        '2020/05/logo-resort.png',
+        '2021/01/share.png',
+        '2022/03/front-desk.pdf',
+        '2023/01/skipper.pdf',
+        '2024/02/about-hero.jpg',
+        'company_logos/charters.jpg',
+      ]
+        .map(name)
+        .sort(),
+    )
     // Never the CV, the thumbnail, the old PDF or the job's own logo.
-    expect([...t.bucket.objects.keys()].join()).not.toMatch(/cv|THUMB|150x150|old|job-logo/i)
+    expect([...t.bucket.objects.keys()].join()).not.toMatch(/uploaded_cvs|150x150|skipper-old|job-logo/i)
     expect(Object.keys(t.source.reads)).not.toContain('uploaded_cvs/me.png')
 
     const orgs = t.payload.store.organisations!
     const mediaDoc = (id: unknown) => t.payload.store.media!.find((d) => d.id === id)!
     expect(mediaDoc(orgs.find((o) => o.legacyId === 2)!.logo)).toMatchObject({
       alt: 'Resort logo',
-      filename: '2020-05-logo-resort.png',
+      filename: objectName(TENANT, '2020/05/logo-resort.png'),
       filesize: 10,
       legacyId: 501,
       mimeType: 'image/png',
       tenant: TENANT,
     })
-    expect(mediaDoc(orgs.find((o) => o.legacyId === 6)!.logo).filename).toBe('company_logos-charters.jpg')
+    expect(mediaDoc(orgs.find((o) => o.legacyId === 6)!.logo).filename).toBe(name('company_logos/charters.jpg'))
     expect(orgs.find((o) => o.legacyId === 8)!.logo).toBeUndefined()
 
     const jobs = t.payload.store.jobs!
@@ -189,7 +200,7 @@ describe('runMediaImport @S-148', () => {
 
     const pages = t.payload.store.pages!
     expect(pages.find((p) => p.legacyId === 201)!.seo).toMatchObject({ noIndex: true, title: 'Kept' }) // group kept whole
-    expect(mediaDoc(pages.find((p) => p.legacyId === 201)!.seo.image).filename).toBe('2024-02-about-hero.jpg')
+    expect(mediaDoc(pages.find((p) => p.legacyId === 201)!.seo.image).filename).toBe(name('2024/02/about-hero.jpg'))
 
     expect(report).toMatchObject({
       bytesCopied: 10 + 12 + 14 + 11 + 8 + 9,
@@ -291,18 +302,74 @@ describe('runMediaImport @S-148', () => {
     }
   })
 
-  it('fails the second of two files that would share a bucket name, instead of serving the wrong bytes', async () => {
-    const t = run()
-    // `2024/02/about-hero.jpg` (page 201) and `2024/02-about/hero.jpg` (page 202) both flatten to
-    // 2024-02-about-hero.jpg: the `-` that joins folders is also legal inside a name.
+  // Page 201 `2024/02/about-hero.jpg` and page 202 `2024/02-about/hero.jpg` flatten alike.
+  const clashTables = () => {
     const tables = structuredClone(mediaTables)
     tables.wp_postmeta!.find((r) => r.post_id === 509 && r.meta_key === '_wp_attached_file')!.meta_value = '2024/02-about/hero.jpg'
-    const report = await t.go({ reader: new MysqlReader({ connect: async () => createFixtureConnection(tables) }) })
-    expect(report.failures).toEqual([
-      expect.objectContaining({ message: expect.stringContaining('Bucket name clash'), owner: 'pages #202' }),
-    ])
-    expect(new TextDecoder().decode(t.bucket.objects.get('2024-02-about-hero.jpg')!.data)).toBe('JPG-hero')
-    expect(t.payload.store.pages!.find((p) => p.legacyId === 202)!.seo.image).toBeUndefined()
+    return tables
+  }
+
+  it('keeps two files that flatten alike apart, even when their owners are imported on different runs', async () => {
+    const t = run()
+    const reader = () => new MysqlReader({ connect: async () => createFixtureConnection(clashTables()) })
+    const page201 = t.payload.store.pages!.splice(0, 1)[0]! // not imported yet on the first run
+    const first = await t.go({ reader: reader() })
+    expect(first.failures).toEqual([])
+
+    t.payload.store.pages!.unshift(page201)
+    const second = await t.go({ reader: reader() })
+    expect(second.failures).toEqual([])
+
+    const bytes = (path: string) => new TextDecoder().decode(t.bucket.objects.get(objectName(TENANT, path))!.data)
+    expect(bytes('2024/02/about-hero.jpg')).toBe('JPG-hero')
+    expect(bytes('2024/02-about/hero.jpg')).toBe('JPG-other')
+    const imageOf = (legacyId: number) =>
+      t.payload.store.media!.find((d) => d.id === t.payload.store.pages!.find((p) => p.legacyId === legacyId)!.seo.image)!
+    expect(imageOf(201).filename).toBe(objectName(TENANT, '2024/02/about-hero.jpg'))
+    expect(imageOf(202).filename).toBe(objectName(TENANT, '2024/02-about/hero.jpg'))
+    expect(imageOf(201).id).not.toBe(imageOf(202).id)
+  })
+
+  it('never writes one tenant\'s file over another\'s in the shared bucket', async () => {
+    const bucket = fakeBucket()
+    const importFor = async (tenant: number, files: Record<string, string>) => {
+      const payload = createFakePayload({
+        pages: [{ id: 1, legacyId: 201, seo: {}, tenant }],
+      })
+      const report = await runMediaImport({
+        payload: payload.payload,
+        reader: readerFor(),
+        source: fakeSource({ ...mediaFiles, ...files }).source,
+        target: bucket.target,
+        tenant,
+      })
+      return { payload, report }
+    }
+    // Same legacy path, different bytes (and the same size, which a shared key would call "already copied").
+    const one = await importFor(1, { '2024/02/about-hero.jpg': 'TENANT-ONE-IMG' })
+    const two = await importFor(2, { '2024/02/about-hero.jpg': 'TENANT-TWO-IMG' })
+    expect(one.report.failures).toEqual([])
+    expect(two.report.failures).toEqual([])
+
+    const bytes = (tenant: number) => new TextDecoder().decode(bucket.objects.get(objectName(tenant, '2024/02/about-hero.jpg'))!.data)
+    expect(bytes(1)).toBe('TENANT-ONE-IMG')
+    expect(bytes(2)).toBe('TENANT-TWO-IMG')
+    expect(one.payload.store.media![0]!.filename).toMatch(/^t1-/)
+    expect(two.payload.store.media![0]!.filename).toMatch(/^t2-/)
+    expect(two.report.files.alreadyCopied).toBe(0)
+  })
+
+  it('reports the same documents in a dry run when two records share a file', async () => {
+    // Organisations 2 and 3 are one organisation; give two organisations the same logo.
+    const tables = structuredClone(mediaTables)
+    tables.wp_usermeta!.push({ meta_id: 9001, umeta_id: 9001, user_id: 6, meta_key: 'company-logo', meta_value: '501' })
+    const t = run()
+    const reader = () => new MysqlReader({ connect: async () => createFixtureConnection(tables) })
+    const dry = await t.go({ dryRun: true, reader: reader() })
+    const real = await t.go({ reader: reader() })
+    expect(real.documents).toEqual(dry.documents)
+    expect(real.documents.existing).toBeGreaterThanOrEqual(1) // the second owner of the shared logo
+    expect({ ...real, dryRun: true }).toEqual(dry)
   })
 
   it('uses the slugs it is given', async () => {
