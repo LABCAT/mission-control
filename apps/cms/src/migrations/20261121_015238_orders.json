@@ -15798,6 +15798,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "external_id": {
+          "name": "external_id",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true
+        },
         "url": {
           "name": "url",
           "type": "varchar",
@@ -19009,6 +19015,6 @@
     "tables": {},
     "columns": {}
   },
-  "id": "68c6f2c7-e4ae-4a0b-b89b-c9c117abdef9",
+  "id": "38bd3446-1084-4ef1-9042-3baffcec5842",
   "prevId": "00000000-0000-0000-0000-000000000000"
 }

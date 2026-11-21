@@ -38,6 +38,7 @@ export async function up({ db, payload, req }: MigrateUpArgs): Promise<void> {
   	"_parent_id" integer NOT NULL,
   	"id" varchar PRIMARY KEY NOT NULL,
   	"provider" varchar NOT NULL,
+  	"external_id" varchar NOT NULL,
   	"url" varchar
   );
   
