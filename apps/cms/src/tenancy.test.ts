@@ -775,7 +775,7 @@ describe('Xero add-on', () => {
     },
   )
 
-  it('lets no one write invoice records through the API @S-150', async () => {
+  it('lets no one write invoice records through the API @S-151', async () => {
     const config = await buildConfig()
     const invoices = config.collections?.find((candidate) => candidate.slug === 'xero-invoices')
 

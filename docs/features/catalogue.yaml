@@ -1498,7 +1498,7 @@ stories:
       - packages/payload-jobs/src/plug-points/plug-points.test.ts
       - apps/cms/src/seed/vwok-xero.test.ts
 
-  - id: S-150
+  - id: S-151
     area: Commerce
     role: site manager
     story: "A Xero invoice that fails to sync is retried, never duplicated, and never blocks the order."

@@ -129,7 +129,7 @@ describe('invoice input @S-102', () => {
 
 const link = (url: string) => vi.fn(async () => json({ OnlineInvoices: [{ OnlineInvoiceUrl: url }] }))
 
-describe('Xero calls @S-150', () => {
+describe('Xero calls @S-151', () => {
   it('sends the idempotency key and the organisation with a create, and never leaks the token in errors', async () => {
     const fetch = vi.fn(async () => json({ Elements: [{ ValidationErrors: [{ Message: 'Account code is invalid' }] }] }, 400))
 

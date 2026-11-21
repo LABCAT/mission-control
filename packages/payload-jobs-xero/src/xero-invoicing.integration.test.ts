@@ -295,7 +295,7 @@ describe('Xero invoicing for orders', () => {
     expect(await syncRow(order.id)).toMatchObject({ onlineUrl: url, status: 'AUTHORISED' })
   })
 
-  it('does nothing in Xero when a re-run finds the invoice up to date @S-150', async () => {
+  it('does nothing in Xero when a re-run finds the invoice up to date @S-151', async () => {
     const order = await createOrder(tenants.a, orgs.a)
     await setStatus(order.id, 'invoiced')
     const calls = xero.calls.length
@@ -307,7 +307,7 @@ describe('Xero invoicing for orders', () => {
     expect(invoicesFor(order.id)).toHaveLength(1)
   })
 
-  it('keeps the order when Xero is down, queues a retry, and the retry invoices it once @S-150', async () => {
+  it('keeps the order when Xero is down, queues a retry, and the retry invoices it once @S-151', async () => {
     xero.faults.push({ match: (call) => call.method === 'PUT' && call.path === '/Invoices', respond: unavailable })
 
     const order = await createOrder(tenants.a, orgs.a)
@@ -327,7 +327,7 @@ describe('Xero invoicing for orders', () => {
     expect(await syncRow(order.id)).toMatchObject({ attempts: 0, lastError: null })
   })
 
-  it('recovers an invoice whose answer was lost instead of creating a second one @S-150', async () => {
+  it('recovers an invoice whose answer was lost instead of creating a second one @S-151', async () => {
     // Xero creates the invoice, but the answer never arrives.
     xero.faults.push({ match: (call) => call.method === 'PUT' && call.path === '/Invoices', respond: networkError, when: 'after' })
 
@@ -342,7 +342,7 @@ describe('Xero invoicing for orders', () => {
     expect((await readOrder(order.id)).externalRefs).toEqual([expect.objectContaining({ externalId: invoice!.InvoiceID })])
   })
 
-  it('lets one of two concurrent runs create the invoice @S-150', async () => {
+  it('lets one of two concurrent runs create the invoice @S-151', async () => {
     const order = await createOrder(tenants.a, orgs.a, { status: 'waiting_for_purchase' })
     await quietStatus(order.id, 'pending')
 
@@ -361,7 +361,7 @@ describe('Xero invoicing for orders', () => {
     expect(results.some((result) => result.status === 'fulfilled' && result.value.action === 'created')).toBe(true)
   })
 
-  it('never authorises an invoice whose Xero total differs, and does not retry it @S-150', async () => {
+  it('never authorises an invoice whose Xero total differs, and does not retry it @S-151', async () => {
     const order = await createOrder(tenants.a, orgs.a)
     const [invoice] = invoicesFor(order.id)
     xero.totalOverride.set(invoice!.InvoiceID, 3800)
@@ -373,7 +373,7 @@ describe('Xero invoicing for orders', () => {
     expect(await queuedRetries(order.id)).toHaveLength(0)
   })
 
-  it('records a refusal from Xero and does not retry it @S-150', async () => {
+  it('records a refusal from Xero and does not retry it @S-151', async () => {
     xero.faults.push({
       match: (call) => call.method === 'PUT' && call.path === '/Invoices',
       respond: () => rejected('Account code 225 is not a valid code'),
