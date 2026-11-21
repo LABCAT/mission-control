@@ -39,7 +39,7 @@ describe('payloadJobs', () => {
     // mission-control: the users collection is extended (legacy password support PJ-34,
     // organisation relation PJ-18), and locations (PJ-17), organisations (PJ-18), pages and
     // menus (PJ-103), the taxonomies (PJ-16), plans (PJ-21), coupons (PJ-22),
-    // applications (PJ-25) and orders (PJ-23) are added.
+    // applications (PJ-25), orders (PJ-23) and the credit ledger (PJ-24) are added.
     expect(result.collections?.map((collection) => collection.slug)).toEqual([
       'users',
       'locations',
@@ -54,6 +54,7 @@ describe('payloadJobs', () => {
       'application-files',
       'applications',
       'orders',
+      'credit-ledger',
     ])
     expect(result.collections?.[0]?.fields.map((f) => ('name' in f ? f.name : null))).toContain(
       'legacyPasswordHash',
@@ -142,6 +143,38 @@ describe('payloadJobs', () => {
     for (const slug of ['organisations', 'jobs']) {
       const [guard] = hooksOf(slug) as ((args: unknown) => Promise<void>)[]
       await expect(guard({ collection: { slug }, id: 1, req })).rejects.toThrow()
+    }
+  })
+
+  it('adds the credit ledger, the History endpoint and the cancel refund only when credits are on @S-149', async () => {
+    const on = await payloadJobs()(baseConfig)
+    const off = await payloadJobs({ features: { credits: false } })(baseConfig)
+    const find = (config: typeof on, slug: string) => config.collections?.find((collection) => collection.slug === slug)
+    const endpointPaths = (config: typeof on) =>
+      ((find(config, 'organisations')?.endpoints || []) as { path: string }[]).map((endpoint) => endpoint.path)
+
+    expect(find(on, 'credit-ledger')).toBeDefined()
+    expect(find(off, 'credit-ledger')).toBeUndefined()
+    expect(endpointPaths(on)).toContain('/:id/history')
+    expect(endpointPaths(off)).not.toContain('/:id/history')
+    expect(find(on, 'jobs')?.hooks?.afterChange?.length).toBe((find(off, 'jobs')?.hooks?.afterChange?.length ?? 0) + 1)
+  })
+
+  it('keeps organisations, jobs and orders that credit rows point at @S-149', async () => {
+    const result = await payloadJobs()(baseConfig)
+    const req = { context: {}, payload: { collections: { 'credit-ledger': {} }, count: async () => ({ totalDocs: 1 }) } }
+    for (const slug of ['organisations', 'jobs', 'orders']) {
+      const guards = (result.collections?.find((collection) => collection.slug === slug)?.hooks?.beforeDelete ??
+        []) as ((args: unknown) => Promise<void>)[]
+      const messages = await Promise.all(
+        guards.map((guard) =>
+          Promise.resolve(guard({ collection: { slug }, id: 1, req })).then(
+            () => '',
+            (error: { data?: { errors?: { message: string }[] } }) => error.data?.errors?.[0]?.message ?? '',
+          ),
+        ),
+      )
+      expect(messages.some((message) => /credit movement/.test(message))).toBe(true)
     }
   })
 
@@ -313,6 +346,7 @@ const deny = () => false
 const OVERRIDES = {
   addOns: { slug: 'extras' },
   coupons: { slug: 'vouchers' },
+  creditLedger: { slug: 'credit-moves' },
   jobCategories: { slug: 'categories' },
   jobs: { slug: 'vacancies' },
   jobTypes: { slug: 'employment-types' },
@@ -364,6 +398,7 @@ describe('collection slug overrides', () => {
       'application-files',
       'applications',
       'purchases',
+      'credit-moves',
     ])
 
     const targets = new Set(
@@ -416,6 +451,7 @@ describe('collection slug overrides', () => {
       'application-files',
       'applications',
       'purchases',
+      'credit-moves',
     ])
   })
 

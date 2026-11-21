@@ -382,6 +382,9 @@ export const planCollection = ({
           validate: planFieldValidators.creditExpiryDays,
           admin: {
             description: 'Days until unused credits from this plan expire. Empty: they never expire.',
+            // Credits never expire in the MVP (decision 19 Nov, PJ-24): the field is kept for a
+            // later per-tenant expiry option, but hidden so nobody sets it.
+            hidden: true,
             step: 1,
           },
         },

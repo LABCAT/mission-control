@@ -714,6 +714,40 @@ describe('orders', () => {
   })
 })
 
+describe('credit ledger', () => {
+  it('registers the credit ledger with its tenant field @S-149', async () => {
+    const config = await buildConfig()
+    const ledger = config.collections?.find((collection) => collection.slug === 'credit-ledger')
+
+    expect(ledger).toBeDefined()
+    expect(ledger?.fields.some((field) => 'name' in field && field.name === 'tenant')).toBe(true)
+  })
+
+  it('keeps the credit ledger out of reach for anonymous requests and site keys @S-149', async () => {
+    const config = await buildConfig()
+    const ledger = config.collections?.find((candidate) => candidate.slug === 'credit-ledger')
+    const read = ledger?.access?.read as (args: unknown) => Promise<unknown>
+
+    expect(await read({ req: requestFor(null), slug: 'credit-ledger' })).toBe(false)
+
+    const req = await siteKeyRequest({ key: 'sk_tenant', tenant: tenantA.id })
+
+    expect(await read({ req, slug: 'credit-ledger' })).toBe(false)
+  })
+
+  it('refuses to delete a tenant that has credit movements @S-149', async () => {
+    const config = await buildConfig()
+    const tenants = config.collections?.find((collection) => collection.slug === 'tenants')
+    const guard = tenants?.hooks?.beforeDelete?.[3]
+    const count = async () => ({ totalDocs: 1 })
+    const req = { context: {}, payload: { collections: { 'credit-ledger': {} }, count } }
+
+    await expect(
+      (guard as (args: unknown) => Promise<void>)({ collection: { slug: 'tenants' }, id: 1, req }),
+    ).rejects.toMatchObject({ data: { errors: [expect.objectContaining({ message: expect.stringMatching(/credit movement/) })] } })
+  })
+})
+
 describe('credential updates', () => {
   const target = { id: 20, email: 'b@example.com' }
 

@@ -62,18 +62,18 @@ export type SupportedTimezones =
   | 'Pacific/Fiji';
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "LexicalNodes_C6AA4078".
+ * via the `definition` "LexicalNodes_D124A330".
  */
-export type LexicalNodes_C6AA4078 =
+export type LexicalNodes_D124A330 =
   | SerializedTextNode
   | SerializedTabNode
   | SerializedLineBreakNode
-  | SerializedParagraphNode<LexicalNodes_C6AA4078>
+  | SerializedParagraphNode<LexicalNodes_D124A330>
   | SerializedHorizontalRuleNode
   | SerializedUploadNode<'media'>
   | SerializedUploadNode<'documents'>
   | SerializedUploadNode<'application-files'>
-  | SerializedQuoteNode<LexicalNodes_C6AA4078>
+  | SerializedQuoteNode<LexicalNodes_D124A330>
   | SerializedRelationshipNode<
       | 'users'
       | 'folders'
@@ -93,6 +93,7 @@ export type LexicalNodes_C6AA4078 =
       | 'coupons'
       | 'applications'
       | 'orders'
+      | 'credit-ledger'
       | 'alert-subscriptions'
       | 'payload-kv'
       | 'payload-jobs'
@@ -100,11 +101,11 @@ export type LexicalNodes_C6AA4078 =
       | 'payload-preferences'
       | 'payload-migrations'
     >
-  | SerializedAutoLinkNode<LexicalNodes_C6AA4078, LexicalLinkFields>
-  | SerializedLinkNode<LexicalNodes_C6AA4078, LexicalLinkFields>
-  | SerializedListNode<LexicalNodes_C6AA4078>
-  | SerializedListItemNode<LexicalNodes_C6AA4078>
-  | SerializedHeadingNode<LexicalNodes_C6AA4078>;
+  | SerializedAutoLinkNode<LexicalNodes_D124A330, LexicalLinkFields>
+  | SerializedLinkNode<LexicalNodes_D124A330, LexicalLinkFields>
+  | SerializedListNode<LexicalNodes_D124A330>
+  | SerializedListItemNode<LexicalNodes_D124A330>
+  | SerializedHeadingNode<LexicalNodes_D124A330>;
 /**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "LexicalNodes_3DE324E4".
@@ -153,6 +154,7 @@ export interface Config {
     'application-files': ApplicationFile;
     applications: Application;
     orders: Order;
+    'credit-ledger': CreditLedger;
     'alert-subscriptions': AlertSubscription;
     'payload-kv': PayloadKv;
     'payload-jobs': PayloadJob;
@@ -184,6 +186,7 @@ export interface Config {
     'application-files': ApplicationFilesSelect<false> | ApplicationFilesSelect<true>;
     applications: ApplicationsSelect<false> | ApplicationsSelect<true>;
     orders: OrdersSelect<false> | OrdersSelect<true>;
+    'credit-ledger': CreditLedgerSelect<false> | CreditLedgerSelect<true>;
     'alert-subscriptions': AlertSubscriptionsSelect<false> | AlertSubscriptionsSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-jobs': PayloadJobsSelect<false> | PayloadJobsSelect<true>;
@@ -763,7 +766,7 @@ export interface FeatureBoxesBlock {
  */
 export interface RichTextBlock {
   heading?: string | null;
-  content: LexicalRichText<LexicalNodes_C6AA4078>;
+  content: LexicalRichText<LexicalNodes_D124A330>;
   id?: string | null;
   blockName?: string | null;
   blockType: 'rich-text';
@@ -818,7 +821,7 @@ export interface FaqBlock {
   heading?: string | null;
   items: {
     question: string;
-    answer: LexicalRichText<LexicalNodes_C6AA4078>;
+    answer: LexicalRichText<LexicalNodes_D124A330>;
     id?: string | null;
   }[];
   id?: string | null;
@@ -1317,7 +1320,7 @@ export interface Job {
   publishedAt?: string | null;
   expiresAt?: string | null;
   organisation: number | Organisation;
-  description?: LexicalRichText<LexicalNodes_C6AA4078> | null;
+  description?: LexicalRichText<LexicalNodes_D124A330> | null;
   jobType?: (number | null) | JobType;
   categories?: (number | JobCategory)[] | null;
   salaryBand?: (number | null) | SalaryBand;
@@ -1661,6 +1664,47 @@ export interface Application {
   createdAt: string;
 }
 /**
+ * Every credit movement, oldest to newest. Rows never change: correct a mistake with an adjustment. The balance is the sum of an organisation’s rows.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "credit-ledger".
+ */
+export interface CreditLedger {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  organisation: number | Organisation;
+  /**
+   * Credits added (+) or taken (−).
+   */
+  delta: number;
+  reason: 'bought' | 'used' | 'refunded' | 'adjustment' | 'opening';
+  /**
+   * Why. Required for an adjustment.
+   */
+  note?: string | null;
+  order?: (number | null) | Order;
+  job?: (number | null) | Job;
+  actor?: ('system' | 'staff') | null;
+  /**
+   * The WordPress record an opening balance came from (PJ-65).
+   */
+  legacyRef?: string | null;
+  /**
+   * Makes a movement happen once. Filled in automatically.
+   */
+  idempotencyKey?: string | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
  * Job alert subscribers. They confirm by email and manage themselves through their link; staff only read this list.
  *
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1931,6 +1975,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'orders';
         value: number | Order;
+      } | null)
+    | ({
+        relationTo: 'credit-ledger';
+        value: number | CreditLedger;
       } | null)
     | ({
         relationTo: 'alert-subscriptions';
@@ -2738,6 +2786,26 @@ export interface OrdersSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "credit-ledger_select".
+ */
+export interface CreditLedgerSelect<T extends boolean = true> {
+  tenant?: T;
+  organisation?: T;
+  delta?: T;
+  reason?: T;
+  note?: T;
+  order?: T;
+  job?: T;
+  actor?: T;
+  legacyRef?: T;
+  idempotencyKey?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "alert-subscriptions_select".
  */
 export interface AlertSubscriptionsSelect<T extends boolean = true> {
@@ -2962,6 +3030,7 @@ export interface CollectionQueryWidget {
       | 'application-files'
       | 'applications'
       | 'orders'
+      | 'credit-ledger'
       | 'alert-subscriptions';
     where?:
       | {
@@ -3007,6 +3076,7 @@ export interface ActivityWidget {
           | 'application-files'
           | 'applications'
           | 'orders'
+          | 'credit-ledger'
           | 'alert-subscriptions'
         )[]
       | null;

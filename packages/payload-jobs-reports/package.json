@@ -4,14 +4,17 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./client": "./src/exports/client.ts",
+    "./package.json": "./package.json"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
   "description": "Reports add-on for payload-jobs: registers report types (CSV exports), switchable per tenant.",
   "peerDependencies": {
-    "payload": "4.0.0-beta.7"
+    "payload": "4.0.0-beta.7",
+    "react": "19.3.1"
   },
   "dependencies": {
     "@mission-control/payload-jobs": "workspace:*"
@@ -20,6 +23,8 @@
     "@payloadcms/db-postgres": "4.0.0-beta.7",
     "@payloadcms/plugin-multi-tenant": "4.0.0-beta.7",
     "payload": "4.0.0-beta.7",
-    "typescript": "6.0.3"
+    "typescript": "6.0.3",
+    "react": "19.3.1",
+    "@types/react": "19.3.0"
   }
 }

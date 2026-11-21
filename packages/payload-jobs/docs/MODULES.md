@@ -9,7 +9,7 @@ through registries; a tenant switches each add-on on or off.
 | --- | --- | --- |
 | Core | `payload-jobs` | organisations (+ membership/roles), jobs, taxonomies/locations, plans/add-ons/pricing (quote, tax), credits + orders, coupons, applications, emails (templates, `sendTemplate`, log), job view counts |
 | Add-on | `payload-jobs-alerts` | alert subscriptions (confirm/manage tokens), later the digest and run log (PJ-47/48) |
-| Add-on | `payload-jobs-reports` | report types and CSV export (PJ-53). Skeleton today: registers itself, no reports |
+| Add-on | `payload-jobs-reports` | report types and CSV export (PJ-53): jobs and orders by month, job views |
 | Add-on | `payload-xero` + a thin adapter (follow-up) | generic Xero plugin, never depends on payload-jobs; the adapter implements the invoice-sync plug point |
 | Generic | `payload-email-cloudflare`, `payload-email-smtp`, `payload-cloudflare-analytics`, `rocketship-payload`, `payload-backups` | no payload-jobs dependency; cross-links are optional peers plus adapters |
 

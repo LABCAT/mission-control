@@ -12,6 +12,12 @@ import { DASHBOARD_COMPONENT_PATH, type SiteManagerAdminOptions } from './admin'
 import type { LocationsOptions } from './collections/locations'
 import { locationsCollection, locationsTenantSlugIndex } from './collections/locations'
 import { organisationsCollection, withOrganisationField } from './collections/organisations'
+import {
+  creditLedgerCollection,
+  organisationHistoryEndpoint,
+  refundCreditOnCancel,
+  refuseDeleteWhileInCreditLedger,
+} from './credits'
 import { couponCollection, removeTenantCouponsFor, removeTenantCoupons } from './coupons'
 import { withLegacyPasswords } from './legacy-password'
 import { tenantLocationSettings, type TenantLocationSource } from './location-settings'
@@ -58,6 +64,7 @@ export * from './collections/menus'
 export * from './collections/organisations'
 export * from './collections/pages'
 export * from './coupons'
+export * from './credits'
 export * from './email'
 export * from './legacy-password'
 export * from './location-settings'
@@ -127,6 +134,7 @@ export const payloadJobsTenantCollections = (
   APPLICATION_FILES_SLUG,
   APPLICATIONS_SLUG,
   slugs.orders,
+  slugs.creditLedger,
 ]
 
 /**
@@ -150,7 +158,10 @@ export const PAYLOAD_JOBS_TENANT_COLLECTIONS = payloadJobsTenantCollections() as
 export type PayloadJobsFeatures = {
   /** Applications and their private CV files (PJ-25). Defaults to true. */
   applications?: boolean
-  /** Organisation job credits. Added by a later task. Defaults to true. */
+  /**
+   * Organisation job credits: the append-only credit ledger, the History endpoint and the
+   * refund of a job cancelled before publishing (PJ-24). Defaults to true.
+   */
   credits?: boolean
   /** Coupon codes and their discounts. Defaults to true. */
   coupons?: boolean
@@ -243,6 +254,32 @@ const withApplicationDeleteGuard = (
             }),
           ]
         : []),
+    ],
+  },
+})
+
+/**
+ * Keep the credit history: refuse to delete a document credit rows point at (PJ-24), and add
+ * any extra endpoints or hooks the collection needs for credits.
+ */
+const withCreditLedger = (
+  collection: CollectionConfig,
+  field: 'job' | 'order' | 'organisation',
+  noun: string,
+  ledgerSlug: string,
+  extra: { afterChange?: NonNullable<CollectionConfig['hooks']>['afterChange']; endpoints?: CollectionConfig['endpoints'] } = {},
+): CollectionConfig => ({
+  ...collection,
+  endpoints: [
+    ...(Array.isArray(collection.endpoints) ? collection.endpoints : []),
+    ...(Array.isArray(extra.endpoints) ? extra.endpoints : []),
+  ],
+  hooks: {
+    ...collection.hooks,
+    afterChange: [...(collection.hooks?.afterChange ?? []), ...(extra.afterChange ?? [])],
+    beforeDelete: [
+      ...(collection.hooks?.beforeDelete ?? []),
+      refuseDeleteWhileInCreditLedger({ field, ledgerSlug, noun }),
     ],
   },
 })
@@ -477,6 +514,10 @@ export const payloadJobs =
                   // runs before the plugin removes anything; the delete's transaction rolls back
                   // whatever the host's own hooks did.
                   refuseDeleteWhileOrdered({ field: 'tenant', noun: 'tenant', ordersSlug: slugs.orders }),
+                  // Credit history is kept too (PJ-24).
+                  ...(features.credits
+                    ? [refuseDeleteWhileInCreditLedger({ field: 'tenant', ledgerSlug: slugs.creditLedger, noun: 'tenant' })]
+                    : []),
                   // A deleted site takes its pages and menus with it.
                   ...(features.pages
                     ? [
@@ -581,7 +622,7 @@ export const payloadJobs =
 
     // Orders go last, after coupons, so the existing compound index names keep their numbers.
     const paymentProviders = resolvePaymentProviders(options.orders?.paymentProviders ?? [])
-    const orders = orderCollection({
+    const baseOrders = orderCollection({
       access: collectionOptions.orders?.access,
       couponsEnabled: features.coupons,
       isOrganisationOwner: options.orders?.isOrganisationOwner ?? isOrganisationOwnerByRole,
@@ -591,13 +632,24 @@ export const payloadJobs =
       usersSlug,
     })
     // Add-ons hear about jobs being published, expired or cancelled (PJ-115).
-    const jobs: CollectionConfig = {
+    const lifecycleJobs: CollectionConfig = {
       ...baseJobs,
       hooks: {
         ...baseJobs.hooks,
         afterChange: [...(baseJobs.hooks?.afterChange ?? []), jobLifecycleHook(registry, slugs.jobs)],
       },
     }
+    // Credits (PJ-24): a job cancelled before publishing gets its credit back, and documents the
+    // ledger points at are kept.
+    const jobs = features.credits
+      ? withCreditLedger(lifecycleJobs, 'job', 'job', slugs.creditLedger, {
+          afterChange: [refundCreditOnCancel({ slug: slugs.creditLedger })],
+        })
+      : lifecycleJobs
+    const orders = features.credits ? withCreditLedger(baseOrders, 'order', 'order', slugs.creditLedger) : baseOrders
+    const creditLedger = features.credits
+      ? [creditLedgerCollection({ access: collectionOptions.creditLedger?.access, slugs, tenantScoped: tenancy === 'multi', usersSlug })]
+      : []
 
     const jobsWithPlacements = [...(config.collections ?? []), jobs].find(
       (collection) => collection.slug === slugs.jobs,
@@ -619,13 +671,18 @@ export const payloadJobs =
       // Applications and their files go after jobs: they relate to it, and the compound
       // index names of the collections before them must not shift.
       collections: [
-        ...(features.applications
-          ? (config.collections ?? []).map((collection) =>
-              collection.slug === slugs.organisations
-                ? withApplicationDeleteGuard(collection, 'organisation', 'organisation')
-                : collection,
-            )
-          : (config.collections ?? [])),
+        ...(config.collections ?? []).map((collection) => {
+          if (collection.slug !== slugs.organisations) return collection
+          const guarded = features.applications
+            ? withApplicationDeleteGuard(collection, 'organisation', 'organisation')
+            : collection
+          // The History tab's data (PJ-24): orders, credit movements and job events.
+          return features.credits
+            ? withCreditLedger(guarded, 'organisation', 'organisation', slugs.creditLedger, {
+                endpoints: [organisationHistoryEndpoint({ slugs, tenantScoped: tenancy === 'multi' })],
+              })
+            : guarded
+        }),
         ...taxonomies,
         plans,
         addOns,
@@ -648,6 +705,8 @@ export const payloadJobs =
           : []),
         // Orders go last (PJ-23), so no existing compound index name shifts.
         orders,
+        // The credit ledger after orders (PJ-24), for the same reason.
+        ...creditLedger,
       ],
       jobs: jobsConfig,
       custom: {

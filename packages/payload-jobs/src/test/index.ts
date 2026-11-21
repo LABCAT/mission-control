@@ -182,6 +182,8 @@ export const bootTestPayload = async ({
       try {
         await payload.delete({
           collection: slug,
+          // Teardown removes whole tenants on purpose, append-only ledgers included (PJ-24).
+          context: { payloadJobsPurge: true },
           overrideAccess: true,
           where: { tenant: { in: tenantIds } },
         })
@@ -206,6 +208,7 @@ export const bootTestPayload = async ({
       try {
         await payload.delete({
           collection: 'tenants',
+          context: { payloadJobsPurge: true },
           overrideAccess: true,
           where: { id: { in: tenantIds } },
         })
