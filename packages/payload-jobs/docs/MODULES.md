@@ -10,7 +10,7 @@ through registries; a tenant switches each add-on on or off.
 | Core | `payload-jobs` | organisations (+ membership/roles), jobs, taxonomies/locations, plans/add-ons/pricing (quote, tax), credits + orders, coupons, applications, emails (templates, `sendTemplate`, log), job view counts |
 | Add-on | `payload-jobs-alerts` | alert subscriptions (confirm/manage tokens), later the digest and run log (PJ-47/48) |
 | Add-on | `payload-jobs-reports` | report types and CSV export (PJ-53): jobs and orders by month, job views |
-| Add-on | `payload-xero` + a thin adapter (follow-up) | generic Xero plugin, never depends on payload-jobs; the adapter implements the invoice-sync plug point |
+| Add-on | `payload-jobs-xero` (uses the generic `payload-xero`) | order → Xero invoice adapter (PJ-57); `payload-xero` never depends on payload-jobs |
 | Generic | `payload-email-cloudflare`, `payload-email-smtp`, `payload-cloudflare-analytics`, `rocketship-payload`, `payload-backups` | no payload-jobs dependency; cross-links are optional peers plus adapters |
 
 An add-on depends on `payload-jobs`; `payload-jobs` never depends on an add-on.
@@ -22,6 +22,7 @@ plugins: [
   payloadJobs({ tenancy: 'multi' }),   // first: it creates the registry
   payloadJobsAlerts(),                 // add-ons come after
   payloadJobsReports(),
+  payloadJobsXero(),                   // settings, OAuth, order invoices
   multiTenantPlugin({ collections: { 'alert-subscriptions': {}, /* ... */ } }),
 ]
 ```
@@ -145,7 +146,11 @@ type InvoiceSyncAdapter = {
 
 Core ships `invoice` (pending until marked paid), `free` and `credit` (settle at once). The orders collection (PJ-23) still validates an order's provider against `orders.paymentProviders` in the plugin options (key and label only); `PaymentProviderRegistration` is the richer registry entry add-ons use to create payments. Hosts that add a provider to the options should register the same key here. Stripe
 is a later add-on (PJ-106). `emitOrderEvent(registry, 'created' | 'statusChanged', event, tenant)`
-calls the adapters; one failing adapter does not stop the others and its error is returned.
+calls the adapters; one failing adapter does not stop the others and its error is returned. The
+orders collection emits these from its `afterChange` (`orderEventHook`): `created` for a new order,
+`statusChanged` only when the status changes. A failing adapter is logged and never fails the save.
+`payload-jobs-xero` registers the `xero` adapter: a draft invoice for a new invoice order, authorised
+when the order is `invoiced` or `paid`.
 
 ### 7. Job lifecycle hooks
 
@@ -161,5 +166,5 @@ A failing hook is logged and never fails the save.
 
 ## Not in this change
 
-Building the add-on features (PJ-47/48 alerts digest, PJ-53 reports, PJ-54..58 Xero), the
-`payload-xero` invoice-sync adapter, Stripe (PJ-106) and npm publishing/renaming.
+Building the add-on features (PJ-47/48 alerts digest, PJ-58 invoice link), Stripe (PJ-106) and npm
+publishing/renaming.

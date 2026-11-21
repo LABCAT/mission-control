@@ -18,7 +18,7 @@
  * so a request that dies mid-refresh never blocks the next one.
  */
 
-import { createPayloadRequest, docAccessOperation, type Payload } from 'payload'
+import { createPayloadRequest, docAccessOperation, type CollectionSlug, type Payload } from 'payload'
 
 import { decryptToken, encryptToken, XERO_TOKEN_KEY_ENV } from './crypto'
 import {
@@ -134,7 +134,7 @@ export const assertCanUpdateSettings = async ({
   settings: XeroSettingsDoc
   user: Record<string, unknown>
 }): Promise<void> => {
-  const config = payload.collections[collection]?.config
+  const config = payload.collections[collection as CollectionSlug]?.config
   if (!config) {
     throw new XeroOAuthError('settings_not_found', 'These Xero settings no longer exist.')
   }
@@ -160,7 +160,7 @@ export const saveXeroTokens = async ({
   const key = requireKey(encryptionKey)
 
   return (await payload.update({
-    collection,
+    collection: collection as CollectionSlug,
     data: {
       ...data,
       tokens: await encryptedTokenColumns(tokens, key, tokenContext(settings.id)),
@@ -199,7 +199,7 @@ export const findSettingsWithTokens = async ({
   payload: Payload
 }): Promise<null | XeroSettingsDoc> => {
   const doc = (await payload.findByID({
-    collection,
+    collection: collection as CollectionSlug,
     depth: 0,
     id,
     overrideAccess: true,
@@ -284,7 +284,7 @@ const claimRefreshLease = async ({
   const leaseToken = crypto.randomUUID()
 
   const claimed = await payload.db.updateOne({
-    collection,
+    collection: collection as CollectionSlug,
     data: {
       tokens: {
         refreshLockToken: leaseToken,
@@ -333,7 +333,7 @@ const saveRefreshedTokens = async ({
   const key = requireKey(encryptionKey)
 
   const saved = await payload.db.updateOne({
-    collection,
+    collection: collection as CollectionSlug,
     data: { tokens: await encryptedTokenColumns(tokens, key, tokenContext(settings.id)) },
     where: {
       and: [
@@ -360,7 +360,7 @@ const releaseRefreshLease = async ({
 }): Promise<void> => {
   try {
     await payload.db.updateOne({
-      collection,
+      collection: collection as CollectionSlug,
       data: { tokens: { refreshLockToken: null, refreshLockedUntil: null } },
       where: {
         and: [

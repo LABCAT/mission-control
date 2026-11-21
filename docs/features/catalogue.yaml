@@ -1482,12 +1482,37 @@ stories:
     story: "An order creates a Xero invoice with the configured account codes and due date."
     steps:
       - "Submit a job and open Xero."
-    expected: "A draft invoice becomes authorised with lines for the plan, add-on and coupon, due in 14 days, using the tenant's account codes."
+      - "Complete checkout (the order becomes invoiced)."
+    expected: "A draft invoice becomes authorised with lines for the plan, add-on and coupon, due in 14 days, using the tenant's account codes; the order records the Xero invoice and its online link, and its history logs both."
     settings:
       - xero.accountCodes
+      - xero.dueDays
+      - xero.invoicing.authorise
+      - addOns (xero)
     mvp: true
-    status: planned
-    tests: []
+    status: built
+    tests:
+      - packages/payload-jobs-xero/src/xero-invoicing.integration.test.ts
+      - packages/payload-jobs-xero/src/order-invoice.test.ts
+      - packages/payload-xero/src/invoices.test.ts
+      - packages/payload-jobs/src/plug-points/plug-points.test.ts
+      - apps/cms/src/seed/vwok-xero.test.ts
+
+  - id: S-150
+    area: Commerce
+    role: site manager
+    story: "A Xero invoice that fails to sync is retried, never duplicated, and never blocks the order."
+    steps:
+      - "Create an order while Xero is down, then let the retry job run."
+      - "Re-run the sync, or run two syncs at once."
+    expected: "The order saves; the failure is recorded on the invoice record and a retry is queued; the retry creates exactly one invoice; a lost Xero answer is recovered by its reference; refusals and a total that does not match are recorded for a person and not retried."
+    settings:
+      - addOns (xero)
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs-xero/src/xero-invoicing.integration.test.ts
+      - packages/payload-xero/src/invoices.test.ts
 
   - id: S-103
     area: Commerce

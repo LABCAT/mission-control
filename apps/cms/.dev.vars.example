@@ -3,3 +3,14 @@ PAYLOAD_SECRET=change-me-to-a-long-random-string
 
 # Bindings (not variables): `MEDIA` is an R2 bucket declared in wrangler.jsonc. `pnpm dev` and the
 # tests use wrangler's local R2 automatically, so there is nothing to set here.
+
+# Xero add-on (PJ-55/PJ-57). Optional locally: without them Xero stays unconnected and orders are
+# not invoiced. In production these are Worker secrets (`wrangler secret put`), never committed.
+# XERO_CLIENT_ID=
+# XERO_CLIENT_SECRET=
+# XERO_REDIRECT_URI=http://localhost:<port>/api/xero/callback
+# Base64 of 32 random bytes (`generateEncryptionKey()` in payload-xero). Rotating it disconnects
+# every tenant.
+# XERO_TOKEN_ENCRYPTION_KEY=
+# Optional: HMAC key for the OAuth state; defaults to PAYLOAD_SECRET.
+# XERO_STATE_SECRET=

@@ -2,6 +2,7 @@ import { crc32 } from 'node:zlib'
 
 import { payloadJobs } from '@mission-control/payload-jobs'
 import { payloadJobsAlerts } from '@mission-control/payload-jobs-alerts'
+import { payloadJobsXero } from '@mission-control/payload-jobs-xero'
 import { postgresAdapter } from '@payloadcms/db-postgres'
 import { multiTenantPlugin } from '@payloadcms/plugin-multi-tenant'
 import { r2Storage } from '@payloadcms/storage-r2'
@@ -167,6 +168,7 @@ describe.skipIf(!databaseUrl)('media and documents (R2, tenant scoped)', () => {
         plugins: [
           payloadJobs({ tenancy: 'multi' }),
           payloadJobsAlerts(), // mission-control: add-on (PJ-115); multiTenantOptions lists its collection
+          payloadJobsXero(), // mission-control: add-on (PJ-57); multiTenantOptions lists its collections
           multiTenantPlugin(multiTenantOptions),
         ],
         secret: 'test-secret',
