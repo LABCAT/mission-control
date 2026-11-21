@@ -500,6 +500,18 @@ export interface Tenant {
    * Receives contact and moderation notifications.
    */
   adminEmail?: string | null;
+  /**
+   * Which add-ons this site uses, for example ["alerts", "reports"]. Leave empty for all installed add-ons; [] switches them all off.
+   */
+  addOns?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
   createdBy?: {
     relationTo: 'users';
     value: number | User;
@@ -2263,6 +2275,7 @@ export interface TenantsSelect<T extends boolean = true> {
   emailFromName?: T;
   emailFromAddress?: T;
   adminEmail?: T;
+  addOns?: T;
   createdBy?: T;
   updatedBy?: T;
   updatedAt?: T;
