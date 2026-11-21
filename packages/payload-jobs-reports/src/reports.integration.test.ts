@@ -170,6 +170,48 @@ describe('jobs and orders by month @S-104', () => {
   })
 })
 
+describe('jobs and orders by month, large ranges @S-104', () => {
+  it('lists an order once when its jobs straddle the 200-job lookup chunks', async () => {
+    const { payload, tenantB } = harness
+    const org = await payload.create({
+      collection: 'organisations' as never,
+      data: { name: 'Bulk org', tenant: tenantB.id } as never,
+      overrideAccess: true,
+    })
+    const ids: number[] = []
+    for (let i = 0; i < 205; i++) {
+      const doc = await payload.create({
+        collection: 'jobs' as never,
+        data: {
+          createdAt: '2026-06-15T00:00:00.000Z',
+          organisation: org.id,
+          status: 'published',
+          tenant: tenantB.id,
+          title: `Bulk ${i}`,
+        } as never,
+        overrideAccess: true,
+      })
+      ids.push(doc.id as number)
+    }
+    // Jobs 199 and 200 sit either side of the first chunk boundary.
+    await payload.create({
+      collection: 'orders' as never,
+      data: { currency: 'NZD', jobs: [ids[199], ids[200]], status: 'paid', tenant: tenantB.id, total: 42 } as never,
+      overrideAccess: true,
+    })
+
+    const { csv } = await run(tenantB.id, JOBS_ORDERS_REPORT_KEY, {
+      fields: ['jobTitle', 'orderTotal'],
+      from: '2026-06-01',
+      to: '2026-06-30',
+    })
+    const rows = lines(csv).slice(1)
+
+    expect(rows).toHaveLength(205)
+    expect(rows.filter((row) => row.endsWith(',42'))).toHaveLength(2)
+  }, 120_000)
+})
+
 describe('job views @S-105', () => {
   it('lists views per job including the imported legacy totals', async () => {
     const { csv } = await run(harness.tenantA.id, JOB_VIEWS_REPORT_KEY, {
@@ -182,7 +224,11 @@ describe('job views @S-105', () => {
   })
 
   it('is scoped to the tenant', async () => {
-    const { csv } = await run(harness.tenantB.id, JOB_VIEWS_REPORT_KEY, { fields: ['jobTitle', 'views'] })
+    const { csv } = await run(harness.tenantB.id, JOB_VIEWS_REPORT_KEY, {
+      fields: ['jobTitle', 'views'],
+      from: '2026-04-01',
+      to: '2026-04-30',
+    })
 
     expect(lines(csv)).toEqual(['jobTitle,views', 'Tenant B job,99'])
   })

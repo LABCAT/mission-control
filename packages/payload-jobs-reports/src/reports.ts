@@ -151,15 +151,18 @@ const runJobsOrders = async (registry: PayloadJobsRegistry, args: ReportRunArgs)
   const jobs = await findAll(args.payload, args.req, slugs.jobs, scopedWhere(registry, args, range), 'createdAt')
 
   const jobIDs = jobs.map((job) => job.id)
-  const orders: Doc[] = []
+  // An order can reference jobs in two chunks, so it may come back twice: keep one copy.
+  const orders = new Map<string, Doc>()
   for (let i = 0; i < jobIDs.length; i += IN_CHUNK) {
     const and: Where[] = [{ jobs: { in: jobIDs.slice(i, i + IN_CHUNK) } }]
     if (registry.context.tenancy === 'multi') and.push({ tenant: { equals: args.tenantID } })
-    orders.push(...(await findAll(args.payload, args.req, slugs.orders, { and }, 'createdAt')))
+    for (const order of await findAll(args.payload, args.req, slugs.orders, { and }, 'createdAt')) {
+      orders.set(String(order.id), order)
+    }
   }
 
   const ordersByJob = new Map<string, Doc[]>()
-  for (const order of orders) {
+  for (const order of orders.values()) {
     for (const job of (order.jobs ?? []) as unknown[]) {
       const key = String(idOf(job))
       ordersByJob.set(key, [...(ordersByJob.get(key) ?? []), order])
