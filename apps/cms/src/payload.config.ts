@@ -13,6 +13,7 @@ import { Tags } from './collections/Tags'
 import { payloadJobs, type RateLimiter } from '@mission-control/payload-jobs'
 import { payloadJobsAlerts } from '@mission-control/payload-jobs-alerts'
 import { payloadJobsReports } from '@mission-control/payload-jobs-reports'
+import { payloadJobsXero } from '@mission-control/payload-jobs-xero'
 import { multiTenantPlugin } from '@payloadcms/plugin-multi-tenant'
 import { Tenants } from './collections/Tenants'
 import { SiteKeys } from './collections/SiteKeys'
@@ -51,6 +52,12 @@ const workerEnv =
         ACCOUNT_RATE_LIMIT?: RateLimiter // mission-control: account auth rate limit (PJ-81)
         HYPERDRIVE?: { connectionString: string }
         MEDIA?: R2Bucket // mission-control: R2 bucket `mission-control-media`
+        // mission-control: Xero app and token key (PJ-55/57), Worker secrets. See .dev.vars.example.
+        XERO_CLIENT_ID?: string
+        XERO_CLIENT_SECRET?: string
+        XERO_REDIRECT_URI?: string
+        XERO_STATE_SECRET?: string
+        XERO_TOKEN_ENCRYPTION_KEY?: string
       })
     : undefined
 
@@ -129,6 +136,19 @@ export default buildConfig({
     // mission-control: add-ons (PJ-115), after payloadJobs(). Tenants switch them with `addOns`.
     payloadJobsAlerts(),
     payloadJobsReports(),
+    // mission-control: Xero add-on (PJ-57): settings, OAuth, order invoices and their retry task.
+    // Secrets are read per request in Workers; the Node CLI falls back to the XERO_* env vars.
+    payloadJobsXero({
+      xero: {
+        oauth: {
+          clientId: () => workerEnv?.XERO_CLIENT_ID,
+          clientSecret: () => workerEnv?.XERO_CLIENT_SECRET,
+          encryptionKey: () => workerEnv?.XERO_TOKEN_ENCRYPTION_KEY,
+          redirectUri: () => workerEnv?.XERO_REDIRECT_URI,
+          stateSecret: () => workerEnv?.XERO_STATE_SECRET,
+        },
+      },
+    }),
     multiTenantPlugin(multiTenantOptionsFor(payloadJobsCollectionSlugs)),
   ],
   localization: {

@@ -1,0 +1,27 @@
+{
+  "name": "@mission-control/payload-jobs-xero",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "description": "Xero add-on for payload-jobs: maps orders to Xero invoices through payload-xero's invoice adapter, switchable per tenant.",
+  "peerDependencies": {
+    "payload": "4.0.0-beta.7"
+  },
+  "dependencies": {
+    "@mission-control/payload-jobs": "workspace:*",
+    "@mission-control/payload-xero": "workspace:*"
+  },
+  "devDependencies": {
+    "@payloadcms/db-postgres": "4.0.0-beta.7",
+    "@payloadcms/plugin-multi-tenant": "4.0.0-beta.7",
+    "payload": "4.0.0-beta.7",
+    "typescript": "6.0.3"
+  }
+}

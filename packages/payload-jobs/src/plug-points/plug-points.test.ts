@@ -16,6 +16,7 @@ import {
   getPayloadJobsRegistry,
   isAddOnEnabled,
   jobLifecycleHook,
+  orderEventHook,
   runCheckoutSteps,
   validateAddOnKeys,
   RegistryError,
@@ -281,6 +282,60 @@ describe('invoice sync and lifecycle hooks @S-147', () => {
         req,
       } as never),
     ).resolves.toBeTruthy()
+    expect(error).toHaveBeenCalledOnce()
+  })
+})
+
+describe('order events @S-102', () => {
+  const tenants = [
+    { addOns: null, id: 1 },
+    { addOns: [], id: 2 },
+  ]
+  const reqWith = (error = vi.fn()) =>
+    ({
+      payload: {
+        findByID: async ({ id }: { id: number }) => tenants.find((tenant) => tenant.id === id),
+        logger: { error },
+      },
+    }) as unknown as PayloadRequest
+
+  it('tells the invoice adapters about new orders and status changes only', async () => {
+    const registry = newRegistry()
+    registry.addOns.register({ key: 'xero', label: 'Xero' })
+    const created = vi.fn()
+    const changed = vi.fn()
+    registry.invoiceSync.register({ addOn: 'xero', key: 'spy', label: 'Spy', onOrderCreated: created, onOrderStatusChanged: changed })
+    const hook = orderEventHook(registry)
+    const req = reqWith()
+    const run = (doc: Record<string, unknown>, previousDoc: Record<string, unknown>, operation = 'update') =>
+      hook({ collection: {} as never, context: {}, doc, operation, previousDoc, req } as never)
+
+    await run({ id: 5, status: 'pending', tenant: 1 }, {}, 'create')
+    await run({ id: 5, status: 'pending', tenant: 1 }, { status: 'pending' })
+    await run({ id: 5, status: 'invoiced', tenant: { id: 1 } }, { status: 'pending' })
+    // A tenant with the add-on switched off hears nothing.
+    await run({ id: 6, status: 'pending', tenant: 2 }, {}, 'create')
+
+    expect(created.mock.calls.map(([event]) => [event.orderID, event.status, event.tenantID])).toEqual([[5, 'pending', 1]])
+    expect(changed.mock.calls.map(([event]) => [event.orderID, event.from, event.status])).toEqual([[5, 'pending', 'invoiced']])
+    expect(created.mock.calls[0]![0].req).toBe(req)
+  })
+
+  it('logs, and never fails the order save, when an adapter throws', async () => {
+    const registry = newRegistry()
+    registry.invoiceSync.register({
+      key: 'bad',
+      label: 'Bad',
+      onOrderCreated: () => {
+        throw new Error('Xero is down')
+      },
+    })
+    const error = vi.fn()
+    const doc = { id: 5, status: 'pending', tenant: 1 }
+
+    await expect(
+      orderEventHook(registry)({ doc, operation: 'create', previousDoc: {}, req: reqWith(error) } as never),
+    ).resolves.toBe(doc)
     expect(error).toHaveBeenCalledOnce()
   })
 })

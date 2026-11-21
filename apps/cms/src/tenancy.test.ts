@@ -11,6 +11,7 @@ import {
   type MissionControlUser,
 } from '@mission-control/payload-jobs'
 import { payloadJobsAlerts, removeTenantAlertSubscriptions } from '@mission-control/payload-jobs-alerts'
+import { payloadJobsXero } from '@mission-control/payload-jobs-xero'
 
 import { Documents } from './collections/Documents'
 import { Folders } from './collections/Folders'
@@ -59,7 +60,9 @@ const buildConfig = async (): Promise<Config> => {
     collections: [Users, Media, Folders, Tags, Tenants, Documents],
   } as Config)
   // mission-control: the alerts add-on is its own plugin since PJ-115.
-  const withJobs = await payloadJobsAlerts()(base)
+  const withAlerts = await payloadJobsAlerts()(base)
+  // mission-control: the Xero add-on (PJ-57).
+  const withJobs = await payloadJobsXero()(withAlerts)
 
   return (await multiTenantPlugin(multiTenantOptions)(withJobs)) as Config
 }
@@ -745,6 +748,41 @@ describe('credit ledger', () => {
     await expect(
       (guard as (args: unknown) => Promise<void>)({ collection: { slug: 'tenants' }, id: 1, req }),
     ).rejects.toMatchObject({ data: { errors: [expect.objectContaining({ message: expect.stringMatching(/credit movement/) })] } })
+  })
+})
+
+describe('Xero add-on', () => {
+  const employerA: TestUser = { id: 30, collection: 'users', role: 'user', tenants: [{ role: 'employer', tenant: tenantA }] }
+
+  it.each(['xero-settings', 'xero-invoices'])('registers %s with its tenant field @S-102', async (slug) => {
+    const config = await buildConfig()
+    const collection = config.collections?.find((candidate) => candidate.slug === slug)
+
+    expect(collection?.fields.some((field) => 'name' in field && field.name === 'tenant')).toBe(true)
+  })
+
+  it.each(['xero-settings', 'xero-invoices'])(
+    'keeps %s from anonymous requests, site keys and employers, and narrows site managers to their tenant @S-102',
+    async (slug) => {
+      const config = await buildConfig()
+      const collection = config.collections?.find((candidate) => candidate.slug === slug)
+      const read = collection?.access?.read as (args: unknown) => Promise<unknown>
+
+      expect(await read({ req: requestFor(null), slug })).toBe(false)
+      expect(await read({ req: await siteKeyRequest({ key: 'sk_tenant', tenant: tenantA.id }), slug })).toBe(false)
+      expect(await read({ req: requestFor(employerA), slug })).toBe(false)
+      expect(await read({ req: requestFor(tenantAdminA), slug })).toEqual({ tenant: { in: [tenantA.id] } })
+    },
+  )
+
+  it('lets no one write invoice records through the API @S-151', async () => {
+    const config = await buildConfig()
+    const invoices = config.collections?.find((candidate) => candidate.slug === 'xero-invoices')
+
+    for (const operation of ['create', 'update', 'delete'] as const) {
+      const access = invoices?.access?.[operation] as (args: unknown) => Promise<unknown>
+      expect(await access({ req: requestFor(superAdmin) })).toBe(false)
+    }
   })
 })
 
