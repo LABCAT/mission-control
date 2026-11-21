@@ -59,6 +59,7 @@ describe('locations collection @S-120', () => {
       'application-files',
       'applications',
       'orders',
+      'credit-ledger',
     ])
     expect(Locations.slug).toBe('locations')
     expect(Locations.versions).toBe(false)

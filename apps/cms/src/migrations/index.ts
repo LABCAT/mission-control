@@ -24,6 +24,7 @@ import * as migration_20261120_203257_applications from './20261120_203257_appli
 import * as migration_20261120_230226_account_import_fields from './20261120_230226_account_import_fields';
 import * as migration_20261121_015238_orders from './20261121_015238_orders';
 import * as migration_20261121_061136_tenant_add_ons from './20261121_061136_tenant_add_ons';
+import * as migration_20261121_153213_credit_ledger from './20261121_153213_credit_ledger';
 
 export const migrations = [
   {
@@ -154,6 +155,11 @@ export const migrations = [
   {
     up: migration_20261121_061136_tenant_add_ons.up,
     down: migration_20261121_061136_tenant_add_ons.down,
-    name: '20261121_061136_tenant_add_ons'
+    name: '20261121_061136_tenant_add_ons',
+  },
+  {
+    up: migration_20261121_153213_credit_ledger.up,
+    down: migration_20261121_153213_credit_ledger.down,
+    name: '20261121_153213_credit_ledger'
   },
 ];
