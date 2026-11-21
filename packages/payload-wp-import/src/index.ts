@@ -11,3 +11,20 @@ export * from './importers/locations'
 export * from './importers/taxonomies'
 export { buildImportPlan, usersImporters } from './importers/users'
 export type { UserImportOptions } from './importers/users'
+export { buildMediaPlan, originalOfThumbnail, uploadsPathOf } from './media/plan'
+export type { MediaPlan, MediaPlanOptions } from './media/plan'
+export { copyFile, sha256Of, SourceMissingError } from './media/copy'
+export {
+  DEFAULT_MAX_DOCUMENT_BYTES,
+  formatMediaReport,
+  objectName,
+  pathLegacyId,
+  runMediaImport,
+  stableFilename,
+} from './media/run'
+export type { MediaImportOptions, MediaReport, MediaSlugs, RunMediaImportOptions } from './media/run'
+export { directorySource, directoryTarget, r2Target } from './media/stores'
+export type { R2BucketLike } from './media/stores'
+export type * from './media/types'
+export { MEDIA_USAGE, parseMediaArgs } from './media/cli'
+export type { MediaCliArgs } from './media/cli'

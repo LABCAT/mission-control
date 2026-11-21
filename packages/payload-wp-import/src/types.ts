@@ -19,7 +19,7 @@ export type ImportPayload = {
     overrideAccess?: boolean
     pagination?: boolean
     where?: any
-  }) => Promise<{ docs: { id: number | string }[] }>
+  }) => Promise<{ docs: ({ id: number | string } & Record<string, any>)[] }>
   update: (args: {
     collection: any
     data: any

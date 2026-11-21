@@ -1960,6 +1960,21 @@ stories:
     status: planned
     tests: []
 
+  - id: S-148
+    area: Import and cutover
+    role: super admin
+    story: "The importer copies the logos, covers, job PDFs and page images that imported records use into R2 and links them."
+    steps:
+      - "Run wp-import-media with --dry-run and read the files, bytes, skipped reasons and failures."
+      - "Run it for real, then run it again."
+    expected: "Only files used by imported organisations, jobs and pages are copied, with checksum and size verified and stable names; thumbnails and uploaded_cvs are never copied; the logo, cover, job PDF and page image relations are set; a second run copies nothing."
+    settings:
+      - import.media
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-wp-import/src/media/media.test.ts
+
   # ---------------------------------------------------------------------------
   # Security and spam
   # ---------------------------------------------------------------------------

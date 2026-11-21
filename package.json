@@ -10,6 +10,7 @@
     "dev": "pnpm --filter cms dev",
     "build": "pnpm --filter cms build",
     "wp-import": "pnpm --filter cms wp-import",
+    "wp-import-media": "pnpm --filter cms wp-import-media",
     "typecheck": "pnpm -r --if-present typecheck",
     "lint": "oxlint packages tools apps/vwok",
     "test": "vitest run",
