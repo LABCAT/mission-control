@@ -120,6 +120,9 @@ export const formatSummary = (summary: ImportSummary): string => {
       `  ${name}: created ${r.created}, updated ${r.updated}, skipped ${r.skipped}, failed ${r.failed}` +
         (r.aborted ? ` (aborted: ${r.aborted})` : ''),
     )
+    for (const [label, counts] of [['skipped', r.skipReasons], ['report', r.report]] as const) {
+      for (const [key, count] of Object.entries(counts ?? {})) lines.push(`    ${label} ${key}: ${count}`)
+    }
   }
   if (summary.errors.length) {
     lines.push(`Errors (${summary.errors.length}):`)

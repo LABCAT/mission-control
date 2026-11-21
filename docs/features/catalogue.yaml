@@ -1825,15 +1825,18 @@ stories:
   - id: S-130
     area: Import and cutover
     role: super admin
-    story: "The importer brings the users and organisations that qualify, with password hashes and org fields."
+    story: "The importer brings the users and organisations that qualify, with password hashes and org fields; merged duplicates share one organisation owned by its first employer."
     steps:
-      - "Run the import and check a migrated employer and seeker."
-    expected: "Only users matching the last-login rule import, WordPress hashes survive, and organisations keep type, logo, trusted flag and Xero code."
+      - "Run the import with --dry-run and read the kept and skipped counts."
+      - "Run the import and check a migrated employer, a seeker and a merged organisation."
+    expected: "Only users matching the active rule import (login in the last 3 years, a job or order since 2022, an alert, or an admin), WordPress hashes survive, and organisations keep type, size, trusted flag, billing email, page visibility and Xero code. Logos come with the media import."
     settings:
       - import.users
     mvp: true
-    status: planned
-    tests: []
+    status: built
+    tests:
+      - packages/payload-wp-import/src/importers/users.test.ts
+      - apps/cms/src/wp-import-users.test.ts
 
   - id: S-131
     area: Import and cutover

@@ -518,10 +518,15 @@ export interface User {
   firstName?: string | null;
   lastName?: string | null;
   legacyPasswordHash?: string | null;
+  legacyId?: number | null;
   /**
    * The organisation this employer belongs to.
    */
   organisation?: (number | null) | Organisation;
+  /**
+   * Owners manage billing, the profile and members.
+   */
+  organisationRole?: ('owner' | 'member') | null;
   tenants?:
     | {
         tenant: number | Tenant;
@@ -1830,7 +1835,9 @@ export interface UsersSelect<T extends boolean = true> {
   firstName?: T;
   lastName?: T;
   legacyPasswordHash?: T;
+  legacyId?: T;
   organisation?: T;
+  organisationRole?: T;
   tenants?:
     | T
     | {

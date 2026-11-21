@@ -1,7 +1,6 @@
 import { MysqlReader } from './mysql-reader'
 import type {
   ImportContext,
-  ImportCounts,
   ImportFailure,
   ImportPayload,
   ImporterResult,
@@ -52,8 +51,11 @@ export const sortImporters = (importers: Importer[]): Importer[] => {
   return sorted
 }
 
+// Database and validation errors can quote the offending value, such as a duplicate email, and
+// the summary is printed. Nothing personal may reach it.
+const EMAIL = /[^\s@'"<>(),;]+@[^\s@'"<>(),;]+/g
 const messageOf = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error)
+  (error instanceof Error ? error.message : String(error)).replaceAll(EMAIL, '[email]')
 
 /**
  * Run importers in dependency order. Documents are matched by `legacyId` + tenant, so a
@@ -94,6 +96,7 @@ export const runImport = async (options: RunImportOptions): Promise<ImportSummar
         for await (const row of importer.read(reader)) {
           await importRow(importer, row, ctx, tenantField, result, summary.errors)
         }
+        if (importer.report) result.report = importer.report()
       } catch (error) {
         result.aborted = `read failed: ${messageOf(error)}`
         summary.errors.push({ importer: importer.name, message: result.aborted })
@@ -111,20 +114,25 @@ const importRow = async (
   row: unknown,
   ctx: ImportContext,
   tenantField: string,
-  counts: ImportCounts,
+  counts: ImporterResult,
   errors: ImportFailure[],
 ): Promise<void> => {
   let legacyId: number | undefined
   try {
     const mapped = await importer.map(row, ctx)
-    if (!mapped) {
+    if (!mapped || 'skip' in mapped) {
       counts.skipped++
+      if (mapped) {
+        const reasons = (counts.skipReasons ??= {})
+        reasons[mapped.skip] = (reasons[mapped.skip] ?? 0) + 1
+      }
       return
     }
     legacyId = mapped.legacyId
     if (!Number.isInteger(legacyId)) throw new Error(`legacyId must be an integer, got ${legacyId}`)
 
     const { collection } = importer
+    const scope = importer.tenantScope ?? { path: tenantField, set: true }
     const existing = await ctx.payload.find({
       collection,
       depth: 0,
@@ -132,12 +140,16 @@ const importRow = async (
       overrideAccess: true,
       pagination: false,
       where: {
-        and: [{ legacyId: { equals: legacyId } }, { [tenantField]: { equals: ctx.tenant } }],
+        and: [{ legacyId: { equals: legacyId } }, { [scope.path]: { equals: ctx.tenant } }],
       },
     })
     const found = existing.docs[0]
     // Runner-owned fields win over whatever the mapper returned.
-    const data = { ...mapped.data, legacyId, [tenantField]: ctx.tenant }
+    const data = {
+      ...mapped.data,
+      legacyId,
+      ...(scope.set ? { [tenantField]: ctx.tenant } : {}),
+    }
 
     if (found) {
       if (!ctx.dryRun) {
@@ -145,7 +157,15 @@ const importRow = async (
       }
       counts.updated++
     } else {
-      if (!ctx.dryRun) await ctx.payload.create({ collection, data, overrideAccess: true })
+      if (!ctx.dryRun) {
+        const created = { ...data, ...mapped.createOnly }
+        if (mapped.rawCreate) {
+          if (!ctx.payload.db) throw new Error('rawCreate needs payload.db')
+          await ctx.payload.db.create({ collection, data: created })
+        } else {
+          await ctx.payload.create({ collection, data: created, overrideAccess: true })
+        }
+      }
       counts.created++
     }
   } catch (error) {
