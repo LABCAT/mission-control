@@ -109,6 +109,13 @@ export type OrderEvent = {
 export type InvoiceSyncAdapter = AddOnOwned &
   Keyed & {
     label: string
+    /**
+     * The durable form of the two handlers below, for writes inside a transaction that may still
+     * roll back (checkout, PJ-31). Queue the work with `event.req` so it commits or rolls back
+     * with the order (an outbox): never call an outside service here. The handlers then run once
+     * the transaction has committed, and the queued work makes up for them if they never do.
+     */
+    queue?: (event: OrderEvent) => Promise<void> | void
     onOrderCreated?: (event: OrderEvent) => Promise<void> | void
     onOrderStatusChanged?: (event: OrderEvent & { from: string }) => Promise<void> | void
   }

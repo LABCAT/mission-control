@@ -1,6 +1,15 @@
 import { postgresAdapter, sql } from '@payloadcms/db-postgres'
 import { multiTenantPlugin } from '@payloadcms/plugin-multi-tenant'
-import { buildConfig, getPayload, type CollectionConfig, type Payload } from 'payload'
+import {
+  buildConfig,
+  commitTransaction,
+  createPayloadRequest,
+  getPayload,
+  initTransaction,
+  killTransaction,
+  type CollectionConfig,
+  type Payload,
+} from 'payload'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
 import {
@@ -25,7 +34,13 @@ import {
 } from '@mission-control/payload-xero'
 
 import { orderInvoiceAdapter, payloadJobsXero, seedXeroSettings, xeroTenantCollections } from './index'
-import { getPayloadJobsRegistry } from '@mission-control/payload-jobs'
+import {
+  emitDeferredOrderEvents,
+  getPayloadJobsRegistry,
+  ORDER_EVENTS_DEFER_CONTEXT,
+  type DeferredOrderEvent,
+  type PayloadJobsRegistry,
+} from '@mission-control/payload-jobs'
 import { FakeXero, networkError, rejected, unavailable } from './test/fake-xero'
 
 const databaseUrl = process.env.TEST_DATABASE_URL
@@ -325,6 +340,83 @@ describe('Xero invoicing for orders', () => {
     expect(invoicesFor(order.id)).toHaveLength(1)
     expect((await readOrder(order.id)).externalRefs).toHaveLength(1)
     expect(await syncRow(order.id)).toMatchObject({ attempts: 0, lastError: null })
+  })
+
+  describe('inside a checkout transaction (PJ-31)', () => {
+    /** A request whose order events are deferred, as checkout's are, in a transaction of its own. */
+    const deferredRequest = async () => {
+      const req = await createPayloadRequest({ context: { [ORDER_EVENTS_DEFER_CONTEXT]: [] }, payload })
+      await initTransaction(req)
+      return req
+    }
+    const createOrderIn = async (req: Awaited<ReturnType<typeof deferredRequest>>) =>
+      (await payload.create({
+        collection: ORDERS_SLUG,
+        data: {
+          currency: 'VUV',
+          discount: 0,
+          organisation: orgs.a.id,
+          paymentMethod: 'invoice',
+          paymentProvider: 'invoice',
+          plan: planA.id,
+          subtotal: 3900,
+          tax: 0,
+          tenant: tenants.a.id,
+          total: 3900,
+        } as never,
+        overrideAccess: true,
+        req,
+      })) as unknown as Doc
+
+    it('sends nothing to Xero and leaves nothing behind when the transaction rolls back @S-152', async () => {
+      const calls = xero.calls.length
+      const req = await deferredRequest()
+      const order = await createOrderIn(req)
+      await payload.update({ collection: ORDERS_SLUG, data: { status: 'invoiced' } as never, id: order.id, overrideAccess: true, req })
+      await killTransaction(req)
+
+      expect(xero.calls.length).toBe(calls)
+      expect(invoicesFor(order.id)).toHaveLength(0)
+      expect(await syncRow(order.id)).toBeUndefined()
+      expect(await queuedRetries(order.id)).toHaveLength(0)
+    })
+
+    it('queues one retry job with the order, invoices once after the commit, and the job then finds nothing to do @S-152', async () => {
+      const calls = xero.calls.length
+      const req = await deferredRequest()
+      const order = await createOrderIn(req)
+      await payload.update({ collection: ORDERS_SLUG, data: { status: 'invoiced' } as never, id: order.id, overrideAccess: true, req })
+      // Nothing reaches Xero while the transaction is open.
+      expect(xero.calls.length).toBe(calls)
+      await commitTransaction(req)
+      expect(await queuedRetries(order.id)).toHaveLength(1)
+
+      const registry = getPayloadJobsRegistry(payload.config as never) as PayloadJobsRegistry
+      const events = req.context[ORDER_EVENTS_DEFER_CONTEXT] as DeferredOrderEvent[]
+      expect(events.map((event) => event.status)).toEqual(['pending', 'invoiced'])
+      expect(await emitDeferredOrderEvents(registry, payload, events)).toEqual([])
+
+      expect(invoicesFor(order.id)).toHaveLength(1)
+      expect(invoicesFor(order.id)[0]).toMatchObject({ Status: 'AUTHORISED' })
+      expect((await readOrder(order.id)).externalRefs).toHaveLength(1)
+
+      // The outbox job, had the process died before the emit, would have done the same; now
+      // it finds the invoice up to date.
+      await payload.jobs.run({ overrideAccess: true, queue: XERO_INVOICE_SYNC_QUEUE })
+      expect(invoicesFor(order.id)).toHaveLength(1)
+    })
+
+    it('invoices from the queued job alone when the emit never happens @S-152', async () => {
+      const req = await deferredRequest()
+      const order = await createOrderIn(req)
+      await payload.update({ collection: ORDERS_SLUG, data: { status: 'invoiced' } as never, id: order.id, overrideAccess: true, req })
+      await commitTransaction(req)
+      expect(invoicesFor(order.id)).toHaveLength(0)
+
+      await payload.jobs.run({ overrideAccess: true, queue: XERO_INVOICE_SYNC_QUEUE })
+      expect(invoicesFor(order.id)).toHaveLength(1)
+      expect(invoicesFor(order.id)[0]).toMatchObject({ Status: 'AUTHORISED' })
+    })
   })
 
   it('recovers an invoice whose answer was lost instead of creating a second one @S-151', async () => {

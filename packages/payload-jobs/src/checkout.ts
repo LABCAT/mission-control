@@ -1,4 +1,5 @@
 import {
+  createPayloadRequest,
   type CollectionSlug,
   type Endpoint,
   type GlobalSlug,
@@ -35,6 +36,7 @@ import {
 } from './orders'
 import type { OrderPaymentMethod } from './payment-providers'
 import type { CheckoutContext, PaymentResult } from './plug-points/definitions'
+import { emitDeferredOrderEvents, ORDER_EVENTS_DEFER_CONTEXT, type DeferredOrderEvent } from './plug-points/gate'
 import { createPayloadJobsRegistry, forTenant, type PayloadJobsRegistry } from './plug-points/payload-jobs-registry'
 import {
   PricingError,
@@ -78,6 +80,11 @@ import { tenantTaxSettings, type TenantTaxSource } from './tax-settings'
  * 7. **Payment** through the PJ-115 payment providers: `credit` when a credit pays it all, `free`
  *    when the total is 0, otherwise `invoice`. A pack plan's credits are granted through the
  *    ledger once its order is invoiced or paid, and one of them pays for this job.
+ *
+ * 8. **Nothing outside the database before the commit.** Checkout runs in a transaction of its
+ *    own (`committed`). Order events are deferred: add-ons queue their durable work in that
+ *    transaction (Xero's retry job), and their handlers run only once it has committed. A
+ *    failed checkout or approval therefore never leaves a Xero draft or invoice behind.
  *
  * Out of scope: publishing and moderation (PJ-32: the job is left `pending`), the employer UI
  * (PJ-82), Xero (PJ-57 listens to the order events), relisting (PJ-33 duplicates the job).
@@ -744,11 +751,38 @@ export const previewCheckout = async (args: CheckoutJobArgs): Promise<CheckoutPr
 }
 
 /**
+ * A request of checkout's own for the caller's user, so checkout always opens, and commits, its
+ * own transaction: order events can then wait until the money is really committed. A caller's
+ * transaction is not joined; checkout's writes commit on their own.
+ */
+const isolatedRequest = async (req: PayloadRequest): Promise<PayloadRequest> =>
+  createPayloadRequest({
+    context: { ...req.context, [ORDER_EVENTS_DEFER_CONTEXT]: [] },
+    payload: req.payload,
+    user: (req.user ?? null) as never,
+  })
+
+/**
+ * Run `fn` in the request's own transaction under the organisation's lock, then (only once it
+ * has committed) tell the invoice-sync adapters what happened to its orders. Adapters' durable
+ * work (`InvoiceSyncAdapter.queue`) was queued inside the transaction, so a rollback leaves no
+ * invoice, draft or job behind, and a crash after the commit is made up by the queued work.
+ */
+const committed = async <T>(req: PayloadRequest, options: Resolved, organisationID: ID, fn: () => Promise<T>): Promise<T> => {
+  if (await req.transactionID) throw new Error('payload-jobs: checkout must run in a transaction of its own')
+  const result = await withOrganisationCreditLock(req, organisationID, fn)
+  const events = (req.context[ORDER_EVENTS_DEFER_CONTEXT] as DeferredOrderEvent[] | undefined) ?? []
+  req.context[ORDER_EVENTS_DEFER_CONTEXT] = []
+  await emitDeferredOrderEvents(options.registry, req.payload, events)
+  return result
+}
+
+/**
  * Check a job out: price it, create its order, take or grant credits and start the payment, in
  * one transaction. Safe to repeat: a second identical call returns the first order.
  */
 export const checkoutJob = async (args: CheckoutJobArgs): Promise<CheckoutResult> => {
-  const { req } = args
+  const req = await isolatedRequest(args.req)
   const input = normaliseInput(args.input)
   const options = resolveCheckoutOptions(args.payload, args.options)
   const user = args.user === undefined ? ((req.user as MissionControlUser | null) ?? null) : args.user
@@ -756,7 +790,7 @@ export const checkoutJob = async (args: CheckoutJobArgs): Promise<CheckoutResult
   // Access first (outside the lock), so a stranger learns nothing and holds no lock.
   const first = await prepare(req, options, input.jobId, args.tenantID, user)
 
-  return withOrganisationCreditLock(req, first.organisationID, async () => {
+  return committed(req, options, first.organisationID, async () => {
     // Re-read under the lock: a checkout that just committed is visible now.
     const prepared = await prepare(req, options, input.jobId, args.tenantID, user)
     const { job } = prepared
@@ -973,6 +1007,30 @@ const settleOrder = async (
 // ---------------------------------------------------------------------------------------------
 // Purchase requests
 
+/**
+ * A purchase request is priced when the member asks; by the time the owner approves, its coupon
+ * may be used up or the credit it counted on spent. Refuse then, before writing anything.
+ */
+const assertStillSettleable = async (req: PayloadRequest, options: Resolved, prepared: Prepared, snapshot: QuoteSnapshot): Promise<void> => {
+  const retry = 'Decline this request and submit the job again to get a new price.'
+  const couponID = snapshot.coupon?.applied ? (snapshot.coupon.id ?? null) : null
+  if (couponID !== null && options.couponsEnabled && has(req, options.slugs.coupons)) {
+    await lockCoupon(req, couponID)
+    const coupon = await findOne(req, options.slugs.coupons, couponID)
+    const useCount = (coupon?.useCount as null | number | undefined) ?? 0
+    const maxUses = (coupon?.maxUses as null | number | undefined) ?? null
+    if (!coupon || coupon.active === false || (maxUses !== null && useCount >= maxUses)) {
+      throw new CheckoutError('coupon_unavailable', `The coupon on this request is no longer available. ${retry}`)
+    }
+  }
+  if (snapshot.credits.used > 0) {
+    const balance = (await balanceOrNull(req, options, prepared.organisationID)) ?? 0
+    if (balance < snapshot.credits.used) {
+      throw new CheckoutError('insufficient_credits', `The organisation has no credit left for this request. ${retry}`)
+    }
+  }
+}
+
 export type PurchaseDecisionArgs = {
   options?: CheckoutOptions
   orderId: ID
@@ -1003,12 +1061,12 @@ const preparePurchase = async (req: PayloadRequest, options: Resolved, args: Pur
  * paid) exactly as an immediate checkout would have been. Repeating it returns the result.
  */
 export const approvePurchase = async (args: PurchaseDecisionArgs): Promise<CheckoutResult> => {
-  const { req } = args
+  const req = await isolatedRequest(args.req)
   const options = resolveCheckoutOptions(args.payload, args.options)
   const user = args.user === undefined ? ((req.user as MissionControlUser | null) ?? null) : args.user
   const first = await preparePurchase(req, options, args, user)
 
-  return withOrganisationCreditLock(req, first.prepared.organisationID, async () => {
+  return committed(req, options, first.prepared.organisationID, async () => {
     const { order, prepared } = await preparePurchase(req, options, args, user)
     const job = prepared.job
 
@@ -1027,6 +1085,9 @@ export const approvePurchase = async (args: PurchaseDecisionArgs): Promise<Check
     if (!sameID(tenantIDOf(job.order), order.id) || job.status === 'cancelled') {
       throw new CheckoutError('order_not_waiting', 'This order no longer pays for its job')
     }
+
+    // What could fail while settling is checked before anything is written, with a clear way out.
+    await assertStillSettleable(req, options, prepared, order.quote as QuoteSnapshot)
 
     const pending = (await withContext(req, ORDER_SYSTEM_CONTEXT, () =>
       req.payload.update({
@@ -1052,12 +1113,12 @@ export const approvePurchase = async (args: PurchaseDecisionArgs): Promise<Check
 
 /** The owner (or a site manager) declines a purchase request: the order is cancelled. */
 export const declinePurchase = async (args: PurchaseDecisionArgs): Promise<CheckoutOrderSummary> => {
-  const { req } = args
+  const req = await isolatedRequest(args.req)
   const options = resolveCheckoutOptions(args.payload, args.options)
   const user = args.user === undefined ? ((req.user as MissionControlUser | null) ?? null) : args.user
   const first = await preparePurchase(req, options, args, user)
 
-  return withOrganisationCreditLock(req, first.prepared.organisationID, async () => {
+  return committed(req, options, first.prepared.organisationID, async () => {
     const { order } = await preparePurchase(req, options, args, user)
     if (order.status === 'cancelled') return summary(order)
     if (order.status !== 'waiting_for_purchase') {

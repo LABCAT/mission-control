@@ -13,6 +13,7 @@ import {
   DEFAULT_SETTINGS_SLUG,
   payloadXero,
   resolveXeroInvoicing,
+  queueXeroInvoiceSync,
   syncOrQueueXeroInvoice,
   type PayloadXeroOptions,
 } from '@mission-control/payload-xero'
@@ -116,6 +117,12 @@ export const payloadJobsXero =
       label: 'Xero',
       onOrderCreated: sync,
       onOrderStatusChanged: sync,
+      // Inside checkout's transaction (PJ-31) nothing is sent to Xero: the retry job is queued
+      // with the order's request, so it commits or rolls back with the order. Checkout calls the
+      // handlers above after the commit; if that never happens, the job invoices the order.
+      queue: async ({ orderID, payload, req }: OrderEvent): Promise<void> => {
+        await queueXeroInvoiceSync({ config, payload, req, sourceId: orderID })
+      },
     })
 
     return payloadXero(xeroOptions)(incoming)

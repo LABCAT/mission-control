@@ -1,4 +1,4 @@
-import { createPayloadRequest, type CollectionConfig, type Field } from 'payload'
+import { createPayloadRequest, type CollectionConfig, type Field, type Payload } from 'payload'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { superAdminAccess, type MissionControlUser } from './access'
@@ -25,7 +25,9 @@ import {
 } from './credits'
 import { orderCollection, refuseDeleteWhileOrdered } from './orders'
 import { orderEventHook } from './plug-points/gate'
-import { createPayloadJobsRegistry } from './plug-points/payload-jobs-registry'
+import type { PaymentProviderRegistration } from './plug-points/definitions'
+import { createPayloadJobsRegistry, type PayloadJobsRegistry } from './plug-points/payload-jobs-registry'
+import { createRegistry } from './plug-points/registry'
 import { planCollection, withPlanRestrictionGuards } from './plans'
 import { taxonomyCollections } from './taxonomies'
 import { generateSiteKey } from './site-keys'
@@ -44,21 +46,44 @@ const withHooks = (collection: CollectionConfig, hooks: { afterChange?: any[]; b
   },
 })
 
-/** The ledger and orders first: the harness deletes in this order, and the guards keep referenced rows. */
-/** Order events as #96 (PJ-57) emits them, heard by a spy invoice-sync adapter. */
-const registry = createPayloadJobsRegistry({ settingsSlug: 'job-board-settings', slugs: DEFAULT_PAYLOAD_JOBS_SLUGS, tenancy: 'multi', tenantsSlug: 'tenants' })
-const orderEvents: { from?: string; kind: 'created' | 'statusChanged'; orderID: number | string; status: string }[] = []
+/**
+ * Order events as #96 (PJ-57) emits them, heard by a spy invoice-sync adapter shaped like the
+ * Xero one: `queue` writes an outbox row with the order's request (like `queueXeroInvoiceSync`),
+ * and each handler records the order's status as committed when it is called (it reads without
+ * the request, so it sees only what other connections would see: what an outside call would).
+ */
+const ctx = { settingsSlug: 'job-board-settings', slugs: DEFAULT_PAYLOAD_JOBS_SLUGS, tenancy: 'multi' as const, tenantsSlug: 'tenants' }
+const registry = createPayloadJobsRegistry(ctx)
+const orderEvents: { committed: null | string; from?: string; kind: 'created' | 'statusChanged'; orderID: number | string; status: string }[] = []
+const committedStatus = async (payload: Payload, orderID: number | string): Promise<null | string> =>
+  ((await payload.findByID({ collection: 'orders', depth: 0, disableErrors: true, id: orderID, overrideAccess: true })) as null | Doc)?.status ?? null
 registry.invoiceSync.register({
   key: 'spy',
   label: 'Spy',
-  onOrderCreated: ({ orderID, status }) => {
-    orderEvents.push({ kind: 'created', orderID, status })
+  onOrderCreated: async ({ orderID, payload, status }) => {
+    orderEvents.push({ committed: await committedStatus(payload, orderID), kind: 'created', orderID, status })
   },
-  onOrderStatusChanged: ({ from, orderID, status }) => {
-    orderEvents.push({ from, kind: 'statusChanged', orderID, status })
+  onOrderStatusChanged: async ({ from, orderID, payload, status }) => {
+    orderEvents.push({ committed: await committedStatus(payload, orderID), from, kind: 'statusChanged', orderID, status })
+  },
+  queue: async ({ orderID, payload, req }) => {
+    await payload.create({ collection: 'outbox' as never, data: { orderID: String(orderID) } as never, overrideAccess: true, req })
   },
 })
+const options = { registry }
 
+/** The same, but the invoice provider refuses every payment: checkout fails after its order write. */
+const failingRegistry = (): PayloadJobsRegistry => {
+  const providers = createRegistry<PaymentProviderRegistration>('payment provider')
+  providers.register({ createPayment: () => ({ status: 'failed' }), currencies: '*', key: 'invoice', label: 'Invoice' })
+  providers.register({ createPayment: () => ({ status: 'paid' }), currencies: '*', key: 'free', label: 'Free' })
+  providers.register({ createPayment: () => ({ status: 'paid' }), currencies: '*', key: 'credit', label: 'Job credit' })
+  return { ...createPayloadJobsRegistry(ctx), invoiceSync: registry.invoiceSync, paymentProviders: providers }
+}
+
+const Outbox: CollectionConfig = { slug: 'outbox', fields: [{ name: 'orderID', type: 'text', required: true }], versions: false }
+
+/** The ledger and orders first: the harness deletes in this order, and the guards keep referenced rows. */
 const collections = (): CollectionConfig[] => [
   creditLedgerCollection(),
   withHooks(orderCollection(), { afterChange: [orderEventHook(registry)] }),
@@ -152,6 +177,7 @@ describe('checkout integration', () => {
 
   const checkout = async (user: null | User, input: Partial<CheckoutInput> & { jobId: number }, tenantID = harness.tenantA.id) =>
     checkoutJob({
+      options,
       input: { addOnIds: [], closeDate: null, couponCode: null, planId: plans.regular.id, useCredit: false, ...input },
       payload,
       req: await reqFor(user),
@@ -203,7 +229,7 @@ describe('checkout integration', () => {
   beforeAll(async () => {
     harness = await bootTestPayload({
       collections: collections(),
-      globalCollections: [SiteKeys],
+      globalCollections: [SiteKeys, Outbox],
       tenantData: (which) => (which === 'A' ? { currency: 'VUV', timezone: 'Pacific/Efate' } : { currency: 'NZD', timezone: 'Pacific/Auckland' }),
       tenantFields,
       tenantHooks: {
@@ -373,7 +399,7 @@ describe('checkout integration', () => {
 
     it('previews the same price without writing anything @S-152', async () => {
       const listing = await job(orgs.brew)
-      const preview = await previewCheckout({
+      const preview = await previewCheckout({ options,
         input: { addOnIds: [enhanced.id], closeDate: null, couponCode: 'LINKPS', jobId: listing.id, planId: plans.regular.id, useCredit: false },
         payload,
         req: await reqFor(users.member),
@@ -493,16 +519,16 @@ describe('checkout integration', () => {
       expect((await read('jobs', listing.id)).status).toBe('pending')
 
       const args = { orderId: result.order.id, payload, tenantID: harness.tenantA.id }
-      await expect(approvePurchase({ ...args, req: await reqFor(users.member), user: users.member })).rejects.toSatisfy(refused('forbidden'))
-      await expect(approvePurchase({ ...args, req: await reqFor(users.stranger), user: users.stranger })).rejects.toSatisfy(refused('not_found'))
+      await expect(approvePurchase({ options, ...args, req: await reqFor(users.member), user: users.member })).rejects.toSatisfy(refused('forbidden'))
+      await expect(approvePurchase({ options, ...args, req: await reqFor(users.stranger), user: users.stranger })).rejects.toSatisfy(refused('not_found'))
 
       const coupon = async () => ((await payload.find({ collection: 'coupons', where: { code: { equals: 'LINKPS' } }, ...system })).docs[0] as Doc).useCount
       const usesBefore = await coupon()
-      const approved = await approvePurchase({ ...args, req: await reqFor(users.owner), user: users.owner })
+      const approved = await approvePurchase({ options, ...args, req: await reqFor(users.owner), user: users.owner })
       expect(approved).toMatchObject({ created: true, order: { status: 'invoiced', total: 2000 } })
       expect(await coupon()).toBe(usesBefore + 1)
 
-      const again = await approvePurchase({ ...args, req: await reqFor(users.owner), user: users.owner })
+      const again = await approvePurchase({ options, ...args, req: await reqFor(users.owner), user: users.owner })
       expect(again.created).toBe(false)
       expect(await coupon()).toBe(usesBefore + 1)
 
@@ -517,10 +543,10 @@ describe('checkout integration', () => {
     it('lets the owner decline a purchase, after which the job can be checked out again @S-153', async () => {
       const listing = await job(orgs.brew)
       const held = await checkout(users.member, { jobId: listing.id })
-      const declined = await declinePurchase({ orderId: held.order.id, payload, req: await reqFor(users.owner), tenantID: harness.tenantA.id, user: users.owner })
+      const declined = await declinePurchase({ options, orderId: held.order.id, payload, req: await reqFor(users.owner), tenantID: harness.tenantA.id, user: users.owner })
       expect(declined.status).toBe('cancelled')
       await expect(
-        approvePurchase({ orderId: held.order.id, payload, req: await reqFor(users.owner), tenantID: harness.tenantA.id, user: users.owner }),
+        approvePurchase({ options, orderId: held.order.id, payload, req: await reqFor(users.owner), tenantID: harness.tenantA.id, user: users.owner }),
       ).rejects.toSatisfy(refused('order_not_waiting'))
 
       const bought = await checkout(users.owner, { jobId: listing.id })
@@ -583,12 +609,92 @@ describe('checkout integration', () => {
     it('emits nothing an invoice adapter would invoice until the owner approves a purchase request @S-153', async () => {
       const held = await checkout(users.member, { jobId: (await job(orgs.brew)).id })
       expect(eventsFor(held.order.id)).toEqual(['created:waiting_for_purchase'])
-      await approvePurchase({ orderId: held.order.id, payload, req: await reqFor(users.owner), tenantID: harness.tenantA.id, user: users.owner })
+      await approvePurchase({ options, orderId: held.order.id, payload, req: await reqFor(users.owner), tenantID: harness.tenantA.id, user: users.owner })
       expect(eventsFor(held.order.id)).toEqual([
         'created:waiting_for_purchase',
         'statusChanged:waiting_for_purchase>pending',
         'statusChanged:pending>invoiced',
       ])
+    })
+
+    const outboxFor = async (orderID?: number | string) =>
+      (await payload.find({ collection: 'outbox' as never, pagination: false, ...system, ...(orderID === undefined ? {} : { where: { orderID: { equals: String(orderID) } } }) })).docs
+
+    it('tells adapters only after the transaction committed, and queues their durable work inside it @S-152', async () => {
+      const listing = await job(orgs.brew)
+      const result = await checkout(users.owner, { jobId: listing.id })
+      // When each handler ran, the order was already committed in its final state.
+      expect(orderEvents.filter((event) => String(event.orderID) === String(result.order.id)).map((event) => event.committed)).toEqual([
+        'invoiced',
+        'invoiced',
+      ])
+      expect(await outboxFor(result.order.id)).toHaveLength(1)
+    })
+
+    it('leaves no event and no queued work when checkout fails after writing its order @S-152', async () => {
+      const listing = await job(orgs.brew)
+      const before = (await outboxFor()).length
+      const eventsBefore = orderEvents.length
+      await expect(
+        checkoutJob({
+          input: { addOnIds: [], closeDate: null, couponCode: null, jobId: listing.id, planId: plans.regular.id, useCredit: false },
+          options: { registry: failingRegistry() },
+          payload,
+          req: await reqFor(users.owner),
+          tenantID: harness.tenantA.id,
+          user: users.owner,
+        }),
+      ).rejects.toSatisfy(refused('payment_failed'))
+
+      expect(await ordersOf(listing.id)).toHaveLength(0)
+      expect((await read('jobs', listing.id)).status).toBe('draft')
+      expect(orderEvents.length).toBe(eventsBefore)
+      expect((await outboxFor()).length).toBe(before)
+    })
+
+    it('leaves no event and no queued work when an approval fails after moving the order on @S-153', async () => {
+      const held = await checkout(users.member, { jobId: (await job(orgs.brew)).id })
+      const queued = (await outboxFor(held.order.id)).length
+      await expect(
+        approvePurchase({ options: { registry: failingRegistry() }, orderId: held.order.id, payload, req: await reqFor(users.owner), tenantID: harness.tenantA.id, user: users.owner }),
+      ).rejects.toSatisfy(refused('payment_failed'))
+
+      expect((await read('orders', held.order.id as number)).status).toBe('waiting_for_purchase')
+      expect(eventsFor(held.order.id)).toEqual(['created:waiting_for_purchase'])
+      expect((await outboxFor(held.order.id)).length).toBe(queued)
+    })
+
+    it('refuses an approval whose coupon was used up meanwhile, before writing anything @S-153', async () => {
+      await payload.create({ collection: 'coupons', data: { amount: 100, code: 'LAST', discountType: 'flat', maxUses: 1, tenant: harness.tenantA.id }, ...system })
+      const held = await checkout(users.member, { couponCode: 'LAST', jobId: (await job(orgs.brew)).id })
+      // Another organisation takes the last use before the owner answers.
+      await checkout(users.stranger, { couponCode: 'LAST', jobId: (await job(orgs.bank)).id })
+
+      await expect(
+        approvePurchase({ options, orderId: held.order.id, payload, req: await reqFor(users.owner), tenantID: harness.tenantA.id, user: users.owner }),
+      ).rejects.toSatisfy((error) => error instanceof CheckoutError && error.code === 'coupon_unavailable' && /Decline this request/.test(error.message))
+      expect((await read('orders', held.order.id as number)).status).toBe('waiting_for_purchase')
+      expect(eventsFor(held.order.id)).toEqual(['created:waiting_for_purchase'])
+
+      // The way out works: decline, then check out again at today's price.
+      await declinePurchase({ options, orderId: held.order.id, payload, req: await reqFor(users.owner), tenantID: harness.tenantA.id, user: users.owner })
+    })
+
+    it('refuses an approval whose credit was spent meanwhile @S-153', async () => {
+      const organisation = await org(harness.tenantA.id, 'Spentco')
+      const member = await makeUser('spent-member', [{ role: 'employer', tenant: harness.tenantA.id }], { organisation: organisation.id, organisationRole: 'member' })
+      const owner = await makeUser('spent-owner', [{ role: 'employer', tenant: harness.tenantA.id }], { organisation: organisation.id, organisationRole: 'owner' })
+      await giveCredits(organisation, 1)
+      // Credit for the plan, the add-on to be invoiced: the member must wait for the owner.
+      const held = await checkout(member, { addOnIds: [enhanced.id], jobId: (await job(organisation)).id, useCredit: true })
+      expect(held.waitingForPurchase).toBe(true)
+      await checkout(owner, { jobId: (await job(organisation)).id, useCredit: true })
+
+      await expect(
+        approvePurchase({ options, orderId: held.order.id, payload, req: await reqFor(owner), tenantID: harness.tenantA.id, user: owner }),
+      ).rejects.toSatisfy(refused('insufficient_credits'))
+      expect((await read('orders', held.order.id as number)).status).toBe('waiting_for_purchase')
+      expect(await balanceFor({ organisation: organisation.id, payload })).toBe(0)
     })
 
     it('reports free and credit orders as paid @S-152', async () => {
@@ -598,7 +704,7 @@ describe('checkout integration', () => {
   })
 
   describe('account endpoints', () => {
-    const endpoints = accountCheckoutEndpoints()
+    const endpoints = accountCheckoutEndpoints({ registry })
     const endpoint = (path: string) => endpoints.find((entry) => entry.path === `/:slug/account/${path}`)!
 
     const call = async (path: string, body: unknown, { key = siteKeyA, routeParams = {}, user = users.owner as null | User } = {}) => {

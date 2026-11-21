@@ -1770,6 +1770,7 @@ stories:
     tests:
       - packages/payload-jobs/src/checkout.test.ts
       - packages/payload-jobs/src/checkout.integration.test.ts
+      - packages/payload-jobs-xero/src/xero-invoicing.integration.test.ts
 
   - id: S-153
     area: Commerce
