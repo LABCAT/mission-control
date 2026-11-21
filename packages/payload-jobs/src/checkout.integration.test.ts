@@ -24,9 +24,12 @@ import {
   refuseDeleteWhileInCreditLedger,
 } from './credits'
 import { orderCollection, refuseDeleteWhileOrdered } from './orders'
+import { orderEventHook } from './plug-points/gate'
+import { createPayloadJobsRegistry } from './plug-points/payload-jobs-registry'
 import { planCollection, withPlanRestrictionGuards } from './plans'
 import { taxonomyCollections } from './taxonomies'
 import { generateSiteKey } from './site-keys'
+import { DEFAULT_PAYLOAD_JOBS_SLUGS } from './slugs'
 import { bootTestPayload, type TestHarness } from './test'
 
 type User = MissionControlUser & { collection: 'users'; email: string; id: number; role: 'user' }
@@ -42,9 +45,23 @@ const withHooks = (collection: CollectionConfig, hooks: { afterChange?: any[]; b
 })
 
 /** The ledger and orders first: the harness deletes in this order, and the guards keep referenced rows. */
+/** Order events as #96 (PJ-57) emits them, heard by a spy invoice-sync adapter. */
+const registry = createPayloadJobsRegistry({ settingsSlug: 'job-board-settings', slugs: DEFAULT_PAYLOAD_JOBS_SLUGS, tenancy: 'multi', tenantsSlug: 'tenants' })
+const orderEvents: { from?: string; kind: 'created' | 'statusChanged'; orderID: number | string; status: string }[] = []
+registry.invoiceSync.register({
+  key: 'spy',
+  label: 'Spy',
+  onOrderCreated: ({ orderID, status }) => {
+    orderEvents.push({ kind: 'created', orderID, status })
+  },
+  onOrderStatusChanged: ({ from, orderID, status }) => {
+    orderEvents.push({ from, kind: 'statusChanged', orderID, status })
+  },
+})
+
 const collections = (): CollectionConfig[] => [
   creditLedgerCollection(),
-  orderCollection(),
+  withHooks(orderCollection(), { afterChange: [orderEventHook(registry)] }),
   withHooks(jobsCollection({ richTextDescription: false, withOrder: true }), {
     afterChange: [refundCreditOnCancel()],
     beforeDelete: [refuseDeleteWhileInCreditLedger({ field: 'job', noun: 'job' }), refuseDeleteWhileOrdered({ field: 'jobs', noun: 'job' })],
@@ -548,6 +565,35 @@ describe('checkout integration', () => {
     it('refuses jobs that are no longer drafts or pending @S-152', async () => {
       const live = await job(orgs.brew, { status: 'published' })
       await expect(checkout(users.owner, { jobId: live.id })).rejects.toSatisfy(refused('job_not_checkoutable'))
+    })
+  })
+
+  describe('order events (PJ-57 invoice sync)', () => {
+    const eventsFor = (orderID: number | string) =>
+      orderEvents.filter((event) => String(event.orderID) === String(orderID)).map(({ from, kind, status }) => (from ? `${kind}:${from}>${status}` : `${kind}:${status}`))
+
+    it('emits created then invoiced once per checkout, and nothing on a repeat @S-152', async () => {
+      const listing = await job(orgs.brew)
+      const result = await checkout(users.owner, { jobId: listing.id })
+      expect(eventsFor(result.order.id)).toEqual(['created:pending', 'statusChanged:pending>invoiced'])
+      await checkout(users.owner, { jobId: listing.id })
+      expect(eventsFor(result.order.id)).toHaveLength(2)
+    })
+
+    it('emits nothing an invoice adapter would invoice until the owner approves a purchase request @S-153', async () => {
+      const held = await checkout(users.member, { jobId: (await job(orgs.brew)).id })
+      expect(eventsFor(held.order.id)).toEqual(['created:waiting_for_purchase'])
+      await approvePurchase({ orderId: held.order.id, payload, req: await reqFor(users.owner), tenantID: harness.tenantA.id, user: users.owner })
+      expect(eventsFor(held.order.id)).toEqual([
+        'created:waiting_for_purchase',
+        'statusChanged:waiting_for_purchase>pending',
+        'statusChanged:pending>invoiced',
+      ])
+    })
+
+    it('reports free and credit orders as paid @S-152', async () => {
+      const result = await checkout(users.member, { jobId: (await job(orgs.brew)).id, planId: plans.free.id })
+      expect(eventsFor(result.order.id)).toEqual(['created:pending', 'statusChanged:pending>paid'])
     })
   })
 
