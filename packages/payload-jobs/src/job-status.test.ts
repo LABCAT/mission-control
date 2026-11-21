@@ -88,6 +88,21 @@ describe('datesForTransition', () => {
     })
   })
 
+  it('keeps a close date chosen at checkout, clamped to the plan’s duration @S-031', () => {
+    const inTen = new Date(NOW.getTime() + 10 * DAY).toISOString()
+    const inSixty = new Date(NOW.getTime() + 60 * DAY).toISOString()
+    const past = new Date(NOW.getTime() - DAY).toISOString()
+    const publish = (expiresAt: string, from: 'draft' | 'expired' | 'pending' = 'pending') =>
+      datesForTransition({ durationDays: 30, expiresAt, from, now: NOW, to: 'published' }).expiresAt
+
+    expect(publish(inTen)).toBe(inTen)
+    expect(publish(inTen, 'draft')).toBe(inTen)
+    expect(publish(inSixty)).toBe(new Date(NOW.getTime() + 30 * DAY).toISOString())
+    expect(publish(past)).toBe(new Date(NOW.getTime() + 30 * DAY).toISOString())
+    // A relist starts afresh, whatever the old expiry was.
+    expect(publish(inTen, 'expired')).toBe(new Date(NOW.getTime() + 30 * DAY).toISOString())
+  })
+
   it('resets publishedAt on relist, and keeps the expiry for staff to set when there is no plan', () => {
     expect(
       datesForTransition({ expiresAt: '2026-01-01T00:00:00.000Z', from: 'expired', now: NOW, to: 'published' }),

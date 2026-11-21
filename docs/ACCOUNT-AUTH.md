@@ -86,3 +86,21 @@ Production uses the Cloudflare Rate Limiting binding `ACCOUNT_RATE_LIMIT` (`apps
 - `accountResponse` and `AccountAuthError` give the same JSON shape.
 
 PJ-29's `POST /api/tenants/:slug/employer-signup` is a **collection endpoint on `tenants`** with path `/:slug/employer-signup`: Payload sends `/api/tenants/*` to the collection's `endpoints`, not to the config root. Verification, login, `me`, logout and reset then work for employers through the endpoints above (`employer` is already in `accountRoles`).
+
+## Checkout (PJ-31)
+
+Code: `packages/payload-jobs/src/checkout.ts` (`checkoutJob`, `previewCheckout`, `approvePurchase`, `declinePurchase`). Same site key + bearer token contract as above; the user must be an employer of this tenant and of the job's organisation (anyone else gets `404 not_found`).
+
+| Action | Body | Success |
+| --- | --- | --- |
+| `checkout/quote` | `jobId`, `planId`, `addOnIds?`, `couponCode?`, `useCredit?` | `200 { quote, paymentMethod, needsApproval }`, nothing written |
+| `checkout` | as above, plus `closeDate?` (`YYYY-MM-DD`, tenant timezone) | `201 { created: true, order, job, credits, waitingForPurchase }`; a repeat of the same checkout answers `200` with `created: false` and the same order |
+| `orders/{id}/approve` | – | owner or site manager: `200` with the invoiced order |
+| `orders/{id}/decline` | – | owner or site manager: `200 { order }` (cancelled) |
+
+- **Prices are computed by the CMS** from the plan, add-ons, coupon, tax settings and credit balance. Amounts in the body are ignored.
+- **One order per listing.** A job whose order is still open is never charged again: a different checkout gets `409 already_checked_out` (with `orderId`). Cancel the order first to change it.
+- **Payment method**: `credit` when a credit pays it all, `free` at 0, otherwise `invoice`. A pack plan's credits go into the ledger and one pays for the job.
+- **Purchase rights**: owners and site managers buy. Members use credits unless the owner turned that off, and buy only when allowed (PJ-29's `useCredits` / `canBuy`, defaults on / off). A member who may not buy gets an order `waiting_for_purchase` for the owner to approve.
+- **Close date**: optional, after today and at most the plan's duration; without one the job runs the full duration. The job stays `pending`: publishing is PJ-32.
+- Errors: `invalid_request` (400), `pricing_error` (400, `pricing` = the `quote()` code), `coupon_invalid` (400, `reason`), `close_date_invalid` (400), `forbidden` (403), `not_found` (404), `already_checked_out`, `job_not_checkoutable`, `insufficient_credits`, `coupon_unavailable`, `order_not_waiting` (409), `payment_failed` (402).

@@ -73,7 +73,7 @@ describe('payloadJobs tenancy modes', () => {
     ).toBeUndefined()
   })
 
-  it('adds the account auth endpoints to the tenants collection in multi mode', async () => {
+  it('adds the account auth and checkout endpoints to the tenants collection in multi mode @S-151', async () => {
     const result = await payloadJobs({ tenancy: 'multi' })({
       collections: [tenants, users],
     } as unknown as Config)
@@ -91,6 +91,11 @@ describe('payloadJobs tenancy modes', () => {
       'post /:slug/account/reset-password',
       'post /:slug/account/register',
       'post /:slug/account/verify-email',
+      // Checkout for the /account dashboard (PJ-31).
+      'post /:slug/account/checkout/quote',
+      'post /:slug/account/checkout',
+      'post /:slug/account/orders/:id/approve',
+      'post /:slug/account/orders/:id/decline',
     ])
     // Payload routes /api/tenants/* to the collection's endpoints, so nothing goes at the root.
     expect(result.endpoints).toBeUndefined()
