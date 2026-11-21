@@ -50,7 +50,7 @@ import {
 import { slugRulesFor } from './slug-rules'
 import { removeTenantPages, seedTenantSystemPages } from './system-pages'
 import { taxonomyCollections } from './taxonomies'
-import { jobLifecycleHook } from './plug-points/gate'
+import { jobLifecycleHook, orderEventHook } from './plug-points/gate'
 import { createPayloadJobsRegistry } from './plug-points/payload-jobs-registry'
 import { jobBoardAddOnsField } from './plug-points/tenant-field'
 import { jobBoardSettingsGlobal, jobBoardTenantFields } from './tenancy'
@@ -646,7 +646,15 @@ export const payloadJobs =
           afterChange: [refundCreditOnCancel({ slug: slugs.creditLedger })],
         })
       : lifecycleJobs
-    const orders = features.credits ? withCreditLedger(baseOrders, 'order', 'order', slugs.creditLedger) : baseOrders
+    // Invoice-sync adapters hear about new orders and status changes (PJ-115, PJ-57).
+    const eventOrders: CollectionConfig = {
+      ...baseOrders,
+      hooks: {
+        ...baseOrders.hooks,
+        afterChange: [...(baseOrders.hooks?.afterChange ?? []), orderEventHook(registry)],
+      },
+    }
+    const orders = features.credits ? withCreditLedger(eventOrders, 'order', 'order', slugs.creditLedger) : eventOrders
     const creditLedger = features.credits
       ? [creditLedgerCollection({ access: collectionOptions.creditLedger?.access, slugs, tenantScoped: tenancy === 'multi', usersSlug })]
       : []

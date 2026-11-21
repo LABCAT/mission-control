@@ -62,18 +62,18 @@ export type SupportedTimezones =
   | 'Pacific/Fiji';
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "LexicalNodes_D124A330".
+ * via the `definition` "LexicalNodes_E31716F5".
  */
-export type LexicalNodes_D124A330 =
+export type LexicalNodes_E31716F5 =
   | SerializedTextNode
   | SerializedTabNode
   | SerializedLineBreakNode
-  | SerializedParagraphNode<LexicalNodes_D124A330>
+  | SerializedParagraphNode<LexicalNodes_E31716F5>
   | SerializedHorizontalRuleNode
   | SerializedUploadNode<'media'>
   | SerializedUploadNode<'documents'>
   | SerializedUploadNode<'application-files'>
-  | SerializedQuoteNode<LexicalNodes_D124A330>
+  | SerializedQuoteNode<LexicalNodes_E31716F5>
   | SerializedRelationshipNode<
       | 'users'
       | 'folders'
@@ -95,17 +95,19 @@ export type LexicalNodes_D124A330 =
       | 'orders'
       | 'credit-ledger'
       | 'alert-subscriptions'
+      | 'xero-settings'
+      | 'xero-invoices'
       | 'payload-kv'
       | 'payload-jobs'
       | 'payload-locked-documents'
       | 'payload-preferences'
       | 'payload-migrations'
     >
-  | SerializedAutoLinkNode<LexicalNodes_D124A330, LexicalLinkFields>
-  | SerializedLinkNode<LexicalNodes_D124A330, LexicalLinkFields>
-  | SerializedListNode<LexicalNodes_D124A330>
-  | SerializedListItemNode<LexicalNodes_D124A330>
-  | SerializedHeadingNode<LexicalNodes_D124A330>;
+  | SerializedAutoLinkNode<LexicalNodes_E31716F5, LexicalLinkFields>
+  | SerializedLinkNode<LexicalNodes_E31716F5, LexicalLinkFields>
+  | SerializedListNode<LexicalNodes_E31716F5>
+  | SerializedListItemNode<LexicalNodes_E31716F5>
+  | SerializedHeadingNode<LexicalNodes_E31716F5>;
 /**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "LexicalNodes_3DE324E4".
@@ -156,6 +158,8 @@ export interface Config {
     orders: Order;
     'credit-ledger': CreditLedger;
     'alert-subscriptions': AlertSubscription;
+    'xero-settings': XeroSetting;
+    'xero-invoices': XeroInvoice;
     'payload-kv': PayloadKv;
     'payload-jobs': PayloadJob;
     'payload-locked-documents': PayloadLockedDocument;
@@ -188,6 +192,8 @@ export interface Config {
     orders: OrdersSelect<false> | OrdersSelect<true>;
     'credit-ledger': CreditLedgerSelect<false> | CreditLedgerSelect<true>;
     'alert-subscriptions': AlertSubscriptionsSelect<false> | AlertSubscriptionsSelect<true>;
+    'xero-settings': XeroSettingsSelect<false> | XeroSettingsSelect<true>;
+    'xero-invoices': XeroInvoicesSelect<false> | XeroInvoicesSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-jobs': PayloadJobsSelect<false> | PayloadJobsSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
@@ -220,6 +226,7 @@ export interface Config {
     tasks: {
       heartbeat: TaskHeartbeat;
       'expire-job-placements': TaskExpireJobPlacements;
+      'xero-invoice-sync': TaskXeroInvoiceSync;
       inline: {
         input: unknown;
         output: unknown;
@@ -766,7 +773,7 @@ export interface FeatureBoxesBlock {
  */
 export interface RichTextBlock {
   heading?: string | null;
-  content: LexicalRichText<LexicalNodes_D124A330>;
+  content: LexicalRichText<LexicalNodes_E31716F5>;
   id?: string | null;
   blockName?: string | null;
   blockType: 'rich-text';
@@ -821,7 +828,7 @@ export interface FaqBlock {
   heading?: string | null;
   items: {
     question: string;
-    answer: LexicalRichText<LexicalNodes_D124A330>;
+    answer: LexicalRichText<LexicalNodes_E31716F5>;
     id?: string | null;
   }[];
   id?: string | null;
@@ -1320,7 +1327,7 @@ export interface Job {
   publishedAt?: string | null;
   expiresAt?: string | null;
   organisation: number | Organisation;
-  description?: LexicalRichText<LexicalNodes_D124A330> | null;
+  description?: LexicalRichText<LexicalNodes_E31716F5> | null;
   jobType?: (number | null) | JobType;
   categories?: (number | JobCategory)[] | null;
   salaryBand?: (number | null) | SalaryBand;
@@ -1759,6 +1766,130 @@ export interface AlertSubscription {
   createdAt: string;
 }
 /**
+ * Xero accounting settings. Tokens are stored encrypted, never here in plain text.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "xero-settings".
+ */
+export interface XeroSetting {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  /**
+   * The Xero organisation (tenant) ID. Set when Xero is connected.
+   */
+  xeroTenantId?: string | null;
+  accountCodes?: {
+    /**
+     * Sales account code for plan line items.
+     */
+    plan?: string | null;
+    /**
+     * Sales account code for add-on line items.
+     */
+    addOn?: string | null;
+    /**
+     * Account code for discount line items.
+     */
+    discount?: string | null;
+  };
+  invoicing?: {
+    /**
+     * Approve invoices in Xero once the sale is confirmed. Off: invoices stay drafts for you to approve in Xero.
+     */
+    authorise?: boolean | null;
+  };
+  /**
+   * Xero branding theme ID for invoices.
+   */
+  brandingThemeId?: string | null;
+  /**
+   * Days from invoice date until payment is due.
+   */
+  dueDays?: number | null;
+  /**
+   * Bank account code used when reconciling payments.
+   */
+  reconciliationAccountCode?: string | null;
+  trackingCategory?: {
+    /**
+     * Xero tracking category name.
+     */
+    name?: string | null;
+    /**
+     * Tracking option applied to invoices.
+     */
+    option?: string | null;
+  };
+  /**
+   * When Xero was last connected. Set by the callback.
+   */
+  connectedAt?: string | null;
+  tokens?: {
+    accessToken?: string | null;
+    expiresAt?: string | null;
+    refreshToken?: string | null;
+    scope?: string | null;
+    refreshLockToken?: string | null;
+    refreshLockedUntil?: number | null;
+  };
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * One row per invoiced document: the Xero invoice, and the last sync error. Written by the sync.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "xero-invoices".
+ */
+export interface XeroInvoice {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  /**
+   * Source collection.
+   */
+  source: string;
+  sourceId: string;
+  reference?: string | null;
+  /**
+   * Xero InvoiceID.
+   */
+  invoiceId?: string | null;
+  invoiceNumber?: string | null;
+  /**
+   * Xero invoice status.
+   */
+  status?: string | null;
+  onlineUrl?: string | null;
+  /**
+   * Failed attempts since the last success.
+   */
+  attempts?: number | null;
+  lastError?: string | null;
+  lastAttemptAt?: string | null;
+  lease?: {
+    token?: string | null;
+    until?: number | null;
+  };
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv".
  */
@@ -1836,7 +1967,7 @@ export interface PayloadJob {
     | {
         executedAt: string;
         completedAt: string;
-        taskSlug: 'inline' | 'heartbeat' | 'expire-job-placements';
+        taskSlug: 'inline' | 'heartbeat' | 'expire-job-placements' | 'xero-invoice-sync';
         taskID: string;
         input:
           | {
@@ -1867,13 +1998,13 @@ export interface PayloadJob {
           | boolean
           | null;
         parent?: {
-          taskSlug?: ('inline' | 'heartbeat' | 'expire-job-placements') | null;
+          taskSlug?: ('inline' | 'heartbeat' | 'expire-job-placements' | 'xero-invoice-sync') | null;
           taskID?: string | null;
         };
         id?: string | null;
       }[]
     | null;
-  taskSlug?: ('inline' | 'heartbeat' | 'expire-job-placements') | null;
+  taskSlug?: ('inline' | 'heartbeat' | 'expire-job-placements' | 'xero-invoice-sync') | null;
   queue?: string | null;
   waitUntil?: string | null;
   processingUntil?: string | null;
@@ -1983,6 +2114,14 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'alert-subscriptions';
         value: number | AlertSubscription;
+      } | null)
+    | ({
+        relationTo: 'xero-settings';
+        value: number | XeroSetting;
+      } | null)
+    | ({
+        relationTo: 'xero-invoices';
+        value: number | XeroInvoice;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -2827,6 +2966,77 @@ export interface AlertSubscriptionsSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "xero-settings_select".
+ */
+export interface XeroSettingsSelect<T extends boolean = true> {
+  tenant?: T;
+  xeroTenantId?: T;
+  accountCodes?:
+    | T
+    | {
+        plan?: T;
+        addOn?: T;
+        discount?: T;
+      };
+  invoicing?:
+    | T
+    | {
+        authorise?: T;
+      };
+  brandingThemeId?: T;
+  dueDays?: T;
+  reconciliationAccountCode?: T;
+  trackingCategory?:
+    | T
+    | {
+        name?: T;
+        option?: T;
+      };
+  connectedAt?: T;
+  tokens?:
+    | T
+    | {
+        accessToken?: T;
+        expiresAt?: T;
+        refreshToken?: T;
+        scope?: T;
+        refreshLockToken?: T;
+        refreshLockedUntil?: T;
+      };
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "xero-invoices_select".
+ */
+export interface XeroInvoicesSelect<T extends boolean = true> {
+  tenant?: T;
+  source?: T;
+  sourceId?: T;
+  reference?: T;
+  invoiceId?: T;
+  invoiceNumber?: T;
+  status?: T;
+  onlineUrl?: T;
+  attempts?: T;
+  lastError?: T;
+  lastAttemptAt?: T;
+  lease?:
+    | T
+    | {
+        token?: T;
+        until?: T;
+      };
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv_select".
  */
 export interface PayloadKvSelect<T extends boolean = true> {
@@ -3031,7 +3241,9 @@ export interface CollectionQueryWidget {
       | 'applications'
       | 'orders'
       | 'credit-ledger'
-      | 'alert-subscriptions';
+      | 'alert-subscriptions'
+      | 'xero-settings'
+      | 'xero-invoices';
     where?:
       | {
           [k: string]: unknown;
@@ -3078,6 +3290,8 @@ export interface ActivityWidget {
           | 'orders'
           | 'credit-ledger'
           | 'alert-subscriptions'
+          | 'xero-settings'
+          | 'xero-invoices'
         )[]
       | null;
   };
@@ -3110,6 +3324,19 @@ export interface TaskExpireJobPlacements {
   output: {
     jobsUpdated?: number | null;
     placementsRemoved?: number | null;
+  };
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "TaskXero-invoice-sync".
+ */
+export interface TaskXeroInvoiceSync {
+  input: {
+    sourceId: string;
+  };
+  output: {
+    action?: string | null;
+    error?: string | null;
   };
 }
 /**

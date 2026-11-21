@@ -37,6 +37,9 @@ importers:
       '@mission-control/payload-jobs-reports':
         specifier: workspace:*
         version: link:../../packages/payload-jobs-reports
+      '@mission-control/payload-jobs-xero':
+        specifier: workspace:*
+        version: link:../../packages/payload-jobs-xero
       '@mission-control/payload-wp-import':
         specifier: workspace:*
         version: link:../../packages/payload-wp-import
@@ -293,6 +296,28 @@ importers:
       react:
         specifier: 19.3.1
         version: 19.3.1
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+
+  packages/payload-jobs-xero:
+    dependencies:
+      '@mission-control/payload-jobs':
+        specifier: workspace:*
+        version: link:../payload-jobs
+      '@mission-control/payload-xero':
+        specifier: workspace:*
+        version: link:../payload-xero
+    devDependencies:
+      '@payloadcms/db-postgres':
+        specifier: 4.0.0-beta.7
+        version: 4.0.0-beta.7(@opentelemetry/api@1.10.0)(mysql2@3.24.6(@types/node@24.12.3))(payload@4.0.0-beta.7(graphql@16.15.0)(typescript@6.0.3))
+      '@payloadcms/plugin-multi-tenant':
+        specifier: 4.0.0-beta.7
+        version: 4.0.0-beta.7(@payloadcms/ui@4.0.0-beta.7(monaco-editor@0.57.0)(payload@4.0.0-beta.7(graphql@16.15.0)(typescript@6.0.3))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@6.0.3))(payload@4.0.0-beta.7(graphql@16.15.0)(typescript@6.0.3))
+      payload:
+        specifier: 4.0.0-beta.7
+        version: 4.0.0-beta.7(graphql@16.15.0)(typescript@6.0.3)
       typescript:
         specifier: 6.0.3
         version: 6.0.3

@@ -171,7 +171,23 @@ export const buildXeroSettingsCollection = (options: XeroSettingsOptions = {}): 
         type: 'group',
         fields: [
           { name: 'plan', type: 'text', admin: { description: 'Sales account code for plan line items.' } },
+          { name: 'addOn', type: 'text', admin: { description: 'Sales account code for add-on line items.' } },
           { name: 'discount', type: 'text', admin: { description: 'Account code for discount line items.' } },
+        ],
+      },
+      {
+        name: 'invoicing',
+        type: 'group',
+        fields: [
+          {
+            name: 'authorise',
+            type: 'checkbox',
+            defaultValue: true,
+            admin: {
+              description:
+                'Approve invoices in Xero once the sale is confirmed. Off: invoices stay drafts for you to approve in Xero.',
+            },
+          },
         ],
       },
       { name: 'brandingThemeId', type: 'text', admin: { description: 'Xero branding theme ID for invoices.' } },
