@@ -223,10 +223,19 @@ export const clearLegacyHashOnPasswordSet: CollectionBeforeValidateHook = ({ dat
   return data
 }
 
-/** Adds the legacy hash field and the login hook to an auth collection. */
+/** The WordPress user id of an imported user, so a re-run of the import updates instead of duplicating. */
+export const legacyUserIdField: Field = {
+  name: 'legacyId',
+  type: 'number',
+  index: true,
+  access: { create: () => false, update: () => false },
+  admin: { hidden: true, position: 'sidebar' },
+}
+
+/** Adds the legacy hash and id fields and the login hook to an auth collection. */
 export const withLegacyPasswords = (collection: CollectionConfig): CollectionConfig => ({
   ...collection,
-  fields: [...collection.fields, legacyPasswordHashField],
+  fields: [...collection.fields, legacyPasswordHashField, legacyUserIdField],
   hooks: {
     ...collection.hooks,
     beforeValidate: [...(collection.hooks?.beforeValidate ?? []), clearLegacyHashOnPasswordSet],

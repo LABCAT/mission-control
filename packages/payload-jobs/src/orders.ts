@@ -163,15 +163,22 @@ export const ORDER_IMMUTABLE_FIELDS = [
 export const ORDER_SYSTEM_ONLY_FIELDS = ['organisation', 'paymentProvider', 'legacyId'] as const
 
 /**
- * Whether `user` owns `organisationID`. Organisations have no owner role yet (PJ-29 adds the
- * owner and members); until a host passes this, no one is an owner and site managers answer
- * purchase requests.
+ * Whether `user` owns `organisationID`. The plugin uses `isOrganisationOwnerByRole`
+ * (`users.organisationRole`, PJ-62) unless the host passes its own. Without one, no one is an
+ * owner and site managers answer purchase requests.
  */
 export type OrganisationOwnerCheck = (args: {
   organisationID: number | string
   req: PayloadRequest
   user: MissionControlUser
 }) => boolean | Promise<boolean>
+
+/**
+ * The default owner check: the user's `organisationRole` (PJ-62) is `owner`. `orderActorFor`
+ * already requires the user to be a member of the order's organisation in its tenant.
+ */
+export const isOrganisationOwnerByRole: OrganisationOwnerCheck = ({ user }) =>
+  (user as MissionControlUser & { organisationRole?: null | string }).organisationRole === 'owner'
 
 const userOf = (req: PayloadRequest): MissionControlUser | null =>
   (req.user as MissionControlUser | null | undefined) ?? null

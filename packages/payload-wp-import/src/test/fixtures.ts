@@ -147,9 +147,104 @@ export const createFixtureConnection = (
         })
 
       let rows = source.filter((row) => tests.every((test) => test(row)))
-      if (orderKey) rows = rows.toSorted((a, b) => (a[orderKey] as number) - (b[orderKey] as number))
+      if (orderKey) rows = [...rows].sort((a, b) => (a[orderKey] as number) - (b[orderKey] as number))
       if (limit) rows = rows.slice(0, Number(limit))
       return [rows.map((row) => ({ ...row }))]
     },
   }
+}
+
+const caps = (...roles: string[]): string =>
+  `a:${roles.length}:{${roles.map((role) => `s:${role.length}:"${role}";b:1;`).join('')}}`
+
+let metaId = 0
+const meta = (user_id: number, meta_key: string, meta_value: string): Row => ({
+  meta_key,
+  meta_value,
+  umeta_id: ++metaId,
+  user_id,
+})
+
+/**
+ * Made-up legacy users (PJ-62). "Today" in the tests is 2026-11-20, so the three-year login
+ * boundary is 2023-11-20 00:00:00 and the job/order cut-off is 2022-01-01.
+ */
+export const userTables: Record<string, Row[]> = {
+  wp_users: [
+    { ID: 1, display_name: 'Site Admin', user_email: 'admin@example.com', user_pass: '$P$Badmin', user_url: '' },
+    { ID: 2, display_name: 'Pat Lister', user_email: 'Pat@Example.com', user_pass: '$P$Bpat', user_url: 'example-resort.test' },
+    { ID: 3, display_name: 'Sam Second', user_email: 'sam@example.com', user_pass: '$P$Bsam', user_url: '' },
+    { ID: 4, display_name: 'Old Lister', user_email: 'old@example.com', user_pass: '$P$Bold', user_url: '' },
+    { ID: 5, display_name: 'Seeker One', user_email: 'seeker1@example.com', user_pass: '$P$Bs1', user_url: '' },
+    { ID: 6, display_name: 'Charter Owner', user_email: 'charter@example.com', user_pass: '$P$Bch', user_url: '' },
+    { ID: 7, display_name: 'Alert Seeker', user_email: 'alert@example.com', user_pass: '$P$Bal', user_url: '' },
+    { ID: 8, display_name: 'Boundary In', user_email: 'in@example.com', user_pass: '$P$Bin', user_url: '' },
+    { ID: 9, display_name: 'Boundary Out', user_email: 'out@example.com', user_pass: '$P$Bout', user_url: '' },
+    { ID: 10, display_name: '', user_email: 'noname@example.com', user_pass: '$P$Bnn', user_url: '' },
+    { ID: 11, display_name: 'Subscriber', user_email: 'sub@example.com', user_pass: '$P$Bsub', user_url: '' },
+    { ID: 12, display_name: 'Bad Email', user_email: 'not-an-email', user_pass: '$P$Bbad', user_url: '' },
+    { ID: 13, display_name: 'Recruiter', user_email: 'recruit@example.com', user_pass: '$P$Brec', user_url: '' },
+  ],
+  wp_usermeta: [
+    meta(1, 'wp_capabilities', caps('administrator')),
+    meta(2, 'wp_capabilities', caps('job_lister')),
+    meta(2, 'last_login', '2026-01-10 08:00:00'),
+    meta(2, 'nickname', 'Example Resort Ltd'),
+    meta(2, 'organisation_type', 'Business'),
+    meta(2, 'organisation_size', '11-50'),
+    meta(2, 'description', '<p>Beach &amp; bungalows</p>'),
+    meta(2, 'area_code', '678'),
+    meta(2, 'phone_number', '555 0100'),
+    meta(2, 'twitter_id', 'https://x.com/example'),
+    meta(2, 'enable_organisations_page', '1'),
+    meta(2, 'listing_request', '1'),
+    // A present row with an empty value is trusted: query 24 shows all 79 with a blank value.
+    meta(2, 'can_pay_by_bank_transfer', ''),
+    meta(2, 'can_pay_by_bank_transfer_billing_email', 'Billing@Example.com'),
+    meta(2, 'xero_contact_code', 'XC-100'),
+    meta(2, 'first_name', 'Pat'),
+    meta(2, 'last_name', 'Lister'),
+    meta(2, 'wp_user_level', '0'),
+    meta(3, 'wp_capabilities', caps('job_lister', 'upload_files')),
+    meta(3, 'last_login', '2025-06-01 12:00:00'),
+    meta(3, 'nickname', 'example  resort ltd.'),
+    meta(3, 'phone_number', '555 0199'),
+    meta(4, 'wp_capabilities', caps('job_lister')),
+    meta(4, 'last_login', '2019-05-05 00:00:00'),
+    meta(4, 'nickname', 'Long Gone Co'),
+    meta(5, 'wp_capabilities', caps('job_seeker')),
+    meta(5, 'last_login', '2026-02-02 10:00:00'),
+    meta(5, 'confirmation_key', 'abc123'),
+    meta(6, 'wp_capabilities', caps('job_lister')),
+    meta(6, 'nickname', 'Sample Charters'),
+    meta(6, 'organisation_size', '1'),
+    meta(7, 'wp_capabilities', caps('job_seeker')),
+    meta(7, 'jr_alert_status', 'active'),
+    meta(7, 'confirmation_key', 'def456'),
+    meta(8, 'wp_capabilities', caps('job_lister')),
+    meta(8, 'last_login', '2023-11-20 00:00:00'),
+    meta(8, 'nickname', 'Boundary Co'),
+    meta(9, 'wp_capabilities', caps('job_lister')),
+    meta(9, 'last_login', '2023-11-19 23:59:59'),
+    meta(9, 'nickname', 'Boundary Out Co'),
+    meta(10, 'wp_capabilities', caps('job_lister')),
+    meta(10, 'last_login', '2026-03-03 00:00:00'),
+    meta(11, 'wp_capabilities', caps('subscriber')),
+    meta(11, 'last_login', '2026-03-03 00:00:00'),
+    meta(12, 'wp_capabilities', caps('job_lister')),
+    meta(12, 'last_login', '2026-03-03 00:00:00'),
+    meta(12, 'nickname', 'Bad Email Co'),
+    meta(13, 'wp_capabilities', caps('recruiter')),
+    meta(13, 'last_login', '2026-03-03 00:00:00'),
+    meta(13, 'nickname', 'Pacific Staffing'),
+    // Never read: applications, CVs and addresses are out of scope.
+    meta(2, 'user_IP', '203.0.113.9'),
+    meta(2, 'career_status', 'seeking'),
+  ],
+  wp_posts: [
+    { ID: 901, post_type: 'job_listing', post_status: 'publish', post_author: 6, post_date: '2022-03-01 10:00:00' },
+    { ID: 902, post_type: 'transaction', post_status: 'tr_pending', post_author: 9, post_date: '2021-12-31 23:59:59' },
+    { ID: 903, post_type: 'job_listing', post_status: 'expired', post_author: 4, post_date: '2021-05-01 00:00:00' },
+    { ID: 904, post_type: 'page', post_status: 'publish', post_author: 4, post_date: '2025-05-01 00:00:00' },
+  ],
 }

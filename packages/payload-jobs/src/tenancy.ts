@@ -188,6 +188,16 @@ export const jobBoardTenantFields: Field[] = [
       description: 'Whether new jobs need an admin’s approval before they go live.',
     },
   },
+  // Applying (PJ-25, decided 20 Nov). Generic default: guests may apply. vwok turns it on.
+  {
+    name: 'accountRequiredToApply',
+    type: 'checkbox',
+    defaultValue: false,
+    admin: {
+      condition: showForSiteTenant,
+      description: 'When on, only signed-in accounts can apply to a job. Off: guests can apply with an email address.',
+    },
+  },
   {
     name: 'emailFromName',
     type: 'text',

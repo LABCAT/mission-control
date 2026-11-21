@@ -758,7 +758,8 @@ stories:
       - applications.dashboard
     mvp: true
     status: planned
-    tests: []
+    tests:
+      - packages/payload-jobs/src/collections/applications.test.ts
 
   - id: S-053
     area: Applications
@@ -1843,15 +1844,18 @@ stories:
   - id: S-130
     area: Import and cutover
     role: super admin
-    story: "The importer brings the users and organisations that qualify, with password hashes and org fields."
+    story: "The importer brings the users and organisations that qualify, with password hashes and org fields; merged duplicates share one organisation owned by its first employer."
     steps:
-      - "Run the import and check a migrated employer and seeker."
-    expected: "Only users matching the last-login rule import, WordPress hashes survive, and organisations keep type, logo, trusted flag and Xero code."
+      - "Run the import with --dry-run and read the kept and skipped counts."
+      - "Run the import and check a migrated employer, a seeker and a merged organisation."
+    expected: "Only users matching the active rule import (login in the last 3 years, a job or order since 2022, an alert, or an admin), WordPress hashes survive, and organisations keep type, size, trusted flag, billing email, page visibility and Xero code. Logos come with the media import."
     settings:
       - import.users
     mvp: true
-    status: planned
-    tests: []
+    status: built
+    tests:
+      - packages/payload-wp-import/src/importers/users.test.ts
+      - apps/cms/src/wp-import-users.test.ts
 
   - id: S-131
     area: Import and cutover
@@ -2029,3 +2033,36 @@ stories:
     mvp: true
     status: planned
     tests: []
+
+  - id: S-144
+    area: Admin
+    role: site manager
+    story: "Every site starts with Home, About, Contact and Organisations, which a site manager can edit and unpublish but not delete."
+    steps:
+      - "Create a site and open its pages."
+      - "Rename the About page, unpublish Contact, then try to delete Organisations."
+    expected: "The four system pages exist and are published with an empty layout, URLs follow their role (home at /, organisations reserving /organisations/*), deleting one is refused with a message to unpublish, and only a super admin can change a role."
+    settings:
+      - pages.system
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/collections/pages.integration.test.ts
+      - packages/payload-jobs/src/system-pages.test.ts
+      - packages/payload-jobs/src/collections/pages-rules.test.ts
+
+  - id: S-145
+    area: Admin
+    role: site manager
+    story: "A site manager keeps one menu per location (top, primary, footer) with its links in a chosen order."
+    steps:
+      - "Add the primary menu with three items, reorder them, then add a footer menu."
+      - "Try a page item from another site, a second primary menu and a menu item with no link."
+    expected: "Items keep the order the site manager set, each location exists once per site, page items may only point at the site's own pages, and an unsafe or empty link is refused."
+    settings:
+      - site.menus
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/collections/pages.integration.test.ts
+      - packages/payload-jobs/src/collections/pages-rules.test.ts

@@ -125,8 +125,9 @@ organisation's orders, tenant admins change them, and nobody deletes one, or a t
 organisation or job an order points at.
 
 Core registers the `invoice` provider. A payment add-on registers its own, and an order may only
-name a registered one. Organisations have no owner role yet; pass `isOrganisationOwner` so an
-owner can answer a member's purchase request (`waiting_for_purchase` → `pending` or `cancelled`):
+name a registered one. An owner (by default a user whose `organisationRole` is `owner`) can answer
+a member's purchase request (`waiting_for_purchase` → `pending` or `cancelled`); pass
+`isOrganisationOwner` to decide ownership another way:
 
 ```ts
 payloadJobs({

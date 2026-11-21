@@ -23,8 +23,10 @@ export type PayloadJobsCollectionKey =
   | 'jobs'
   | 'jobTypes'
   | 'locations'
+  | 'menus'
   | 'orders'
   | 'organisations'
+  | 'pages'
   | 'plans'
   | 'salaryBands'
 
@@ -48,8 +50,10 @@ export const DEFAULT_PAYLOAD_JOBS_SLUGS: PayloadJobsCollectionSlugs = {
   jobs: 'jobs',
   jobTypes: 'job-types',
   locations: 'locations',
+  menus: 'menus',
   orders: 'orders',
   organisations: 'organisations',
+  pages: 'pages',
   plans: 'plans',
   salaryBands: 'salary-bands',
 }

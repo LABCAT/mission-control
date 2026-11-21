@@ -779,6 +779,29 @@ export const organisationField = (
   },
 })
 
+/**
+ * What the user is inside their organisation. The first employer of an imported organisation is
+ * its owner; PJ-29 builds invites and the owner/member permissions on top of this field.
+ * Staff-only to change, like `organisation`.
+ */
+export const organisationRoleField = (): Field => ({
+  name: 'organisationRole',
+  type: 'select',
+  options: [
+    { label: 'Owner', value: 'owner' },
+    { label: 'Member', value: 'member' },
+  ],
+  access: {
+    create: organisationAdminFieldAccess(false),
+    update: organisationAdminFieldAccess(false),
+  },
+  admin: {
+    condition: (data) => Boolean(data?.organisation),
+    description: 'Owners manage billing, the profile and members.',
+    position: 'sidebar',
+  },
+})
+
 /** Add `organisation` to a users collection, keeping everything else as it was. */
 export const withOrganisationField = (
   collection: CollectionConfig,
@@ -792,6 +815,10 @@ export const withOrganisationField = (
 
   return {
     ...collection,
-    fields: [...collection.fields, organisationField(tenantScoped, collectionSlug)],
+    fields: [
+      ...collection.fields,
+      organisationField(tenantScoped, collectionSlug),
+      organisationRoleField(),
+    ],
   }
 }

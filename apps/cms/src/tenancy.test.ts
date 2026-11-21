@@ -8,6 +8,7 @@ import {
   PAYLOAD_JOBS_TENANT_COLLECTIONS,
   payloadJobs,
   removeTenantAlertSubscriptions,
+  resolvePayloadJobsSlugs,
   type MissionControlUser,
 } from '@mission-control/payload-jobs'
 
@@ -23,7 +24,8 @@ import {
   usersReadAccess,
   usersUpdateAccess,
 } from './collections/Users'
-import { multiTenantOptions } from './tenancy'
+import { siteKeyAllowedCollections } from './site-keys'
+import { multiTenantOptions, multiTenantOptionsFor } from './tenancy'
 
 type TestUser = MissionControlUser & { collection: 'users' }
 
@@ -693,16 +695,18 @@ describe('orders', () => {
     expect(await read({ req, slug: 'orders' })).toBe(false)
   })
 
-  it('refuses to delete a tenant that has orders before anything else runs @S-144', async () => {
+  it('refuses to delete a tenant that has orders before the plugin removes anything @S-144', async () => {
     const config = await buildConfig()
     const tenants = config.collections?.find((collection) => collection.slug === 'tenants')
-    const [first] = tenants?.hooks?.beforeDelete ?? []
+    // The app's own two hooks run first (the delete's transaction rolls them back); the order
+    // guard comes next, before the plugin's clean-ups.
+    const guard = tenants?.hooks?.beforeDelete?.[2]
     const count = async () => ({ totalDocs: 2 })
     const req = { payload: { collections: { orders: {} }, count } }
 
     await expect(
-      (first as (args: unknown) => Promise<void>)({ collection: { slug: 'tenants' }, id: 1, req }),
-    ).rejects.toThrow()
+      (guard as (args: unknown) => Promise<void>)({ collection: { slug: 'tenants' }, id: 1, req }),
+    ).rejects.toMatchObject({ data: { errors: [expect.objectContaining({ message: expect.stringMatching(/kept for accounting/) })] } })
   })
 })
 
@@ -756,6 +760,85 @@ describe('credential updates', () => {
         req: requestFor(superAdmin),
       }),
     ).resolves.toEqual({ email: 'new@example.com', password: 'new-password' })
+  })
+})
+
+describe('renamed collection slugs (PJ-80)', () => {
+  const collections = {
+    jobCategories: { slug: 'categories' },
+    menus: { slug: 'nav-menus' },
+    pages: { slug: 'content-pages' },
+  }
+  const slugs = resolvePayloadJobsSlugs(collections)
+
+  const buildRenamedConfig = async (): Promise<Config> => {
+    const withJobs = await payloadJobs({ collections, tenancy: 'multi' })({
+      admin: { user: 'users' },
+      collections: [Users, Media, Folders, Tags, Tenants, Documents],
+    } as Config)
+
+    return (await multiTenantPlugin(multiTenantOptionsFor(slugs))(withJobs)) as Config
+  }
+
+  it('registers the multi-tenant overrides under the renamed slugs, not the defaults', async () => {
+    const config = await buildRenamedConfig()
+
+    expect(config.collections?.some((collection) => collection.slug === 'content-pages')).toBe(
+      true,
+    )
+    expect(
+      await collectionAccess(config, 'read', 'content-pages', tenantAdminA),
+    ).toEqual({ tenant: { in: [tenantA.id] } })
+    expect(multiTenantOptionsFor(slugs).collections).not.toHaveProperty('pages')
+    expect(multiTenantOptionsFor(slugs).collections).not.toHaveProperty('menus')
+  })
+
+  it('lets a site key read a renamed page and menu collection, and refuses the old names', async () => {
+    const config = await buildRenamedConfig()
+    const req = await siteKeyRequest({ key: 'sk_tenant', tenant: tenantA.id })
+
+    expect(await collectionAccessWithReq(config, 'read', 'content-pages', req)).toEqual({
+      tenant: { equals: tenantA.id },
+    })
+    expect(await collectionAccessWithReq(config, 'read', 'nav-menus', req)).toEqual({
+      tenant: { equals: tenantA.id },
+    })
+    expect(
+      siteKeyAllowedCollections(slugs),
+    ).toEqual(expect.arrayContaining(['content-pages', 'nav-menus', 'categories']))
+    expect(siteKeyAllowedCollections(slugs)).not.toContain('pages')
+  })
+
+  it('scopes and seeds a renamed pages collection', async () => {
+    const config = await buildRenamedConfig()
+    const pages = config.collections?.find((collection) => collection.slug === 'content-pages')
+    const tenant = config.collections?.find((collection) => collection.slug === 'tenants')
+    const afterChange = tenant?.hooks?.afterChange?.[0]
+
+    expect(pages?.fields.some((field) => 'name' in field && field.name === 'tenant')).toBe(true)
+    expect(afterChange).toBeDefined()
+
+    const created: { collection: string }[] = []
+    await runHook(afterChange as (args: unknown) => unknown, {
+      doc: { id: 7, slug: 'new-site' },
+      operation: 'create',
+      req: {
+        payload: {
+          create: async (args: { collection: string }) => {
+            created.push(args)
+            return { id: created.length }
+          },
+          find: async () => ({ docs: [] }),
+        },
+      },
+    })
+
+    expect(created.map((args) => args.collection)).toEqual([
+      'content-pages',
+      'content-pages',
+      'content-pages',
+      'content-pages',
+    ])
   })
 })
 
@@ -816,10 +899,9 @@ describe('tenant deletion', () => {
     const config = await buildConfig()
     const tenants = config.collections?.find((collection) => collection.slug === 'tenants')
 
-    // The plugin's order guard runs first, so a tenant with orders is refused before anything is
-    // removed (PJ-23). The app's own hooks run next; the plugin appends the subscription cleanup,
-    // so a subscriber's address and tokens cannot outlive the tenant as an orphaned row.
-    expect(tenants?.hooks?.beforeDelete?.slice(1, 3)).toEqual([
+    // The app's own hooks still run first; the plugin appends the subscription cleanup, so a
+    // subscriber's address and tokens cannot outlive the tenant as an orphaned row.
+    expect(tenants?.hooks?.beforeDelete?.slice(0, 2)).toEqual([
       removeTenantMemberships,
       removeTenantSiteKeys,
     ])

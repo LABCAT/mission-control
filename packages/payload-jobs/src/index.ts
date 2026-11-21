@@ -21,8 +21,22 @@ import { couponCollection, removeTenantCouponsFor, removeTenantCoupons } from '.
 import { withLegacyPasswords } from './legacy-password'
 import { tenantLocationSettings, type TenantLocationSource } from './location-settings'
 import { addOnCollection } from './add-ons'
+import {
+  APPLICATION_FILES_SLUG,
+  APPLICATIONS_SLUG,
+  applicationFilesCollection,
+  applicationsCollection,
+  blockDeleteWhileReferencedByApplications,
+} from './collections/applications'
 import { jobsCollection } from './collections/jobs'
-import { orderCollection, refuseDeleteWhileOrdered, type OrganisationOwnerCheck } from './orders'
+import { menusCollection, removeTenantMenus } from './collections/menus'
+import { pagesCollection } from './collections/pages'
+import {
+  isOrganisationOwnerByRole,
+  orderCollection,
+  refuseDeleteWhileOrdered,
+  type OrganisationOwnerCheck,
+} from './orders'
 import { resolvePaymentProviders, type PaymentProviderDefinition } from './payment-providers'
 import { expireJobPlacementsTask, PLACEMENTS_FIELD } from './placements'
 import { planCollection, withPlanRestrictionGuards } from './plans'
@@ -33,6 +47,7 @@ import {
   type PayloadJobsCollectionsOptions,
 } from './slugs'
 import { slugRulesFor } from './slug-rules'
+import { removeTenantPages, seedTenantSystemPages } from './system-pages'
 import { taxonomyCollections } from './taxonomies'
 import { jobBoardSettingsGlobal, jobBoardTenantFields } from './tenancy'
 
@@ -40,7 +55,9 @@ export * from './access'
 export * from './account-auth'
 export * from './alert-subscriptions'
 export * from './collections/locations'
+export * from './collections/menus'
 export * from './collections/organisations'
+export * from './collections/pages'
 export * from './coupons'
 export * from './email'
 export * from './legacy-password'
@@ -51,6 +68,7 @@ export * from './payment-providers'
 export * from './slug-rules'
 export * from './add-ons'
 export * from './collections/jobs'
+export * from './collections/applications'
 export * from './job-status'
 export * from './add-ons-seed'
 export * from './catalog'
@@ -62,6 +80,7 @@ export * from './rate-limit'
 export * from './seed/vanuatu'
 export * from './slugs'
 export * from './site-keys'
+export * from './system-pages'
 export * from './tax'
 export * from './tax-settings'
 export * from './taxonomies'
@@ -96,6 +115,8 @@ export const payloadJobsTenantCollections = (
 ): string[] => [
   slugs.locations,
   slugs.organisations,
+  slugs.pages,
+  slugs.menus,
   slugs.jobCategories,
   slugs.jobTypes,
   slugs.salaryBands,
@@ -104,6 +125,8 @@ export const payloadJobsTenantCollections = (
   slugs.alertSubscriptions,
   slugs.jobs,
   slugs.coupons,
+  APPLICATION_FILES_SLUG,
+  APPLICATIONS_SLUG,
   slugs.orders,
 ]
 
@@ -126,7 +149,7 @@ export const jobsTenantCollections = (options: PayloadJobsOptions = {}): string[
 export const PAYLOAD_JOBS_TENANT_COLLECTIONS = payloadJobsTenantCollections() as string[]
 
 export type PayloadJobsFeatures = {
-  /** Job applications. The collection is added by a later task. Defaults to true. */
+  /** Applications and their private CV files (PJ-25). Defaults to true. */
   applications?: boolean
   /** Email-only job alert subscriptions (PJ-26). Defaults to true. */
   alerts?: boolean
@@ -134,13 +157,15 @@ export type PayloadJobsFeatures = {
   credits?: boolean
   /** Coupon codes and their discounts. Defaults to true. */
   coupons?: boolean
+  /** Content pages, the system pages seeded per site, and menus (PJ-103). Defaults to true. */
+  pages?: boolean
 }
 
 /** Orders (PJ-23). Always on: every job board sells listings, even if all are free. */
 export type PayloadJobsOrdersOptions = {
   /**
-   * Who owns an organisation, so they can answer a member's purchase request. Organisations
-   * have no owner role yet (PJ-29); until one is passed, site managers do it.
+   * Who owns an organisation, so they can answer a member's purchase request. Defaults to
+   * `isOrganisationOwnerByRole`: the user's `organisationRole` is `owner` (PJ-62).
    */
   isOrganisationOwner?: OrganisationOwnerCheck
   /**
@@ -194,11 +219,37 @@ export type PayloadJobsOptions = {
   jobsSlug?: string
 }
 
+const withApplicationDeleteGuard = (
+  collection: CollectionConfig,
+  field: 'job' | 'organisation',
+  label: string,
+): CollectionConfig => ({
+  ...collection,
+  hooks: {
+    ...collection.hooks,
+    beforeDelete: [
+      ...(collection.hooks?.beforeDelete ?? []),
+      blockDeleteWhileReferencedByApplications({ fields: [field], label }),
+      // A CV is uploaded before its application exists, so organisations also guard their files.
+      ...(field === 'organisation'
+        ? [
+            blockDeleteWhileReferencedByApplications({
+              collection: APPLICATION_FILES_SLUG,
+              fields: ['organisation'],
+              label,
+            }),
+          ]
+        : []),
+    ],
+  },
+})
+
 const resolvedFeatures = (options: PayloadJobsOptions): Required<PayloadJobsFeatures> => ({
   applications: options.features?.applications ?? true,
   alerts: options.features?.alerts ?? true,
   credits: options.features?.credits ?? true,
   coupons: options.features?.coupons ?? true,
+  pages: options.features?.pages ?? true,
 })
 
 /** Job-board collections owned by this plugin. Later tasks append to this list. */
@@ -209,6 +260,7 @@ const jobBoardCollections = (
   locationsOptions: LocationsOptions,
   slugs: PayloadJobsCollectionSlugs,
   collections: PayloadJobsCollectionsOptions,
+  blockSlugs: readonly string[],
 ): CollectionConfig[] => [
   locationsCollection({
     ...locationsOptions,
@@ -228,6 +280,23 @@ const jobBoardCollections = (
     'organisation',
     slugs.orders,
   ),
+  ...(features.pages
+    ? [
+        pagesCollection({
+          access: collections.pages?.access,
+          blockSlugs,
+          mediaSlug,
+          slug: slugs.pages,
+          tenantScoped: tenancy === 'multi',
+        }),
+        menusCollection({
+          access: collections.menus?.access,
+          pagesSlug: slugs.pages,
+          slug: slugs.menus,
+          tenantScoped: tenancy === 'multi',
+        }),
+      ]
+    : []),
   ...(features.alerts
     ? [
         alertSubscriptionCollection({
@@ -238,6 +307,16 @@ const jobBoardCollections = (
       ]
     : []),
 ]
+
+/**
+ * Block slugs the host registered in `config.blocks` (rocketship-payload, PJ-84). The pages
+ * layout offers exactly those, so the plugin needs no dependency on the block library and a
+ * host with no blocks still gets a page whose layout is an empty list.
+ */
+const registeredBlockSlugs = (config: Config): string[] =>
+  (config.blocks ?? [])
+    .map((block) => (typeof block === 'string' ? null : block.slug))
+    .filter((slug): slug is string => typeof slug === 'string')
 
 /**
  * Job board plugin for Mission Control. It owns the job-board tenant settings and the
@@ -318,7 +397,15 @@ export const payloadJobs =
           : null
         : options.mediaSlug
 
-    const added = jobBoardCollections(tenancy, features, mediaSlug, locationsOptions, slugs, collectionOptions)
+    const added = jobBoardCollections(
+      tenancy,
+      features,
+      mediaSlug,
+      locationsOptions,
+      slugs,
+      collectionOptions,
+      registeredBlockSlugs(config),
+    )
     const existingSlugs = new Set((config.collections ?? []).map((collection) => collection.slug))
     const clashes = added.filter((collection) => existingSlugs.has(collection.slug))
     if (clashes.length > 0) {
@@ -373,13 +460,33 @@ export const payloadJobs =
               fields: [...collection.fields, ...jobBoardTenantFields],
               hooks: {
                 ...collection.hooks,
+                ...(features.pages
+                  ? {
+                      // A new site starts with its four system pages (PJ-103).
+                      afterChange: [
+                        ...(collection.hooks?.afterChange ?? []),
+                        seedTenantSystemPages({
+                          collectionSlug: slugs.pages,
+                          tenantScoped: tenancy === 'multi',
+                        }),
+                      ],
+                    }
+                  : {}),
                 // Deleting a tenant must take its subscribers with it, not detach them.
                 // Coupons are removed too: the tenant foreign key would otherwise null them.
                 beforeDelete: [
-                  // Orders are kept for accounting: a tenant that has any can't be deleted, and
-                  // this runs before anything else is removed.
-                  refuseDeleteWhileOrdered({ field: 'tenant', noun: 'tenant', ordersSlug: slugs.orders }),
                   ...(collection.hooks?.beforeDelete ?? []),
+                  // Orders are kept for accounting: a tenant that has any can't be deleted. This
+                  // runs before the plugin removes anything; the delete's transaction rolls back
+                  // whatever the host's own hooks did.
+                  refuseDeleteWhileOrdered({ field: 'tenant', noun: 'tenant', ordersSlug: slugs.orders }),
+                  // A deleted site takes its pages and menus with it.
+                  ...(features.pages
+                    ? [
+                        removeTenantPages({ collectionSlug: slugs.pages }),
+                        removeTenantMenus({ collectionSlug: slugs.menus }),
+                      ]
+                    : []),
                   ...(features.alerts
                     ? [
                         slugs.alertSubscriptions === ALERT_SUBSCRIPTIONS_SLUG
@@ -487,7 +594,7 @@ export const payloadJobs =
     const orders = orderCollection({
       access: collectionOptions.orders?.access,
       couponsEnabled: features.coupons,
-      isOrganisationOwner: options.orders?.isOrganisationOwner,
+      isOrganisationOwner: options.orders?.isOrganisationOwner ?? isOrganisationOwnerByRole,
       paymentProviders,
       slugs,
       tenantScoped: tenancy === 'multi',
@@ -511,7 +618,39 @@ export const payloadJobs =
       ...config,
       // Plans before add-ons: Payload numbers compound index names in collection order, and
       // plans' existing `tenant_key_idx` must keep its name.
-      collections: [...(config.collections ?? []), ...taxonomies, plans, addOns, jobs, ...coupons, orders],
+      // Applications and their files go after jobs: they relate to it, and the compound
+      // index names of the collections before them must not shift.
+      collections: [
+        ...(features.applications
+          ? (config.collections ?? []).map((collection) =>
+              collection.slug === slugs.organisations
+                ? withApplicationDeleteGuard(collection, 'organisation', 'organisation')
+                : collection,
+            )
+          : (config.collections ?? [])),
+        ...taxonomies,
+        plans,
+        addOns,
+        features.applications ? withApplicationDeleteGuard(jobs, 'job', 'job') : jobs,
+        ...coupons,
+        ...(features.applications
+          ? [
+              applicationFilesCollection({
+                applicantsSlug: usersSlug,
+                organisationsSlug: slugs.organisations,
+                tenantScoped: tenancy === 'multi',
+              }),
+              applicationsCollection({
+                applicantsSlug: usersSlug,
+                jobsSlug: slugs.jobs,
+                organisationsSlug: slugs.organisations,
+                tenantScoped: tenancy === 'multi',
+              }),
+            ]
+          : []),
+        // Orders go last (PJ-23), so no existing compound index name shifts.
+        orders,
+      ],
       jobs: jobsConfig,
       custom: {
         ...config.custom,

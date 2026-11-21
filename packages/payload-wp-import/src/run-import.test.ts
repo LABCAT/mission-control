@@ -163,4 +163,57 @@ describe('runImport', () => {
     expect(store.terms).toHaveLength(1)
     expect(store.jobs).toBeUndefined()
   })
+
+  it('counts skip reasons, writes createOnly fields once, and can create through the adapter', async () => {
+    const { payload, store, writes } = createFakePayload()
+    const importer = rowsImporter('things', [{ id: 1 }, { id: 2 }, { id: 3 }], {
+      map: (row) =>
+        row.id === 3
+          ? { skip: 'spam' }
+          : row.id === 2
+            ? null
+            : { createOnly: { secret: 'first' }, data: { title: 'T' }, legacyId: 1, rawCreate: true },
+    })
+
+    const first = await run([importer], payload)
+    expect(first.importers.things).toMatchObject({ created: 1, skipped: 2, skipReasons: { spam: 1 } })
+    expect(store.things![0]).toMatchObject({ secret: 'first', tenant: 1, title: 'T' })
+
+    store.things![0]!.secret = 'changed'
+    const second = await run([importer], payload)
+    expect(second.importers.things).toMatchObject({ created: 0, updated: 1 })
+    expect(store.things![0]!.secret).toBe('changed')
+    expect(writes.map((write) => write.op)).toEqual(['create', 'update'])
+  })
+
+  it('looks documents up by the importer\'s own tenant path and leaves the tenant to the mapper', async () => {
+    const { payload, store } = createFakePayload({
+      things: [{ id: 5, legacyId: 1, tenants: [{ tenant: 1 }] }],
+    })
+    const importer = rowsImporter('things', [{ id: 1 }], {
+      map: () => ({ data: { title: 'T' }, legacyId: 1 }),
+      tenantScope: { path: 'tenants.tenant', set: false },
+    })
+
+    const summary = await run([importer], payload)
+    expect(summary.importers.things).toMatchObject({ created: 0, updated: 1 })
+    expect(store.things![0]).not.toHaveProperty('tenant')
+  })
+
+  it('reports an importer\'s extra counts', async () => {
+    const { payload } = createFakePayload()
+    const importer = rowsImporter('things', [{ id: 1 }], { report: () => ({ read: 5 }) })
+    expect((await run([importer], payload)).importers.things!.report).toEqual({ read: 5 })
+  })
+
+  it('redacts email addresses from error messages', async () => {
+    const { payload } = createFakePayload()
+    const importer = rowsImporter('things', [{ id: 1 }], {
+      map: () => {
+        throw new Error('duplicate key (email)=(Jo.Bloggs@example.com) already exists')
+      },
+    })
+    const summary = await run([importer], payload)
+    expect(summary.errors[0]!.message).toBe('duplicate key (email)=([email]) already exists')
+  })
 })
