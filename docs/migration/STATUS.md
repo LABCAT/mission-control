@@ -276,3 +276,5 @@ Not imported: applications/CVs, resumes, logs (order-log, job-alerts-log, resume
 - 21 Nov 14:30 ICT pass: #86 Deploy OK (54cba5f). #92 PJ-63: GLM Kinsho blocked on story-id clash (S-146); session pushed ddb5005, re-review pending. #83 PJ-30: OpenHands working on main merge (since 13:06). Dispatched PJ-24 credits (Opus, review:deep) and PJ-53 reports (Sonnet). PJ-57 held until PJ-24 lands (both touch orders).
 
 - 21 Nov 15:30 ICT: FOUNDER — Kinsho GLM key "Daruma Dashboard" hit its $0.50 monthly budget (resets 11 Dec); #92, #94, #95 got automation failures on their new heads. GLM had found a real bug in #94 (orders duplicated across 200-job chunks), fix pushed. Queue stalled on reviews until budget raised or OpenCode Go resets (~22 Nov). #83: OpenHands prodded once (no push since 13:06 ICT). Open PRs: 5 (#83, #92, #93, #94, #95).
+
+- 21 Nov 16:37 ICT: **Decision (21 Nov, founder):** pause Hisha's cloud orchestrator while OpenCode Go is out (~1d14h). Disabled its 3 scheduled runs (01:00, 03:23, 10:47 UTC). Re-enable when usage resets.
