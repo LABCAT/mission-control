@@ -19,7 +19,7 @@ import { taxonomyImporters } from './taxonomies'
 import { createPlanProvider } from './users'
 
 /** The importer against a real Payload: the state machine, the views guard and Lexical validation. */
-describe('jobs import against Payload @S-151', () => {
+describe('jobs import against Payload @S-155', () => {
   let harness: TestHarness
   const NOW = new Date('2026-11-20T00:00:00Z')
   const system = { overrideAccess: true } as const

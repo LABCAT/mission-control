@@ -2000,7 +2000,7 @@ stories:
     tests:
       - packages/payload-wp-import/src/media/media.test.ts
 
-  - id: S-151
+  - id: S-155
     area: Import and cutover
     role: super admin
     story: "The importer brings the legacy published and expired jobs into a tenant with their organisation, taxonomies, locations, description, dates, featured placements and view counts."

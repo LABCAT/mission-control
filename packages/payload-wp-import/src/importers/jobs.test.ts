@@ -39,7 +39,7 @@ const run = async (dryRun: boolean, payload = createFakePayload(seed())) => {
 
 const jobBy = (store: Record<string, any[]>, legacyId: number) => store.jobs!.find((job) => job.legacyId === legacyId)
 
-describe('legacy status, dates and close date @S-151', () => {
+describe('legacy status, dates and close date @S-155', () => {
   it('imports only published and expired jobs', () => {
     expect(importableStatus('publish')).toBe('published')
     expect(importableStatus('expired')).toBe('expired')
@@ -84,7 +84,7 @@ describe('legacy status, dates and close date @S-151', () => {
   })
 })
 
-describe('salary and job type clean-up @S-151', () => {
+describe('salary and job type clean-up @S-155', () => {
   const terms = async () => {
     const reader = readerFor()
     return {
@@ -113,7 +113,7 @@ describe('salary and job type clean-up @S-151', () => {
   })
 })
 
-describe('featured placements @S-151', () => {
+describe('featured placements @S-155', () => {
   const args = {
     closesAt: new Date('2026-12-01T00:00:00Z'),
     featuredInCategory: false,
@@ -149,7 +149,7 @@ describe('featured placements @S-151', () => {
   })
 })
 
-describe('location chips @S-151', () => {
+describe('location chips @S-155', () => {
   const match = buildJobLocationMatcher(locationDocs as any)
   const names = (label: string) => match(label).locations.map((l) => l.name).toSorted()
 
@@ -174,7 +174,7 @@ describe('location chips @S-151', () => {
   })
 })
 
-describe('the jobs importer @S-151', () => {
+describe('the jobs importer @S-155', () => {
   it('imports published and expired jobs and counts what it leaves out', async () => {
     const { store, summary } = await run(false)
 

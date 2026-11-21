@@ -9,7 +9,7 @@ const kinds = (node: LexicalNode): string[] => [
 const root = (html: string) => htmlToLexical(html)!.root.children
 const json = (html: string) => JSON.stringify(htmlToLexical(html))
 
-describe('legacy HTML to Lexical @S-151', () => {
+describe('legacy HTML to Lexical @S-155', () => {
   it('converts paragraphs, bold, italic, headings, lists and links', () => {
     const children = root(
       '<h1>Role</h1><p>Hello <strong>bold</strong> <em>it</em> <a href="https://example.com/a?b=1&amp;c=2">link</a></p>' +
