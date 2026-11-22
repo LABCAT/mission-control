@@ -109,6 +109,37 @@ export const runImport = async (options: RunImportOptions): Promise<ImportSummar
   return summary
 }
 
+/** Field names under layout-only containers (tabs without a name, rows, collapsibles). */
+const localizedNames = (fields: any[]): string[] =>
+  fields.flatMap((field) => {
+    if (field.localized && field.name) return [field.name as string]
+    if (field.type === 'tabs') {
+      return (field.tabs ?? []).flatMap((tab: any) => (tab.name ? [] : localizedNames(tab.fields ?? [])))
+    }
+    if (!field.name && Array.isArray(field.fields)) return localizedNames(field.fields)
+    return []
+  })
+
+/**
+ * `payload.db.create` skips Payload's locale handling: with localization on, a localized field
+ * must be `{ [locale]: value }`, or the adapter drops a plain value (a null title) and reads the
+ * keys of a rich-text object as locale codes. Wrap each such field in the default locale.
+ */
+export const wrapLocalizedFields = (
+  payload: ImportPayload,
+  collection: string,
+  data: Record<string, unknown>,
+): Record<string, unknown> => {
+  const localization = payload.config?.localization
+  if (!localization) return data
+  const fields = payload.config?.collections?.find((c) => c.slug === collection)?.fields ?? []
+  const out = { ...data }
+  for (const name of localizedNames(fields)) {
+    if (out[name] !== undefined && out[name] !== null) out[name] = { [localization.defaultLocale]: out[name] }
+  }
+  return out
+}
+
 const importRow = async (
   importer: Importer,
   row: unknown,
@@ -153,7 +184,13 @@ const importRow = async (
 
     if (found) {
       if (!ctx.dryRun) {
-        await ctx.payload.update({ collection, data, id: found.id, overrideAccess: true })
+        await ctx.payload.update({
+          collection,
+          ...(mapped.updateContext ? { context: mapped.updateContext } : {}),
+          data,
+          id: found.id,
+          overrideAccess: true,
+        })
       }
       counts.updated++
     } else {
@@ -161,7 +198,7 @@ const importRow = async (
         const created = { ...data, ...mapped.createOnly }
         if (mapped.rawCreate) {
           if (!ctx.payload.db) throw new Error('rawCreate needs payload.db')
-          await ctx.payload.db.create({ collection, data: created })
+          await ctx.payload.db.create({ collection, data: wrapLocalizedFields(ctx.payload, collection, created) })
         } else {
           await ctx.payload.create({ collection, data: created, overrideAccess: true })
         }

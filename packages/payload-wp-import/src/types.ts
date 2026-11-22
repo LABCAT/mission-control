@@ -3,6 +3,14 @@ import type { MysqlReader } from './mysql-reader'
 /** The subset of the Payload local API the framework needs. Real `Payload` satisfies it. */
 export type ImportPayload = {
   /**
+   * The Payload config, so a `rawCreate` can wrap localized fields. Real `payload.config`
+   * satisfies it; without it nothing is wrapped (localization off).
+   */
+  config?: {
+    collections?: { fields: any[]; slug: string }[]
+    localization?: false | { defaultLocale: string }
+  }
+  /**
    * The database adapter. Needed only by importers that create documents with `rawCreate`.
    * Real `payload.db` satisfies it.
    */
@@ -22,6 +30,8 @@ export type ImportPayload = {
   }) => Promise<{ docs: ({ id: number | string } & Record<string, any>)[] }>
   update: (args: {
     collection: any
+    /** Request context for the collection's hooks (see `MappedDoc.updateContext`). */
+    context?: Record<string, unknown>
     data: any
     id: number | string
     overrideAccess?: boolean
@@ -48,6 +58,11 @@ export type MappedDoc = {
    * in. Updates still go through `payload.update`.
    */
   rawCreate?: boolean
+  /**
+   * Hook context passed to `payload.update` on a re-run. For a hook that guards a field the
+   * import must set, such as the job view counter.
+   */
+  updateContext?: Record<string, unknown>
   /** Fields for the collection. `legacyId` and the tenant are set by the runner. */
   data: Record<string, unknown>
   /** The WordPress primary key of the source row. */
