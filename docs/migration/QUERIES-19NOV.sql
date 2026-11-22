@@ -249,3 +249,19 @@ FROM wp_posts p JOIN wp_usermeta m ON m.user_id=p.post_author AND m.meta_key='wp
 WHERE p.post_type='job_listing' AND p.post_status IN ('publish','expired')
   AND (m.meta_value LIKE '%"administrator"%' OR m.meta_value LIKE '%"editor"%')
 GROUP BY y ORDER BY y;
+
+-- 60. Job packs: bought on their own, or while posting a job? (counts only, no personal data)
+--     Orders (post_type 'transaction') linked through wp_p2p to a pack plan (28 = 5 Job Pack, 36082 = 10 Job Pack),
+--     split by whether the same order is also linked to a job_listing. By year and order status.
+SELECT YEAR(o.post_date) y, o.post_status,
+  CASE WHEN EXISTS (
+    SELECT 1 FROM wp_p2p x2 JOIN wp_posts j ON j.ID IN (x2.p2p_from, x2.p2p_to) AND j.post_type='job_listing'
+    WHERE o.ID IN (x2.p2p_from, x2.p2p_to)) THEN 'with job' ELSE 'pack only' END AS bought,
+  COUNT(DISTINCT o.ID) orders
+FROM wp_posts o
+JOIN wp_p2p x ON o.ID IN (x.p2p_from, x.p2p_to)
+JOIN wp_posts pk ON pk.ID IN (x.p2p_from, x.p2p_to) AND pk.ID IN (28, 36082)
+WHERE o.post_type = 'transaction'
+GROUP BY y, o.post_status, bought ORDER BY y DESC, bought;
+-- 60b. If 60 returns nothing (orders link packs another way): which p2p types touch the pack plans? (counts only)
+SELECT x.p2p_type, COUNT(*) n FROM wp_p2p x WHERE x.p2p_from IN (28, 36082) OR x.p2p_to IN (28, 36082) GROUP BY x.p2p_type;
