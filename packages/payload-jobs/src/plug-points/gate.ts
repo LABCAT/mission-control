@@ -12,7 +12,7 @@ import type {
 import { ValidationError } from 'payload'
 
 import { isAddOnEnabled, type AddOnSettings } from './add-ons'
-import { emitJobLifecycle, emitOrderEvent, type PayloadJobsRegistry } from './payload-jobs-registry'
+import { emitJobLifecycle, emitOrderEvent, forTenant, type PayloadJobsRegistry } from './payload-jobs-registry'
 import type { JobLifecycleEvent } from './definitions'
 
 /**
@@ -29,6 +29,47 @@ const idOf = (value: unknown): null | number | string =>
     : typeof value === 'number' || typeof value === 'string'
       ? value
       : null
+
+/**
+ * Set this on `req.context` to an empty array to defer order events: `orderEventHook` then
+ * queues adapters' durable work in the request's transaction and records each event here, and
+ * the caller emits them with `emitDeferredOrderEvents` once the transaction has committed.
+ */
+export const ORDER_EVENTS_DEFER_CONTEXT = 'payloadJobsDeferOrderEvents'
+
+export type DeferredOrderEvent = {
+  from: null | string
+  kind: 'created' | 'statusChanged'
+  orderID: number | string
+  status: string
+  tenantID: null | number | string
+}
+
+/**
+ * Emit events recorded under `ORDER_EVENTS_DEFER_CONTEXT`, in order, after the transaction that
+ * wrote them committed. Runs with a request of its own (no transaction); like the hook, an
+ * adapter failing is logged, never thrown. Returns the errors.
+ */
+export const emitDeferredOrderEvents = async (
+  registry: PayloadJobsRegistry,
+  payload: Payload,
+  events: readonly DeferredOrderEvent[],
+  req?: PayloadRequest,
+): Promise<Error[]> => {
+  const errors: Error[] = []
+  for (const event of events) {
+    const settings = await loadTenantSettings(registry, payload, event.tenantID, req)
+    const failed = await emitOrderEvent(
+      registry,
+      event.kind,
+      { orderID: event.orderID, payload, req, status: event.status, tenantID: event.tenantID, ...(event.from === null ? {} : { from: event.from }) },
+      settings,
+    )
+    for (const error of failed) payload.logger.error({ err: error }, 'payload-jobs: invoice sync adapter failed')
+    errors.push(...failed)
+  }
+  return errors
+}
 
 /** One tenant's settings (the tenant document, or the settings global in single mode). */
 export const loadTenantSettings = async (
@@ -188,6 +229,23 @@ export const orderEventHook =
 
     const tenantID = registry.context.tenancy === 'multi' ? idOf(doc.tenant) : null
     const settings = await loadTenantSettings(registry, req.payload, tenantID, req)
+
+    // Inside a transaction that may still roll back (checkout, PJ-31): queue durable work with
+    // this request, so it shares the transaction, and hold the inline calls until it commits
+    // (`emitDeferredOrderEvents`). A rolled-back write then leaves nothing outside the database.
+    const deferred = req.context?.[ORDER_EVENTS_DEFER_CONTEXT]
+    if (Array.isArray(deferred)) {
+      const batch = deferred as DeferredOrderEvent[]
+      const firstForOrder = !batch.some((event) => String(event.orderID) === String(doc.id))
+      batch.push({ from, kind: operation === 'create' ? 'created' : 'statusChanged', orderID: doc.id, status, tenantID })
+      if (firstForOrder) {
+        for (const adapter of forTenant(registry, registry.invoiceSync, settings)) {
+          // Not caught: if the outbox write fails, the order write must fail with it.
+          await adapter.queue?.({ orderID: doc.id, payload: req.payload, req, status, tenantID })
+        }
+      }
+      return doc
+    }
     const errors = await emitOrderEvent(
       registry,
       operation === 'create' ? 'created' : 'statusChanged',

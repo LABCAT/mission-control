@@ -99,7 +99,8 @@ export type JobStatusDates = { expiresAt?: null | string; publishedAt?: null | s
 /**
  * The date fields to set alongside a status change, at `now`:
  * - published (from draft or pending): `publishedAt` = now, `expiresAt` = now + the listing
- *   duration. Without a duration the expiry is left as it is (staff set it by hand).
+ *   duration, or the close date chosen at checkout (PJ-31) when that is earlier and still ahead.
+ *   Without a duration the expiry is left as it is (staff set it by hand).
  * - published again from expired (relist): the same, so `publishedAt` resets.
  * - expired early (before `expiresAt`): `expiresAt` = now, so the record says when it ended.
  * - anything else: no date changes.
@@ -122,7 +123,12 @@ export const datesForTransition = ({
   if (to === 'published' && from !== 'published') {
     const publishedAt = now.toISOString()
     if (!Number.isSafeInteger(durationDays) || (durationDays as number) < 1) return { publishedAt }
-    return { expiresAt: new Date(now.getTime() + (durationDays as number) * DAY_MS).toISOString(), publishedAt }
+    const latest = now.getTime() + (durationDays as number) * DAY_MS
+    // The close date the employer chose at checkout (PJ-31) is kept when it is still ahead, but
+    // never past the plan's duration from now. A relist (from expired) always starts afresh.
+    const chosen = from !== 'expired' && expiresAt ? Date.parse(expiresAt) : Number.NaN
+    const ends = Number.isFinite(chosen) && chosen > now.getTime() ? Math.min(chosen, latest) : latest
+    return { expiresAt: new Date(ends).toISOString(), publishedAt }
   }
 
   if (to === 'expired' && from === 'published') {

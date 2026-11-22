@@ -152,6 +152,16 @@ orders collection emits these from its `afterChange` (`orderEventHook`): `create
 `payload-jobs-xero` registers the `xero` adapter: a draft invoice for a new invoice order, authorised
 when the order is `invoiced` or `paid`.
 
+Inside a transaction that may still roll back, such as checkout or a purchase approval (PJ-31),
+nothing outside the database may happen before the commit. Checkout sets
+`req.context[ORDER_EVENTS_DEFER_CONTEXT] = []`. `orderEventHook` then calls each adapter's
+optional `queue(event)` once per order, with the order's request. That queues durable work in
+the same transaction, like an outbox, and the hook records the event instead of calling the
+handlers. Once the transaction has committed, checkout calls `emitDeferredOrderEvents`, which
+runs the handlers. A rollback leaves no invoice, draft or job, and the queued work covers a
+crash between the commit and the emit. The `xero` adapter's `queue` is `queueXeroInvoiceSync`
+(its retry job), so it needs no schema change.
+
 ### 7. Job lifecycle hooks
 
 ```ts

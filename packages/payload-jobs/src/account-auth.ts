@@ -649,6 +649,16 @@ const currentUser = async (
   return fresh && canSignInOn(fresh, tenant.id, options) ? fresh : null
 }
 
+/**
+ * The signed-in user of an account request, read fresh, or null when the token is missing,
+ * expired or not a member of `tenant` in an account role. Checkout (PJ-31) uses it.
+ */
+export const resolveAccountUser = (
+  req: PayloadRequest,
+  tenant: AccountTenant,
+  options: AccountAuthOptions = {},
+): Promise<RawUser | null> => currentUser(req, tenant, resolveOptions(options))
+
 const me: Handler = async ({ options, req, tenant }) => {
   const user = await currentUser(req, tenant, options)
   if (!user) throw new AccountAuthError(ERRORS.notAuthenticated)
