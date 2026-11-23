@@ -21,7 +21,7 @@ import { resolveLocale } from '../tenant/locale'
 import { jobPostingStructuredData, type JobPostingStructuredData } from '../tenant/seo'
 import type { SiteTenant } from '../tenant/types'
 import type { JobSummary } from '../types'
-import { liveJobsCmsWhere, toJobSummary, type ListingJob } from './listing'
+import { liveJobsWhere, toJobSummary, type ListingJob } from './listing'
 
 /** Where a job page lives. The slug is unique per tenant (PJ-19). */
 export const jobDetailPath = (slug: string): string => `/jobs/${encodeURIComponent(slug)}`
@@ -435,7 +435,7 @@ type SimilarJobsOptions = {
  * left out by id, because a job can be its own category match.
  */
 const similarJobs = async ({ cms, detail, locale, now }: SimilarJobsOptions): Promise<JobSummary[]> => {
-  const live = liveJobsCmsWhere(now)
+  const live = liveJobsWhere(now)
   const wanted = SIMILAR_JOB_LIMIT + 1
 
   const byCategory = detail.categories.length

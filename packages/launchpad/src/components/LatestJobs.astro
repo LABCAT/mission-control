@@ -1,0 +1,102 @@
+---
+import Container from '@labcat2020/rocketship/components/Container'
+import Grid from '@labcat2020/rocketship/components/Grid'
+import Stack from '@labcat2020/rocketship/components/Stack'
+import Typography from '@labcat2020/rocketship/components/Typography'
+
+import JobCardBody from './JobCardBody.astro'
+import type { JobSummary } from '../types'
+
+type Props = {
+  jobs: JobSummary[]
+  heading?: string
+  /** Absolute or site-relative feed URL. The link is shown only when a feed exists. */
+  rssHref?: string
+  rssLabel?: string
+  /** Link to the full listing, under the jobs. */
+  allHref?: string
+  allLabel?: string
+  emptyLabel?: string
+  locale?: string
+  timezone?: string
+}
+
+const {
+  jobs,
+  heading,
+  rssHref,
+  rssLabel = 'RSS',
+  allHref,
+  allLabel = 'Browse all jobs',
+  emptyLabel = 'No jobs are listed yet.',
+  locale = 'en',
+  timezone,
+} = Astro.props as Props
+---
+
+<section class="lp-latest">
+  <Container size="wide">
+    <Stack gap="large">
+      {
+        (heading || rssHref) && (
+          <div class="lp-latest__head">
+            {heading && (
+              <Typography>
+                <h2>{heading}</h2>
+              </Typography>
+            )}
+            {rssHref && (
+              <a class="lp-latest__rss" href={rssHref} rel="alternate" type="application/rss+xml">
+                {rssLabel}
+              </a>
+            )}
+          </div>
+        )
+      }
+
+      {
+        jobs.length > 0 ? (
+          <Grid as="ul" columns={3}>
+            {jobs.map((job) => (
+              <li>
+                <JobCardBody job={job} locale={locale} timezone={timezone} />
+              </li>
+            ))}
+          </Grid>
+        ) : (
+          <Typography>
+            <p>{emptyLabel}</p>
+          </Typography>
+        )
+      }
+
+      {
+        allHref && (
+          <Typography>
+            <p>
+              <a class="lp-latest__all" href={allHref}>
+                {allLabel}
+              </a>
+            </p>
+          </Typography>
+        )
+      }
+    </Stack>
+  </Container>
+</section>
+
+<style>
+  /* Composition only; every colour and size is a Rocketship token. */
+  .lp-latest__head {
+    align-items: baseline;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--rs-space-4);
+    justify-content: space-between;
+  }
+
+  .lp-latest__rss,
+  .lp-latest__all {
+    color: var(--rs-color-link);
+  }
+</style>

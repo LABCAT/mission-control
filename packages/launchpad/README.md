@@ -54,6 +54,37 @@ timezone.
 | `RecentlyViewed` | —                               | browser-local list, filled on idle           |
 | `JobViewTracker` | —                              | records the current job on a detail page     |
 | `Pagination` | —                                    | **temporary**; moves to Rocketship (RCL task) |
+| `PageView`   | `RenderBlocks`, `BaseLayout`         | a whole CMS page: blocks in editor order, menus in the chrome |
+| `SiteNav`    | —                                    | one menu in a landmark; marks the current page |
+| `LatestJobs` | `Grid`, `JobCardBody`                | the latest-jobs block: featured first, empty state, listing link |
+| `JobCardBody` | `Card`                              | the job card without its script, for pages that ship none |
+
+## CMS pages (`@mission-control/launchpad/pages`)
+
+A site renders its pages from CMS data, never from a route per page. One load per request:
+
+```ts
+import { loadSite, pageView } from '@mission-control/launchpad/pages'
+
+const content = await loadSite({ cms, pathname: Astro.url.pathname, tenant })
+if (content.kind !== 'page') return notFound(content.menus) // menus still draw the chrome
+
+const view = pageView(content, { tenant })
+```
+
+- `loadSite` reads the site's pages and menus once and resolves the path against the page tree
+  (`resolveContentRoute`): `/` is the page with role `home`, `/<parent>/<slug>` is the chain of
+  slugs, and anything else is `not-found`. It loads the latest jobs only when the page's layout
+  names that block.
+- `pageView` turns the loaded page into plain data for `PageView.astro`: the layout split into
+  runs of generic blocks and the data-needing block in between (`pageSegments`), the page
+  metadata, and the menus (`menuViews`). Blocks render through an explicit component map the site
+  passes in, so a page bundles only the renderers it names.
+- A menu item that names a page follows that page's current path; a custom URL keeps its
+  new-tab flag and is refused if its scheme is unsafe.
+- Collection slugs come from the plugin options (PJ-80): pass `collections` (pages, menus, jobs)
+  and, when the host registered it under another name, `latestJobsSlug`. The defaults match a
+  stock installation.
 
 ## Viewed jobs (browser-local)
 
@@ -153,6 +184,37 @@ return serveJobListing({
   (`?category=made-up`) and a page past the end both still render a correct page, but not *that*
   URL's page: storing each made-up slug would waste an entry per slug. The view carries
   `inexact` for this, and `serveJobListing` answers those with `Cache-Control: no-store`.
+
+## Sitemap and robots (`@mission-control/launchpad/seo`)
+
+`./seo` is the pure rules, `./seo/serve` adds the CMS read and the edge cache, `./seo/robots` is
+`robots.txt` as data. A site app supplies the CMS client, the tenant and the origin:
+
+```ts
+import { serveSitemap } from '@mission-control/launchpad/seo/serve'
+
+return serveSitemap({
+  cms: createCmsClient({ baseUrl: env.CMS_URL, siteKey: env.SITE_KEY }),
+  path: Astro.url.pathname, // /sitemap.xml or /sitemap-1.xml
+  site: tenant.slug,
+  siteUrl: Astro.site!.origin,
+  tenant,
+})
+```
+
+- Live jobs only: the loader asks the CMS with `liveJobsWhere(now)`, so an expired job cannot
+  reach the builder. A page is listed unless it is a draft or `seo.noIndex`; an organisation must
+  be approved with its page enabled.
+- A filter page is listed only while it has a job, so the sitemap never advertises an empty page
+  that answers `noindex`. Query-string filters have no URL in it at all.
+- `filterPaths` says where a site's filter pages live. It defaults to `/jobs/category/:slug` and
+  `/jobs/type/:slug` (the routes `jobListingRoute` serves); `cleanFilterPaths` is the founder's
+  one-level scheme for when PJ-42 adds those routes. A kind with no builder is not listed, so the
+  sitemap never names a URL the site cannot answer.
+- One file up to 45,000 URLs, then `/sitemap.xml` becomes an index over `/sitemap-1.xml` … and a
+  shard the current plan does not have is a 404.
+- XML and robots answers are held at the edge for an hour under `site:<slug>` and
+  `site:<slug>:sitemap`, which PJ-41's purge clears.
 
 ## Conventions
 
