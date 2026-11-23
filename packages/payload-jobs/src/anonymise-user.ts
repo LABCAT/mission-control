@@ -1,6 +1,10 @@
 import {
   APIError,
+  commitTransaction,
+  createPayloadRequest,
   Forbidden,
+  initTransaction,
+  killTransaction,
   type CollectionBeforeDeleteHook,
   type CollectionConfig,
   type Endpoint,
@@ -24,6 +28,12 @@ import { APPLICATION_FILES_SLUG, APPLICATIONS_SLUG } from './collections/applica
 
 /** Set on `req.context` to allow a real delete, for test teardown and tenant cleanup only. */
 export const USER_PURGE_CONTEXT = 'payloadJobsPurge'
+
+/**
+ * Set on `req.context` by the removal itself, after the permission check, so the host's
+ * credential guard lets the scrub replace the email and password. Clients cannot set it.
+ */
+export const PERSONAL_DATA_REMOVAL_CONTEXT = 'payloadJobsPersonalDataRemoval'
 
 /** Header the admin button sends; a cross-site form cannot set it without a CORS preflight. */
 export const REMOVE_PERSONAL_DATA_CSRF_HEADER = 'x-mc-remove-personal-data'
@@ -52,13 +62,20 @@ export type AnonymiseUserArgs = {
   alertSubscriptionsSlug?: string
   /** Slug of the applications collection. */
   applicationsSlug?: string
+  /** Tenant id recorded on the audit entry, so it shows in that site's audit view. */
+  auditTenantID?: number | string
   /** Slug of the private upload collection holding CVs. */
   filesSlug?: string
   payload: Payload
-  /** Free-form reason from the admin, e.g. a ticket number. Never personal data. */
+  /** Free-form reference from the admin, e.g. a ticket number: no personal data. Email-like text is stripped. */
   reason?: string
   /** Write inside the caller's transaction when given. */
   req?: PayloadRequest
+  /**
+   * Only remove data on these tenants. Omit for a super admin, who may remove everywhere. A
+   * site manager's removal is always scoped to the sites they manage.
+   */
+  scopeTenantIDs?: readonly (number | string)[]
   /** The user to anonymise. */
   userID: number | string
   /** Slug of the auth collection. */
@@ -147,7 +164,6 @@ const deleteWhere = async ({
 
   await args.payload.delete({
     collection: collection as never,
-    context: { [USER_PURGE_CONTEXT]: true },
     overrideAccess: true,
     ...(args.req ? { req: args.req } : {}),
     where: { id: { in: docs.map((doc) => doc.id) } } as never,
@@ -166,7 +182,9 @@ const deleteWhere = async ({
  * memberships and the WordPress link. Orders, invoices and the credit ledger are untouched and
  * keep pointing at the same user id.
  */
-export const anonymiseUser = async (args: AnonymiseUserArgs): Promise<AnonymiseUserResult> => {
+const anonymiseInTransaction = async (
+  args: AnonymiseUserArgs & { req: PayloadRequest },
+): Promise<AnonymiseUserResult> => {
   const {
     alertSubscriptionsSlug = ALERT_SUBSCRIPTIONS_SLUG,
     applicationsSlug = APPLICATIONS_SLUG,
@@ -182,7 +200,7 @@ export const anonymiseUser = async (args: AnonymiseUserArgs): Promise<AnonymiseU
       depth: 0,
       id: userID as never,
       overrideAccess: true,
-      ...(args.req ? { req: args.req } : {}),
+      req: args.req,
     })
     .catch(() => null)) as Doc | null
 
@@ -195,9 +213,17 @@ export const anonymiseUser = async (args: AnonymiseUserArgs): Promise<AnonymiseU
 
   // Their own applications, and guest applications sent from their address. Both hold personal
   // data (name, email, phone, message, CV) even when the applicant field is empty.
-  const applicationWhere = email
-    ? { or: [{ applicant: { equals: userID } }, { email: { equals: email } }] }
-    : { applicant: { equals: userID } }
+  const scope = args.scopeTenantIDs
+    ? { tenant: { in: [...args.scopeTenantIDs] } }
+    : null
+  const withScope = (where: Record<string, unknown>): Record<string, unknown> =>
+    scope ? { and: [where, scope] } : where
+
+  const applicationWhere = withScope(
+    email
+      ? { or: [{ applicant: { equals: userID } }, { email: { equals: email } }] }
+      : { applicant: { equals: userID } },
+  )
 
   const applications = (await payload.find({
     collection: applicationsSlug as never,
@@ -225,20 +251,26 @@ export const anonymiseUser = async (args: AnonymiseUserArgs): Promise<AnonymiseU
     where: applicationWhere,
   })
 
-  const filesRemoved =
-    fileIDs.length > 0
-      ? await deleteWhere({ args, collection: filesSlug, where: { id: { in: fileIDs } } })
-      : 0
+  // The files those applications named, and any file uploaded by this person that no
+  // application links to (an abandoned upload).
+  const filesRemoved = await deleteWhere({
+    args,
+    collection: filesSlug,
+    where: withScope({
+      or: [
+        ...(fileIDs.length > 0 ? [{ id: { in: fileIDs } }] : []),
+        { applicant: { equals: userID } },
+      ],
+    }),
+  })
 
   const subscriptionsRemoved = email
     ? await deleteWhere({
         args,
         collection: alertSubscriptionsSlug,
-        where: { email: { equals: email } },
+        where: withScope({ email: { equals: email } }),
       })
     : 0
-
-  const scrub: Record<string, unknown> = { email: removedUserEmail(user.id) }
 
   // Only scrub fields this installation actually has: the host owns the users collection.
   const userCollection = payload.config.collections.find((entry) => entry.slug === usersSlug)
@@ -247,6 +279,12 @@ export const anonymiseUser = async (args: AnonymiseUserArgs): Promise<AnonymiseU
       'name' in field && typeof field.name === 'string' ? [field.name] : [],
     ),
   )
+  const hasField = (name: string): boolean => fieldNames.has(name)
+
+  // The row keeps no global role beyond the plainest one.
+  const scrub: Record<string, unknown> = { email: removedUserEmail(user.id) }
+  if (hasField('role')) scrub.role = 'user'
+
   const optional: Record<string, unknown> = {
     legacyId: null,
     legacyPasswordHash: null,
@@ -268,10 +306,11 @@ export const anonymiseUser = async (args: AnonymiseUserArgs): Promise<AnonymiseU
 
   await payload.update({
     collection: usersSlug as never,
+    context: { [PERSONAL_DATA_REMOVAL_CONTEXT]: true },
     data: scrub as never,
     id: userID as never,
     overrideAccess: true,
-    ...(args.req ? { req: args.req } : {}),
+    req: args.req,
   })
 
   await writeRemovalAudit({
@@ -280,9 +319,9 @@ export const anonymiseUser = async (args: AnonymiseUserArgs): Promise<AnonymiseU
       applicationsRemoved,
       // Never the address that was removed: the audit trail must not keep the data it removed.
       filesRemoved,
-      reason: args.reason,
+      reason: args.reason ? scrubReason(args.reason) : undefined,
       subscriptionsRemoved,
-      tenantID: tenantIDs[0] ?? undefined,
+      tenantID: args.auditTenantID ?? tenantIDs[0] ?? undefined,
       tenantIDs,
     },
   })
@@ -293,6 +332,27 @@ export const anonymiseUser = async (args: AnonymiseUserArgs): Promise<AnonymiseU
     filesRemoved,
     subscriptionsRemoved,
     userID: user.id,
+  }
+}
+
+/** The reason is a ticket reference, not a place for personal data: drop anything email-like. */
+const scrubReason = (reason: string): string =>
+  reason.replace(/\S+@\S+/g, '[removed]').slice(0, 500)
+
+export const anonymiseUser = async (args: AnonymiseUserArgs): Promise<AnonymiseUserResult> => {
+  // All or nothing: the deletes and the scrub share one transaction, so a failure part-way
+  // (a host guard refusing the scrub, say) leaves the person's data exactly as it was.
+  const req = args.req ?? (await createPayloadRequest({ payload: args.payload }))
+  const started = await initTransaction(req)
+
+  try {
+    const result = await anonymiseInTransaction({ ...args, req })
+    if (started) await commitTransaction(req)
+
+    return result
+  } catch (error) {
+    if (started) await killTransaction(req)
+    throw error
   }
 }
 
@@ -317,9 +377,15 @@ export const canRemovePersonalData = ({
   const managed = getUserTenantIDsByRole(user, ['tenant-admin'])
   if (managed.length === 0) return false
 
+  // Every site the person belongs to must be one the actor manages. Someone who also belongs
+  // to another site would lose that membership, and their data there, in the removal.
   const memberships = (target.tenants ?? []).map((membership) => idOf(membership.tenant))
+  const managedKeys = new Set(managed.map(String))
 
-  return memberships.some((id) => id !== null && managed.includes(id))
+  return (
+    memberships.length > 0 &&
+    memberships.every((id) => id !== null && managedKeys.has(String(id)))
+  )
 }
 
 /** Refuse a real delete: it would cascade the user's orders and ledger rows away with them. */
@@ -373,9 +439,18 @@ export const removePersonalDataEndpoint = (
 
     const body = (await req.json?.().catch(() => null)) as null | { reason?: unknown }
 
+    // A site manager removes data on their own sites only; a super admin on all of them.
+    const managed = isSuperAdmin(actor) ? null : getUserTenantIDsByRole(actor, ['tenant-admin'])
+    const memberships = (target.tenants ?? []).map((membership) => idOf(membership.tenant))
+    const auditTenantID =
+      memberships.find((tenant) => tenant !== null && (!managed || managed.map(String).includes(String(tenant)))) ??
+      managed?.[0]
+
     const result = await anonymiseUser({
       ...options,
       actorID: actor!.id as number | string,
+      ...(auditTenantID != null ? { auditTenantID } : {}),
+      ...(managed ? { scopeTenantIDs: managed } : {}),
       payload: req.payload,
       reason: typeof body?.reason === 'string' ? body.reason.slice(0, 500) : undefined,
       req,

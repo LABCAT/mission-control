@@ -2369,12 +2369,13 @@ stories:
     steps:
       - "Open a user who has applied for jobs and has an invoice order."
       - "Run Remove personal data, then open the user and the order again."
-    expected: "The name, email, phone, applications, CVs and alert subscriptions are gone, the row keeps the same id with a non-personal address and cannot sign in, the order and invoice still point at that id, a second run removes nothing, and a hard delete of a user is refused."
+    expected: "The name, email, phone, applications, CVs and alert subscriptions are gone, the row keeps the same id with a non-personal address and cannot sign in, the order and invoice still point at that id, a second run removes nothing, and a hard delete of a user is refused. A site manager can do this only for members who belong to their own sites alone, it removes data on their sites only, and a failed removal changes nothing."
     settings: []
     mvp: true
     status: built
     tests:
       - packages/payload-jobs/src/anonymise-user.test.ts
+      - apps/cms/src/personal-data-removal.test.ts
       - packages/payload-jobs/src/admin/RemovePersonalDataButton.test.ts
 
   - id: S-312

@@ -78,6 +78,24 @@ describe('personal data removal rules @S-311', () => {
     ).toBe(false)
   })
 
+  it('refuses a member who also belongs to a site the manager does not manage @S-311', () => {
+    expect(
+      canRemovePersonalData({
+        target: { id: 5, role: 'user', tenants: [{ tenant: 7 }, { tenant: 8 }] },
+        user: tenantAdmin,
+      }),
+    ).toBe(false)
+    expect(
+      canRemovePersonalData({
+        target: { id: 5, role: 'user', tenants: [{ tenant: 7 }, { tenant: 7 }] },
+        user: tenantAdmin,
+      }),
+    ).toBe(true)
+    expect(canRemovePersonalData({ target: { id: 6, role: 'user', tenants: [] }, user: tenantAdmin })).toBe(
+      false,
+    )
+  })
+
   it('never lets a site manager remove a super admin, and never acts while viewing as someone', () => {
     expect(canRemovePersonalData({ target: superAdmin, user: tenantAdmin })).toBe(false)
     expect(
@@ -192,7 +210,26 @@ describe('personal data removal in Postgres @S-311', () => {
       tenantFields: [{ name: 'currency', type: 'text' }],
       userFields,
       wrapUsers: (collection) =>
-        withPersonalDataRemoval(collection, { alertSubscriptionsSlug: ALERTS, usersSlug: 'users' }),
+        withPersonalDataRemoval(
+          {
+            ...collection,
+            hooks: {
+              ...collection.hooks,
+              // Stands in for a host guard that refuses the scrub (see the rollback test).
+              beforeChange: [
+                ...(collection.hooks?.beforeChange ?? []),
+                ({ data, originalDoc }) => {
+                  if (originalDoc?.firstName === 'Rollback' && data.firstName === null) {
+                    throw new Error('scrub refused')
+                  }
+
+                  return data
+                },
+              ],
+            },
+          },
+          { alertSubscriptionsSlug: ALERTS, usersSlug: 'users' },
+        ),
     })
 
     const tenant = harness.tenantA.id
@@ -349,6 +386,87 @@ describe('personal data removal in Postgres @S-311', () => {
     expect(entry).toBeDefined()
     expect(entry).toMatchObject({ actorID: String(harness.superAdmin.id) })
     expect(JSON.stringify(entry)).not.toContain(email)
+  })
+
+  it('rolls everything back when the scrub fails, so no data is lost half way @S-311', async () => {
+    const tenant = harness.tenantA.id
+    const email = `rollback-${Date.now()}@example.invalid`
+    const userID = await create('users', {
+      email,
+      firstName: 'Rollback',
+      password: 'test-password',
+      role: 'user',
+      tenants: [{ role: 'seeker', tenant }],
+    })
+    const cv = await file(ids.organisation, tenant, userID)
+    const application = await apply({ applicant: userID, cv, email })
+    const subscription = await create(ALERTS, { email, tenant })
+
+    await expect(
+      anonymiseUser({
+        actorID: harness.superAdmin.id,
+        alertSubscriptionsSlug: ALERTS,
+        payload: harness.payload,
+        userID,
+      }),
+    ).rejects.toThrow(/scrub refused/)
+
+    // Nothing was deleted, and the account is untouched.
+    expect(await read('applications', application)).not.toBeNull()
+    expect(await read(APPLICATION_FILES_SLUG, cv)).not.toBeNull()
+    expect(await read(ALERTS, subscription)).not.toBeNull()
+    expect((await read('users', userID))?.email).toBe(email)
+  })
+
+  it('removes data on the sites it is scoped to and leaves other sites alone @S-311', async () => {
+    const [a, b] = [harness.tenantA.id, harness.tenantB.id]
+    const email = `scoped-${Date.now()}@example.invalid`
+    const organisationB = await create('organisations', {
+      name: 'Port Vila Cafe',
+      slug: `cafe-${Date.now()}`,
+      tenant: b,
+    })
+    const jobB = await create('jobs', {
+      organisation: organisationB,
+      status: 'published',
+      tenant: b,
+      title: 'Barista',
+    })
+    const userID = await create('users', {
+      email,
+      firstName: 'Scoped',
+      password: 'test-password',
+      role: 'user',
+      tenants: [{ role: 'seeker', tenant: a }],
+    })
+    const hereCv = await file(ids.organisation, a, userID)
+    const here = await apply({ applicant: userID, cv: hereCv, email })
+    const elsewhereCv = await file(organisationB, b)
+    const elsewhere = await create('applications', {
+      consentAt: new Date().toISOString(),
+      cv: elsewhereCv,
+      email,
+      job: jobB,
+      message: 'Guest application on another site',
+      name: 'Scoped Person',
+      tenant: b,
+    })
+    const subscriptionB = await create(ALERTS, { email, tenant: b })
+    const orphanFile = await file(ids.organisation, a, userID)
+
+    const result = await anonymiseUser({
+      actorID: harness.tenantAdminA.id,
+      alertSubscriptionsSlug: ALERTS,
+      payload: harness.payload,
+      scopeTenantIDs: [a],
+      userID,
+    })
+
+    expect(result.applicationsRemoved).toBe(1)
+    expect(await read('applications', here)).toBeNull()
+    expect(await read(APPLICATION_FILES_SLUG, orphanFile)).toBeNull()
+    expect(await read('applications', elsewhere)).not.toBeNull()
+    expect(await read(ALERTS, subscriptionB)).not.toBeNull()
   })
 
   it('refuses a hard delete, so orders never lose the user they point at @S-311', async () => {
