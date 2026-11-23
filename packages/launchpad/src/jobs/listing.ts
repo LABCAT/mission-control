@@ -9,7 +9,7 @@
 import { DEFAULT_CONTENT_VERSION, readContentVersion, type ContentVersionStore } from '@mission-control/content-cache'
 
 import { cacheTag, cachedResponse, type CacheLike } from '../cms/cache'
-import { HTML_EDGE_TTL_SECONDS } from '../cms/headers'
+import { HTML_BROWSER_MAX_AGE_SECONDS, HTML_EDGE_TTL_SECONDS, htmlCacheControl } from '../cms/headers'
 import type { CmsClient } from '../cms/client'
 import type { CmsWhere } from '../cms/types'
 import {
@@ -777,7 +777,8 @@ export const serveJobListing = async (options: ServeJobListingOptions): Promise<
       headers.set('cache-control', 'no-store')
       return new Response(response.body, { headers, status: response.status })
     },
-    { cache, tags },
+    // The edge keeps the page for `ttl`; a browser cannot be purged, so it revalidates after a minute.
+    { browserCacheControl: htmlCacheControl(ttl, HTML_BROWSER_MAX_AGE_SECONDS).browser, cache, tags },
   )
 }
 

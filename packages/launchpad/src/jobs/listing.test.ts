@@ -627,7 +627,7 @@ describe('serveJobListing', () => {
     const firstBody = await first.text()
     expect(firstBody).toContain('1 jobs')
     expect(await second.text()).toBe(firstBody)
-    expect(first.headers.get('cache-control')).toBe('public, max-age=300')
+    expect(first.headers.get('cache-control')).toBe('public, max-age=60')
     expect(first.headers.get('cache-tag')).toBe('site:vwok,site:vwok:jobs')
   })
 
@@ -670,7 +670,7 @@ describe('serveJobListing', () => {
 
     const first = await serveJobListing({ ...base, search: '?category=trades' })
 
-    expect(first.headers.get('cache-control')).toBe('public, max-age=300')
+    expect(first.headers.get('cache-control')).toBe('public, max-age=60')
     expect([...cache.store.keys()].filter((url) => url.includes('/page/'))).toHaveLength(1)
   })
 
@@ -732,7 +732,10 @@ describe('serveJobListing', () => {
 
     const response = await serveJobListing({ cache, cms, now: NOW, render: renderView, search: '', site: 'vwok', store, tenant })
 
-    expect(response.headers.get('cache-control')).toBe('public, max-age=604800')
+    // The browser revalidates after a minute; only the stored edge entry is held for seven days.
+    expect(response.headers.get('cache-control')).toBe('public, max-age=60')
+    const stored = [...cache.store.entries()].find(([url]) => url.includes('/page/'))?.[1]
+    expect(stored?.headers.get('cache-control')).toBe('public, max-age=604800')
   })
 
   it('renders fresh after the content version is bumped, without a purge @S-240', async () => {
