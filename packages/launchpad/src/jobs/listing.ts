@@ -79,8 +79,10 @@ export type ListingFacets = {
   types: ListingTypeRef[]
 }
 
-/**
- * The slice of a job document the listing reads. The refs are loose because a Payload document
+/** A placement that puts a job above the others in listings (add-on or manual feature). */
+export const FEATURED_PLACEMENT = 'featured-in-listings'
+
+/** The slice of a job document the listing reads. The refs are loose because a Payload document
  * may carry an unpopulated id or a null field; `toJobSummary` treats that as "not there".
  * Fetch with `depth: 2` so the refs arrive populated.
  */
@@ -98,6 +100,15 @@ export type ListingJob = {
     | { id: number; name?: null | string; slug?: null | string }
     | (null | number | { id: number; name?: null | string; slug?: null | string })[]
   organisation?: null | number | { id: number; name?: null | string; slug?: null | string }
+  /** Where the job is featured, and until when (PJ-19). Expired rows are removed daily. */
+  placements?:
+    | null
+    | {
+        expiresAt?: null | string
+        placement?: null | string
+        startsAt?: null | string
+      }[]
+  publishedAt?: null | string
   slug?: null | string
   title?: null | string
 }
@@ -195,6 +206,19 @@ export const locationDescendantIDs = (
   return ids
 }
 
+/**
+ * Jobs that are live at `now`: published and either with no expiry or an expiry still ahead.
+ * That is `liveJobsWhere` in `packages/payload-jobs`, restated here because the theme cannot
+ * import the CMS server package. Listings, the sitemap and (later) feeds share it, so an
+ * expired job can never appear in one while another still lists it.
+ */
+export const liveJobsWhere = (now: Date = new Date()): CmsWhere => ({
+  and: [
+    { status: { equals: 'published' } },
+    { or: [{ expiresAt: { greater_than: now.toISOString() } }, { expiresAt: { exists: false } }] },
+  ],
+})
+
 export type ListingWhereOptions = {
   facets: ListingFacets
   filters: FilterValues
@@ -203,19 +227,15 @@ export type ListingWhereOptions = {
 }
 
 /**
- * The Payload query for a filter set: jobs that are live only, meaning published and either
- * with no expiry or an expiry still ahead. That is `liveJobsWhere` in `packages/payload-jobs`;
- * expired jobs keep their own page and never appear in a listing.
+ * The Payload query for a filter set: live jobs only, plus the filters the URL asked for.
+ * Expired jobs keep their own page and never appear in a listing.
  */
 export const listingWhere = ({
   facets,
   filters,
   now = new Date(),
 }: ListingWhereOptions): CmsWhere => {
-  const and: CmsWhere[] = [
-    { status: { equals: 'published' } },
-    { or: [{ expiresAt: { greater_than: now.toISOString() } }, { expiresAt: { exists: false } }] },
-  ]
+  const and: CmsWhere[] = [...(liveJobsWhere(now).and ?? [])]
 
   const keyword = filters.q?.trim()
   if (keyword) {
@@ -244,11 +264,55 @@ export const listingWhere = ({
   return { and }
 }
 
+const timeOf = (value: unknown): number => {
+  if (value instanceof Date) return value.getTime()
+  if (typeof value === 'string') return Date.parse(value)
+  return Number.NaN
+}
+
+/**
+ * True when the job carries a live `featured-in-listings` placement at `now`: started, not ended
+ * and well formed. The jobs collection's daily task removes ended rows, so this is the guard for
+ * the window between a write and that task's run.
+ */
+export const isFeatured = (job: Pick<ListingJob, 'placements'>, now: Date = new Date()): boolean => {
+  const at = now.getTime()
+
+  return (job.placements ?? []).some(
+    (row) =>
+      Boolean(row) &&
+      row?.placement === FEATURED_PLACEMENT &&
+      timeOf(row.startsAt) <= at &&
+      at < timeOf(row.expiresAt),
+  )
+}
+
+/**
+ * The listing order the founder decided (PJ-39): featured jobs first, newest first, then every
+ * other live job newest first. The CMS already returns `-publishedAt`, so this only lifts the
+ * featured jobs; jobs keep their relative order within each group.
+ */
+export const featuredFirst = <T>(
+  jobs: readonly T[],
+  options: { featured: (job: T) => boolean },
+): T[] => {
+  const featured: T[] = []
+  const rest: T[] = []
+
+  for (const job of jobs) (options.featured(job) ? featured : rest).push(job)
+
+  return [...featured, ...rest]
+}
+
 /**
  * A job document as the card needs it, or `null` when it cannot be rendered: a job with no slug
  * has no page, and one with no organisation or company name has no attribution. Callers drop nulls.
  */
-export const toJobSummary = (job: ListingJob, hrefs: ListingHrefs = {}): JobSummary | null => {
+export const toJobSummary = (
+  job: ListingJob,
+  hrefs: ListingHrefs = {},
+  now: Date = new Date(),
+): JobSummary | null => {
   const title = job.title?.trim()
   const slug = job.slug?.trim()
   const organisation = populated(job.organisation)
@@ -270,6 +334,7 @@ export const toJobSummary = (job: ListingJob, hrefs: ListingHrefs = {}): JobSumm
   return {
     ...(job.expiresAt ? { closes: job.expiresAt } : {}),
     ...(salary ? { displayedSalary: salary } : {}),
+    ...(isFeatured(job, now) ? { featured: true } : {}),
     ...(type?.isVolunteer === true ? { isVolunteer: true } : {}),
     ...(type?.name ? { jobType: type.name } : {}),
     ...(location?.name ? { location: location.name } : {}),

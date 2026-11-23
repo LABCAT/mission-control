@@ -1,12 +1,14 @@
 ---
+/**
+ * The home page before the CMS fills it (and for a deployment with no CMS secrets). It is the
+ * same hero block the site manager will edit, so the switch to CMS content changes copy only.
+ */
 import RenderBlocks from '@mission-control/rocketship-payload/astro/render-blocks'
 import Hero from '@mission-control/rocketship-payload/astro/hero'
 import type { HeroBlock } from '@mission-control/rocketship-payload/types'
 
 import SiteLayout from '../layouts/SiteLayout.astro'
 
-// mission-control: the home page renders the generic block package (PJ-84). PJ-39 will fill
-// these from site settings; the shell keeps the same copy until then.
 const blocks: HeroBlock[] = [
   {
     blockType: 'hero',

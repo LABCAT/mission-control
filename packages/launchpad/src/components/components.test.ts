@@ -67,6 +67,23 @@ describe('BaseLayout', () => {
     expect(html).not.toContain('#06914b')
   })
 
+  it('puts a hidden, personal-data-free view-as banner on every page @S-160', async () => {
+    const render = (props: object) =>
+      container.renderToString(BaseLayout, { props: { tenant, title: 'Any', ...props }, slots: { default: '' } })
+
+    for (const html of [await render({ path: '/' }), await render({ noindex: true, path: '/account' })]) {
+      // Hidden until the inline script sees the hint cookie, so cached HTML is the same for everyone.
+      expect(html).toMatch(/<div class="lp-view-as[^"]*"[^>]*hidden/)
+      expect(html).toContain('id="mc-view-as"')
+      expect(html).toContain('impersonating=1')
+      // Exit is a POST form, not a link.
+      expect(html).toMatch(/<form action="\/account\/view-as\/exit" method="post"/)
+      expect(html).toContain('Exit')
+      // Nothing about any user is in the markup: the name arrives from /api/me after load.
+      expect(html).toContain('a user')
+    }
+  })
+
   it('writes a canonical link, the language, and the title', async () => {
     const html = await container.renderToString(BaseLayout, {
       props: {

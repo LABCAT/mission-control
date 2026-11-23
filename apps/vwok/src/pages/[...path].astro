@@ -1,0 +1,65 @@
+---
+/**
+ * Every public page: `/`, `/about`, `/about/team` … The path is resolved against the site's CMS
+ * pages (PJ-39), so a new page is a CMS document, not a route file. An unknown path is a 404.
+ *
+ * With no CMS configured (a local checkout, the Lighthouse run) only `/` is served, from the
+ * static shell; every other path is still a 404.
+ */
+import Banner from '@mission-control/rocketship-payload/astro/banner'
+import CardGrid from '@mission-control/rocketship-payload/astro/card-grid'
+import Cta from '@mission-control/rocketship-payload/astro/cta'
+import Faq from '@mission-control/rocketship-payload/astro/faq'
+import FeatureBoxes from '@mission-control/rocketship-payload/astro/feature-boxes'
+import Hero from '@mission-control/rocketship-payload/astro/hero'
+import RichText from '@mission-control/rocketship-payload/astro/rich-text'
+import type { BlockComponentMap } from '@mission-control/rocketship-payload/render'
+import PageView from '@mission-control/launchpad/components/PageView'
+
+import BrandHead from '../components/BrandHead.astro'
+import HomeShell from '../components/HomeShell.astro'
+import NotFoundPage from '../components/NotFoundPage.astro'
+
+import { siteTenant } from '../brand'
+import { siteEnv } from '../env'
+import { pageRoute } from '../page-route'
+import { cmsFromEnv } from '../site'
+
+// Explicit, so a page ships only the renderers it can draw. The job blocks (latest jobs, the
+// search form, plans) are added by their own tickets.
+const components: BlockComponentMap = {
+  banner: Banner,
+  'card-grid': CardGrid,
+  cta: Cta,
+  faq: Faq,
+  'feature-boxes': FeatureBoxes,
+  hero: Hero,
+  'rich-text': RichText,
+}
+
+const pathname = Astro.url.pathname
+const route = await pageRoute({ cms: cmsFromEnv(await siteEnv()), pathname })
+
+// An unknown path is a real 404: the status and the page agree, so a crawler and a visitor see
+// the same answer.
+if (route.kind === 'not-found') Astro.response.status = 404
+---
+
+{
+  route.kind === 'page' ? (
+    <PageView
+      allJobsHref="/jobs"
+      components={components}
+      menus={route.menus}
+      siteUrl={Astro.site?.origin}
+      tenant={siteTenant}
+      view={route.view}
+    >
+      <BrandHead slot="head" />
+    </PageView>
+  ) : route.kind === 'shell' ? (
+    <HomeShell />
+  ) : (
+    <NotFoundPage menus={route.menus} path={pathname} />
+  )
+}

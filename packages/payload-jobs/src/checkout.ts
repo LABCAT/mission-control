@@ -1,5 +1,6 @@
 import {
   createPayloadRequest,
+  Forbidden,
   type CollectionSlug,
   type Endpoint,
   type GlobalSlug,
@@ -58,6 +59,7 @@ import {
 } from './pricing'
 import { DEFAULT_PAYLOAD_JOBS_SLUGS, type PayloadJobsCollectionSlugs } from './slugs'
 import { tenantTaxSettings, type TenantTaxSource } from './tax-settings'
+import { assertNotViewingAs } from './view-as'
 
 /**
  * Checkout (PJ-31): plan + add-ons → coupon / credit → order, for one job.
@@ -796,6 +798,8 @@ const committed = async <T>(req: PayloadRequest, options: Resolved, organisation
  * one transaction. Safe to repeat: a second identical call returns the first order.
  */
 export const checkoutJob = async (args: CheckoutJobArgs): Promise<CheckoutResult> => {
+  await assertNotViewingAs(args.req, 'checkout')
+
   const req = await isolatedRequest(args.req)
   const input = normaliseInput(args.input)
   const options = resolveCheckoutOptions(args.payload, args.options)
@@ -1088,6 +1092,8 @@ const preparePurchase = async (req: PayloadRequest, options: Resolved, args: Pur
  * paid) exactly as an immediate checkout would have been. Repeating it returns the result.
  */
 export const approvePurchase = async (args: PurchaseDecisionArgs): Promise<CheckoutResult> => {
+  await assertNotViewingAs(args.req, 'checkout.approve')
+
   const req = await isolatedRequest(args.req)
   const options = resolveCheckoutOptions(args.payload, args.options)
   const user = args.user === undefined ? ((req.user as MissionControlUser | null) ?? null) : args.user
@@ -1140,6 +1146,8 @@ export const approvePurchase = async (args: PurchaseDecisionArgs): Promise<Check
 
 /** The owner (or a site manager) declines a purchase request: the order is cancelled. */
 export const declinePurchase = async (args: PurchaseDecisionArgs): Promise<CheckoutOrderSummary> => {
+  await assertNotViewingAs(args.req, 'checkout.decline')
+
   const req = await isolatedRequest(args.req)
   const options = resolveCheckoutOptions(args.payload, args.options)
   const user = args.user === undefined ? ((req.user as MissionControlUser | null) ?? null) : args.user
@@ -1197,6 +1205,13 @@ const accountEndpoint = (
       if (error instanceof CheckoutError) return errorResponse(error)
       if (error instanceof AccountAuthError) {
         return accountResponse({ error: { code: error.code, message: error.message } }, error.status, error.headers)
+      }
+      // A view-as guard rail (assertNotViewingAs) refused the checkout.
+      if (error instanceof Forbidden) {
+        return accountResponse(
+          { error: { code: 'view_as_blocked', message: 'This is not available while viewing the site as a user.' } },
+          403,
+        )
       }
       req.payload.logger.error({ err: error, msg: `checkout: ${path} failed` })
       return accountResponse({ error: { code: 'server_error', message: 'Something went wrong.' } }, 500)
