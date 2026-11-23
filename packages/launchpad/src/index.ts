@@ -1,4 +1,6 @@
 export * from './jobs/listing'
+export * from './seo/robots'
+export * from './seo/sitemap'
 export * from './tenant/branding'
 export * from './tenant/date'
 export * from './tenant/filters'

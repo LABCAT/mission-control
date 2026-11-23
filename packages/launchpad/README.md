@@ -154,6 +154,37 @@ return serveJobListing({
   URL's page: storing each made-up slug would waste an entry per slug. The view carries
   `inexact` for this, and `serveJobListing` answers those with `Cache-Control: no-store`.
 
+## Sitemap and robots (`@mission-control/launchpad/seo`)
+
+`./seo` is the pure rules, `./seo/serve` adds the CMS read and the edge cache, `./seo/robots` is
+`robots.txt` as data. A site app supplies the CMS client, the tenant and the origin:
+
+```ts
+import { serveSitemap } from '@mission-control/launchpad/seo/serve'
+
+return serveSitemap({
+  cms: createCmsClient({ baseUrl: env.CMS_URL, siteKey: env.SITE_KEY }),
+  path: Astro.url.pathname, // /sitemap.xml or /sitemap-1.xml
+  site: tenant.slug,
+  siteUrl: Astro.site!.origin,
+  tenant,
+})
+```
+
+- Live jobs only: the loader asks the CMS with `liveJobsWhere(now)`, so an expired job cannot
+  reach the builder. A page is listed unless it is a draft or `seo.noIndex`; an organisation must
+  be approved with its page enabled.
+- A filter page is listed only while it has a job, so the sitemap never advertises an empty page
+  that answers `noindex`. Query-string filters have no URL in it at all.
+- `filterPaths` says where a site's filter pages live. It defaults to `/jobs/category/:slug` and
+  `/jobs/type/:slug` (the routes `jobListingRoute` serves); `cleanFilterPaths` is the founder's
+  one-level scheme for when PJ-42 adds those routes. A kind with no builder is not listed, so the
+  sitemap never names a URL the site cannot answer.
+- One file up to 45,000 URLs, then `/sitemap.xml` becomes an index over `/sitemap-1.xml` … and a
+  shard the current plan does not have is a 404.
+- XML and robots answers are held at the edge for an hour under `site:<slug>` and
+  `site:<slug>:sitemap`, which PJ-41's purge clears.
+
 ## Conventions
 
 - Zero client JavaScript by default. Only `Turnstile` ships a script, and only the forms that

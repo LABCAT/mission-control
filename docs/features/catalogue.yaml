@@ -1888,8 +1888,11 @@ stories:
     settings:
       - seo.sitemap
     mvp: true
-    status: planned
-    tests: []
+    status: built
+    tests:
+      - packages/launchpad/src/seo/sitemap.test.ts
+      - packages/launchpad/src/seo/serve.test.ts
+      - apps/vwok/src/sitemap.test.ts
 
   - id: S-124
     area: SEO and URLs
@@ -1901,8 +1904,10 @@ stories:
     settings:
       - seo.robots
     mvp: true
-    status: planned
-    tests: []
+    status: built
+    tests:
+      - packages/launchpad/src/seo/robots.test.ts
+      - apps/vwok/src/brand.test.ts
 
   - id: S-125
     area: SEO and URLs

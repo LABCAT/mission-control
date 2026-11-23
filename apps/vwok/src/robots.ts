@@ -1,3 +1,5 @@
+import { robotsTxt as themeRobotsTxt } from '@mission-control/launchpad/seo/robots'
+
 import { PRODUCTION_HOSTNAMES } from './brand'
 
 /** Loopback hosts are a developer's own machine, never a public duplicate of the site. */
@@ -7,15 +9,31 @@ export const isProductionHost = (hostname: string): boolean =>
   PRODUCTION_HOSTNAMES.includes(hostname.toLowerCase())
 
 /**
- * `robots.txt` for one hostname. Production is crawlable, and so is a developer's own machine so
- * Lighthouse sees a crawlable page. A Worker preview — including a `workers.dev` deployment —
- * serves the same pages as the live site and would be duplicate content, so it is blocked. The
- * sitemap reference arrives with the sitemap itself (PJ-40).
+ * A host may be crawled in production or on a developer's own machine, so Lighthouse sees a
+ * crawlable page. A Worker preview — including a `workers.dev` deployment — serves the same
+ * pages as the site and would be duplicate content, so it is blocked.
  */
-export const robotsTxt = (hostname: string): string => {
-  const host = hostname.toLowerCase()
-  const crawlable = isProductionHost(host) || LOCAL_HOSTNAMES.includes(host)
-  const rules = crawlable ? ['User-agent: *', 'Allow: /'] : ['User-agent: *', 'Disallow: /']
+export const isCrawlableHost = (hostname: string): boolean =>
+  isProductionHost(hostname) || LOCAL_HOSTNAMES.includes(hostname.toLowerCase())
 
-  return `${rules.join('\n')}\n`
+export type RobotsOptions = {
+  /** The tenant's AI-crawler setting (PJ-104); allow until the setting exists. */
+  aiCrawlersAllowed?: boolean
+  /** Absolute sitemap URL. Omitted only where there is no canonical origin to name. */
+  sitemapUrl?: null | string
 }
+
+/**
+ * `robots.txt` for one hostname. Which paths stay private and how AI crawlers are treated come
+ * from the theme, so every site answers the same way; this app only decides whether the host is
+ * the live site.
+ */
+export const robotsTxt = (
+  hostname: string,
+  { aiCrawlersAllowed = true, sitemapUrl = null }: RobotsOptions = {},
+): string =>
+  themeRobotsTxt({
+    allowAiCrawlers: aiCrawlersAllowed,
+    crawlable: isCrawlableHost(hostname),
+    sitemapUrl,
+  })
