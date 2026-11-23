@@ -1,9 +1,11 @@
-import type { CollectionSlug, Endpoint, Payload, PayloadRequest } from 'payload'
+import type { CollectionAfterChangeHook, CollectionSlug, Endpoint, Payload, PayloadRequest } from 'payload'
 
 import { hasTenantRole, isSeekerOnly, isSuperAdmin, type MissionControlUser } from './access'
 import { idsOf, tenantIDOf } from './catalog'
-import { JobLogNote, JOB_LOG_NOTE_CONTEXT } from './job-log'
+import { JOB_LOG_NOTE_CONTEXT, type JobLogNote } from './job-log'
 import { JOB_STAFF_ROLES } from './collections/jobs'
+import { JOB_SYSTEM_CONTEXT } from './job-status'
+import { loadTenantDoc } from './tenant-doc'
 import {
   DEFAULT_PUBLICATION_SETTINGS,
   publicationDecisionFor,
@@ -46,8 +48,6 @@ export const publicationPaymentOf = ({
   return 'invoiced'
 }
 
-type TenantSettings = { organisation?: unknown; publication: PublicationSettings; trusted: boolean }
-
 /**
  * Read what the rule needs for one job: its organisation's trust flag and the tenant's
  * publication settings. Missing rows fall back to the generic defaults, never to a guess about
@@ -78,32 +78,10 @@ const settingsFor = async ({
           req,
         })) as Doc | null)
 
-  if (tenantID === null) {
-    return {
-      organisation,
-      publication: { ...DEFAULT_PUBLICATION_SETTINGS },
-      trusted: organisation?.trusted === true,
-    }
-  }
-
-  let tenant: unknown = null
-  try {
-    tenant = await payload.findByID({
-      collection: slugs.tenants as CollectionSlug,
-      depth: 0,
-      disableErrors: true,
-      id: tenantID,
-      overrideAccess: true,
-      req,
-    })
-  } catch {
-    // A host without a tenants collection in single-tenant mode; the defaults apply.
-    tenant = null
-  }
-
+  const tenant = await loadTenantDoc(req, tenantID)
   return {
     organisation,
-    publication: tenantPublicationSettings(tenant as never),
+    publication: tenant ? tenantPublicationSettings(tenant as never) : { ...DEFAULT_PUBLICATION_SETTINGS },
     trusted: organisation?.trusted === true,
   }
 }
@@ -143,7 +121,6 @@ export const jobPublicationDecision = async ({
   })
 
   return publicationDecisionFor({
-    approved: job.approvedByStaff === true,
     payment: publicationPaymentOf({ orderStatus: order?.status as null | string }),
     settings: publication,
     trusted,
@@ -151,31 +128,54 @@ export const jobPublicationDecision = async ({
   })
 }
 
-/** Set a job's status as system code, leaving a note in its log. */
+/** Run `fn` with these keys on `req.context`, then put back what was there. */
+export const withContextKeys = async <T>(
+  req: PayloadRequest,
+  keys: Record<string, unknown>,
+  fn: () => Promise<T>,
+): Promise<T> => {
+  const previous = req.context
+  req.context = { ...previous, ...keys }
+  try {
+    return await fn()
+  } finally {
+    req.context = previous
+  }
+}
+
+/** Set a job's status, leaving a note in its log. `system` marks it as the rule's doing. */
 const setStatus = async ({
   jobID,
   note,
   payload,
   req,
-  status,
   slugs,
+  status,
+  system,
 }: {
   jobID: number | string
   note: string
   payload: Payload
   req: PayloadRequest
-  status: 'published'
   slugs: PayloadJobsCollectionSlugs
+  status: 'published'
+  /** The rule decided, not a person: logged as the system. A site manager's approval is not. */
+  system: boolean
 }): Promise<Doc> =>
-  (await payload.update({
-    collection: slugs.jobs as CollectionSlug,
-    context: { [JOB_LOG_NOTE_CONTEXT]: note } satisfies JobLogNote,
-    data: { status } as never,
-    depth: 0,
-    id: jobID,
-    overrideAccess: true,
+  withContextKeys(
     req,
-  })) as unknown as Doc
+    { [JOB_LOG_NOTE_CONTEXT]: note, ...(system ? { [JOB_SYSTEM_CONTEXT]: true } : {}) } satisfies JobLogNote &
+      Record<string, unknown>,
+    async () =>
+      (await payload.update({
+        collection: slugs.jobs as CollectionSlug,
+        data: { status } as never,
+        depth: 0,
+        id: jobID,
+        overrideAccess: true,
+        req,
+      })) as unknown as Doc,
+  )
 
 export type ApproveJobArgs = {
   jobId: number | string
@@ -252,8 +252,9 @@ export const approveJob = async ({
     note: 'Approved by a site manager',
     payload,
     req,
-    status: 'published',
     slugs,
+    status: 'published',
+    system: false,
   })
 
   let organisationTrusted = false
@@ -320,14 +321,31 @@ export const applyPublicationForOrder = async ({
       note: 'Published when its order was settled',
       payload,
       req,
-      status: 'published',
       slugs,
+      status: 'published',
+      system: true,
     })
     published.push(job.id)
   }
 
   return { published }
 }
+
+/**
+ * Order hook: once an order is invoiced or paid, release the jobs it pays for as far as the
+ * rule allows. Runs inside the order's own transaction, so checkout, a purchase approval, the
+ * Xero payment sync and "mark paid" all go through the one rule.
+ */
+export const releaseJobsOnSettle = (
+  slugs: PayloadJobsCollectionSlugs = DEFAULT_PAYLOAD_JOBS_SLUGS,
+): CollectionAfterChangeHook =>
+  async function releaseJobsOnSettleHook({ doc, operation, previousDoc, req }) {
+    const status = (doc as { status?: string }).status
+    if (status !== 'invoiced' && status !== 'paid') return doc
+    if (operation === 'update' && (previousDoc as { status?: string } | undefined)?.status === status) return doc
+    await applyPublicationForOrder({ orderID: (doc as Doc).id, payload: req.payload, req, slugs })
+    return doc
+  }
 
 /** `POST /api/<jobs>/:id/approve` for the admin button and any later client. */
 export const approveJobEndpoint = ({

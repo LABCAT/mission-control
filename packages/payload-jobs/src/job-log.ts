@@ -1,7 +1,6 @@
-import type { CollectionBeforeChangeHook, Field } from 'payload'
+import type { CollectionBeforeChangeHook, CollectionSlug, Field, PayloadRequest } from 'payload'
 
-import { hasAnyTenantRole, hasTenantRole, isSuperAdmin, type MissionControlUser } from './access'
-import { JOB_STATUSES, isJobStatus, type JobStatus } from './job-status'
+import { JOB_STATUSES, JOB_SYSTEM_CONTEXT, isJobStatus, type JobStatus } from './job-status'
 
 /**
  * A job's status log: every move, oldest first, nobody can edit it (PJ-32). The organisation
@@ -53,7 +52,7 @@ export const jobLogField = (usersSlug: string): Field => ({
           options: JOB_LOG_ACTORS.map((value) => ({ label: value, value })),
           required: true,
         },
-        { name: 'by', type: 'relationship', relationTo: usersSlug },
+        { name: 'by', type: 'relationship', relationTo: usersSlug as CollectionSlug },
       ],
     },
     {
@@ -78,6 +77,7 @@ export const jobLogField = (usersSlug: string): Field => ({
 
 /** `req.context` key that carries the note a site manager's action wants in the log. */
 export const JOB_LOG_NOTE_CONTEXT = 'jobLogNote'
+export type JobLogNote = { [JOB_LOG_NOTE_CONTEXT]: string }
 
 const storedLog = (value: unknown): JobLogEntry[] =>
   Array.isArray(value) ? (value as JobLogEntry[]).filter((entry) => entry && typeof entry === 'object') : []
@@ -88,8 +88,10 @@ const storedLog = (value: unknown): JobLogEntry[] =>
  * Runs after `jobStatusRules`, which has already validated the move and set the dates.
  */
 export const jobStatusLog =
-  (): CollectionBeforeChangeHook =>
+  (actorOf: (args: { data?: Record<string, unknown>; originalDoc?: Record<string, unknown>; req: PayloadRequest }) => JobLogActor): CollectionBeforeChangeHook =>
   ({ context, data, operation, originalDoc, req }) => {
+    const actorFor = (): JobLogActor =>
+      context?.[JOB_SYSTEM_CONTEXT] === true ? 'system' : actorOf({ data, originalDoc, req })
     const previous = storedLog(originalDoc?.[JOB_LOG_FIELD])
     const to = (data?.status ?? originalDoc?.status) as JobStatus
     if (!isJobStatus(to)) return data
@@ -100,7 +102,7 @@ export const jobStatusLog =
         ...data,
         [JOB_LOG_FIELD]: [
           ...previous,
-          { actor: actorFor(req), at: new Date().toISOString(), by: userIDOf(req), event: 'created', from: null, note, to },
+          { actor: actorFor(), at: new Date().toISOString(), by: userIDOf(req), event: 'created', from: null, note, to },
         ],
       }
     }
@@ -113,17 +115,10 @@ export const jobStatusLog =
       ...data,
       [JOB_LOG_FIELD]: [
         ...previous,
-        { actor: actorFor(req), at: new Date().toISOString(), by: userIDOf(req), event: 'status', from, note, to },
+        { actor: actorFor(), at: new Date().toISOString(), by: userIDOf(req), event: 'status', from, note, to },
       ],
     }
   }
-
-const actorFor = (req: { user?: unknown }): JobLogActor => {
-  const user = (req.user ?? null) as MissionControlUser | null
-  if (!user) return 'system'
-  if (isSuperAdmin(user)) return 'staff'
-  return hasAnyTenantRole(user, ['tenant-admin', 'editor']) ? 'staff' : 'employer'
-}
 
 const userIDOf = (req: { user?: unknown }): null | number | string => {
   const id = (req.user as { id?: unknown } | null | undefined)?.id

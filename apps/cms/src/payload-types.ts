@@ -500,9 +500,26 @@ export interface Tenant {
     exemptXeroTaxType?: string | null;
   };
   /**
-   * Whether new jobs need an admin’s approval before they go live.
+   * When a job goes live and whether it needs a site manager’s approval. Every rule is per site.
    */
-  jobModeration?: ('legacy' | 'review' | 'auto') | null;
+  jobPublication?: {
+    /**
+     * Which jobs wait for a site manager before going live.
+     */
+    moderation?: ('always' | 'new-employers' | 'never') | null;
+    /**
+     * For a trusted organisation’s jobs.
+     */
+    trustedGoLive?: ('after-approval' | 'after-payment' | 'on-submit') | null;
+    /**
+     * For an organisation that is not trusted yet.
+     */
+    newEmployerGoLive?: ('after-approval' | 'after-payment' | 'on-submit') | null;
+    /**
+     * When a site manager approves a job, also mark its organisation as trusted, so its later jobs go live as that organisation’s rule says.
+     */
+    trustOnApproval?: boolean | null;
+  };
   /**
    * When on, only signed-in accounts can apply to a job. Off: guests can apply with an email address.
    */
@@ -640,6 +657,10 @@ export interface Organisation {
    * Set by a tenant admin. Unapproved organisations cannot publish jobs.
    */
   approved?: boolean | null;
+  /**
+   * Set by a site manager. A trusted organisation’s jobs follow the site’s “trusted” go-live rule (usually live at once, invoice paid later); others wait for approval. Approving a job can set this (site setting).
+   */
+  trusted?: boolean | null;
   /**
    * Set by a tenant admin. The public page and directory entry go live.
    */
@@ -1326,7 +1347,7 @@ export interface Job {
    * Made from the title when left empty. Unique in the tenant.
    */
   slug?: string | null;
-  status: 'draft' | 'pending' | 'published' | 'expired' | 'cancelled';
+  status: 'draft' | 'waiting_for_purchase' | 'pending' | 'published' | 'expired' | 'cancelled';
   publishedAt?: string | null;
   expiresAt?: string | null;
   organisation: number | Organisation;
@@ -1383,6 +1404,21 @@ export interface Job {
       }[]
     | null;
   views?: number | null;
+  /**
+   * Every status change, oldest first. Nobody can edit it.
+   */
+  log?:
+    | {
+        at: string;
+        event: 'created' | 'status';
+        actor: 'employer' | 'staff' | 'system';
+        by?: (number | null) | User;
+        from?: ('draft' | 'waiting_for_purchase' | 'pending' | 'published' | 'expired' | 'cancelled') | null;
+        to: 'draft' | 'waiting_for_purchase' | 'pending' | 'published' | 'expired' | 'cancelled';
+        note?: string | null;
+        id?: string | null;
+      }[]
+    | null;
   /**
    * WordPress post id, for the import.
    */
@@ -2497,7 +2533,14 @@ export interface TenantsSelect<T extends boolean = true> {
         defaultRateKey?: T;
         exemptXeroTaxType?: T;
       };
-  jobModeration?: T;
+  jobPublication?:
+    | T
+    | {
+        moderation?: T;
+        trustedGoLive?: T;
+        newEmployerGoLive?: T;
+        trustOnApproval?: T;
+      };
   accountRequiredToApply?: T;
   emailFromName?: T;
   emailFromAddress?: T;
@@ -2601,6 +2644,7 @@ export interface OrganisationsSelect<T extends boolean = true> {
       };
   listingRequested?: T;
   approved?: T;
+  trusted?: T;
   pageEnabled?: T;
   canPayByInvoice?: T;
   billingEmail?: T;
@@ -2808,6 +2852,18 @@ export interface JobsSelect<T extends boolean = true> {
         id?: T;
       };
   views?: T;
+  log?:
+    | T
+    | {
+        at?: T;
+        event?: T;
+        actor?: T;
+        by?: T;
+        from?: T;
+        to?: T;
+        note?: T;
+        id?: T;
+      };
   legacyId?: T;
   updatedBy?: T;
   updatedAt?: T;

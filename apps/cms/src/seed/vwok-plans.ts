@@ -12,9 +12,15 @@ import type { PlanSeed } from '@mission-control/payload-jobs'
  * duration, pack size, post ID) and must be copied in exactly. `seedPlans` refuses to run while
  * any value is `null`, so a guessed price can never reach a database.
  */
+/**
+ * A listing runs for at most 45 days on Vanuatu Wok (founder, PJ-32): the employer's close date
+ * is capped by the plan's duration, and the job expires at the end of that local day.
+ */
+export const VWOK_MAX_DURATION_DAYS = 45
+
 export const vwokPlans: PlanSeed[] = [
   {
-    durationDays: null,
+    durationDays: VWOK_MAX_DURATION_DAYS,
     jobCredits: 1,
     key: 'regular-listing',
     legacyId: null,
@@ -24,7 +30,7 @@ export const vwokPlans: PlanSeed[] = [
   },
   {
     creditExpiryDays: null,
-    durationDays: null,
+    durationDays: VWOK_MAX_DURATION_DAYS,
     jobCredits: null,
     key: 'job-pack',
     legacyId: null,
@@ -34,7 +40,7 @@ export const vwokPlans: PlanSeed[] = [
   },
   {
     creditExpiryDays: null,
-    durationDays: null,
+    durationDays: VWOK_MAX_DURATION_DAYS,
     jobCredits: 10,
     key: '10-job-pack',
     legacyId: null,
@@ -43,7 +49,7 @@ export const vwokPlans: PlanSeed[] = [
     sortOrder: 30,
   },
   {
-    durationDays: null,
+    durationDays: VWOK_MAX_DURATION_DAYS,
     // The Enhanced add-on for the listing's duration, unless the live plan says otherwise.
     includedAddOns: [{ addOnKey: 'enhanced', durationDays: null }],
     jobCredits: 1,
@@ -57,7 +63,7 @@ export const vwokPlans: PlanSeed[] = [
     // Free, and only for voluntary jobs (USAGE.md): the Voluntary job type and its children are
     // flagged `isVolunteer` (PJ-16), which checkout passes to quote().
     acceptsCredits: false,
-    durationDays: null,
+    durationDays: VWOK_MAX_DURATION_DAYS,
     isVolunteer: true,
     jobCredits: 1,
     key: 'volunteer-listing',

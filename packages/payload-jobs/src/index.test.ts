@@ -178,6 +178,25 @@ describe('payloadJobs', () => {
     }
   })
 
+  it('adds the Approve endpoint and button to jobs, under a renamed slug too @S-194', async () => {
+    for (const slug of ['jobs', 'vacancies']) {
+      const result = await payloadJobs({ collections: slug === 'jobs' ? {} : { jobs: { slug } } })(baseConfig)
+      const jobs = result.collections?.find((collection) => collection.slug === slug)
+      expect(((jobs?.endpoints || []) as { method: string; path: string }[]).map((e) => `${e.method} ${e.path}`)).toContain(
+        'post /:id/approve',
+      )
+      const controls = (jobs?.admin?.components?.edit as { beforeDocumentControls?: { path: string }[] } | undefined)
+        ?.beforeDocumentControls
+      expect(controls?.map((control) => control.path)).toContain('@mission-control/payload-jobs/client#ApproveJobButton')
+    }
+  })
+
+  it('releases jobs when their order is invoiced or paid @S-192', async () => {
+    const result = await payloadJobs()(baseConfig)
+    const hooks = result.collections?.find((collection) => collection.slug === 'orders')?.hooks?.afterChange ?? []
+    expect(hooks.map((hook) => hook.name)).toContain('releaseJobsOnSettleHook')
+  })
+
   it('adds coupons only when the feature is on', async () => {
     const on = await payloadJobs()(baseConfig)
     const off = await payloadJobs({ features: { coupons: false } })(baseConfig)

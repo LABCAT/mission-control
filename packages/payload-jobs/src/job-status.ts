@@ -46,9 +46,9 @@ export const JOB_TRANSITIONS: Readonly<Record<JobStatus, readonly JobStatus[]>> 
   cancelled: [],
   draft: ['waiting_for_purchase', 'pending', 'published', 'cancelled'],
   expired: ['published'],
-  pending: ['draft', 'published', 'cancelled'],
+  pending: ['draft', 'published', 'cancelled', 'waiting_for_purchase'],
   published: ['expired', 'cancelled'],
-  waiting_for_purchase: ['cancelled', 'pending', 'published'],
+  waiting_for_purchase: ['cancelled', 'draft', 'pending', 'published'],
 }
 
 /** The statuses a new job may start in. Expired and cancelled jobs are never created. */
@@ -58,6 +58,12 @@ export const JOB_INITIAL_STATUSES: readonly JobStatus[] = [
   'published',
   'waiting_for_purchase',
 ]
+
+/**
+ * Set on `req.context` by checkout, the Approve action and the order-paid release: the move is
+ * the system's (the rule decided it), whoever's request carries it. Server-side only.
+ */
+export const JOB_SYSTEM_CONTEXT = 'jobSystem'
 
 /** Who is acting: an employer on their own job, staff, or system code (no user). */
 export type JobActor = 'employer' | 'staff' | 'system'

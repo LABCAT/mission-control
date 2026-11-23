@@ -10,6 +10,7 @@ import type {
 import { accountAuthEndpoints, type AccountAuthOptions } from './account-auth'
 import { withViewAs } from './view-as'
 import { DASHBOARD_COMPONENT_PATH, type SiteManagerAdminOptions } from './admin'
+import { approveJobEndpoint, releaseJobsOnSettle } from './approval'
 import { accountCheckoutEndpoints, type PurchaseRightsCheck } from './checkout'
 import type { LocationsOptions } from './collections/locations'
 import { locationsCollection, locationsTenantSlugIndex } from './collections/locations'
@@ -81,7 +82,12 @@ export * from './slug-rules'
 export * from './add-ons'
 export * from './collections/jobs'
 export * from './collections/applications'
+export * from './approval'
+export * from './job-log'
 export * from './job-status'
+export { addLocalDays, endOfLocalDayAfter, validTimeZone } from './local-time'
+export * from './publication'
+export * from './publication-settings'
 export * from './add-ons-seed'
 export * from './catalog'
 export * from './placements'
@@ -670,6 +676,11 @@ const jobBoardPlugin =
         ...baseJobs.hooks,
         afterChange: [...(baseJobs.hooks?.afterChange ?? []), jobLifecycleHook(registry, slugs.jobs)],
       },
+      // The site manager's Approve action (PJ-32): POST /api/<jobs>/:id/approve.
+      endpoints: [
+        ...(Array.isArray(baseJobs.endpoints) ? baseJobs.endpoints : []),
+        approveJobEndpoint({ slugs, tenantScoped: tenancy === 'multi' }),
+      ],
     }
     // Credits (PJ-24): a job cancelled before publishing gets its credit back, and documents the
     // ledger points at are kept.
@@ -683,7 +694,12 @@ const jobBoardPlugin =
       ...baseOrders,
       hooks: {
         ...baseOrders.hooks,
-        afterChange: [...(baseOrders.hooks?.afterChange ?? []), orderEventHook(registry)],
+        afterChange: [
+          ...(baseOrders.hooks?.afterChange ?? []),
+          orderEventHook(registry),
+          // Release the jobs an order pays for once it is invoiced or paid (PJ-32).
+          releaseJobsOnSettle(slugs),
+        ],
       },
     }
     const orders = features.credits ? withCreditLedger(eventOrders, 'order', 'order', slugs.creditLedger) : eventOrders

@@ -13,8 +13,6 @@ import {
  * `publication.ts`; the legacy Vanuatu Wok behaviour is the `vwok-publication` seed.
  */
 
-type Sibling = { siblingData?: Record<string, unknown> }
-
 const validateTrigger = (value: unknown): string | true => {
   if (value === null || value === undefined || value === '') return true
   return PUBLICATION_TRIGGERS.includes(value as never) || 'Pick one of the listed go-live rules'
