@@ -1042,13 +1042,99 @@ stories:
     role: super admin
     story: "A super admin views the site as another user with a visible banner and an audit entry."
     steps:
-      - "Start View as user from the admin, browse, then stop."
-    expected: "The hint cookie switches the public site view, a banner names the impersonated user, and the action is logged."
+      - "Open a seeker or employer in the admin and choose View as this user."
+      - "Browse the site, then choose Exit in the banner."
+    expected: "The site opens signed in as that user for 30 minutes; the hint cookie shows a banner on every page naming the user, with Exit; Exit ends the session and returns to the admin; start and exit are in the audit log with the super admin's id."
     settings:
       - security.viewAsUser
     mvp: true
-    status: planned
-    tests: []
+    status: built
+    tests:
+      - packages/payload-jobs/src/view-as.test.ts
+      - apps/vwok/src/view-as-handlers.test.ts
+
+  - id: S-156
+    area: Organisations
+    role: super admin
+    story: "Only a signed-in super admin can view the site as a user, and only as a plain site account, from our own admin."
+    steps:
+      - "Try to start a view as a tenant admin, an editor, an employer and a seeker."
+      - "Try to view as a super admin, as yourself, as staff, and as a user with no account on the tenant."
+      - "Send the start request from another origin, without the CSRF header, or as a form post."
+    expected: "Every one of those is refused and no code is issued; refused starts are logged with the reason; a demoted super admin is refused at once; only a seeker or employer whose memberships are all site roles can be viewed."
+    settings:
+      - security.viewAsUser
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/view-as.integration.test.ts
+
+  - id: S-157
+    area: Organisations
+    role: super admin
+    story: "A view-as session lasts 30 minutes at most, works only on its own tenant, and Exit ends it at once."
+    steps:
+      - "Redeem the one-time code twice, on the wrong tenant, and after 60 seconds."
+      - "Use the token on another tenant, as a cookie, after 30 minutes, and after Exit or logout."
+      - "Demote the super admin or make the user staff while viewing."
+    expected: "The code works once, for 60 seconds, on its own tenant; the token is bearer-only, tenant-bound and cannot be refreshed; expiry, Exit, logout, a demotion or the user becoming staff each stop it on the next request; the super admin's own session and the user's own sessions are untouched."
+    settings:
+      - security.viewAsUser
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/view-as.integration.test.ts
+      - packages/payload-jobs/src/view-as.test.ts
+      - packages/launchpad/src/view-as/index.test.ts
+      - apps/vwok/src/view-as-handlers.test.ts
+
+  - id: S-158
+    area: Organisations
+    role: super admin
+    story: "While viewing as a user, sign-in details, account deletion and purchases are blocked."
+    steps:
+      - "While viewing, change the email, password, role or memberships."
+      - "Delete the account, refresh the token, request a password reset, register, or create an order."
+      - "Call Payload's own logout, with and without allSessions."
+    expected: "Each is refused with 403 and logged as blocked with the super admin's id; only the profile name can be changed; Payload's own logout is refused so no other session is touched; the admin panel and the audit log are not reachable."
+    settings:
+      - security.viewAsUser
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/view-as.integration.test.ts
+
+  - id: S-159
+    area: Admin
+    role: super admin
+    story: "Everything done through a view-as session is in the audit log, which only super admins can read and nobody can change."
+    steps:
+      - "Start a view, change the profile name, try a blocked action, then exit."
+      - "Try to read the log as staff and to edit or delete a row."
+    expected: "Start, redeem, every write, every blocked attempt and exit are recorded with the super admin's id, the user, the tenant and the session, and never a token or code; the log is readable by super admins only and is append only."
+    settings:
+      - admin.auditLog
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/view-as.integration.test.ts
+
+  - id: S-160
+    area: Site
+    role: super admin
+    story: "While viewing as a user, a banner names them on every page, and cached pages are not affected."
+    steps:
+      - "Start a view and open pages of the site, including cached ones."
+      - "Let the view expire or exit, and reload."
+    expected: "The banner is in every page's HTML, hidden; the non-HttpOnly impersonating hint cookie shows it and /api/me fills in the name; nothing personal is in the HTML; a stale hint removes itself; Exit is a POST form."
+    settings:
+      - security.viewAsUser
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/view-as/index.test.ts
+      - packages/launchpad/src/components/components.test.ts
+      - apps/vwok/src/view-as-handlers.test.ts
 
   # ---------------------------------------------------------------------------
   # Accounts and authentication
@@ -1471,15 +1557,36 @@ stories:
   - id: S-101
     area: Commerce
     role: employer
-    story: "An employer opens the Xero invoice link for an order."
+    story: "An employer or site manager opens an order's invoice: Xero's online invoice when the sync recorded one, otherwise an HTML invoice built from the order."
     steps:
-      - "Open the invoice link from the order or email."
-    expected: "The Xero online invoice opens for the signed-in organisation; a HTML fallback renders when Xero is unavailable."
+      - "Open a paid order as its organisation's member and as a site manager, from the order's admin edit view and from GET /api/orders/:id/invoice."
+      - "Ask for ?format=json and ?download=1, then try the same order as another organisation, another tenant, a seeker and a signed-out caller."
+    expected: "The organisation's members and the tenant's site managers get the invoice: a 302 to the Xero online invoice, or the HTML fallback served inline (an attachment with ?download=1, described by ?format=json), carrying no scripts. Another organisation, another tenant, a seeker and a missing order all get not_found; a signed-out caller gets not_signed_in. An order that needs no invoice, and a tenant with the xero add-on off, answer no_invoice. The admin shows the link on the order's edit view only for those who may open it."
     settings:
-      - xero.invoiceLink
+      - addOns (xero)
+      - xero.dueDays
     mvp: true
-    status: planned
-    tests: []
+    status: built
+    tests:
+      - packages/payload-jobs-xero/src/invoice-link.integration.test.ts
+      - packages/payload-jobs-xero/src/invoice-link.test.ts
+
+  - id: S-171
+    area: Commerce
+    role: employer
+    story: "The HTML invoice fallback prints an order's lines, tax, total and parties in the tenant's currency and locale."
+    steps:
+      - "Render the fallback for an untaxed order, and for a taxed order with a discount."
+      - "Print the page, and render a document with no dates or parties."
+    expected: "Amounts are whole minor units printed in the currency's own places, never through float arithmetic; the line detail carries the discount and tax; tax is its own row before the total; every user-entered value is escaped; the page fetches nothing and ships no script; and a document with no dates or parties still renders."
+    settings:
+      - tax.enabled
+      - taxLabel
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-xero/src/invoice-html.test.ts
+      - packages/payload-jobs-xero/src/invoice-link.test.ts
 
   - id: S-102
     area: Commerce
@@ -1888,8 +1995,11 @@ stories:
     settings:
       - seo.sitemap
     mvp: true
-    status: planned
-    tests: []
+    status: built
+    tests:
+      - packages/launchpad/src/seo/sitemap.test.ts
+      - packages/launchpad/src/seo/serve.test.ts
+      - apps/vwok/src/sitemap.test.ts
 
   - id: S-124
     area: SEO and URLs
@@ -1901,8 +2011,10 @@ stories:
     settings:
       - seo.robots
     mvp: true
-    status: planned
-    tests: []
+    status: built
+    tests:
+      - packages/launchpad/src/seo/robots.test.ts
+      - apps/vwok/src/brand.test.ts
 
   - id: S-125
     area: SEO and URLs
@@ -2311,3 +2423,126 @@ stories:
     status: built
     tests:
       - packages/payload-jobs/src/plug-points/plug-points.test.ts
+
+  # ---------------------------------------------------------------------------
+  # Site pages (PJ-39): the home page, system pages and normal CMS pages, rendered from
+  # blocks with the site's menus. Stories S-290 to S-299 belong to this task.
+  # ---------------------------------------------------------------------------
+  - id: S-290
+    area: Site pages
+    role: site manager
+    story: "The home page is a CMS page: visitors see the blocks the site manager arranged, in that order."
+    steps:
+      - "Open / on a site whose home page has a hero block and a latest-jobs block."
+      - "Move the hero below the jobs in the admin, then reload /."
+    expected: "The home page renders the blocks in the editor's order, with no template copy of its own; with no CMS configured the site still serves a home page shell."
+    settings:
+      - site.pages.home
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/pages/view.test.ts
+      - packages/launchpad/src/pages/pathing.test.ts
+      - packages/launchpad/src/pages/collections.test.ts
+      - apps/vwok/src/page-route.test.ts
+      - apps/vwok/src/site.test.ts
+
+  - id: S-291
+    area: Site pages
+    role: site manager
+    story: "A page created in the CMS is live at its path, and a page under another page is live at /<parent>/<slug>."
+    steps:
+      - "Create an About us page, then a Team page under it."
+      - "Open /about and /about/team, with and without a trailing slash."
+    expected: "Each page renders at the path its slug chain gives it; the home page is / whatever its slug says, and Organisations keeps /organisations."
+    settings:
+      - site.pages.paths
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/pages/pathing.test.ts
+      - packages/launchpad/src/pages/view.test.ts
+      - apps/vwok/src/page-route.test.ts
+
+  - id: S-292
+    area: Site pages
+    role: site manager
+    story: "A path with no page behind it is a 404, and a page's own SEO fields set its title, description and robots tag."
+    steps:
+      - "Open /no-such-page on the site."
+      - "Set a page's SEO title, description and 'do not index', then open the page."
+    expected: "An unknown path answers 404 with the not-found page and no menu links to it; the page head uses the page's SEO overrides and falls back to the page title."
+    settings:
+      - site.pages.seo
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/pages/pathing.test.ts
+      - packages/launchpad/src/pages/view.test.ts
+      - packages/launchpad/src/components/PageView.test.ts
+
+  - id: S-293
+    area: Site pages
+    role: site manager
+    story: "Every block type a site registers renders on a page, and a block that needs data (latest jobs) renders where the editor put it."
+    steps:
+      - "Build a page with a hero, three feature boxes, a latest-jobs block and rich text."
+      - "Save and open the page."
+    expected: "Blocks render in order through the explicit component map; a block with no renderer is skipped instead of breaking the page; the jobs block draws the loaded jobs at its place in the layout."
+    settings:
+      - site.blocks
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/pages/blocks.test.ts
+      - packages/launchpad/src/pages/view.test.ts
+      - packages/launchpad/src/components/PageView.test.ts
+
+  - id: S-294
+    area: Site pages
+    role: seeker
+    story: "The latest-jobs block shows live jobs with featured jobs first, then the rest newest first, and links the full listing."
+    steps:
+      - "Have one job with a live featured placement and several without."
+      - "Open the home page."
+    expected: "Live jobs only, featured first, newest first within each group; the block is bounded by its limit, shows an empty state when there are no jobs, and links the full listing."
+    settings:
+      - site.blocks.latestJobs.limit
+      - site.jobs.featuredSort
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/pages/latest-jobs.test.ts
+      - packages/launchpad/src/components/PageView.test.ts
+
+  - id: S-295
+    area: Site pages
+    role: site manager
+    story: "The site's menus render in the header and footer, with a page item following the page's current path."
+    steps:
+      - "Add primary, top and footer menus, with page items and one external link."
+      - "Rename a linked page's slug and reload the site."
+    expected: "Each menu renders in its own place, a page item's href follows the page's current path, a custom URL is kept with its new-tab flag, and an unsafe URL is not rendered."
+    settings:
+      - site.menus
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/pages/menus.test.ts
+      - packages/launchpad/src/components/PageView.test.ts
+
+  - id: S-296
+    area: Site pages
+    role: seeker
+    story: "A public page ships no client JavaScript, so it can be cached at the edge and passes the Lighthouse budget."
+    steps:
+      - "Open a CMS page with the browser's network panel."
+      - "Run Lighthouse against the page."
+    expected: "No island and no module script in the HTML, so nothing is hydrated: the only script is the hidden view-as banner's inline snippet, which renders nothing unless a hint cookie is set and so leaves the cached HTML identical for every visitor. A menu location the theme has no place for is not rendered twice, and the page is cacheable per PJ-41."
+    settings:
+      - site.pages.cache
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/components/PageView.test.ts
+      - packages/launchpad/src/pages/menus.test.ts
