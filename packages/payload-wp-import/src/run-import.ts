@@ -164,6 +164,11 @@ const importRow = async (
 
     const { collection } = importer
     const scope = importer.tenantScope ?? { path: tenantField, set: true }
+    const matchField = importer.matchBy?.field ?? 'legacyId'
+    const matchValue = importer.matchBy ? mapped.data[matchField] : legacyId
+    if (importer.matchBy && (matchValue === undefined || matchValue === null || matchValue === '')) {
+      throw new Error(`${matchField} is required to match existing documents`)
+    }
     const existing = await ctx.payload.find({
       collection,
       depth: 0,
@@ -171,18 +176,22 @@ const importRow = async (
       overrideAccess: true,
       pagination: false,
       where: {
-        and: [{ legacyId: { equals: legacyId } }, { [scope.path]: { equals: ctx.tenant } }],
+        and: [{ [matchField]: { equals: matchValue } }, { [scope.path]: { equals: ctx.tenant } }],
       },
     })
     const found = existing.docs[0]
     // Runner-owned fields win over whatever the mapper returned.
     const data = {
       ...mapped.data,
-      legacyId,
+      ...(importer.matchBy ? {} : { legacyId }),
       ...(scope.set ? { [tenantField]: ctx.tenant } : {}),
     }
 
-    if (found) {
+    if (found && importer.matchBy) {
+      counts.skipped++
+      const reasons = (counts.skipReasons ??= {})
+      reasons['already-imported'] = (reasons['already-imported'] ?? 0) + 1
+    } else if (found) {
       if (!ctx.dryRun) {
         await ctx.payload.update({
           collection,
@@ -200,7 +209,12 @@ const importRow = async (
           if (!ctx.payload.db) throw new Error('rawCreate needs payload.db')
           await ctx.payload.db.create({ collection, data: wrapLocalizedFields(ctx.payload, collection, created) })
         } else {
-          await ctx.payload.create({ collection, data: created, overrideAccess: true })
+          await ctx.payload.create({
+            collection,
+            ...(mapped.createContext ? { context: mapped.createContext } : {}),
+            data: created,
+            overrideAccess: true,
+          })
         }
       }
       counts.created++

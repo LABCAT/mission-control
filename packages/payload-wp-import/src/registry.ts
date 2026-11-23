@@ -1,3 +1,4 @@
+import { commerceImporters } from './importers/commerce'
 import { jobsImporters } from './importers/jobs'
 import { locationsImporter } from './importers/locations'
 import { taxonomyImporters } from './importers/taxonomies'
@@ -11,6 +12,8 @@ import type { Importer } from './types'
  * The taxonomies import into the five `payload-jobs` taxonomy collections. `organisations` and
  * `users` (PJ-62) import the active legacy users and the organisations derived from the employers.
  * `job-organisations` and `jobs` (PJ-64) import the published and expired jobs.
+ * `plans` (checks the seed), `coupons`, `orders` (last 24 months) and `credits` (opening balances)
+ * are PJ-65.
  */
 const planProvider = createPlanProvider()
 export const registry: Record<string, Importer> = Object.fromEntries(
@@ -19,6 +22,7 @@ export const registry: Record<string, Importer> = Object.fromEntries(
     ...taxonomyImporters(),
     ...Object.values(usersImporters({ planProvider })),
     ...Object.values(jobsImporters({ planProvider })),
+    ...Object.values(commerceImporters({ planProvider })),
   ].map((importer) => [importer.name, importer]),
 )
 
