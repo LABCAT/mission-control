@@ -24,7 +24,7 @@ import {
   XeroInvoiceError,
   type XeroInvoiceAdapter,
   type XeroInvoiceDraft,
-  type XeroInvoiceLineInput,
+  type XeroLineAmountTypes,
   type XeroInvoiceSettings,
   type XeroInvoiceSynced,
 } from '@mission-control/payload-xero'
@@ -62,6 +62,32 @@ export type OrderInvoiceContext = {
   settings: Pick<XeroInvoiceSettings, 'accountCodes'>
 }
 
+/** What the lines need to be named: looked up by the adapter, passed in by tests. */
+export type OrderInvoiceLinesContext = Pick<OrderInvoiceContext, 'jobTitles' | 'planName'>
+
+/**
+ * One invoice line before it meets Xero: money in minor units, and the kind that picks the
+ * account code (`plan`/`add-on` are sales, `discount` is the discount account).
+ */
+export type OrderInvoiceLine = {
+  description: string
+  discountAmount?: number
+  kind: 'add-on' | 'discount' | 'plan'
+  quantity: number
+  taxAmount?: number
+  taxType?: null | string
+  unitAmount: number
+}
+
+/** The money of an order's invoice, in one place, so the Xero invoice and the HTML fallback agree. */
+export type OrderInvoiceSummary = {
+  currency: string
+  lineAmountTypes: XeroLineAmountTypes
+  lines: OrderInvoiceLine[]
+  /** What the invoice must total, in minor units. */
+  total: number
+}
+
 /** Whether this order should have a Xero invoice at all. */
 export const orderNeedsInvoice = (order: Rec): boolean =>
   (INVOICED_ORDER_STATUSES as readonly string[]).includes(String(order.status)) &&
@@ -74,10 +100,14 @@ const describePlan = (name: string, jobTitles: string[]): string =>
   jobTitles.length > 0 ? `${name}: ${jobTitles.join(', ')}` : name
 
 /**
- * The neutral invoice for an order. Pure: no I/O, so the money rules are unit-tested.
- * Returns `null` when the order needs no invoice.
+ * The order's invoice money: its currency, its lines (plan, add-ons, then discounts), and the
+ * total they must come to. Pure: no I/O, so the money rules are unit-tested once for the Xero
+ * invoice and the HTML fallback alike. Returns `null` when the order needs no invoice.
  */
-export const orderToXeroInvoice = (order: Rec, context: OrderInvoiceContext): null | XeroInvoiceDraft => {
+export const orderInvoiceSummary = (
+  order: Rec,
+  context: OrderInvoiceLinesContext,
+): null | OrderInvoiceSummary => {
   if (!orderNeedsInvoice(order)) return null
 
   const currency = text(order.currency)
@@ -91,8 +121,7 @@ export const orderToXeroInvoice = (order: Rec, context: OrderInvoiceContext): nu
   const taxed = tax > 0 || taxLines.some((line) => typeof line.tax === 'number' && line.tax > 0)
   const quote = isRecord(order.quote) ? order.quote : null
   const quoteLines = quote && Array.isArray(quote.lines) ? quote.lines.filter(isRecord) : null
-  const codes = context.settings.accountCodes
-  const lines: XeroInvoiceLineInput[] = []
+  const lines: OrderInvoiceLine[] = []
 
   if (taxed) {
     // Each line carries its own tax, as the quote worked it out, so Xero's total is ours.
@@ -103,9 +132,9 @@ export const orderToXeroInvoice = (order: Rec, context: OrderInvoiceContext): nu
       const amount = minor(line.amount)
       if (amount === 0) continue
       lines.push({
-        accountCode: line.kind === 'plan' ? codes.plan : codes.addOn,
         description: line.kind === 'plan' ? describePlan(String(line.name ?? ''), context.jobTitles) : String(line.name ?? ''),
         discountAmount: minor(line.discount ?? 0),
+        kind: line.kind === 'plan' ? 'plan' : 'add-on',
         quantity: 1,
         taxAmount: minor(line.tax ?? 0),
         taxType: text(line.xeroTaxType),
@@ -114,13 +143,10 @@ export const orderToXeroInvoice = (order: Rec, context: OrderInvoiceContext): nu
     }
 
     return {
-      confirmed: (CONFIRMED_ORDER_STATUSES as readonly string[]).includes(String(order.status)),
-      contact: context.contact,
       currency,
-      expectedTotal: total,
       lineAmountTypes: order.taxInclusive === true ? 'Inclusive' : 'Exclusive',
       lines,
-      reference: context.reference,
+      total,
     }
   }
 
@@ -131,8 +157,8 @@ export const orderToXeroInvoice = (order: Rec, context: OrderInvoiceContext): nu
       const amount = minor(line.amount)
       if (amount === 0) continue
       lines.push({
-        accountCode: line.kind === 'plan' ? codes.plan : codes.addOn,
         description: line.kind === 'plan' ? describePlan(String(line.name ?? ''), context.jobTitles) : String(line.name ?? ''),
+        kind: line.kind === 'plan' ? 'plan' : 'add-on',
         quantity: 1,
         unitAmount: amount,
       })
@@ -144,14 +170,14 @@ export const orderToXeroInvoice = (order: Rec, context: OrderInvoiceContext): nu
       const amount = minor(addOn.amount)
       addOnTotal += amount
       if (amount === 0) continue
-      lines.push({ accountCode: codes.addOn, description: String(addOn.name ?? 'Add-on'), quantity: 1, unitAmount: amount })
+      lines.push({ description: String(addOn.name ?? 'Add-on'), kind: 'add-on', quantity: 1, unitAmount: amount })
     }
     const planAmount = subtotal - addOnTotal
     if (planAmount < 0) throw new XeroInvoiceError('invalid_invoice', 'The order’s add-ons exceed its subtotal.')
     if (planAmount > 0) {
       lines.unshift({
-        accountCode: codes.plan,
         description: describePlan(context.planName ?? 'Job listing', context.jobTitles),
+        kind: 'plan',
         quantity: 1,
         unitAmount: planAmount,
       })
@@ -162,25 +188,47 @@ export const orderToXeroInvoice = (order: Rec, context: OrderInvoiceContext): nu
   const couponDiscount = discount - credits
   if (couponDiscount < 0) throw new XeroInvoiceError('invalid_invoice', 'The order’s credit discount exceeds its discount.')
   if (credits > 0) {
-    lines.push({ accountCode: codes.discount, description: 'Job credit', quantity: 1, unitAmount: -credits })
+    lines.push({ description: 'Job credit', kind: 'discount', quantity: 1, unitAmount: -credits })
   }
   if (couponDiscount > 0) {
     const code = text(order.couponCode)
     lines.push({
-      accountCode: codes.discount,
       description: code ? `Coupon ${code}` : 'Discount',
+      kind: 'discount',
       quantity: 1,
       unitAmount: -couponDiscount,
     })
   }
 
+  return { currency, lineAmountTypes: 'NoTax', lines, total }
+}
+
+/**
+ * The neutral invoice for an order, for payload-xero's sync. Pure: no I/O, so the money rules are
+ * unit-tested. Returns `null` when the order needs no invoice.
+ */
+export const orderToXeroInvoice = (order: Rec, context: OrderInvoiceContext): null | XeroInvoiceDraft => {
+  const summary = orderInvoiceSummary(order, context)
+  if (!summary) return null
+
+  const codes = context.settings.accountCodes
+
   return {
     confirmed: (CONFIRMED_ORDER_STATUSES as readonly string[]).includes(String(order.status)),
     contact: context.contact,
-    currency,
-    expectedTotal: total,
-    lineAmountTypes: 'NoTax',
-    lines,
+    currency: summary.currency,
+    expectedTotal: summary.total,
+    lineAmountTypes: summary.lineAmountTypes,
+    lines: summary.lines.map((line) => ({
+      accountCode: line.kind === 'plan' ? codes.plan : line.kind === 'discount' ? codes.discount : codes.addOn,
+      description: line.description,
+      ...(line.discountAmount !== undefined ? { discountAmount: line.discountAmount } : {}),
+      quantity: line.quantity,
+      ...(line.taxAmount !== undefined ? { taxAmount: line.taxAmount } : {}),
+      // A taxed line always names its tax, even when Xero's default applies; an untaxed one has none.
+      ...(line.taxType === undefined ? {} : { taxType: line.taxType }),
+      unitAmount: line.unitAmount,
+    })),
     reference: context.reference,
   }
 }

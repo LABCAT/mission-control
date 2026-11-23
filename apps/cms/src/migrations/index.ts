@@ -26,6 +26,7 @@ import * as migration_20261121_015238_orders from './20261121_015238_orders';
 import * as migration_20261121_061136_tenant_add_ons from './20261121_061136_tenant_add_ons';
 import * as migration_20261121_153213_credit_ledger from './20261121_153213_credit_ledger';
 import * as migration_20261121_163345_xero_invoices from './20261121_163345_xero_invoices';
+import * as migration_20261123_001810_view_as_audit_log from './20261123_001810_view_as_audit_log';
 
 export const migrations = [
   {
@@ -166,6 +167,11 @@ export const migrations = [
   {
     up: migration_20261121_163345_xero_invoices.up,
     down: migration_20261121_163345_xero_invoices.down,
-    name: '20261121_163345_xero_invoices'
+    name: '20261121_163345_xero_invoices',
+  },
+  {
+    up: migration_20261123_001810_view_as_audit_log.up,
+    down: migration_20261123_001810_view_as_audit_log.down,
+    name: '20261123_001810_view_as_audit_log'
   },
 ];

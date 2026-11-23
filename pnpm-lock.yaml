@@ -171,6 +171,9 @@ importers:
       '@labcat2020/rocketship':
         specifier: 0.3.0
         version: 0.3.0(sass@1.108.2)
+      '@mission-control/rocketship-payload':
+        specifier: workspace:*
+        version: link:../rocketship-payload
     devDependencies:
       '@astrojs/check':
         specifier: 0.9.12
@@ -317,10 +320,16 @@ importers:
         version: 4.0.0-beta.7(@opentelemetry/api@1.10.0)(mysql2@3.24.6(@types/node@24.12.3))(payload@4.0.0-beta.7(graphql@16.15.0)(typescript@6.0.3))
       '@payloadcms/plugin-multi-tenant':
         specifier: 4.0.0-beta.7
-        version: 4.0.0-beta.7(@payloadcms/ui@4.0.0-beta.7(monaco-editor@0.57.0)(payload@4.0.0-beta.7(graphql@16.15.0)(typescript@6.0.3))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@6.0.3))(payload@4.0.0-beta.7(graphql@16.15.0)(typescript@6.0.3))
+        version: 4.0.0-beta.7(@payloadcms/ui@4.0.0-beta.7(@types/react@19.3.0)(monaco-editor@0.57.0)(payload@4.0.0-beta.7(graphql@16.15.0)(typescript@6.0.3))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@6.0.3))(payload@4.0.0-beta.7(graphql@16.15.0)(typescript@6.0.3))
+      '@types/react':
+        specifier: 19.3.0
+        version: 19.3.0
       payload:
         specifier: 4.0.0-beta.7
         version: 4.0.0-beta.7(graphql@16.15.0)(typescript@6.0.3)
+      react:
+        specifier: 19.3.1
+        version: 19.3.1
       typescript:
         specifier: 6.0.3
         version: 6.0.3
