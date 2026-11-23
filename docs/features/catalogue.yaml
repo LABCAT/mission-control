@@ -1556,15 +1556,36 @@ stories:
   - id: S-101
     area: Commerce
     role: employer
-    story: "An employer opens the Xero invoice link for an order."
+    story: "An employer or site manager opens an order's invoice: Xero's online invoice when the sync recorded one, otherwise an HTML invoice built from the order."
     steps:
-      - "Open the invoice link from the order or email."
-    expected: "The Xero online invoice opens for the signed-in organisation; a HTML fallback renders when Xero is unavailable."
+      - "Open a paid order as its organisation's member and as a site manager, from the order's admin edit view and from GET /api/orders/:id/invoice."
+      - "Ask for ?format=json and ?download=1, then try the same order as another organisation, another tenant, a seeker and a signed-out caller."
+    expected: "The organisation's members and the tenant's site managers get the invoice: a 302 to the Xero online invoice, or the HTML fallback served inline (an attachment with ?download=1, described by ?format=json), carrying no scripts. Another organisation, another tenant, a seeker and a missing order all get not_found; a signed-out caller gets not_signed_in. An order that needs no invoice, and a tenant with the xero add-on off, answer no_invoice. The admin shows the link on the order's edit view only for those who may open it."
     settings:
-      - xero.invoiceLink
+      - addOns (xero)
+      - xero.dueDays
     mvp: true
-    status: planned
-    tests: []
+    status: built
+    tests:
+      - packages/payload-jobs-xero/src/invoice-link.integration.test.ts
+      - packages/payload-jobs-xero/src/invoice-link.test.ts
+
+  - id: S-171
+    area: Commerce
+    role: employer
+    story: "The HTML invoice fallback prints an order's lines, tax, total and parties in the tenant's currency and locale."
+    steps:
+      - "Render the fallback for an untaxed order, and for a taxed order with a discount."
+      - "Print the page, and render a document with no dates or parties."
+    expected: "Amounts are whole minor units printed in the currency's own places, never through float arithmetic; the line detail carries the discount and tax; tax is its own row before the total; every user-entered value is escaped; the page fetches nothing and ships no script; and a document with no dates or parties still renders."
+    settings:
+      - tax.enabled
+      - taxLabel
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-xero/src/invoice-html.test.ts
+      - packages/payload-jobs-xero/src/invoice-link.test.ts
 
   - id: S-102
     area: Commerce
@@ -1973,8 +1994,11 @@ stories:
     settings:
       - seo.sitemap
     mvp: true
-    status: planned
-    tests: []
+    status: built
+    tests:
+      - packages/launchpad/src/seo/sitemap.test.ts
+      - packages/launchpad/src/seo/serve.test.ts
+      - apps/vwok/src/sitemap.test.ts
 
   - id: S-124
     area: SEO and URLs
@@ -1986,8 +2010,10 @@ stories:
     settings:
       - seo.robots
     mvp: true
-    status: planned
-    tests: []
+    status: built
+    tests:
+      - packages/launchpad/src/seo/robots.test.ts
+      - apps/vwok/src/brand.test.ts
 
   - id: S-125
     area: SEO and URLs

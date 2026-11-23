@@ -1,9 +1,15 @@
 # Local values for `astro dev` and `wrangler dev`. Copy to `.dev.vars` (git-ignored).
 #
-# The home page is a placeholder and nothing renders CMS content yet, but 'view as user'
-# (PJ-119, docs/VIEW-AS-USER.md) already needs both of these. PJ-35's CMS client will use them too:
+# The sitemap reads the CMS, so these two are needed for `/sitemap.xml`. Without them the route
+# answers 404 rather than an empty sitemap, which would tell a crawler the site has no pages.
+# 'View as user' (PJ-119, docs/VIEW-AS-USER.md) and PJ-35's CMS client need them too.
 #   CMS_URL=https://mc-cms.labcat.workers.dev
 #   SITE_KEY=sk_…                  the vwok tenant's site key (a secret, never public)
-# and the form islands (PJ-45, PJ-47) will need the public Turnstile site key, whose documented
+#
+# robots.txt lets AI crawlers read the site by default, which is vwok's legacy behaviour. Set
+# this to `false` to turn them away until the per-tenant setting (PJ-104) takes over:
+#   AI_CRAWLERS_ALLOWED=true
+#
+# The form islands (PJ-45, PJ-47) will need the public Turnstile site key, whose documented
 # test value always passes:
 #   PUBLIC_TURNSTILE_SITE_KEY=1x00000000000000000000AA
