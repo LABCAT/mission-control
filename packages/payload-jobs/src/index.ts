@@ -41,6 +41,7 @@ import {
 } from './orders'
 import { resolvePaymentProviders, type PaymentProviderDefinition } from './payment-providers'
 import { expireJobPlacementsTask, PLACEMENTS_FIELD } from './placements'
+import { deleteExpiredApplicationsTask, withApplicationDataAction } from './retention'
 import { planCollection, withPlanRestrictionGuards } from './plans'
 import {
   DEFAULT_PAYLOAD_JOBS_SLUGS,
@@ -86,6 +87,7 @@ export * from './plans'
 export * from './plans-seed'
 export * from './pricing'
 export * from './rate-limit'
+export * from './retention'
 export * from './seed/vanuatu'
 export * from './slugs'
 export * from './site-keys'
@@ -696,6 +698,25 @@ export const payloadJobs =
         }
       : config.jobs
 
+    // Retention (PJ-88): a daily task deletes applications and CV files once the job has been
+    // closed for the tenant's retention period.
+    const tasksWithRetention: Config['jobs'] = features.applications
+      ? {
+          ...jobsConfig,
+          tasks: [
+            ...(jobsConfig?.tasks ?? []),
+            deleteExpiredApplicationsTask({
+              applicationsSlug: APPLICATIONS_SLUG,
+              filesSlug: APPLICATION_FILES_SLUG,
+              jobsSlug: slugs.jobs,
+              settingsSlug,
+              tenancy,
+              tenantsSlug,
+            }),
+          ],
+        }
+      : jobsConfig
+
     const jobBoardConfig: Config = {
       ...config,
       // Plans before add-ons: Payload numbers compound index names in collection order, and
@@ -727,12 +748,15 @@ export const payloadJobs =
                 organisationsSlug: slugs.organisations,
                 tenantScoped: tenancy === 'multi',
               }),
-              applicationsCollection({
-                applicantsSlug: usersSlug,
-                jobsSlug: slugs.jobs,
-                organisationsSlug: slugs.organisations,
-                tenantScoped: tenancy === 'multi',
-              }),
+              withApplicationDataAction(
+                applicationsCollection({
+                  applicantsSlug: usersSlug,
+                  jobsSlug: slugs.jobs,
+                  organisationsSlug: slugs.organisations,
+                  tenantScoped: tenancy === 'multi',
+                }),
+                { applicationsSlug: APPLICATIONS_SLUG, filesSlug: APPLICATION_FILES_SLUG },
+              ),
             ]
           : []),
         // Orders go last (PJ-23), so no existing compound index name shifts.
@@ -740,7 +764,7 @@ export const payloadJobs =
         // The credit ledger after orders (PJ-24), for the same reason.
         ...creditLedger,
       ],
-      jobs: jobsConfig,
+      jobs: tasksWithRetention,
       custom: {
         ...config.custom,
         payloadJobs: {

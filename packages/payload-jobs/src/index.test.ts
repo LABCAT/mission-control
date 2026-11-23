@@ -5,6 +5,7 @@ import type { MissionControlUser } from './access'
 import { DASHBOARD_COMPONENT_PATH } from './admin'
 import { SITE_MANAGER_NAV_COLLECTIONS, siteManagerVisibleCollections } from './admin/nav'
 import { EXPIRE_PLACEMENTS_TASK, jobsTenantCollections, payloadJobs } from './index'
+import { DELETE_APPLICATIONS_TASK } from './retention'
 import { DEFAULT_PAYLOAD_JOBS_SLUGS } from './slugs'
 import { TAXONOMY_SLUGS } from './taxonomies'
 
@@ -190,7 +191,7 @@ describe('payloadJobs', () => {
     expect(relationTargets(orders!)).not.toContain('coupons')
   })
 
-  it('adds jobs with placements, and the daily task that expires them, keeping host tasks', async () => {
+  it('adds jobs with placements and the daily tasks that expire them and delete old applications, keeping host tasks @S-300', async () => {
     const withHostTask = {
       ...baseConfig,
       jobs: { tasks: [{ handler: () => ({ output: {} }), slug: 'heartbeat' }] },
@@ -200,7 +201,10 @@ describe('payloadJobs', () => {
     const jobs = result.collections?.find((collection) => collection.slug === 'jobs')
 
     expect(jobs?.fields.some((field) => 'name' in field && field.name === 'placements')).toBe(true)
-    expect(taskSlugs(result)).toEqual(['heartbeat', EXPIRE_PLACEMENTS_TASK])
+    expect(taskSlugs(result)).toEqual(['heartbeat', EXPIRE_PLACEMENTS_TASK, DELETE_APPLICATIONS_TASK])
+    // The retention task goes quiet when a host turns applications off.
+    const withoutApplications = await payloadJobs({ features: { applications: false } })(withHostTask)
+    expect(taskSlugs(withoutApplications)).toEqual(['heartbeat', EXPIRE_PLACEMENTS_TASK])
   })
 
   it('gives a site manager a cut-down nav and a dashboard of their own @S-117', async () => {

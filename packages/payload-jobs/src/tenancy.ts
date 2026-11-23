@@ -2,6 +2,7 @@ import type { Field, GlobalConfig } from 'payload'
 
 import { authenticatedAccess, superAdminAccess } from './access'
 import { tenantLocationFields } from './location-settings'
+import { tenantRetentionField } from './retention'
 import { tenantTaxField } from './tax-settings'
 
 // Current ISO 4217 list one from SIX (the maintenance agency), fetched 2026-11-06.
@@ -188,6 +189,8 @@ export const jobBoardTenantFields: Field[] = [
       description: 'Whether new jobs need an admin’s approval before they go live.',
     },
   },
+  // How long personal data is kept after a job closes (PJ-88). Default: 12 months, as vwok did.
+  tenantRetentionField(showForSiteTenant),
   // Applying (PJ-25, decided 20 Nov). Generic default: guests may apply. vwok turns it on.
   {
     name: 'accountRequiredToApply',

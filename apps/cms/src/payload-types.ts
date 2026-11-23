@@ -226,6 +226,7 @@ export interface Config {
     tasks: {
       heartbeat: TaskHeartbeat;
       'expire-job-placements': TaskExpireJobPlacements;
+      'delete-expired-applications': TaskDeleteExpiredApplications;
       'xero-invoice-sync': TaskXeroInvoiceSync;
       inline: {
         input: unknown;
@@ -500,6 +501,15 @@ export interface Tenant {
    * Whether new jobs need an admin’s approval before they go live.
    */
   jobModeration?: ('legacy' | 'review' | 'auto') | null;
+  /**
+   * How long personal data is kept after a job closes. Applications and their CV files are deleted by the daily job once this period has passed.
+   */
+  retention?: {
+    /**
+     * Months to keep applications and their CV files after the job closes. Default 12, as the old site did.
+     */
+    applicationsMonths?: number | null;
+  };
   /**
    * When on, only signed-in accounts can apply to a job. Off: guests can apply with an email address.
    */
@@ -1967,7 +1977,8 @@ export interface PayloadJob {
     | {
         executedAt: string;
         completedAt: string;
-        taskSlug: 'inline' | 'heartbeat' | 'expire-job-placements' | 'xero-invoice-sync';
+        taskSlug:
+          'inline' | 'heartbeat' | 'expire-job-placements' | 'delete-expired-applications' | 'xero-invoice-sync';
         taskID: string;
         input:
           | {
@@ -1998,13 +2009,16 @@ export interface PayloadJob {
           | boolean
           | null;
         parent?: {
-          taskSlug?: ('inline' | 'heartbeat' | 'expire-job-placements' | 'xero-invoice-sync') | null;
+          taskSlug?:
+            | ('inline' | 'heartbeat' | 'expire-job-placements' | 'delete-expired-applications' | 'xero-invoice-sync')
+            | null;
           taskID?: string | null;
         };
         id?: string | null;
       }[]
     | null;
-  taskSlug?: ('inline' | 'heartbeat' | 'expire-job-placements' | 'xero-invoice-sync') | null;
+  taskSlug?:
+    ('inline' | 'heartbeat' | 'expire-job-placements' | 'delete-expired-applications' | 'xero-invoice-sync') | null;
   queue?: string | null;
   waitUntil?: string | null;
   processingUntil?: string | null;
@@ -2458,6 +2472,11 @@ export interface TenantsSelect<T extends boolean = true> {
         exemptXeroTaxType?: T;
       };
   jobModeration?: T;
+  retention?:
+    | T
+    | {
+        applicationsMonths?: T;
+      };
   accountRequiredToApply?: T;
   emailFromName?: T;
   emailFromAddress?: T;
@@ -3324,6 +3343,17 @@ export interface TaskExpireJobPlacements {
   output: {
     jobsUpdated?: number | null;
     placementsRemoved?: number | null;
+  };
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "TaskDelete-expired-applications".
+ */
+export interface TaskDeleteExpiredApplications {
+  input?: unknown;
+  output: {
+    applicationsDeleted?: number | null;
+    filesDeleted?: number | null;
   };
 }
 /**
