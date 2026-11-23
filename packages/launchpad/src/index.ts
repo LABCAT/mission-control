@@ -1,5 +1,4 @@
 export * from './jobs/listing'
-export * from './legal/footer-menu'
 export * from './legal/links'
 export * from './seo/robots'
 export * from './seo/sitemap'

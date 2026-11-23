@@ -5,7 +5,7 @@ import Container from '@labcat2020/rocketship/components/Container'
 
 import SiteFooter from './SiteFooter.astro'
 import ViewAsBanner from './ViewAsBanner.astro'
-import type { LegalMenuItem } from '../legal/links'
+import type { MenuLink } from '../pages/menus'
 import { brandingStyleAttribute } from '../tenant/branding'
 import { resolveLocale } from '../tenant/locale'
 import { seoMeta } from '../tenant/seo'
@@ -25,8 +25,11 @@ type Props = {
   image?: string
   /** Structured data for this page, rendered as JSON-LD in the head. */
   jsonLd?: Record<string, unknown>
-  /** The site's footer menu items, when it has a footer menu (PJ-103). */
-  footerMenu?: LegalMenuItem[]
+  /**
+   * The links of the footer menu the page renders in the `footer-nav` slot (PJ-103, PJ-39). Only
+   * used so the legal links are not repeated; the menu itself is rendered once, by the slot.
+   */
+  footerMenu?: MenuLink[]
   /** Labels for the footer's legal links, in the tenant's language (PJ-89). */
   legalLabels?: { privacy?: string; terms?: string }
 }
@@ -91,18 +94,21 @@ const jsonLdText = jsonLd ? JSON.stringify(jsonLd).replace(/</g, '\\u003c') : un
           <slot name="header" />
         ) : (
           <Container size="wide">
-            <a class="lp-brand" href="/">
-              {tenant.branding?.logo?.url ? (
-                <img
-                  alt={tenant.branding.logo.alt ?? tenant.name}
-                  height={tenant.branding.logo.height ?? undefined}
-                  src={tenant.branding.logo.url}
-                  width={tenant.branding.logo.width ?? undefined}
-                />
-              ) : (
-                tenant.name
-              )}
-            </a>
+            <div class="lp-header__bar">
+              <a class="lp-brand" href="/">
+                {tenant.branding?.logo?.url ? (
+                  <img
+                    alt={tenant.branding.logo.alt ?? tenant.name}
+                    height={tenant.branding.logo.height ?? undefined}
+                    src={tenant.branding.logo.url}
+                    width={tenant.branding.logo.width ?? undefined}
+                  />
+                ) : (
+                  tenant.name
+                )}
+              </a>
+              <slot name="nav" />
+            </div>
           </Container>
         )
       }
@@ -115,7 +121,9 @@ const jsonLdText = jsonLd ? JSON.stringify(jsonLd).replace(/</g, '\\u003c') : un
         Astro.slots.has('footer') ? (
           <slot name="footer" />
         ) : (
-          <SiteFooter items={footerMenu} labels={legalLabels} name={tenant.name} />
+          <SiteFooter items={footerMenu?.map((link) => ({ label: link.label, url: link.href }))} labels={legalLabels} name={tenant.name}>
+            <slot name="footer-nav" />
+          </SiteFooter>
         )
       }
     </footer>
@@ -143,6 +151,14 @@ const jsonLdText = jsonLd ? JSON.stringify(jsonLd).replace(/</g, '\\u003c') : un
   .lp-header {
     border-block-end: 1px solid var(--rs-color-border);
     padding-block: var(--rs-space-3);
+  }
+
+  .lp-header__bar {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--rs-space-4);
+    justify-content: space-between;
   }
 
   .lp-brand {

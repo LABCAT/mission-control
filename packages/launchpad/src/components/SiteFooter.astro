@@ -1,8 +1,8 @@
 ---
 /**
- * The site footer (PJ-89, S-310). It shows the tenant's name and the two legal links. A footer
- * menu from the CMS (PJ-103) replaces the default link list; the legal links stay, because the
- * policy and terms must be reachable from every page.
+ * The site footer (PJ-89, S-310). It shows the tenant's name and the two legal links. The footer
+ * menu (PJ-103) arrives through the default slot and is rendered once, by the page; the legal
+ * links stay, because the policy and terms must be reachable from every page.
  */
 import Container from '@labcat2020/rocketship/components/Container'
 
@@ -25,21 +25,7 @@ const legal = legalFooterLinks(items, labels ?? {}).filter((link) => !covered.ha
 
 <Container size="wide">
   <nav aria-label="Footer" class="lp-footer__nav">
-    {
-      items.length > 0 && (
-        <ul class="lp-footer__list">
-          {items.map((item) => (
-            <li>
-              {item.url ? (
-                <a href={item.url}>{item.label ?? item.url}</a>
-              ) : (
-                <span>{item.label}</span>
-              )}
-            </li>
-          ))}
-        </ul>
-      )
-    }
+    <slot />
     <ul class="lp-footer__list lp-footer__legal">
       {legal.map((link) => (
         <li>

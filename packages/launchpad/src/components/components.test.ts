@@ -499,6 +499,7 @@ describe('SiteFooter', () => {
         ],
         name: 'Vanuatu Wok',
       },
+      slots: { default: '<a href="/about">About us</a><a href="/privacy">Privacy</a>' },
     })
 
     expect(html).toContain('href="/about"')
