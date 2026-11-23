@@ -1,8 +1,5 @@
 ---
-import Card from '@labcat2020/rocketship/components/Card'
-
-import { formatDate } from '../tenant/date'
-import { formatMoney } from '../tenant/money'
+import JobCardBody from './JobCardBody.astro'
 import type { JobSummary } from '../types'
 
 type Props = {
@@ -17,66 +14,12 @@ type Props = {
   volunteerLabel?: string
 }
 
-const {
-  job,
-  locale = 'en',
-  timezone,
-  closesLabel = 'Closes',
-  featuredLabel = 'Featured',
-  volunteerLabel = 'Voluntary',
-} = Astro.props as Props
-
-const jobId = job.id != null ? String(job.id) : job.url
-
-const salary = job.salary
-  ? formatMoney(
-      { amountMinor: job.salary.amountMinor, currency: job.salary.currency },
-      { locale, minorUnits: job.salary.minorUnits ?? undefined },
-    )
-  : undefined
-
-const salaryLabel =
-  salary && job.salary?.period ? `${salary} / ${job.salary.period}` : (salary ?? job.displayedSalary ?? undefined)
-const closes = job.closes ? formatDate(job.closes, { locale, timezone }) : undefined
+// The script below is what makes this card an island. A page that must ship no client JS — a
+// CMS page with a latest-jobs block — renders `JobCardBody` instead.
+const props = Astro.props as Props
 ---
 
-<Card as="article" data-job-id={jobId}>
-  <h3 class="rs-card__title">
-    <a class="rs-card__link" href={job.url}>{job.title}</a>
-  </h3>
-  <p class="lp-job__org">
-    {job.organisation.url ? (
-      <a class="lp-job__org-link" href={job.organisation.url}>{job.organisation.name}</a>
-    ) : (
-      job.organisation.name
-    )}
-  </p>
-  {job.summary && <p class="rs-card__description">{job.summary}</p>}
-  <ul class="lp-job__tags">
-    {job.location && <li class="lp-job__tag">{job.location}</li>}
-    {job.jobType && <li class="lp-job__tag">{job.jobType}</li>}
-    {job.isVolunteer && <li class="lp-job__tag lp-job__tag--accent">{volunteerLabel}</li>}
-    {job.featured && <li class="lp-job__tag lp-job__tag--accent">{featuredLabel}</li>}
-    {/*
-      Always in the tag row so the pill reserves its space before the idle script runs:
-      revealing it changes visibility, never the layout. Hidden from sight and from AT until
-      the script proves this job is in the browser's viewed history.
-    */}
-    <li class="lp-job__tag lp-job__viewed" data-viewed-label aria-hidden="true">Viewed</li>
-  </ul>
-  {
-    (salaryLabel || closes) && (
-      <ul class="lp-job__facts">
-        {salaryLabel && <li>{salaryLabel}</li>}
-        {closes && (
-          <li>
-            {closesLabel} {closes}
-          </li>
-        )}
-      </ul>
-    )
-  }
-</Card>
+<JobCardBody {...props} viewedSlot />
 
 <script>
   import { has } from '../viewed-jobs'
@@ -96,57 +39,3 @@ const closes = job.closes ? formatDate(job.closes, { locale, timezone }) : undef
 
   whenIdle(revealViewed)
 </script>
-
-<style>
-  /* Composition only: everything visual comes from Card and the --rs-* tokens. */
-  .lp-job__org {
-    color: var(--rs-color-muted);
-    margin: 0;
-  }
-
-  .lp-job__org-link {
-    color: inherit;
-  }
-
-  .lp-job__facts {
-    color: var(--rs-color-muted);
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--rs-space-3);
-    list-style: none;
-    margin: 0;
-    padding: 0;
-  }
-
-  .lp-job__tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--rs-space-2);
-    list-style: none;
-    margin: 0;
-    padding: 0;
-  }
-
-  .lp-job__tag {
-    background: var(--rs-color-surface-elevated);
-    border-radius: var(--rs-radius-pill);
-    color: var(--rs-color-fg);
-    font-size: var(--rs-font-size-sm);
-    padding-block: var(--rs-space-1);
-    padding-inline: var(--rs-space-2);
-  }
-
-  .lp-job__tag--accent {
-    background: var(--rs-color-accent);
-    color: var(--rs-color-accent-contrast);
-  }
-
-  /* Reserves the pill's box so the label appearing causes no layout shift. */
-  .lp-job__viewed {
-    visibility: hidden;
-  }
-
-  .lp-job__viewed--shown {
-    visibility: visible;
-  }
-</style>
