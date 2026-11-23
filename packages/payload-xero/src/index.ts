@@ -12,12 +12,14 @@ import {
   authenticatedAdminAccess,
   buildXeroSettingsCollection,
   DEFAULT_SETTINGS_SLUG,
+  DEFAULT_TENANT_FIELD,
   type XeroSettingsOptions,
   type XeroScope,
 } from './xero-settings'
 
 export * from './contacts'
 export * from './crypto'
+export * from './invoice-html'
 export * from './invoice-sync'
 export * from './invoices'
 export * from './oauth'
@@ -50,6 +52,8 @@ export type PayloadXeroCustom = {
   oauthEndpoints: boolean
   scope: XeroScope
   settingsSlug: string
+  /** The field a tenant-scoped row carries its tenant in. */
+  tenantField: string
 }
 
 /**
@@ -90,6 +94,7 @@ export const payloadXero =
       oauthEndpoints: options.oauth !== false,
       scope,
       settingsSlug: slug,
+      tenantField: options.tenantField ?? DEFAULT_TENANT_FIELD,
     }
 
     return {

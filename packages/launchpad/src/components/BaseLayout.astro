@@ -4,6 +4,7 @@ import '@labcat2020/rocketship/styles'
 import Container from '@labcat2020/rocketship/components/Container'
 
 import SiteFooter from './SiteFooter.astro'
+import ViewAsBanner from './ViewAsBanner.astro'
 import type { LegalMenuItem } from '../legal/links'
 import { brandingStyleAttribute } from '../tenant/branding'
 import { resolveLocale } from '../tenant/locale'
@@ -82,6 +83,7 @@ const jsonLdText = jsonLd ? JSON.stringify(jsonLd).replace(/</g, '\\u003c') : un
     <slot name="head" />
   </head>
   <body>
+    <ViewAsBanner />
     <a class="lp-skip" href="#main">Skip to content</a>
     <header class="lp-header">
       {
