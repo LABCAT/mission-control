@@ -2,8 +2,10 @@ import { postgresAdapter, sql } from '@payloadcms/db-postgres'
 import { multiTenantPlugin } from '@payloadcms/plugin-multi-tenant'
 import {
   buildConfig,
+  createPayloadRequest,
   getPayload,
   handleEndpoints,
+  logoutOperation,
   type CollectionConfig,
   type Payload,
   type SanitizedConfig,
@@ -643,6 +645,70 @@ describe('view as user (PJ-119)', () => {
       expect((await account('GET', tenantA, 'me', { token: own.body.token })).status).toBe(200)
     })
 
+    it("refuses Payload's own logout with allSessions=true, and leaves every real session alone", async () => {
+      const target = await createUser({ memberships: [{ role: 'seeker', tenant: tenantA }] })
+      const own = await account('POST', tenantA, 'login', { body: { email: target.email, password: PASSWORD } })
+      const { token } = await viewAs(target.id)
+
+      const result = await request('POST', '/api/users/logout?allSessions=true', { headers: bearer(token) })
+
+      expect(result.status).toBe(403)
+
+      // The target is still signed in on their own device, and still has the view-as session.
+      expect((await account('GET', tenantA, 'me', { token: own.body.token })).status).toBe(200)
+      expect((await account('GET', tenantA, 'me', { token })).status).toBe(200)
+
+      const rows = await auditRows({ action: { equals: 'view-as.blocked' }, targetID: { equals: String(target.id) } })
+      expect(rows).toHaveLength(1)
+      expect(rows[0]!.detail).toMatchObject({ allSessions: true, blocked: 'users.logout' })
+      expect(rows[0]!.actorID).toBe(String(adminID))
+    })
+
+    it("refuses Payload's own logout, so a view can only be ended through the audited exit", async () => {
+      const target = await createUser({ memberships: [{ role: 'seeker', tenant: tenantA }] })
+      const own = await account('POST', tenantA, 'login', { body: { email: target.email, password: PASSWORD } })
+      const { token } = await viewAs(target.id)
+
+      expect((await request('POST', '/api/users/logout', { headers: bearer(token) })).status).toBe(403)
+
+      expect((await account('GET', tenantA, 'me', { token })).status).toBe(200)
+      expect((await account('GET', tenantA, 'me', { token: own.body.token })).status).toBe(200)
+      expect(await auditRows({ action: { equals: 'view-as.blocked' }, targetID: { equals: String(target.id) } })).toHaveLength(1)
+    })
+
+    it("refuses the GraphQL logout's allSessions argument, which the hook cannot read", async () => {
+      const target = await createUser({ memberships: [{ role: 'seeker', tenant: tenantA }] })
+      const own = await account('POST', tenantA, 'login', { body: { email: target.email, password: PASSWORD } })
+      const { token } = await viewAs(target.id)
+
+      // Exactly what the GraphQL `logoutUsers` resolver does: no search params, the flag as an argument.
+      const auth = await payload.auth({ headers: new Headers(bearer(token)) })
+      const req = await createPayloadRequest({ payload, user: auth.user })
+
+      await expect(
+        logoutOperation({ allSessions: true, collection: payload.collections.users!, req }),
+      ).rejects.toMatchObject({ status: 403 })
+
+      expect((await account('GET', tenantA, 'me', { token: own.body.token })).status).toBe(200)
+      expect((await account('GET', tenantA, 'me', { token })).status).toBe(200)
+    })
+
+    it("a super admin's own logout is unaffected", async () => {
+      const target = await createUser({ memberships: [{ role: 'seeker', tenant: tenantA }] })
+      await viewAs(target.id)
+
+      // A super admin of their own, so the shared admin token survives this test.
+      const other = await createUser({ role: 'super-admin' })
+      const otherToken = await loginToken(other.email)
+
+      expect((await request('POST', '/api/users/logout?allSessions=true', { headers: bearer(otherToken) })).status).toBe(200)
+
+      const after = (await payload.findByID({ collection: 'users', id: other.id, overrideAccess: true })) as {
+        sessions?: unknown[]
+      }
+      expect(after.sessions ?? []).toHaveLength(0)
+    })
+
     it('does not exit a view on another tenant', async () => {
       const target = await createUser({
         memberships: [
@@ -737,6 +803,19 @@ describe('view as user (PJ-119)', () => {
 
       await expect(hooks.beforeChange[0]!({ data: {}, operation: 'update', req } as never)).rejects.toMatchObject({ status: 403 })
       await expect(hooks.beforeDelete[0]!({ id: 1, req } as never)).rejects.toMatchObject({ status: 403 })
+    })
+
+    it('a checkout through the account endpoint is refused as view_as_blocked, not a server error', async () => {
+      for (const [path, body] of [
+        ['checkout', { jobId: 1, planId: 1 }],
+        ['orders/1/approve', {}],
+        ['orders/1/decline', {}],
+      ] as const) {
+        const result = await account('POST', tenantA, path, { body, token })
+
+        expect(result.status, path).toBe(403)
+        expect(result.body.error.code, path).toBe('view_as_blocked')
+      }
     })
 
     it('has no admin panel access, and no way to start another view', async () => {

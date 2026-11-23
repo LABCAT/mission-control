@@ -24,6 +24,7 @@ Code: `packages/payload-jobs/src/view-as.ts` (CMS), `audit-log.ts`, `packages/la
 | Target must be a seeker/employer on that tenant, every membership a site role; never a super admin, staff, or the admin themselves | `viewAsIneligibleReason` |
 | Token bound to one tenant, 30 minutes, no refresh, bearer only | strategy, `currentUser` |
 | No change to email, password, role, memberships or any sign-in field (only the profile name), no delete, no `refresh`/`forgot`/`reset`/`unlock`/`verify`/`login`/`create` | users hooks (`beforeOperation`, `beforeDelete`) |
+| Payload's own `logout` (REST or GraphQL) refused, so it can never reach `allSessions=true` and sign the target out everywhere; ending a view goes through `view-as/exit` | users `afterLogout` hook |
 | No purchases: orders cannot be created, changed or deleted | orders hooks |
 | Forgot/reset/register/verify account endpoints refused | account-auth |
 | No admin panel access | `access.admin` |

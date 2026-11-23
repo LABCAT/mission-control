@@ -835,6 +835,7 @@ const viewAsRedeem: Handler = async ({ options, req, tenant }) => {
   await enforceRateLimit({ action: 'view-as-redeem', options, req, tenant })
 
   const result = await redeemViewAsCode({
+    accountRoles: options.accountRoles,
     code: body.code,
     payload: req.payload,
     tenantID: tenant.id,

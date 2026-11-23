@@ -4,6 +4,7 @@ import {
   type AuthStrategy,
   type CollectionAfterChangeHook,
   type CollectionAfterDeleteHook,
+  type CollectionAfterLogoutHook,
   type CollectionBeforeChangeHook,
   type CollectionBeforeDeleteHook,
   type CollectionBeforeOperationHook,
@@ -67,6 +68,12 @@ export const VIEW_AS_STRATEGY = 'mc-view-as'
 
 /** Header the admin UI sends on start. A cross-site form or fetch cannot set it without a CORS preflight. */
 export const VIEW_AS_CSRF_HEADER = 'x-mc-view-as'
+
+/**
+ * Set on `req.context` by `exitViewAs` only, to let its own `logoutOperation` call through the
+ * `afterLogout` guard. Never set by anything reachable from a request.
+ */
+export const VIEW_AS_EXIT_CONTEXT = 'viewAsExit'
 
 export const VIEW_AS_CSRF_VALUE = 'start'
 
@@ -376,6 +383,26 @@ const IGNORED_USER_KEYS = new Set(['createdAt', 'id', 'updatedAt'])
 
 const usersBeforeDelete: CollectionBeforeDeleteHook = async ({ req }) => {
   await assertNotViewingAs(req, 'users.delete')
+}
+
+/**
+ * Payload's own logout runs no `beforeOperation` hook, only `afterLogout`, so the users guards
+ * never see it. It is refused for a view-as session: REST passes `allSessions` in the query
+ * string and GraphQL passes it as a resolver argument the hook cannot read, so no shape of it can
+ * be told apart from the destructive one, and `allSessions=true` empties the whole `sessions`
+ * array and signs the real user out of every device. Ending a view is `account/view-as/exit` (or
+ * the account `logout`), which calls `exitViewAs` and is logged as `view-as.exit`. This hook runs
+ * before the write, so the sessions are untouched.
+ */
+const usersAfterLogout: CollectionAfterLogoutHook = async ({ req }) => {
+  if (!getViewAs(req.user) || req.context?.[VIEW_AS_EXIT_CONTEXT] === true) return
+
+  await logBlocked(req, 'users.logout', {
+    ...(req.searchParams?.get('allSessions') === 'true' ? { allSessions: true } : {}),
+    via: req.payloadAPI ?? 'local',
+  })
+
+  throw new Forbidden(req.t)
 }
 
 // A whitelist, not a blacklist: only the profile name may change. It runs in `beforeOperation`
@@ -710,11 +737,13 @@ type CodeRecord = {
  * the tenant it was issued for. Returns null for anything else, and never says which check failed.
  */
 export const redeemViewAsCode = async ({
+  accountRoles = VIEW_AS_ACCOUNT_ROLES,
   code,
   payload,
   tenantID,
   usersSlug,
 }: {
+  accountRoles?: readonly TenantRole[]
   code: unknown
   payload: Payload
   tenantID: number | string
@@ -740,7 +769,7 @@ export const redeemViewAsCode = async ({
   })) as unknown as null | TargetUser
 
   const session = target?.sessions?.find(({ id }) => id === record.sid)
-  if (!target || !session || viewAsIneligibleReason(target, tenantID) !== null) return null
+  if (!target || !session || viewAsIneligibleReason(target, tenantID, accountRoles) !== null) return null
 
   const token = await signViewAsToken(payload.secret, {
     adm: record.actorID,
@@ -775,10 +804,19 @@ export const exitViewAs = async ({
   const marker = getViewAs(req.user)
   if (!marker) return false
 
-  await logoutOperation({
-    collection: req.payload.collections[usersSlug as CollectionSlug],
-    req,
-  })
+  // This is the one logout that may run in a view: mark it so `usersAfterLogout` lets it through.
+  const hadFlag = Object.prototype.hasOwnProperty.call(req.context ?? {}, VIEW_AS_EXIT_CONTEXT)
+  const previous = req.context?.[VIEW_AS_EXIT_CONTEXT]
+  req.context = { ...req.context, [VIEW_AS_EXIT_CONTEXT]: true }
+  try {
+    await logoutOperation({
+      collection: req.payload.collections[usersSlug as CollectionSlug],
+      req,
+    })
+  } finally {
+    if (hadFlag) req.context[VIEW_AS_EXIT_CONTEXT] = previous
+    else delete req.context[VIEW_AS_EXIT_CONTEXT]
+  }
 
   await writeAuditLog({
     entry: {
@@ -842,6 +880,7 @@ const withUsersGuards = (collection: CollectionConfig, options: StartOptions): C
     endpoints: collection.endpoints === false ? false : [...(collection.endpoints ?? []), startEndpoint(options)],
     hooks: {
       ...collection.hooks,
+      afterLogout: [usersAfterLogout, ...(collection.hooks?.afterLogout ?? [])],
       beforeDelete: [usersBeforeDelete, ...(collection.hooks?.beforeDelete ?? [])],
       beforeOperation: [usersBeforeOperation, ...(collection.hooks?.beforeOperation ?? [])],
     },
