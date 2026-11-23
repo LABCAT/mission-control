@@ -134,6 +134,7 @@ export interface Config {
     cta: CtaBlock;
     faq: FaqBlock;
     banner: BannerBlock;
+    'organisation-directory': OrganisationDirectoryBlock;
   };
   collections: {
     users: User;
@@ -507,6 +508,10 @@ export interface Tenant {
    * When on, only signed-in accounts can apply to a job. Off: guests can apply with an email address.
    */
   accountRequiredToApply?: boolean | null;
+  /**
+   * When on, an organisation page only goes public once an admin approves it. Off: the owner switching the page on is enough.
+   */
+  organisationPagesNeedApproval?: boolean | null;
   emailFromName?: string | null;
   emailFromAddress?: string | null;
   /**
@@ -641,9 +646,13 @@ export interface Organisation {
    */
   approved?: boolean | null;
   /**
-   * Set by a tenant admin. The public page and directory entry go live.
+   * Private by default. Switch on to put the public page and directory entry live (needs approval where the tenant requires it).
    */
   pageEnabled?: boolean | null;
+  /**
+   * Flagged as a possible duplicate of another organisation. Its page cannot be public, and its jobs stay off any official page, until a site manager merges or clears it.
+   */
+  possibleDuplicate?: boolean | null;
   /**
    * Known customers pay by invoice instead of at checkout.
    */
@@ -866,6 +875,23 @@ export interface BannerBlock {
   blockType: 'banner';
 }
 /**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "OrganisationDirectoryBlock".
+ */
+export interface OrganisationDirectoryBlock {
+  heading?: string | null;
+  intro?: string | null;
+  showTypeFilter?: boolean | null;
+  showSizeFilter?: boolean | null;
+  /**
+   * Shown when no organisation matches.
+   */
+  emptyLabel?: string | null;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'organisation-directory';
+}
+/**
  * Keys public sites use to read their own tenant. The raw key is shown once.
  *
  * This interface was referenced by `Config`'s JSON-Schema
@@ -963,7 +989,18 @@ export interface Page {
   /**
    * The page body, built from blocks in the order shown.
    */
-  layout?: (HeroBlock | FeatureBoxesBlock | RichTextBlock | CardGridBlock | CtaBlock | FaqBlock | BannerBlock)[] | null;
+  layout?:
+    | (
+        | HeroBlock
+        | FeatureBoxesBlock
+        | RichTextBlock
+        | CardGridBlock
+        | CtaBlock
+        | FaqBlock
+        | BannerBlock
+        | OrganisationDirectoryBlock
+      )[]
+    | null;
   /**
    * Overrides for the page metadata. Empty fields fall back to the title.
    */
@@ -2499,6 +2536,7 @@ export interface TenantsSelect<T extends boolean = true> {
       };
   jobModeration?: T;
   accountRequiredToApply?: T;
+  organisationPagesNeedApproval?: T;
   emailFromName?: T;
   emailFromAddress?: T;
   adminEmail?: T;
@@ -2602,6 +2640,7 @@ export interface OrganisationsSelect<T extends boolean = true> {
   listingRequested?: T;
   approved?: T;
   pageEnabled?: T;
+  possibleDuplicate?: T;
   canPayByInvoice?: T;
   billingEmail?: T;
   xeroContactCode?: T;

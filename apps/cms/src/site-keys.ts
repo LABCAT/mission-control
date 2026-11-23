@@ -24,7 +24,15 @@ export const siteKeyAllowedCollections = (slugs: PayloadJobsCollectionSlugs) =>
     // mission-control: pages and menus, read published only (PJ-103).
     slugs.pages,
     slugs.menus,
+    // mission-control: the organisation directory and profile pages (PJ-38). Only organisations
+    // the collection's own rule calls public are returned (see `ownAccessCollections` below).
+    slugs.organisations,
   ] as const
 
 export const siteKeyAccessOverrideFor = (slugs: PayloadJobsCollectionSlugs) =>
-  createSiteKeyAccessOverride({ allowedCollections: siteKeyAllowedCollections(slugs) })
+  createSiteKeyAccessOverride({
+    allowedCollections: siteKeyAllowedCollections(slugs),
+    // mission-control: private, unapproved and possible-duplicate organisations are not readable
+    // by a site key (PJ-38), so the collection's access result is kept, not replaced.
+    ownAccessCollections: [slugs.organisations],
+  })

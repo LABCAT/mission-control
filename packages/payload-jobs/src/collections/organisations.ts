@@ -102,11 +102,73 @@ export const ORGANISATION_HOLDER_ROLES = [
 ] as const satisfies readonly TenantRole[]
 
 /**
- * What a public site may see: an organisation is only published once an admin has approved it
- * and enabled its page (the legacy "listing request" flow, AUDIT.md).
+ * What a public site may see (PJ-38, decided 19 Nov). Pages are private until the page is
+ * switched on, and an organisation flagged as a possible duplicate is never public, whatever its
+ * flags say. Where the tenant requires approval (vwok: the lister requests, an admin approves,
+ * AUDIT.md) the admin's `approved` is needed as well.
  */
-export const PUBLIC_ORGANISATION_FILTER: Where = {
-  and: [{ approved: { equals: true } }, { pageEnabled: { equals: true } }],
+export const publicOrganisationFilter = (needsApproval: boolean): Where => ({
+  and: [
+    { pageEnabled: { equals: true } },
+    { possibleDuplicate: { not_equals: true } },
+    ...(needsApproval ? [{ approved: { equals: true } }] : []),
+  ],
+})
+
+/** The strict filter: approval required. Used where a request spans tenants (aggregate keys). */
+export const PUBLIC_ORGANISATION_FILTER: Where = publicOrganisationFilter(true)
+
+/** The tenant setting's name, and its default: vwok's legacy behaviour is approval ON. */
+export const ORGANISATION_PAGES_NEED_APPROVAL = 'organisationPagesNeedApproval'
+
+type OrganisationPublicState = {
+  approved?: boolean | null
+  pageEnabled?: boolean | null
+  possibleDuplicate?: boolean | null
+}
+
+/** The rule above for one organisation in hand (an import check, a unit test, a stub page). */
+export const isOrganisationPublic = (
+  organisation: null | OrganisationPublicState | undefined,
+  { needsApproval = true }: { needsApproval?: boolean } = {},
+): boolean =>
+  Boolean(organisation) &&
+  organisation?.pageEnabled === true &&
+  organisation.possibleDuplicate !== true &&
+  (!needsApproval || organisation.approved === true)
+
+/**
+ * Whether a tenant's organisation pages need an admin's approval. One lookup per request. A
+ * tenant that cannot be read keeps the strict default.
+ */
+const needsApprovalFor = async (
+  req: PayloadRequest,
+  tenantsSlug: string,
+  tenantID: number | string,
+): Promise<boolean> => {
+  const context = (req.context ??= {})
+  const cache = ((context.missionControlOrgApproval as Map<string, Promise<boolean>> | undefined) ??=
+    new Map())
+  const key = `${tenantsSlug}:${String(tenantID)}`
+  const cached = cache.get(key)
+  if (cached) return cached
+
+  const lookup = (async (): Promise<boolean> => {
+    const tenant = (await req.payload
+      .findByID({
+        collection: tenantsSlug as CollectionSlug,
+        depth: 0,
+        disableErrors: true,
+        id: tenantID,
+        overrideAccess: true,
+        req,
+      })
+      .catch(() => null)) as null | Record<string, unknown>
+    return tenant?.[ORGANISATION_PAGES_NEED_APPROVAL] !== false
+  })()
+
+  cache.set(key, lookup)
+  return lookup
 }
 
 const tenantIDOf = (tenant: unknown): null | number | string => {
@@ -159,14 +221,14 @@ const idsOf = (value: unknown): (number | string)[] =>
  * - Super admins: every organisation.
  * - Tenant admins and editors: every organisation in their tenants.
  * - Employers: only the organisation on their user.
- * - Anonymous with a valid site key: the tenant's approved organisations with a live page
- *   (every tenant for an aggregate key). Without a key: nothing.
+ * - Anonymous with a valid site key: the tenant's public organisations (see
+ *   `publicOrganisationFilter`; every tenant for an aggregate key). Without a key: nothing.
  * - Seekers: nothing they could not see on the site, and site reads carry a key.
  *
  * In multi-tenant mode the plugin also ANDs `tenant in <user's tenants>` onto a user's result.
  */
 export const organisationReadAccess =
-  (tenantScoped: boolean): Access =>
+  (tenantScoped: boolean, tenantsSlug = 'tenants'): Access =>
   async ({ req }) => {
     const user = userOf(req)
 
@@ -177,10 +239,13 @@ export const organisationReadAccess =
 
       const siteKey = await resolveSiteKey(req)
       if (!siteKey) return false
+      // An aggregate key spans tenants, so it keeps the strict rule.
       if (siteKey.isAggregate) return PUBLIC_ORGANISATION_FILTER
 
+      const needsApproval = await needsApprovalFor(req, tenantsSlug, siteKey.tenantID)
+
       return {
-        and: [{ tenant: { equals: siteKey.tenantID } }, PUBLIC_ORGANISATION_FILTER],
+        and: [{ tenant: { equals: siteKey.tenantID } }, publicOrganisationFilter(needsApproval)],
       }
     }
 
@@ -342,6 +407,42 @@ export const organisationRelationsInTenant =
     }
 
     if (errors.length > 0) throw new ValidationError({ collection: collection.slug, errors, req })
+    return data
+  }
+
+const valueAfterWrite = (
+  data: Record<string, unknown> | undefined,
+  originalDoc: Record<string, unknown> | undefined,
+  name: string,
+): unknown =>
+  data && Object.prototype.hasOwnProperty.call(data, name) ? data[name] : originalDoc?.[name]
+
+/**
+ * A possible duplicate cannot have a public page (PJ-38): two organisations competing for one
+ * name on the directory is the problem the flag marks. Clear the flag (or merge) first.
+ */
+export const duplicateCannotBePublic =
+  (collectionSlug = ORGANISATIONS_SLUG): CollectionBeforeChangeHook =>
+  ({ data, originalDoc, req }) => {
+    const doc = originalDoc as Record<string, unknown> | undefined
+    const submitted = data as Record<string, unknown> | undefined
+
+    if (
+      valueAfterWrite(submitted, doc, 'possibleDuplicate') === true &&
+      valueAfterWrite(submitted, doc, 'pageEnabled') === true
+    ) {
+      throw new ValidationError({
+        collection: collectionSlug as CollectionSlug,
+        errors: [
+          {
+            message: 'A possible duplicate cannot have a public page until the duplicate is resolved',
+            path: 'pageEnabled',
+          },
+        ],
+        req,
+      })
+    }
+
     return data
   }
 
@@ -557,7 +658,18 @@ const profileFields = (
         defaultValue: false,
         access: adminOnly,
         admin: {
-          description: 'Set by a tenant admin. The public page and directory entry go live.',
+          description:
+            'Private by default. Switch on to put the public page and directory entry live (needs approval where the tenant requires it).',
+        },
+      },
+      {
+        name: 'possibleDuplicate',
+        type: 'checkbox',
+        defaultValue: false,
+        access: adminOnly,
+        admin: {
+          description:
+            'Flagged as a possible duplicate of another organisation. Its page cannot be public, and its jobs stay off any official page, until a site manager merges or clears it.',
         },
       },
     ],
@@ -617,6 +729,8 @@ export type OrganisationsOptions = {
   slug?: string
   /** `false` in single-tenant mode, where there is no tenants collection. */
   tenantScoped?: boolean
+  /** Slug of the tenants collection, read for the page-approval setting. Defaults to `tenants`. */
+  tenantsSlug?: string
 }
 
 /**
@@ -629,13 +743,14 @@ export const organisationsCollection = ({
   mediaSlug = 'media',
   slug = ORGANISATIONS_SLUG,
   tenantScoped = true,
+  tenantsSlug = 'tenants',
 }: OrganisationsOptions = {}): CollectionConfig => ({
   slug,
   access: mergeCollectionAccess(
     {
       create: organisationCreateAccess(tenantScoped),
       delete: organisationDeleteAccess(tenantScoped),
-      read: organisationReadAccess(tenantScoped),
+      read: organisationReadAccess(tenantScoped, tenantsSlug),
       update: organisationUpdateAccess(tenantScoped),
     },
     access,
@@ -652,6 +767,7 @@ export const organisationsCollection = ({
     beforeChange: [
       organisationRelationsInTenant(tenantScoped, mediaSlug, locationsSlug),
       organisationTenantIsStable(tenantScoped, slug),
+      duplicateCannotBePublic(slug),
     ],
     beforeValidate: [uniqueOrganisationSlug(tenantScoped, slug)],
   },

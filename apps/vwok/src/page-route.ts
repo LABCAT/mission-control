@@ -24,9 +24,12 @@ export type PageRoute =
 export const pageRoute = async ({
   cms,
   pathname,
+  searchParams,
 }: {
   cms: CmsClient | null
   pathname: string
+  /** The query string, for the organisation directory's type and size filters (PJ-38). */
+  searchParams?: Pick<URLSearchParams, 'get'>
 }): Promise<PageRoute> => {
   if (!cms) return pathname === '/' ? { kind: 'shell' } : { kind: 'not-found', menus: [] }
 
@@ -35,6 +38,7 @@ export const pageRoute = async ({
     collections: SITE_COLLECTIONS,
     locale: resolveLocale(siteTenant),
     pathname,
+    searchParams,
     tenant: siteTenant,
   })
 
