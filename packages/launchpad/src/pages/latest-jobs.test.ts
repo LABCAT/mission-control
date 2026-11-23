@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
 import type { CmsClient } from '../cms/client'
+import { liveJobsWhere } from '../jobs/listing'
 import {
   LATEST_JOBS_LIMIT,
   LATEST_JOBS_MAX_LIMIT,
   latestJobsLimit,
-  liveJobsWhere,
   loadLatestJobs,
 } from './latest-jobs'
 

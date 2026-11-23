@@ -8,33 +8,22 @@
  */
 import type { CmsClient } from '../cms/client'
 import type { CmsCollectionSlug } from '../cms/types'
-import type { CmsWhere } from '../cms/types'
-import { resolveLocale } from '../tenant/locale'
-import type { SiteTenant } from '../tenant/types'
-import type { JobSummary } from '../types'
 import {
   featuredFirst,
+  liveJobsWhere,
   toJobSummary,
   type ListingHrefs,
   type ListingJob,
 } from '../jobs/listing'
+import { resolveLocale } from '../tenant/locale'
+import type { SiteTenant } from '../tenant/types'
+import type { JobSummary } from '../types'
 
 /** How many jobs the block shows when it does not say. */
 export const LATEST_JOBS_LIMIT = 10
 
 /** The most a single block may ask for: a page must stay bounded for the Lighthouse budget. */
 export const LATEST_JOBS_MAX_LIMIT = 50
-
-/**
- * The query for live jobs: published and not past its expiry. That is the same rule as the
- * listing's, kept here because the block reads jobs without the filter facets.
- */
-export const liveJobsWhere = (now: Date = new Date()): CmsWhere => ({
-  and: [
-    { status: { equals: 'published' } },
-    { or: [{ expiresAt: { greater_than: now.toISOString() } }, { expiresAt: { exists: false } }] },
-  ],
-})
 
 /** The block's own `limit`, clamped: a missing, negative or huge value still yields a bounded page. */
 export const latestJobsLimit = (value: unknown): number => {
