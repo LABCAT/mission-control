@@ -1,7 +1,7 @@
 import type { CollectionConfig, Field, Payload } from 'payload'
 
 import type { MissionControlUser } from './access'
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import {
   anonymiseUser,
@@ -12,6 +12,7 @@ import {
   withPersonalDataRemoval,
 } from './anonymise-user'
 import { addOnCollection } from './add-ons'
+import { auditLogCollection } from './audit-log'
 import {
   APPLICATION_FILES_SLUG,
   applicationFilesCollection,
@@ -185,6 +186,8 @@ describe('personal data removal in Postgres @S-311', () => {
         }),
         alertSubscriptions(),
       ],
+      // The audit log is not tenant-scoped (PJ-119), so it stays out of the multi-tenant plugin.
+      globalCollections: [auditLogCollection()],
       tenantData: () => ({ currency: 'VUV' }),
       tenantFields: [{ name: 'currency', type: 'text' }],
       userFields,
@@ -324,7 +327,7 @@ describe('personal data removal in Postgres @S-311', () => {
     expect((await read('users', ids.seeker))?.email).toBe(before?.email)
   })
 
-  it('writes an audit trail that does not keep the address it removed @S-311', async () => {
+  it('writes an audit entry that does not keep the address it removed @S-311', async () => {
     const email = `audited-${Date.now()}@example.invalid`
     const userID = await create('users', {
       email,
@@ -334,24 +337,18 @@ describe('personal data removal in Postgres @S-311', () => {
       tenants: [],
     })
 
-    // This harness has no audit-log collection, so the entry goes to the logger instead.
-    const entries: unknown[] = []
-    const spy = vi.spyOn(harness.payload.logger, 'info').mockImplementation((entry: unknown) => {
-      entries.push(entry)
+    await anonymiseUser({ actorID: harness.superAdmin.id, payload: harness.payload, userID })
+
+    const entries = await harness.payload.find({
+      collection: 'audit-log' as never,
+      overrideAccess: true,
+      where: { action: { equals: 'user.personal-data-removed' } },
     })
+    const entry = entries.docs.find((doc) => (doc as { targetID?: string }).targetID === String(userID))
 
-    try {
-      await anonymiseUser({ actorID: harness.superAdmin.id, payload: harness.payload, userID })
-    } finally {
-      spy.mockRestore()
-    }
-
-    const entry = entries.find(
-      (candidate) => (candidate as { msg?: string }).msg === 'user.personal-data-removed',
-    )
     expect(entry).toBeDefined()
+    expect(entry).toMatchObject({ actorID: String(harness.superAdmin.id) })
     expect(JSON.stringify(entry)).not.toContain(email)
-    expect(entry).toMatchObject({ actorID: String(harness.superAdmin.id), targetID: String(userID) })
   })
 
   it('refuses a hard delete, so orders never lose the user they point at @S-311', async () => {
