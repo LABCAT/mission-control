@@ -1136,6 +1136,52 @@ stories:
       - packages/launchpad/src/components/components.test.ts
       - apps/vwok/src/view-as-handlers.test.ts
 
+  - id: S-161
+    area: Email
+    role: super admin
+    story: "Email from any environment other than production is redirected to one inbox, so previews never email the public."
+    steps:
+      - "Trigger an email (for example a password reset) on a preview with EMAIL_REDIRECT_TO set."
+      - "Trigger the same email on production (ENVIRONMENT=production)."
+    expected: "On a preview the message goes only to EMAIL_REDIRECT_TO; on production it is delivered to its real recipients."
+    settings:
+      - env.ENVIRONMENT
+      - env.EMAIL_REDIRECT_TO
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-email-cloudflare/src/redirect.test.ts
+      - apps/cms/src/email-redirect.test.ts
+
+  - id: S-162
+    area: Email
+    role: super admin
+    story: "A redirected email strips cc and bcc and shows who it was meant for."
+    steps:
+      - "Send an email with to, cc and bcc recipients on a preview."
+    expected: "Only the redirect inbox is addressed, and the subject starts with [<env> → original recipients], listing to, cc and bcc."
+    settings:
+      - env.EMAIL_REDIRECT_TO
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-email-cloudflare/src/redirect.test.ts
+
+  - id: S-163
+    area: Email
+    role: super admin
+    story: "If the redirect inbox is missing, nothing is delivered."
+    steps:
+      - "Unset EMAIL_REDIRECT_TO on a non-production environment and trigger an email."
+    expected: "Nothing is sent through the binding or Resend; the console logs that it was not sent, without recipients."
+    settings:
+      - env.EMAIL_REDIRECT_TO
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-email-cloudflare/src/redirect.test.ts
+      - apps/cms/src/email-redirect.test.ts
+
   # ---------------------------------------------------------------------------
   # Accounts and authentication
   # ---------------------------------------------------------------------------

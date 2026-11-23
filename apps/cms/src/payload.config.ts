@@ -20,6 +20,7 @@ import { SiteKeys } from './collections/SiteKeys'
 import { SystemStatus } from './globals/SystemStatus'
 // mission-control: email adapter lives in a generic package (PJ-92)
 import { cloudflareEmail } from '@mission-control/payload-email-cloudflare'
+import { emailRedirect } from './email-redirect'
 import { heartbeatTask } from './jobs/heartbeat'
 import { Documents } from './collections/Documents'
 import { createMediaTransformers } from './media'
@@ -51,6 +52,9 @@ const workerEnv =
     ? ((await import('cloudflare:workers')).env as {
         ACCOUNT_RATE_LIMIT?: RateLimiter // mission-control: account auth rate limit (PJ-81)
         HYPERDRIVE?: { connectionString: string }
+        // mission-control: email safety (PJ-94). Redirect is ON unless ENVIRONMENT is 'production'.
+        ENVIRONMENT?: string
+        EMAIL_REDIRECT_TO?: string
         MEDIA?: R2Bucket // mission-control: R2 bucket `mission-control-media`
         // mission-control: Xero app and token key (PJ-55/57), Worker secrets. See .dev.vars.example.
         XERO_CLIENT_ID?: string
@@ -109,7 +113,9 @@ export default buildConfig({
   }),
   // mission-control: Cloudflare Email Sending adapter (PJ-09). Sends via the `EMAIL` binding in
   // Workers and logs to the console in dev; tenant emails go through sendTenantEmail.
-  email: cloudflareEmail(),
+  // mission-control: redirect-all (PJ-94): everything goes to EMAIL_REDIRECT_TO unless
+  // ENVIRONMENT=production; with no inbox set nothing is delivered. Read per send, never at module scope.
+  email: cloudflareEmail({ redirect: () => emailRedirect(workerEnv) }),
   globals: [SystemStatus],
   jobs: { tasks: [heartbeatTask] },
   // mission-control: resized media variants (PJ-10)

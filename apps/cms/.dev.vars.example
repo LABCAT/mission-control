@@ -14,3 +14,10 @@ PAYLOAD_SECRET=change-me-to-a-long-random-string
 # XERO_TOKEN_ENCRYPTION_KEY=
 # Optional: HMAC key for the OAuth state; defaults to PAYLOAD_SECRET.
 # XERO_STATE_SECRET=
+
+# Email safety (PJ-94). Redirect-all is ON unless ENVIRONMENT=production: every email goes to
+# EMAIL_REDIRECT_TO with the original recipients in the subject. With no inbox set, nothing is
+# delivered (console). In Cloudflare, set ENVIRONMENT=production on the production Worker only,
+# and EMAIL_REDIRECT_TO as a secret/variable on previews. Never commit a real address.
+# EMAIL_REDIRECT_TO=
+# ENVIRONMENT=production
