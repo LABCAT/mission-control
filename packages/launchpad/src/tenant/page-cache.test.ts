@@ -87,6 +87,21 @@ describe('servePublicPage @S-242', () => {
     expect(render).toHaveBeenCalledTimes(1)
   })
 
+  it('holds a page for only five minutes while the store has never been bumped, so an unshared namespace cannot pin stale HTML', async () => {
+    const { cache, store: entries } = pageCache()
+    const empty = createMemoryContentVersionStore()
+    const bumped = createMemoryContentVersionStore({ vwok: 'v1' })
+    const serve = (store: typeof empty) =>
+      servePublicPage({ cache, normalise: { pathname: '/about', rules: [], search: '' }, render: renderBody('x'), site: 'vwok', store })
+
+    await serve(empty)
+    expect([...entries.values()].map((entry) => entry.headers.get('cache-control'))).toEqual(['public, max-age=300'])
+
+    entries.clear()
+    await serve(bumped)
+    expect([...entries.values()].map((entry) => entry.headers.get('cache-control'))).toEqual(['public, max-age=604800'])
+  })
+
   it('stores the edge lifetime but answers the browser with the short one, even on a hit', async () => {
     const { cache, store: entries } = pageCache()
     const store = createMemoryContentVersionStore({ vwok: 'v1' })

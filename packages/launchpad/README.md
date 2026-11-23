@@ -148,7 +148,7 @@ from `apps/cms/wrangler.jsonc` into each site's wrangler config after the first 
 - Lifetimes (`cms/headers`): HTML 7 days at the edge, browser `max-age=60` (never `s-maxage`, so a
   CDN rule cannot outlive the version), hashed assets one year `immutable`, media one year;
   `/health`, `/account` and forms `no-store`. A response that sets a cookie is never stored.
-  Without a KV binding pages fall back to a 5 minute edge TTL.
+  While a tenant's version has never been written (no binding, or a namespace the CMS does not share, so it always reads the default) pages are held for 5 minutes only, so a wrongly provisioned namespace costs freshness, never correctness. A tenant gets the 7 day TTL from its first CMS write.
 - `/health` (`tenant/health`): 200 or 503, `no-store`; a site checks its Worker and the CMS, whose
   `/health` checks the database. Point UptimeRobot at each site's and the CMS's `/health`.
 

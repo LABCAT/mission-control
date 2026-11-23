@@ -35,8 +35,8 @@ export const JOB_LISTING_PAGE_SIZE = 20
 
 /**
  * HTML is held at the edge for five minutes when nothing can invalidate it: long enough to absorb
- * a burst, short enough to feel live. A site with a content version store uses the seven-day
- * lifetime instead, because the version, not the clock, is what refreshes the page (PJ-41).
+ * a burst, short enough to feel live. A tenant whose content version has been written uses the
+ * seven-day lifetime instead, because the version, not the clock, is what refreshes the page (PJ-41).
  */
 export const JOB_LISTING_HTML_TTL_SECONDS = 5 * 60
 
@@ -750,7 +750,7 @@ export const serveJobListing = async (options: ServeJobListingOptions): Promise<
     lockedKeys: Object.keys(loadOptions.locked ?? {}),
     search: loadOptions.search,
     site: loadOptions.site,
-    ttl: store || version ? HTML_EDGE_TTL_SECONDS : JOB_LISTING_HTML_TTL_SECONDS,
+    ttl: contentVersion === DEFAULT_CONTENT_VERSION ? JOB_LISTING_HTML_TTL_SECONDS : HTML_EDGE_TTL_SECONDS,
     version: contentVersion,
   })
 

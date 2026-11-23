@@ -12,6 +12,7 @@
  * ```
  */
 import {
+  DEFAULT_CONTENT_VERSION,
   readContentVersion,
   type ContentVersionStore,
 } from '@mission-control/content-cache'
@@ -31,9 +32,10 @@ export type PublicPageOptions = {
   /** The tenant's content version store (KV in production). Absent means version `0`. */
   store: ContentVersionStore | undefined
   /**
-   * How long the edge holds the HTML. Default seven days when a version store exists, because the
-   * version, not the clock, refreshes it; five minutes without one, because then nothing can
-   * invalidate the entry and the TTL is the only way a change reaches the site.
+   * How long the edge holds the HTML. Default seven days once the tenant has a content version,
+   * because the version, not the clock, refreshes it; five minutes while it reads the default
+   * (no store, or a store the CMS has never written to), because then nothing can invalidate the
+   * entry and the TTL is the only way a change reaches the site.
    */
   ttl?: number
 }
@@ -70,7 +72,9 @@ export const servePublicPage = async ({
   if (changed) return redirect(url)
 
   const version = await readContentVersion(store, site)
-  const edgeTtl = ttl ?? (store ? HTML_EDGE_TTL_SECONDS : FALLBACK_EDGE_TTL_SECONDS)
+  // Long only when a version has actually been written: a store that always reads the default
+  // (an empty namespace the CMS never bumps) cannot invalidate anything, so the clock must.
+  const edgeTtl = ttl ?? (version === DEFAULT_CONTENT_VERSION ? FALLBACK_EDGE_TTL_SECONDS : HTML_EDGE_TTL_SECONDS)
 
   return cachedResponse(contentCacheKey({ site, url: keyUrl, version }), edgeTtl, render, {
     browserCacheControl: htmlCacheControl(edgeTtl, HTML_BROWSER_MAX_AGE_SECONDS).browser,
