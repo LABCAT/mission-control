@@ -465,7 +465,10 @@ stories:
       - jobs.closeDateMaxDays
     mvp: true
     status: planned
-    tests: []
+    tests:
+      - packages/payload-jobs/src/checkout.test.ts
+      - packages/payload-jobs/src/checkout.integration.test.ts
+      - packages/payload-jobs/src/job-status.test.ts
 
   - id: S-032
     area: Job posting
@@ -550,6 +553,7 @@ stories:
     status: planned
     tests:
       - packages/payload-jobs/src/coupons.test.ts
+      - packages/payload-jobs/src/checkout.integration.test.ts
 
   - id: S-038
     area: Job posting
@@ -562,8 +566,9 @@ stories:
       - billing.memberCanUseCredits
       - billing.creditsExpire
     mvp: true
-    status: planned
-    tests: []
+    status: built
+    tests:
+      - packages/payload-jobs/src/checkout.integration.test.ts
 
   - id: S-039
     area: Job posting
@@ -1833,6 +1838,57 @@ stories:
       - packages/payload-jobs/src/admin/dashboard.test.ts
       - packages/payload-jobs/src/admin/SiteManagerDashboard.test.tsx
 
+  - id: S-152
+    area: Commerce
+    role: employer
+    story: "An employer checks out a job: the CMS prices the plan, add-ons and coupon itself and creates exactly one order."
+    steps:
+      - "Post checkout with a job, a plan, an add-on and a coupon, as an employer of the job's organisation."
+      - "Submit the same checkout again, and twice at once."
+      - "Try the job from another organisation or another tenant's site, and with another tenant's plan."
+    expected: "One order is created from the server-side quote (free at zero, credit when a credit pays it all, otherwise invoiced through the invoice provider); repeats return that order; other organisations and tenants get not found; amounts sent by the client are ignored."
+    settings:
+      - billing.invoiceOnly
+      - plans.coupons
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/checkout.test.ts
+      - packages/payload-jobs/src/checkout.integration.test.ts
+      - packages/payload-jobs-xero/src/xero-invoicing.integration.test.ts
+
+  - id: S-153
+    area: Commerce
+    role: org owner
+    story: "A member without purchase rights submits a job and the owner approves or declines the purchase."
+    steps:
+      - "As a member who may not buy, check out a paid job."
+      - "As the owner, approve the order; check out another and decline it."
+    expected: "The order waits for purchase until the owner approves it, then it is invoiced once; a declined order is cancelled and the job can be checked out again; members may still pay with a credit."
+    settings:
+      - billing.memberCanUseCredits
+      - billing.memberCanBuy
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/checkout.test.ts
+      - packages/payload-jobs/src/checkout.integration.test.ts
+
+  - id: S-154
+    area: Commerce
+    role: employer
+    story: "Buying a job pack at checkout adds its credits to the ledger and uses one for the job."
+    steps:
+      - "Check out a job with the 5 Job Pack plan."
+      - "Check out the next job with Use credits."
+    expected: "The ledger records 5 credits bought and 1 used against the pack's order, and the next job is paid with a credit."
+    settings:
+      - billing.creditsExpire
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/checkout.integration.test.ts
+
   - id: S-118
     area: Admin
     role: site manager
@@ -2084,6 +2140,22 @@ stories:
     status: built
     tests:
       - packages/payload-wp-import/src/media/media.test.ts
+
+  - id: S-155
+    area: Import and cutover
+    role: super admin
+    story: "The importer brings the legacy published and expired jobs into a tenant with their organisation, taxonomies, locations, description, dates, featured placements and view counts."
+    steps:
+      - "Run wp-import jobs with --dry-run and read the counts per status, job type, salary band, category and location."
+      - "Run it for real, then run it again."
+    expected: "Only published and expired jobs are imported, each attached to the organisation named in its company field (created when it has none); descriptions are converted to Lexical with scripts and unsafe links removed; salary and job-type clean-up is applied; slugs are kept; expired jobs keep their dates; a second run creates nothing and never lowers a job's view count."
+    settings:
+      - import.jobs
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-wp-import/src/importers/jobs.test.ts
+      - packages/payload-wp-import/src/html-to-lexical.test.ts
 
   # ---------------------------------------------------------------------------
   # Security and spam

@@ -10,6 +10,7 @@ import type {
 import { accountAuthEndpoints, type AccountAuthOptions } from './account-auth'
 import { withViewAs } from './view-as'
 import { DASHBOARD_COMPONENT_PATH, type SiteManagerAdminOptions } from './admin'
+import { accountCheckoutEndpoints, type PurchaseRightsCheck } from './checkout'
 import type { LocationsOptions } from './collections/locations'
 import { locationsCollection, locationsTenantSlugIndex } from './collections/locations'
 import { organisationsCollection, withOrganisationField } from './collections/organisations'
@@ -61,6 +62,7 @@ export * from './access'
 export * from './admin'
 export * from './account-auth'
 export * from './audit-log'
+export * from './checkout'
 export * from './view-as'
 export * from './collections/locations'
 export * from './collections/menus'
@@ -184,6 +186,12 @@ export type PayloadJobsOrdersOptions = {
    * payment add-on. An order may only name a registered provider.
    */
   paymentProviders?: PaymentProviderDefinition[]
+  /**
+   * What a member may spend for their organisation at checkout (PJ-31). Defaults to
+   * `defaultPurchaseRights`: owners and site managers anything; members use credits unless
+   * `useCredits` is false and buy only when `canBuy` is true (the per-member switches of PJ-29).
+   */
+  purchaseRights?: PurchaseRightsCheck
 }
 
 export type PayloadJobsOptions = {
@@ -485,7 +493,23 @@ const jobBoardPlugin =
           )
         }
 
-        return accountAuthEndpoints(accountAuth)
+        return [
+          ...accountAuthEndpoints(accountAuth),
+          // Checkout for the /account dashboard (PJ-31), on the same site key + token contract.
+          ...accountCheckoutEndpoints({
+            couponsEnabled: features.coupons,
+            creditsEnabled: features.credits,
+            isOrganisationOwner: options.orders?.isOrganisationOwner ?? isOrganisationOwnerByRole,
+            purchaseRights: options.orders?.purchaseRights,
+            rateLimiter: accountAuth.rateLimiter,
+            registry,
+            settingsSlug,
+            slugs,
+            tenantScoped: true,
+            tenantsSlug,
+            usersSlug: accountUsersSlug,
+          }),
+        ]
       })()
 
       config = {
