@@ -10,6 +10,7 @@ import {
 
 import { xeroTenantCollections } from '@mission-control/payload-jobs-xero'
 
+import { FORMS_SLUG, FORMS_SUBMISSIONS_SLUG } from './forms'
 import { siteKeyAccessOverrideFor } from './site-keys'
 
 type AccessResultOverride = NonNullable<
@@ -87,6 +88,14 @@ export const multiTenantOptionsFor = (
       // key's tenant and, for the draft-enabled pages, published only.
       [slugs.menus]: { accessResultOverride: tenantContentOverride },
       [slugs.pages]: { accessResultOverride: tenantContentOverride },
+      // mission-control: form definitions are content a site key may read, so the Form block
+      // can render a form it points at (PJ-102). Submissions are personal data and are never
+      // readable with a site key. The form-builder collections are not in the generated types
+      // until a migration lands, hence the cast.
+      ...({
+        [FORMS_SLUG]: { accessResultOverride: tenantContentOverride },
+        [FORMS_SUBMISSIONS_SLUG]: { accessResultOverride: privateToTenant },
+      } as MultiTenantPluginConfig['collections']),
     },
     tenantsArrayField: {
       rowFields: [

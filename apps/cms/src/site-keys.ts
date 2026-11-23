@@ -24,6 +24,9 @@ export const siteKeyAllowedCollections = (slugs: PayloadJobsCollectionSlugs) =>
     // mission-control: pages and menus, read published only (PJ-103).
     slugs.pages,
     slugs.menus,
+    // mission-control: form definitions, so the Form block renders a site's own form (PJ-102).
+    // Submissions are personal data and are deliberately absent.
+    'forms',
   ] as const
 
 export const siteKeyAccessOverrideFor = (slugs: PayloadJobsCollectionSlugs) =>

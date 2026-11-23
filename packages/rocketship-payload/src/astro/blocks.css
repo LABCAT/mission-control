@@ -98,3 +98,53 @@
     aspect-ratio: var(--rp-banner-ratio-mobile, auto);
   }
 }
+
+.rp-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rs-space-4);
+}
+
+.rp-form--columns {
+  flex-flow: row wrap;
+}
+
+/* A field's editor-chosen width, from the form builder's 0–100 scale. */
+.rp-form > .rs-field,
+.rp-form > .rs-fieldset,
+.rp-form > .rp-form__message-field {
+  flex: 1 1 var(--rp-field-width, 100%);
+  max-inline-size: var(--rp-field-width, 100%);
+}
+
+.rp-form__choice {
+  align-items: start;
+}
+
+.rp-form__message,
+.rp-form__actions {
+  margin: 0;
+}
+
+.rp-form__actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
+/* Off-screen rather than display:none, so a bot that ignores CSS still fills it. */
+.rp-form__honeypot {
+  block-size: 1px;
+  clip-path: inset(50%);
+  inline-size: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+}
+
+.rp-map__frame {
+  border: 0;
+  block-size: var(--rp-map-height, 400px);
+  border-radius: var(--rs-radius-md);
+  display: block;
+  inline-size: 100%;
+}

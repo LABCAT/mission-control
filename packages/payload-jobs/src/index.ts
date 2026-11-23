@@ -5,9 +5,16 @@ import type {
   GlobalConfig,
   GlobalSlug,
   Plugin,
+  TaskSlug,
 } from 'payload'
 
 import { accountAuthEndpoints, type AccountAuthOptions } from './account-auth'
+import {
+  formEndpoints,
+  purgeFormSubmissionsTask,
+  PURGE_FORM_SUBMISSIONS_TASK,
+  type FormsOptions,
+} from './forms'
 import { DASHBOARD_COMPONENT_PATH, type SiteManagerAdminOptions } from './admin'
 import { accountCheckoutEndpoints, type PurchaseRightsCheck } from './checkout'
 import type { LocationsOptions } from './collections/locations'
@@ -61,6 +68,7 @@ export * from './access'
 export * from './admin'
 export * from './account-auth'
 export * from './checkout'
+export * from './contact-page'
 export * from './collections/locations'
 export * from './collections/menus'
 export * from './collections/organisations'
@@ -68,6 +76,7 @@ export * from './collections/pages'
 export * from './coupons'
 export * from './credits'
 export * from './email'
+export * from './forms'
 export * from './legacy-password'
 export * from './location-settings'
 export * from './money'
@@ -213,6 +222,11 @@ export type PayloadJobsOptions = {
   enabled?: boolean
   /** Which job-board collections to enable. All default to true. */
   features?: PayloadJobsFeatures
+  /**
+   * Public form submissions (PJ-102): the site-key endpoint and the retention task. Defaults to
+   * on; pass `false` for a host whose forms are only written from the admin.
+   */
+  forms?: FormsOptions | false
   /** Orders: organisation owners and payment providers (PJ-23). */
   orders?: PayloadJobsOrdersOptions
   /** Slug of the host's upload collection for PDF job descriptions. Defaults to `documents`. */
@@ -458,6 +472,12 @@ export const payloadJobs =
 
     config = { ...config, collections: [...(config.collections ?? []), ...added] }
 
+    // Public form submissions (PJ-102). The host's form-builder collections are detected by
+    // slug: without them there is nothing to submit to or purge, so both stay off.
+    const formsOptions = options.forms === false ? null : options.forms ?? {}
+    const formsSlug = formsOptions?.formsSlug ?? 'forms'
+    const formSubmissionsSlug = formsOptions?.submissionsSlug ?? 'form-submissions'
+
     if (tenancy === 'multi') {
       const tenants = config.collections?.find((collection) => collection.slug === tenantsSlug)
 
@@ -467,6 +487,13 @@ export const payloadJobs =
             'Create it first or use tenancy: "single".',
         )
       }
+
+      // Public form submissions (PJ-102) do not depend on account auth: a contact form works
+      // on a site with no accounts at all.
+      const formSubmissionEndpoints =
+        formsOptions && hostSlugs.has(formsSlug) && hostSlugs.has(formSubmissionsSlug)
+          ? formEndpoints({ ...formsOptions, tenantScoped: true, tenantsSlug })
+          : []
 
       const accountEndpoints = (() => {
         if (options.accountAuth === false) return []
@@ -514,6 +541,7 @@ export const payloadJobs =
               endpoints: [
                 ...(Array.isArray(collection.endpoints) ? collection.endpoints : []),
                 ...accountEndpoints,
+                ...formSubmissionEndpoints,
               ],
               fields: [...collection.fields, ...jobBoardTenantFields, addOnsField],
               hooks: {
@@ -695,6 +723,26 @@ export const payloadJobs =
           tasks: [...(config.jobs?.tasks ?? []), expireJobPlacementsTask({ jobsSlug: slugs.jobs })],
         }
       : config.jobs
+    // Delete form submissions past each tenant's retention (PJ-102). The task is registered
+    // only when the host actually has the form-builder collections.
+    const jobsWithForms =
+      formsOptions && hostSlugs.has(formsSlug) && hostSlugs.has(formSubmissionsSlug)
+        ? {
+            ...jobsConfig,
+            tasks: [
+              ...(jobsConfig?.tasks ?? []).filter(
+                (task) => task.slug !== (PURGE_FORM_SUBMISSIONS_TASK as TaskSlug),
+              ),
+              purgeFormSubmissionsTask({
+                formsSlug,
+                settingsSlug,
+                submissionsSlug: formSubmissionsSlug,
+                tenantScoped: tenancy === 'multi',
+                tenantsSlug,
+              }),
+            ],
+          }
+        : jobsConfig
 
     const jobBoardConfig: Config = {
       ...config,
@@ -740,7 +788,7 @@ export const payloadJobs =
         // The credit ledger after orders (PJ-24), for the same reason.
         ...creditLedger,
       ],
-      jobs: jobsConfig,
+      jobs: jobsWithForms,
       custom: {
         ...config.custom,
         payloadJobs: {

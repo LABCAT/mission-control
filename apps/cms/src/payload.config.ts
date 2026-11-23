@@ -15,12 +15,16 @@ import { payloadJobsAlerts } from '@mission-control/payload-jobs-alerts'
 import { payloadJobsReports } from '@mission-control/payload-jobs-reports'
 import { payloadJobsXero } from '@mission-control/payload-jobs-xero'
 import { multiTenantPlugin } from '@payloadcms/plugin-multi-tenant'
+// mission-control: the Payload form builder backs the generic Form block (PJ-102).
+import { formBuilderPlugin } from '@payloadcms/plugin-form-builder'
 import { Tenants } from './collections/Tenants'
 import { SiteKeys } from './collections/SiteKeys'
 import { SystemStatus } from './globals/SystemStatus'
 // mission-control: email adapter lives in a generic package (PJ-92)
 import { cloudflareEmail } from '@mission-control/payload-email-cloudflare'
 import { heartbeatTask } from './jobs/heartbeat'
+// mission-control: forms collections and the Turnstile check for public submissions (PJ-102).
+import { FORMS_SUBMISSIONS_SLUG, FORMS_SLUG, formBuilderOptions } from './forms'
 import { Documents } from './collections/Documents'
 import { createMediaTransformers } from './media'
 import { r2Storage } from '@payloadcms/storage-r2'
@@ -35,7 +39,9 @@ import {
   ctaBlock,
   faqBlock,
   featureBoxesBlock,
+  formBlock,
   heroBlock,
+  mapBlock,
   richTextBlock,
 } from '@mission-control/rocketship-payload/blocks'
 
@@ -58,6 +64,8 @@ const workerEnv =
         XERO_REDIRECT_URI?: string
         XERO_STATE_SECRET?: string
         XERO_TOKEN_ENCRYPTION_KEY?: string
+        // mission-control: Turnstile secret for public form submissions (PJ-102).
+        TURNSTILE_SECRET_KEY?: string
       })
     : undefined
 
@@ -80,6 +88,9 @@ export default buildConfig({
     ctaBlock,
     faqBlock,
     bannerBlock({ mediaSlug: 'media' }),
+    // mission-control: the contact page's two blocks (PJ-102).
+    formBlock({ formsSlug: FORMS_SLUG }),
+    mapBlock,
   ],
   collections: [Users, Media, Folders, Tags, Tenants, SiteKeys, Documents], // mission-control: tenants, site keys, documents
   editor: lexicalEditor(),
@@ -128,6 +139,13 @@ export default buildConfig({
     // binding in Workers, and fall back to an in-memory limiter in dev.
     payloadJobs({
       accountAuth: { rateLimiter: () => workerEnv?.ACCOUNT_RATE_LIMIT },
+      // mission-control: public form submissions (PJ-102). Turnstile is verified server-side;
+      // the secret is a Worker secret, never a tenant field.
+      forms: {
+        formsSlug: FORMS_SLUG,
+        submissionsSlug: FORMS_SUBMISSIONS_SLUG,
+        turnstile: { secret: () => workerEnv?.TURNSTILE_SECRET_KEY ?? process.env.TURNSTILE_SECRET_KEY },
+      },
       // mission-control: one resolved slug set, shared with the multi-tenant plugin below, so a
       // renamed collection keeps its tenant scoping and site-key reads.
       collections: payloadJobsCollectionOptions,
@@ -149,6 +167,9 @@ export default buildConfig({
         },
       },
     }),
+    // mission-control: the form builder's collections (PJ-102). Before the multi-tenant plugin,
+    // so `forms` and `form-submissions` are there for it to scope.
+    formBuilderPlugin(formBuilderOptions()),
     multiTenantPlugin(multiTenantOptionsFor(payloadJobsCollectionSlugs)),
   ],
   localization: {
