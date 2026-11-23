@@ -149,3 +149,88 @@ describe('PageView head slot', () => {
     expect(html.indexOf('rel="icon"')).toBeLessThan(html.indexOf('</head>'))
   })
 })
+
+describe('organisation directory block (PJ-38)', () => {
+  const directoryView: PageViewData = {
+    ...view,
+    directory: {
+      entries: [
+        {
+          initials: 'SB',
+          jobCount: 2,
+          logo: { height: 80, url: 'https://cdn/logo.png', width: 160 },
+          name: 'Santo Bakery',
+          typeLabel: 'Business',
+          url: '/organisations/santo-bakery',
+        },
+        { initials: 'ET', jobCount: 0, name: 'Efate Tours', url: '/organisations/efate-tours' },
+      ],
+      filters: { type: 'business' },
+      truncated: false,
+    },
+    path: '/organisations',
+    segments: [
+      { block: { blockType: 'organisation-directory', heading: 'Employers' }, kind: 'organisation-directory' },
+    ],
+  }
+
+  const render = () =>
+    container.renderToString(PageView, { props: { components, menus, tenant, view: directoryView } })
+
+  it('lists the organisations with type and size filters, counts and links @S-223', async () => {
+    const html = await render()
+
+    expect(html).toContain('Employers')
+    expect(html).toContain('href="/organisations/santo-bakery"')
+    expect(html).toContain('2 open jobs')
+    expect(html).toContain('name="type"')
+    expect(html).toContain('name="size"')
+    // A plain GET form back to the page: it works with JavaScript off.
+    expect(html).toContain('action="/organisations"')
+    expect(html).toContain('method="get"')
+    // The active filter is kept selected.
+    expect(html).toMatch(/<option value="business"[^>]* selected/)
+  })
+
+  it('lazy-loads logos with their size and falls back to initials @S-224', async () => {
+    const html = await render()
+
+    expect(html).toMatch(/<img[^>]*src="https:\/\/cdn\/logo\.png"[^>]*loading="lazy"/)
+    expect(html).toMatch(/<img[^>]*width="160"[^>]*height="80"/)
+    expect(html).toContain('>ET<')
+  })
+
+  it('ships no client JavaScript beyond the inline view-as snippet @S-224', async () => {
+    const html = await render()
+
+    expect(html).not.toContain('astro-island')
+    expect(html).not.toContain('type="module"')
+    const scripts = html.match(/<script[^>]*>/g) ?? []
+    expect(scripts).toHaveLength(1)
+    expect(scripts[0]).not.toContain('src=')
+  })
+
+  it('hides a filter the block turns off and shows an empty state @S-223', async () => {
+    const html = await container.renderToString(PageView, {
+      props: {
+        components,
+        menus,
+        tenant,
+        view: {
+          ...directoryView,
+          directory: { entries: [], filters: {}, truncated: false },
+          segments: [
+            {
+              block: { blockType: 'organisation-directory', emptyLabel: 'None yet', showSizeFilter: false },
+              kind: 'organisation-directory',
+            },
+          ],
+        },
+      },
+    })
+
+    expect(html).toContain('None yet')
+    expect(html).toContain('name="type"')
+    expect(html).not.toContain('name="size"')
+  })
+})

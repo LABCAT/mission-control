@@ -154,16 +154,19 @@ const needsApprovalFor = async (
   if (cached) return cached
 
   const lookup = (async (): Promise<boolean> => {
-    const tenant = (await req.payload
-      .findByID({
+    let tenant: null | Record<string, unknown> = null
+    try {
+      tenant = (await req.payload.findByID({
         collection: tenantsSlug as CollectionSlug,
         depth: 0,
         disableErrors: true,
         id: tenantID,
         overrideAccess: true,
         req,
-      })
-      .catch(() => null)) as null | Record<string, unknown>
+      })) as null | Record<string, unknown>
+    } catch {
+      // Unreadable: keep the strict default below.
+    }
     return tenant?.[ORGANISATION_PAGES_NEED_APPROVAL] !== false
   })()
 
