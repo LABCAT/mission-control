@@ -87,6 +87,9 @@ export const multiTenantOptionsFor = (
       // key's tenant and, for the draft-enabled pages, published only.
       [slugs.menus]: { accessResultOverride: tenantContentOverride },
       [slugs.pages]: { accessResultOverride: tenantContentOverride },
+      // mission-control: site settings (PJ-67) are one document per site, so `isGlobal` makes the
+      // tenant field unique and hides "create new". A site key reads the key's own site only.
+      [slugs.siteSettings]: { accessResultOverride: tenantContentOverride, isGlobal: true },
     },
     tenantsArrayField: {
       rowFields: [

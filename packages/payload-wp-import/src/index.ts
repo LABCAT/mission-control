@@ -12,9 +12,21 @@ export * from './importers/taxonomies'
 export { buildImportPlan, createPlanProvider, usersImporters } from './importers/users'
 export * from './importers/jobs'
 export * from './importers/job-locations'
+export * from './importers/menus'
+export * from './importers/pages'
+export * from './importers/site-settings'
+export {
+  legacyLang,
+  parseLegacyBanner,
+  readLegacySiteChrome,
+  SITE_CHROME_OPTIONS,
+  SITE_SETTINGS_LEGACY_ID,
+} from './site-chrome'
+export type { LegacyBanner, LegacySiteChrome } from './site-chrome'
+export { uploadsPathOf } from './uploads-path'
 export { ALLOWED_HEADING_TAGS, ALLOWED_LINK_PROTOCOLS, htmlToLexical, htmlToPlainText, safeLinkUrl } from './html-to-lexical'
 export type { UserImportOptions } from './importers/users'
-export { buildMediaPlan, originalOfThumbnail, uploadsPathOf } from './media/plan'
+export { buildMediaPlan, originalOfThumbnail } from './media/plan'
 export type { MediaPlan, MediaPlanOptions } from './media/plan'
 export { copyFile, sha256Of, SourceMissingError } from './media/copy'
 export {

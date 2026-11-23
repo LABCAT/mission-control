@@ -75,6 +75,15 @@ export type SkippedRow = { skip: string }
 export type Importer<Row = any> = {
   /** Slug of the Payload collection that receives the mapped documents. */
   collection: string
+  /**
+   * Find a document that already exists under another key than `legacyId`. Tried after the
+   * `legacyId` lookup misses, so it runs once per document: the page importer adopts the
+   * system page a site was seeded with (home, about, contact, organisations) instead of
+   * creating a second one, and writes `legacyId` onto it for the next run.
+   */
+  findExisting?: (
+    args: { ctx: ImportContext; data: Record<string, unknown>; legacyId: number },
+  ) => Promise<{ id: number | string } | undefined>
   /** Names of importers that must run first. */
   dependsOn: string[]
   /**

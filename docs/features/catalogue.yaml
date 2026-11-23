@@ -19,7 +19,7 @@
 meta:
   title: Mission Control features catalogue
   version: 1
-  updated: 2026-11-20
+  updated: 2026-11-23
   sources:
     - docs/migration/STATUS.md
     - docs/migration/PROPOSAL-ROLES.md
@@ -2071,6 +2071,70 @@ stories:
     tests:
       - packages/payload-wp-import/src/importers/jobs.test.ts
       - packages/payload-wp-import/src/html-to-lexical.test.ts
+
+  - id: S-260
+    area: Import and cutover
+    role: super admin
+    story: "The importer brings the legacy content pages into a tenant as CMS pages, and fills the four system pages instead of adding a second set."
+    steps:
+      - "Run wp-import pages with --dry-run and read the imported, dropped and flagged pages."
+      - "Run it for real, then run it again."
+    expected: "About us, Contact, For Employers, Organisations, Volunteering, Land Law Reforms, Organisation Competition and the 2017 Terms page are imported; WordPress and JobRoller machinery (submit, dashboard, login, password reset, contact, home-2) is not; a body becomes a rich-text block with the allowlist applied; a page holding a form or shortcode keeps its text, the form is left out and named in the report; the home, about, contact and organisations pages are the seeded ones, keeping their role and URL; a second run creates nothing."
+    settings:
+      - import.pages
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-wp-import/src/importers/pages.test.ts
+
+  - id: S-261
+    area: Import and cutover
+    role: super admin
+    story: "The imported home page reproduces the legacy page from blocks: hero, search, three feature boxes, latest jobs and the page copy."
+    steps:
+      - "Run wp-import pages, then open the home page in the CMS."
+      - "Rearrange the blocks and save."
+    expected: "The home page is built from blocks rather than one rich-text body: a hero with the legacy headline and a browse link, three feature boxes, the job search and latest-jobs blocks where the host has them registered, and the legacy copy after them; every block can be reordered or removed by a site manager."
+    settings:
+      - import.pages
+      - home.blocks
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-wp-import/src/importers/pages.test.ts
+
+  - id: S-262
+    area: Import and cutover
+    role: super admin
+    story: "The importer rebuilds the three legacy menus with their links, remapping WordPress-only items to the new routes and listing the rest."
+    steps:
+      - "Run wp-import menus with --dry-run and read the remapped and dropped items."
+      - "Run it for real, then run it again."
+    expected: "The main, top and footer menus are created with their items in the legacy order; a page item links to the page the import created; an item pointing at a WordPress-only page becomes the new route (Submit Job, Login, Password Reset, dashboard) or is dropped and named in the report; an unsafe or empty URL is dropped; a second run creates nothing."
+    settings:
+      - import.menus
+      - site.menus
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-wp-import/src/importers/menus.test.ts
+
+  - id: S-263
+    area: Import and cutover
+    role: super admin
+    story: "The importer fills a site's settings with the legacy name, tagline, language, logo and header banner, and the media import attaches the images."
+    steps:
+      - "Run wp-import site-settings and wp-import media with --dry-run, then for real."
+      - "Open the site settings and the public site."
+    expected: "The site name, tagline and language come from the legacy options; the settings document is the one the tenant was seeded with, not a second one; the header banner is one Banner block carrying the desktop image, the mobile image, the alt text and the legacy link, and the logo is set; a banner switched off in JobRoller is not imported; a second run creates nothing and keeps an image a person has replaced."
+    settings:
+      - site.headerBanner
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/collections/site-settings.test.ts
+      - packages/payload-wp-import/src/importers/site-settings.test.ts
+      - packages/payload-wp-import/src/media/media.test.ts
 
   # ---------------------------------------------------------------------------
   # Security and spam
