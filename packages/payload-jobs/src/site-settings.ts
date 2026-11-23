@@ -126,7 +126,7 @@ export const siteSettingsEndpoint = ({
       where: { id: { equals: siteKey.tenantID } },
     })
 
-    const tenant = result.docs[0] as TenantDoc | undefined
+    const tenant = result.docs[0] as unknown as TenantDoc | undefined
     if (!tenant) return respond({ error: 'not_found' }, 404)
 
     const settings = publicSiteSettings(tenant)

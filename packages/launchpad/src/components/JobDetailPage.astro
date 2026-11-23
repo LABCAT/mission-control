@@ -22,7 +22,7 @@ type Props = {
   /** Absolute URL of the share image (PJ-105); omitted until that route exists. */
   image?: string
   applyHref?: string
-  /** URL the view beacon posts to; the page counts only when the tenant counts public views. */
+  /** URL the view beacon posts to. Live jobs always count; the number shows only if the tenant allows. */
   viewEndpoint?: string
   labels?: Partial<Labels>
 }
@@ -64,7 +64,7 @@ const description = view.detail.descriptionHtml
     locale={locale}
     tenant={tenant}
     view={view}
-    viewEndpoint={view.showViews ? viewEndpoint : undefined}
+    viewEndpoint={viewEndpoint}
   />
 </BaseLayout>
 

@@ -4,10 +4,13 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import BaseLayout from './BaseLayout.astro'
 import FilterBar from './FilterBar.astro'
 import JobCard from './JobCard.astro'
+import JobDetailPage from './JobDetailPage.astro'
 import JobsPage from './JobsPage.astro'
 import OrgCard from './OrgCard.astro'
 import Pagination from './Pagination.astro'
 import Turnstile from './Turnstile.astro'
+import { jobDetailView, toJobDetail, type DetailJob } from '../jobs/detail'
+import { tenantJobPageSettings } from '../tenant/job-page-settings'
 import { jobFilterDefinitions, jobListingView, type ListingFacets } from '../jobs/listing'
 import type { FilterDefinition } from '../tenant/filters'
 import type { SiteTenant } from '../tenant/types'
@@ -472,5 +475,67 @@ describe('Turnstile', () => {
     // A noscript element, so a visitor with JavaScript never sees the warning.
     expect(html).toContain('<noscript>')
     expect(html).toMatch(/<noscript>[\s\S]*needs JavaScript[\s\S]*<\/noscript>/)
+  })
+})
+
+describe('JobDetailPage @S-280 @S-282 @S-285', () => {
+  const doc: DetailJob = {
+    description: { root: { children: [] } },
+    expiresAt: '2026-12-01T00:00:00.000Z',
+    howToApply: 'Email us.',
+    id: 7,
+    organisation: { approved: true, id: 3, name: 'Santo Bakery', pageEnabled: false, slug: 'santo-bakery' },
+    slug: 'head-chef',
+    status: 'published',
+    title: 'Head Chef',
+  }
+
+  const render = (status: 'expired' | 'live', source: Parameters<typeof tenantJobPageSettings>[0] = {}) => {
+    const detail = toJobDetail(doc, {})!
+    const view = jobDetailView({
+      detail,
+      settings: tenantJobPageSettings(source),
+      status,
+      tenant,
+    })
+
+    return container.renderToString(JobDetailPage, {
+      props: {
+        applyHref: '/jobs/head-chef/apply',
+        image: 'https://vanuatuwok.vu/og/jobs/head-chef.png',
+        siteUrl: 'https://vanuatuwok.vu',
+        view,
+        viewEndpoint: '/api/jobs/7/view',
+      },
+    })
+  }
+
+  it('is indexable, carries JobPosting and the share tags, and has an apply button when live', async () => {
+    const html = await render('live')
+
+    expect(html).not.toContain('noindex')
+    expect(html).toContain('"@type":"JobPosting"')
+    expect(html).toContain('<meta property="og:image" content="https://vanuatuwok.vu/og/jobs/head-chef.png">')
+    expect(html).toContain('<meta name="twitter:card" content="summary_large_image">')
+    expect(html).toContain('href="/jobs/head-chef/apply"')
+  })
+
+  it('counts a live view even when the tenant does not show the number, and shows no number then', async () => {
+    const hidden = await render('live', { publicJobViews: false })
+    expect(hidden).toMatch(/<p[^>]*data-job-views[^>]*data-view-endpoint="\/api\/jobs\/7\/view"[^>]*hidden/)
+    expect(hidden).not.toContain('data-job-views-count')
+
+    const shown = await render('live', { publicJobViews: true })
+    expect(shown).toContain('data-job-views-count')
+  })
+
+  it('shows the closed notice, noindex, no JobPosting, no apply button and no beacon when expired', async () => {
+    const html = await render('expired')
+
+    expect(html).toContain('No longer accepting applications')
+    expect(html).toContain('noindex')
+    expect(html).not.toContain('JobPosting')
+    expect(html).not.toContain('/jobs/head-chef/apply')
+    expect(html).not.toMatch(/<p[^>]*data-job-views/)
   })
 })

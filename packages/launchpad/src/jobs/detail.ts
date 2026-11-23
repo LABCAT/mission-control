@@ -70,14 +70,23 @@ export const jobPageState = ({
   settings,
   status,
 }: JobPageStateOptions): JobPageStatus => {
-  if (status !== 'published') return 'gone'
-
-  if (!expiresAt) return 'live'
-  const expiry = Date.parse(expiresAt)
-  if (Number.isNaN(expiry)) return 'live'
+  // The CMS closes a job by setting its status to `expired` (a site key reads `published` and
+  // `expired` jobs), so that status is a closed job, not a missing one. Anything else a site key
+  // could see is not a page.
+  if (status !== 'published' && status !== 'expired') return 'gone'
 
   const time = now.getTime()
-  if (expiry > time) return 'live'
+  const expiry = expiresAt ? Date.parse(expiresAt) : Number.NaN
+  if (Number.isNaN(expiry)) {
+    // No usable expiry: a published job stays live; an expired one has no date to count the 410
+    // window from, so it keeps its notice rather than vanishing.
+    if (status === 'published') return 'live'
+    return settings.expiredJobMode === 'gone' ? 'gone' : 'expired'
+  }
+  // The status is the CMS's word that the job closed, even if its date is still ahead (an
+  // early close by an admin), so only a published job can be live.
+  if (status === 'published' && expiry > time) return 'live'
+  if (status === 'expired' && expiry > time) return settings.expiredJobMode === 'gone' ? 'gone' : 'expired'
   if (settings.expiredJobMode === 'gone') return 'gone'
 
   // A null month count is the tenant's "never turn it into a Gone page".

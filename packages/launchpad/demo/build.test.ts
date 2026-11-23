@@ -96,4 +96,49 @@ describe('demo site', () => {
     expect(scripts.length).toBeGreaterThan(0)
     expect(gzipped).toBeLessThan(JS_BUDGET_GZIP)
   })
+  it('builds a live job page with JobPosting data, share tags and the counting script @S-280 @S-284 @S-285', () => {
+    const html = readFileSync(join(outDir, 'jobs', 'head-chef', 'index.html'), 'utf8')
+
+    expect(html).toContain('<h1')
+    expect(html).toContain('application/ld+json')
+    expect(html).toContain('"@type":"JobPosting"')
+    expect(html).not.toContain('noindex')
+    expect(html).toContain('property="og:image"')
+    expect(html).toContain('/og/jobs/head-chef.png')
+    // Every live view is counted, whether or not the tenant shows the number.
+    expect(html).toMatch(/<p[^>]*data-job-views/)
+  })
+
+  it('builds a closed job as a noindex page with no JobPosting and no apply button @S-282', () => {
+    const html = readFileSync(join(outDir, 'jobs', 'sous-chef', 'index.html'), 'utf8')
+
+    expect(html).toContain('No longer accepting applications')
+    expect(html).toContain('noindex')
+    expect(html).not.toContain('JobPosting')
+    expect(html).not.toMatch(/<p[^>]*data-job-views/)
+  })
+
+  it('ships no client JavaScript on a job page beyond the view beacon, under 1 KB min+gzip @S-289', () => {
+    const html = readFileSync(join(outDir, 'jobs', 'head-chef', 'index.html'), 'utf8')
+    const assets = join(outDir, '_astro')
+    const sources = [...html.matchAll(/<script\b[^>]*\bsrc="([^"]+)"/g)].map((match) => match[1]!)
+    const inline = [...html.matchAll(/<script\b(?![^>]*\bsrc=)(?![^>]*type="application\/ld\+json")[^>]*>([\s\S]*?)<\/script>/g)]
+      .map((match) => match[1]!)
+      // The view-as banner's inline cookie check is the layout's, not this page's.
+      .filter((code) => !code.includes('mc-view-as'))
+
+    const files = sources.map((src) => join(assets, src.split('/').pop()!))
+    const bytes = [
+      ...files.map((file) => gzipSync(readFileSync(file)).byteLength),
+      ...inline.map((code) => gzipSync(code).byteLength),
+    ]
+    const total = bytes.reduce((sum, size) => sum + size, 0)
+
+    console.log(`job page JavaScript: ${total} B min+gzip across ${bytes.length} scripts`)
+
+    // Only the beacon: nothing is hydrated, and every script file belongs to it.
+    expect(html).not.toContain('astro-island')
+    expect(total).toBeLessThan(1024)
+    for (const file of files) expect(readFileSync(file, 'utf8')).toContain('data-job-views')
+  })
 })

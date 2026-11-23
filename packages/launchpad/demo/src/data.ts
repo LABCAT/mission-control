@@ -190,7 +190,7 @@ export const detailJobs: DetailJob[] = [
     organisation: { approved: true, id: 201, name: 'Vanuatu Wok', pageEnabled: true, slug: 'vanuatu-wok' },
     publishedAt: '2026-08-01T00:00:00.000Z',
     slug: 'sous-chef',
-    status: 'published',
+    status: 'expired',
     title: 'Sous Chef',
   },
 ]

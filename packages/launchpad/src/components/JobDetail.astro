@@ -207,9 +207,11 @@ const facts = [
     }
 
     {
-      view.showViews && viewEndpoint && (
-        <p class="lp-detail__views" data-job-views data-view-endpoint={viewEndpoint}>
-          <span data-job-views-count data-views-template={viewsTemplate} hidden></span>
+      /* Every live view is counted (it feeds the job views report); the number is only shown when
+         the tenant turns the public counter on, in space reserved so nothing shifts. */
+      !view.expired && viewEndpoint && (
+        <p class="lp-detail__views" data-job-views data-view-endpoint={viewEndpoint} hidden={!view.showViews}>
+          {view.showViews && <span data-job-views-count data-views-template={viewsTemplate} hidden />}
         </p>
       )
     }

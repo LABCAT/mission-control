@@ -99,8 +99,9 @@ describe('payloadJobs tenancy modes', () => {
       'post /:slug/account/orders/:id/approve',
       'post /:slug/account/orders/:id/decline',
     ])
-    // Payload routes /api/tenants/* to the collection's endpoints, so nothing goes at the root.
-    expect(result.endpoints).toBeUndefined()
+    // Payload routes /api/tenants/* to the collection's endpoints, so nothing tenant-specific goes
+    // at the root: the only root endpoint is the site's own settings read (PJ-37).
+    expect(result.endpoints?.map((endpoint) => endpoint.path)).toEqual(['/site-settings'])
   })
 
   it('leaves the account auth endpoints out when asked', async () => {

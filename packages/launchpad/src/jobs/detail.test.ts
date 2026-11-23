@@ -117,6 +117,26 @@ describe('job page state @S-282 @S-283', () => {
     ).toBe('gone')
   })
 
+  it('treats the CMS `expired` status as a closed job, not a missing one', () => {
+    // The CMS flips status to `expired` when a job closes; that is the state the page must show
+    // the notice for, and the one a site key actually reads.
+    const expiredStatus = (over: Parameters<typeof jobPageState>[0]) => jobPageState(over)
+    expect(
+      expiredStatus({ expiresAt: '2026-11-21T00:00:00.000Z', now: NOW, settings: settings(), status: 'expired' }),
+    ).toBe('expired')
+    // Closed early by an admin: still ahead of its date, but not live.
+    expect(
+      expiredStatus({ expiresAt: '2026-12-31T00:00:00.000Z', now: NOW, settings: settings(), status: 'expired' }),
+    ).toBe('expired')
+    expect(
+      expiredStatus({ expiresAt: '2025-11-01T00:00:00.000Z', now: NOW, settings: settings(), status: 'expired' }),
+    ).toBe('gone')
+    expect(expiredStatus({ now: NOW, settings: settings(), status: 'expired' })).toBe('expired')
+    expect(
+      expiredStatus({ now: NOW, settings: settings({ expiredJobMode: 'gone' }), status: 'expired' }),
+    ).toBe('gone')
+  })
+
   it('is gone for a job that was never published', () => {
     for (const status of ['draft', 'pending', 'cancelled', null, undefined]) {
       expect(jobPageState({ now: NOW, settings: settings(), status }), String(status)).toBe('gone')
