@@ -1,4 +1,5 @@
 import { LLMInstructionsMenuItem as LLMInstructionsMenuItem_3817bf644402e67bfe6577f60ef982de } from '@payloadcms/ui'
+import { RemovePersonalDataButton as RemovePersonalDataButton_9f9c8706d2027ec60132fe8d925d10a8 } from '@mission-control/payload-jobs/client'
 import { ViewAsUserButton as ViewAsUserButton_9f9c8706d2027ec60132fe8d925d10a8 } from '@mission-control/payload-jobs/client'
 import { TenantField as TenantField_1d0591e3cf4f332c83a86da13a0de59a } from '@payloadcms/plugin-multi-tenant/client'
 import { NullField as NullField_3817bf644402e67bfe6577f60ef982de } from '@payloadcms/ui'
@@ -54,6 +55,7 @@ import { UploadDropzoneCollectionsField as UploadDropzoneCollectionsField_3817bf
 /** @type import('payload').ImportMap */
 export const importMap = {
   "@payloadcms/ui#LLMInstructionsMenuItem": LLMInstructionsMenuItem_3817bf644402e67bfe6577f60ef982de,
+  "@mission-control/payload-jobs/client#RemovePersonalDataButton": RemovePersonalDataButton_9f9c8706d2027ec60132fe8d925d10a8,
   "@mission-control/payload-jobs/client#ViewAsUserButton": ViewAsUserButton_9f9c8706d2027ec60132fe8d925d10a8,
   "@payloadcms/plugin-multi-tenant/client#TenantField": TenantField_1d0591e3cf4f332c83a86da13a0de59a,
   "@payloadcms/ui#NullField": NullField_3817bf644402e67bfe6577f60ef982de,
