@@ -14,3 +14,6 @@ PAYLOAD_SECRET=change-me-to-a-long-random-string
 # XERO_TOKEN_ENCRYPTION_KEY=
 # Optional: HMAC key for the OAuth state; defaults to PAYLOAD_SECRET.
 # XERO_STATE_SECRET=
+
+# Cache invalidation (PJ-41): no secret. The CMS and every site bind the SAME KV namespace as
+# `CONTENT_CACHE` (wrangler.jsonc). Locally wrangler simulates it; without it the hooks are no-ops.

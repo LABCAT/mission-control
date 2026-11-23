@@ -249,4 +249,14 @@ describe('cachedResponse', () => {
 
     expect(render).toHaveBeenCalledTimes(2)
   })
+
+  it('never stores a response that sets a cookie, so one visitor\'s session is not served to all @S-242', async () => {
+    const cache = memoryCache()
+    const render = vi.fn(async () => new Response('<p>mine</p>', { headers: { 'set-cookie': 'a=1' }, status: 200 }))
+
+    await cachedResponse('k', 300, render, { cache })
+    await cachedResponse('k', 300, render, { cache })
+
+    expect(render).toHaveBeenCalledTimes(2)
+  })
 })

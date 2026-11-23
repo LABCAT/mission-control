@@ -31,6 +31,9 @@ export const LOGO = {
 /** Hostnames that serve production content. Every other host is a preview and stays unindexed. */
 export const PRODUCTION_HOSTNAMES: readonly string[] = ['vanuatuwok.vu', 'www.vanuatuwok.vu']
 
+/** The tenant slug: scopes the cache keys and the content version (PJ-41). */
+export const SITE_SLUG = 'vwok'
+
 /** The tenant the theme renders. */
 export const siteTenant: SiteTenant = {
   branding: {
@@ -40,5 +43,5 @@ export const siteTenant: SiteTenant = {
     logo: { alt: LOGO.alt, height: LOGO.height, url: LOGO.src, width: LOGO.width },
   },
   name: 'Vanuatu Wok',
-  slug: 'vwok',
+  slug: SITE_SLUG,
 }

@@ -92,7 +92,11 @@ const bumpScopes = async (
   options: ContentVersionOptions,
   scopes: readonly string[],
 ): Promise<void> => {
-  await bumpContentVersions(await options.store(), scopes, { nextVersion: options.nextVersion })
+  try {
+    await bumpContentVersions(await options.store(), scopes, { nextVersion: options.nextVersion })
+  } catch {
+    // The binding getter threw: a missed bump is stale pages until the TTL, never a failed save.
+  }
 }
 
 /**
@@ -100,6 +104,19 @@ const bumpScopes = async (
  * aggregate site. A tenantless document (a hub's own row) bumps only the aggregate scope.
  */
 const bumpDoc = async (
+  req: PayloadRequest,
+  options: ContentVersionOptions,
+  doc: unknown,
+  previous: unknown,
+): Promise<void> => {
+  try {
+    await bumpDocScopes(req, options, doc, previous)
+  } catch {
+    // A tenant lookup that fails must not fail the content write that triggered it.
+  }
+}
+
+const bumpDocScopes = async (
   req: PayloadRequest,
   options: ContentVersionOptions,
   doc: unknown,
@@ -189,8 +206,7 @@ export const withContentVersionHooks = (
  */
 export const tenantContentVersionHook =
   (options: ContentVersionOptions): CollectionAfterChangeHook =>
-  async ({ doc, previousDoc, req }) => {
-    if (skipped(options, { doc, operation: 'update', req })) return doc
+  async ({ doc, previousDoc }) => {
     await bumpScopes(options, tenantScopes(doc, previousDoc))
     return doc
   }
@@ -198,7 +214,7 @@ export const tenantContentVersionHook =
 /** The same for a tenant delete. */
 export const tenantContentVersionDeleteHook =
   (options: ContentVersionOptions): CollectionAfterDeleteHook =>
-  async ({ doc, req }) => {
+  async ({ doc }) => {
     await bumpScopes(options, tenantScopes(doc, null))
     return doc
   }
@@ -226,7 +242,7 @@ export const withGlobalContentVersions = (
     ...global.hooks,
     afterChange: [
       ...(global.hooks?.afterChange ?? []),
-      async ({ doc, req }) => {
+      async ({ doc }) => {
         await bumpScopes(options, [options.siteScope ?? 'default', ALL_CONTENT_SCOPE])
         return doc
       },

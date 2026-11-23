@@ -3,8 +3,9 @@
  *
  * The edge holds HTML for seven days because the per-tenant content version in the cache key is
  * what invalidates it: a CMS write bumps the version, so every data centre misses at once. A
- * browser cannot be purged, so HTML carries a short browser max-age instead, and a shared cache
- * between the browser and the edge may keep the long copy.
+ * browser cannot be purged, so HTML carries a short browser max-age instead. The browser header
+ * carries no `s-maxage`: a CDN rule in front of the Worker would otherwise hold the page for days
+ * under its URL and outlive the content version.
  */
 
 export const HTML_EDGE_TTL_SECONDS = 7 * 24 * 60 * 60
@@ -23,13 +24,12 @@ export const NO_STORE_CACHE_CONTROL = 'no-store'
 
 /**
  * The `Cache-Control` an edge cache entry is stored with, and the one a page answers a browser
- * with when the two differ: `s-maxage` lets a shared cache keep the long copy the browser may
- * not.
+ * with when the two differ. Only the short `max-age` ever leaves the Worker.
  */
 export const htmlCacheControl = (
   edgeTtl: number,
   browserMaxAge: number = HTML_BROWSER_MAX_AGE_SECONDS,
 ): { browser: string; edge: string } => ({
-  browser: `public, max-age=${Math.floor(browserMaxAge)}, s-maxage=${Math.floor(edgeTtl)}`,
+  browser: `public, max-age=${Math.floor(browserMaxAge)}`,
   edge: `public, max-age=${Math.floor(edgeTtl)}`,
 })

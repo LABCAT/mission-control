@@ -759,7 +759,7 @@ describe('serveJobListing', () => {
     const get = vi.fn(async () => 'v9')
     const store = { get, put: async () => {} }
 
-    await serveJobListing({ cache, cms, now: NOW, render: renderView, search: '', site: 'vwok', tenant, version: 'v9' })
+    await serveJobListing({ cache, cms, now: NOW, render: renderView, search: '', site: 'vwok', store, tenant, version: 'v9' })
 
     expect(get).not.toHaveBeenCalled()
   })

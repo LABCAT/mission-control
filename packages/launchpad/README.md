@@ -124,7 +124,33 @@ const orgs = await cached(`org:${site}:all`, 300, () => cms.findAll('organisatio
 
 - Typed from `apps/cms/src/payload-types.ts` (type-only import). Sends `x-site-key`; throws `CmsError` (`http`, `network`, `timeout`, `invalid_response`) with no key in the message. `createCmsClient` throws if `window` exists.
 - `findAll` is one request with `limit=0` (no pagination: listings show everything). Lists filter explicitly (e.g. live jobs: `where: { status: { equals: 'published' } }`); `findBySlug` adds no filter, so an expired job's page still resolves.
-- `cached(key, ttl, fn, { tags })` uses `caches.default`; with no cache it just calls `fn`. `purgeTags(tags)` bumps each tag's version. The Cache API is per data centre, so a purge reaches only the colo that runs it: PJ-41 needs a shared store or the zone purge API (entries already carry a `Cache-Tag` header). Put the site in the key; nothing here knows the tenant.
+- `cached(key, ttl, fn, { tags })` uses `caches.default`; with no cache it just calls `fn`. `purgeTags(tags)` bumps each tag's version. The Cache API is per data centre, so a purge reaches only the colo that runs it: global invalidation is the content version below, not `purgeTags`. Put the site in the key; nothing here knows the tenant.
+
+## Content versions and the public page cache (PJ-41)
+
+Global invalidation without a purge. Each tenant has a **content version** in Cloudflare KV
+(`CONTENT_CACHE`, key `content-version:<tenant slug>`). It is part of every edge cache key, so a
+CMS write that bumps it makes every data centre miss at once. The CMS (`payload-jobs`
+`contentVersions` option) bumps it on any change to jobs, organisations, pages, menus, taxonomies,
+locations, plans, add-ons and the site settings, and on `all` for aggregate sites; the hourly
+expiry job (PJ-52) must call `bumpContentVersions` when jobs expire or featured ends. KV errors
+never fail a save or a page. The CMS and every site must bind the **same** namespace: copy the id
+from `apps/cms/wrangler.jsonc` into each site's wrangler config after the first deploy.
+
+- `servePublicPage({ normalise, render, site, store })` (`tenant/page-cache`) redirects a
+  non-canonical URL (301, before any lookup), reads the version once and stores the page under
+  `<site>:html:<version>:<canonical url>`. `apps/vwok` applies it in `src/middleware.ts` to every
+  page except `/account`, `/api`, `/health`, assets and files.
+- Normalisation (`tenant/cache-key`): unknown parameters dropped, values validated, parameters
+  sorted, `?page=1` dropped. **Tracking parameters** (`utm_*`, `gclid`, `gbraid`, `wbraid`,
+  `fbclid`, `msclkid`, `ttclid`, `li_fat_id`, `ref`; add more with `tracking.extra`) are ignored
+  for the key but kept in the URL and never 301-stripped, so client-side analytics still sees them.
+- Lifetimes (`cms/headers`): HTML 7 days at the edge, browser `max-age=60` (never `s-maxage`, so a
+  CDN rule cannot outlive the version), hashed assets one year `immutable`, media one year;
+  `/health`, `/account` and forms `no-store`. A response that sets a cookie is never stored.
+  Without a KV binding pages fall back to a 5 minute edge TTL.
+- `/health` (`tenant/health`): 200 or 503, `no-store`; a site checks its Worker and the CMS, whose
+  `/health` checks the database. Point UptimeRobot at each site's and the CMS's `/health`.
 
 ## Job listing (`@mission-control/launchpad/jobs`)
 

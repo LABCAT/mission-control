@@ -19,7 +19,7 @@ describe('cache lifetimes @S-242', () => {
     expect(HTML_EDGE_TTL_SECONDS).toBe(7 * 24 * 60 * 60)
     expect(HTML_BROWSER_MAX_AGE_SECONDS).toBe(60)
     expect(htmlCacheControl(HTML_EDGE_TTL_SECONDS)).toEqual({
-      browser: 'public, max-age=60, s-maxage=604800',
+      browser: 'public, max-age=60',
       edge: 'public, max-age=604800',
     })
   })
@@ -34,7 +34,7 @@ describe('cache lifetimes @S-242', () => {
   })
 
   it('rounds a fractional lifetime down to whole seconds', () => {
-    expect(htmlCacheControl(10.9, 0.5)).toEqual({ browser: 'public, max-age=0, s-maxage=10', edge: 'public, max-age=10' })
+    expect(htmlCacheControl(10.9, 0.5)).toEqual({ browser: 'public, max-age=0', edge: 'public, max-age=10' })
   })
 })
 
@@ -87,8 +87,8 @@ describe('servePublicPage @S-242', () => {
     const first = await servePublicPage(options)
     const hit = await servePublicPage(options)
 
-    expect(first.headers.get('cache-control')).toBe('public, max-age=60, s-maxage=604800')
-    expect(hit.headers.get('cache-control')).toBe('public, max-age=60, s-maxage=604800')
+    expect(first.headers.get('cache-control')).toBe('public, max-age=60')
+    expect(hit.headers.get('cache-control')).toBe('public, max-age=60')
     // The entry itself is held for the edge lifetime.
     const stored = [...entries.values()].find((response) => response.headers.get('cache-control')?.includes('604800'))
     expect(stored?.headers.get('cache-control')).toBe('public, max-age=604800')
@@ -170,6 +170,6 @@ describe('servePublicPage @S-242', () => {
 
     const response = await servePublicPage(options)
 
-    expect(response.headers.get('cache-control')).toBe('public, max-age=60, s-maxage=300')
+    expect(response.headers.get('cache-control')).toBe('public, max-age=60')
   })
 })

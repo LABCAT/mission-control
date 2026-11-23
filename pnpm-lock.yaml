@@ -134,6 +134,9 @@ importers:
       '@labcat2020/rocketship':
         specifier: 0.3.0
         version: 0.3.0(sass@1.108.2)
+      '@mission-control/content-cache':
+        specifier: workspace:*
+        version: link:../../packages/content-cache
       '@mission-control/launchpad':
         specifier: workspace:*
         version: link:../../packages/launchpad

@@ -10,6 +10,8 @@ export type SiteEnv = {
   /** PJ-104 takes this over as a per-tenant setting; until then it is a deployment switch. */
   AI_CRAWLERS_ALLOWED?: string
   CMS_URL?: string
+  /** KV namespace of per-tenant content versions (PJ-41); absent in a preview or `astro dev`. */
+  CONTENT_CACHE?: unknown
   SITE_KEY?: string
 }
 

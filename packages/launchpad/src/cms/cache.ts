@@ -171,7 +171,9 @@ export const cachedResponse = async (
   }
 
   const response = await render()
-  const refusable = /\bno-store\b/i.test(response.headers.get('cache-control') ?? '')
+  // A response that sets a cookie is for one visitor: never store it for everyone.
+  const refusable =
+    /\bno-store\b/i.test(response.headers.get('cache-control') ?? '') || response.headers.has('set-cookie')
   if (!request || response.status !== 200 || refusable) return response
 
   const body = await response.text()

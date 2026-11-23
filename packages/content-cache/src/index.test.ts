@@ -59,7 +59,7 @@ describe('content versions @S-240', () => {
   })
 
   it('drops duplicate and empty scopes, so one write is one write', async () => {
-    const put = vi.fn(async () => {})
+    const put = vi.fn(async (_key: string, _value: string) => {})
     const store: ContentVersionStore = { get: async () => null, put }
 
     await bumpContentVersions(store, ['vwok', 'vwok', '', ALL_CONTENT_SCOPE], { nextVersion: () => 'x' })

@@ -2482,3 +2482,65 @@ stories:
     tests:
       - packages/launchpad/src/components/PageView.test.ts
       - packages/launchpad/src/pages/menus.test.ts
+
+  - id: S-240
+    area: Content versions
+    role: site manager
+    story: "A change in the CMS reaches every cached public page of the site worldwide, without a manual purge."
+    steps:
+      - "Edit a page, job, menu, category or the site settings in the CMS."
+      - "Reload the public page from another location."
+    expected: "The tenant's content version in KV is bumped (and every aggregate site's), so the next request misses the edge cache and renders the new content. A KV outage never fails a save or a page."
+    settings:
+      - site.contentVersions
+    mvp: true
+    status: built
+    tests:
+      - packages/content-cache/src/index.test.ts
+      - packages/payload-jobs/src/content-version.test.ts
+      - packages/launchpad/src/tenant/store.test.ts
+      - packages/launchpad/src/jobs/listing.test.ts
+
+  - id: S-241
+    area: Content versions
+    role: seeker
+    story: "A junk or reordered URL never reaches the CMS: it is normalised to one canonical, cached URL."
+    steps:
+      - "Open /jobs?type=asdf123&utm_source=chatgpt.com, then /about?junk=1."
+    expected: "Unknown parameters and invalid values are dropped, parameters are sorted, and the browser gets a 301 to the canonical URL before any cache lookup. Tracking parameters (utm_*, gclid, fbclid and others; list configurable) are ignored for the key but kept in the URL, never stripped."
+    settings:
+      - site.cache.trackingParams
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/tenant/cache-key.test.ts
+      - apps/vwok/src/public-cache.test.ts
+
+  - id: S-242
+    area: Content versions
+    role: seeker
+    story: "Public pages are fast because the edge holds them, and the browser never holds them for long."
+    steps:
+      - "Request a public page twice and read the Cache-Control header."
+    expected: "HTML is held at the edge for 7 days under a key that includes the content version; the browser gets max-age=60; hashed assets and media get a year. /account, /api and /health are never cached, and a response that sets a cookie is never stored."
+    settings:
+      - site.cache.htmlTtl
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/tenant/page-cache.test.ts
+      - apps/vwok/src/public-cache.test.ts
+
+  - id: S-243
+    area: Content versions
+    role: super admin
+    story: "UptimeRobot can monitor each site and the CMS on /health and it always tells the truth."
+    steps:
+      - "Request /health on a site and on the CMS; stop the database and request it again."
+    expected: "200 with no-store when the Worker, CMS and database answer; 503 naming the failing check otherwise. Never cached."
+    settings: []
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/tenant/health.test.ts
+      - apps/vwok/src/health.test.ts
