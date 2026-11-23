@@ -325,30 +325,33 @@ stories:
   - id: S-022
     area: Search and listings
     role: seeker
-    story: "A visitor browses the organisation directory, with organisations that have live jobs first."
+    story: "A visitor browses the organisation directory: every public organisation on one page, with its current job count."
     steps:
       - "Open /organisations."
       - "Filter by type or size."
-    expected: "Only public organisations appear, live-job organisations come first, then alphabetical, with no job count."
+    expected: "Only public organisations appear, alphabetical, all on one page with no pagination, whether or not they have live jobs; each card shows its logo (initials when it has none) and its count of live jobs (see S-223)."
     settings:
-      - organisations.pagesPublicByDefault
-      - organisations.directoryOrder
+      - organisationPagesNeedApproval
+      - site.blocks.organisationDirectory
     mvp: true
-    status: planned
-    tests: []
+    status: built
+    tests:
+      - packages/launchpad/src/organisations/organisations.test.ts
+      - packages/launchpad/src/components/PageView.test.ts
 
   - id: S-023
     area: Search and listings
     role: seeker
     story: "A visitor opens an organisation page and sees its profile and current jobs."
     steps:
-      - "Open /organisation/{slug}."
-    expected: "The page shows logo, cover, type, size, about, location, website, socials and that organisation's live jobs."
+      - "Open /organisations/{slug}."
+    expected: "The page shows logo (initials when there is none), type, size, about, location, website and that organisation's own live jobs. Cover image and social links are not drawn yet. A private, unapproved or possible-duplicate organisation is a 404 (see S-224)."
     settings:
-      - organisations.pageApproval
+      - organisationPagesNeedApproval
     mvp: true
-    status: planned
-    tests: []
+    status: built
+    tests:
+      - packages/launchpad/src/organisations/organisations.test.ts
 
   - id: S-024
     area: Search and listings
@@ -2482,3 +2485,85 @@ stories:
     tests:
       - packages/launchpad/src/components/PageView.test.ts
       - packages/launchpad/src/pages/menus.test.ts
+
+  # ---------------------------------------------------------------------------
+  # Organisation directory and page (PJ-38)
+  # ---------------------------------------------------------------------------
+  - id: S-220
+    area: Organisations
+    role: seeker
+    story: "An organisation's page is private until it is switched on, and needs an admin's approval only where the tenant requires it."
+    steps:
+      - "Create an organisation and open its page, then switch the page on, then approve it."
+      - "Turn the tenant's 'organisation pages need approval' setting off and repeat."
+    expected: "The organisation is hidden from the site until its page is on (and approved, when approval is required, which is the default and vwok's legacy flow); with the setting off, switching the page on is enough. One tenant's setting never changes another's, and a site key never sees another tenant's organisations."
+    settings:
+      - organisationPagesNeedApproval
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/collections/organisation-public.test.ts
+      - packages/payload-jobs/src/collections/organisation-public.integration.test.ts
+
+  - id: S-221
+    area: Organisations
+    role: site manager
+    story: "An organisation flagged as a possible duplicate cannot have a public page."
+    steps:
+      - "Flag an organisation as a possible duplicate and try to switch its page on."
+      - "Clear the flag, then switch the page on."
+    expected: "Switching on a flagged page is refused, a flagged organisation is hidden from the directory and from its own page even with approval off, and clearing the flag (or merging) brings it back. Its jobs stay off any official organisation page."
+    settings:
+      - organisations.duplicateHandling
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/collections/organisation-public.test.ts
+      - packages/payload-jobs/src/collections/organisation-public.integration.test.ts
+
+  - id: S-222
+    area: Organisations
+    role: super admin
+    story: "A site key can read organisations, and only the public fields of public ones."
+    steps:
+      - "Read /api/organisations with a site key."
+    expected: "Organisations are on the site-key allowlist under their resolved slug. The key gets the collection's own public rule rather than the generic published scope, billing fields and the legacy id are never returned, and other private collections stay out of the allowlist."
+    settings: []
+    mvp: true
+    status: built
+    tests:
+      - apps/cms/src/site-keys.test.ts
+      - packages/payload-jobs/src/collections/organisation-public.test.ts
+
+  - id: S-223
+    area: Organisations
+    role: seeker
+    story: "The organisation directory block filters by type and size and shows job counts, logos and links to public pages only."
+    steps:
+      - "Place the organisation directory block on the Organisations page."
+      - "Choose a type, then a size, and submit the filter form with JavaScript off."
+    expected: "The page lists the matching public organisations on one page (bounded by a guard), with each live-job count, a lazy-loaded logo with its size or initials when there is none, and a link to the organisation's page. Unknown filter values are ignored."
+    settings:
+      - site.blocks.organisationDirectory
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/organisations/organisations.test.ts
+      - packages/launchpad/src/pages/blocks.test.ts
+      - packages/launchpad/src/components/PageView.test.ts
+
+  - id: S-224
+    area: Organisations
+    role: seeker
+    story: "The organisation page lists only that organisation's live jobs, and a private page is a 404 that ships no client JavaScript."
+    steps:
+      - "Open /organisations/{slug} for a public organisation."
+      - "Open the slug of a private, unapproved or duplicate-flagged organisation."
+    expected: "The public organisation shows its profile and its own live jobs only (a duplicate's jobs never appear on the official page until merged); the others return a 404 identical to an unknown slug. Pages and directory render with no hydrated island and lazy images."
+    settings:
+      - organisationPagesNeedApproval
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/organisations/organisations.test.ts
+      - packages/launchpad/src/components/PageView.test.ts

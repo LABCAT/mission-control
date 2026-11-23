@@ -86,7 +86,7 @@ describe('directory filters @S-223', () => {
 })
 
 describe('directory entries @S-223', () => {
-  it('counts live jobs per organisation, listing organisations with none too', async () => {
+  it('counts live jobs per organisation, listing organisations with none too @S-022', async () => {
     const { calls, cms } = fakeCms({
       jobs: [{ organisation: 1 }, { organisation: { id: 1 } }, { organisation: 2 }, { organisation: null }],
       organisations: [org(1, 'Santo Bakery'), org(2, 'Efate Tours'), org(3, 'Quiet Charity')],
@@ -164,7 +164,7 @@ describe('organisation page @S-224', () => {
     title: `Job ${id}`,
   })
 
-  it('loads the profile and only this organisation’s live jobs', async () => {
+  it('loads the profile and only this organisation’s live jobs @S-023', async () => {
     const { calls, cms } = fakeCms({
       bySlug: { 'santo-bakery': santo },
       jobs: [job(1, { id: 5, name: 'Santo Bakery', slug: 'santo-bakery' })],
