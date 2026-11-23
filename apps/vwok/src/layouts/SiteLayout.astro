@@ -2,6 +2,7 @@
 import BaseLayout from '@mission-control/launchpad/components/BaseLayout'
 
 import { siteTenant } from '../brand'
+import BrandHead from '../components/BrandHead.astro'
 
 type Props = {
   title: string
@@ -24,9 +25,9 @@ const siteUrl = Astro.site ? Astro.site.origin : undefined
   tenant={siteTenant}
   title={title}
 >
-  <!-- The favicons are the legacy uploads, so tabs and home-screen icons keep the brand. -->
-  <link slot="head" href="/brand/icon-32.png" rel="icon" sizes="32x32" type="image/png" />
-  <link slot="head" href="/brand/icon-180.png" rel="icon" sizes="180x180" type="image/png" />
-  <link slot="head" href="/brand/icon-180.png" rel="apple-touch-icon" />
+  <BrandHead slot="head" />
+  <!-- Named slots are forwarded one by one: Astro does not pass them through a wrapper. -->
+  <slot name="nav" slot="nav" />
+  <slot name="footer-nav" slot="footer-nav" />
   <slot />
 </BaseLayout>

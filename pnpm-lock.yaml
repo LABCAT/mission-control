@@ -168,6 +168,9 @@ importers:
       '@labcat2020/rocketship':
         specifier: 0.3.0
         version: 0.3.0(sass@1.108.2)
+      '@mission-control/rocketship-payload':
+        specifier: workspace:*
+        version: link:../rocketship-payload
     devDependencies:
       '@astrojs/check':
         specifier: 0.9.12
