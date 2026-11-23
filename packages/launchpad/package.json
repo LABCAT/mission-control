@@ -18,7 +18,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@labcat2020/rocketship": "0.3.0"
+    "@labcat2020/rocketship": "0.3.0",
+    "@mission-control/content-cache": "workspace:*"
   },
   "peerDependencies": {
     "astro": "7.4.12",

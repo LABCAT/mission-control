@@ -27,6 +27,7 @@
     "typescript": "6.0.3"
   },
   "dependencies": {
-    "bcryptjs": "3.0.3"
+    "bcryptjs": "3.0.3",
+    "@mission-control/content-cache": "workspace:*"
   }
 }

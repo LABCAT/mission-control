@@ -19,6 +19,8 @@ import {
   type ListingFacets,
   type ListingJob,
 } from './listing'
+import { createMemoryContentVersionStore } from '@mission-control/content-cache'
+
 import { purgeTags, type CacheLike } from '../cms/cache'
 import type { CmsList } from '../cms/types'
 import type { SiteTenant } from '../tenant/types'
@@ -268,9 +270,9 @@ describe('listingHref', () => {
     expect(hrefFor({}, 1)).toBe('/jobs')
   })
 
-  it('keeps the filters in the order the form shows them, with the page number last', () => {
+  it('sorts the filters by name so a link is already canonical, with the page number last', () => {
     expect(hrefFor({ location: 'port-vila', page: '2', q: 'chef', category: 'hospitality' }, 2)).toBe(
-      '/jobs?q=chef&category=hospitality&location=port-vila&page=2',
+      '/jobs?category=hospitality&location=port-vila&q=chef&page=2',
     )
   })
 
@@ -359,53 +361,53 @@ describe('listingCache', () => {
 
     expect(cache.ttl).toBe(JOB_LISTING_HTML_TTL_SECONDS)
     expect(cache.ttl).toBe(300)
-    expect(cache.key).toBe('vwok:html:/jobs')
+    expect(cache.key).toBe('vwok:html:0:/jobs')
     expect(cache.tags).toEqual(['site:vwok', 'site:vwok:jobs'])
   })
 
   it('gives each filter set and each site its own entry', () => {
-    expect(keyFor('?q=chef').key).toBe('vwok:html:/jobs?q=chef')
+    expect(keyFor('?q=chef').key).toBe('vwok:html:0:/jobs?q=chef')
     expect(keyFor('?category=trades&location=port-vila').key).toBe(
-      'vwok:html:/jobs?category=trades&location=port-vila',
+      'vwok:html:0:/jobs?category=trades&location=port-vila',
     )
-    expect(keyFor('?q=chef', '/jobs', 'hub').key).toBe('hub:html:/jobs?q=chef')
+    expect(keyFor('?q=chef', '/jobs', 'hub').key).toBe('hub:html:0:/jobs?q=chef')
   })
 
   it('keeps the URL canonical, so one listing has one entry', () => {
     // Parameter order, `?page=1` and a dropped parameter all describe the same page.
-    expect(keyFor('?location=port-vila&q=chef').key).toBe('vwok:html:/jobs?q=chef&location=port-vila')
+    expect(keyFor('?q=chef&location=port-vila').key).toBe('vwok:html:0:/jobs?location=port-vila&q=chef')
     expect(keyFor('?page=1')).toEqual(keyFor(''))
-    expect(keyFor('?utm_source=newsletter').key).toBe('vwok:html:/jobs')
-    expect(keyFor('?q=chef&utm_source=newsletter').key).toBe('vwok:html:/jobs?q=chef')
+    expect(keyFor('?utm_source=newsletter').key).toBe('vwok:html:0:/jobs')
+    expect(keyFor('?q=chef&utm_source=newsletter').key).toBe('vwok:html:0:/jobs?q=chef')
   })
 
   it('does not repeat a filter the path already fixed, so a section has one entry', () => {
     expect(keyFor('?category=trades', '/jobs/category/trades', 'vwok', ['category']).key).toBe(
-      'vwok:html:/jobs/category/trades',
+      'vwok:html:0:/jobs/category/trades',
     )
     // The path wins over the query, so a stale `?category=` cannot make the section a second entry.
     expect(keyFor('?category=hospitality', '/jobs/category/trades', 'vwok', ['category']).key).toBe(
-      'vwok:html:/jobs/category/trades',
+      'vwok:html:0:/jobs/category/trades',
     )
     // The section's own pages stay distinct.
     expect(keyFor('?page=2', '/jobs/category/trades', 'vwok', ['category']).key).toBe(
-      'vwok:html:/jobs/category/trades?page=2',
+      'vwok:html:0:/jobs/category/trades?page=2',
     )
   })
 
   it('carries the page number, so page 2 is not served page 1', () => {
-    expect(keyFor('?page=2').key).toBe('vwok:html:/jobs?page=2')
-    expect(keyFor('?q=chef&page=2').key).toBe('vwok:html:/jobs?q=chef&page=2')
+    expect(keyFor('?page=2').key).toBe('vwok:html:0:/jobs?page=2')
+    expect(keyFor('?q=chef&page=2').key).toBe('vwok:html:0:/jobs?q=chef&page=2')
   })
 
   it('drops a value that could not be a filter, so the cache cannot be filled with junk', () => {
     // A long keyword is cut, not dropped: dropping it would key the search as the bare listing.
-    expect(keyFor('?q=' + 'x'.repeat(500)).key).toBe(`vwok:html:/jobs?q=${'x'.repeat(100)}`)
-    expect(keyFor('?category=%3Cscript%3E').key).toBe('vwok:html:/jobs')
-    expect(keyFor('?page=abc').key).toBe('vwok:html:/jobs')
+    expect(keyFor('?q=' + 'x'.repeat(500)).key).toBe(`vwok:html:0:/jobs?q=${'x'.repeat(100)}`)
+    expect(keyFor('?category=%3Cscript%3E').key).toBe('vwok:html:0:/jobs')
+    expect(keyFor('?page=abc').key).toBe('vwok:html:0:/jobs')
     // Past the last real page every number is the same listing, so it is one entry, not a million.
-    expect(keyFor('?page=999999999').key).toBe('vwok:html:/jobs?page=500')
-    expect(keyFor('?voluntary=yes').key).toBe('vwok:html:/jobs')
+    expect(keyFor('?page=999999999').key).toBe('vwok:html:0:/jobs?page=500')
+    expect(keyFor('?voluntary=yes').key).toBe('vwok:html:0:/jobs')
   })
 
   it('is the same for the same request and scoped per tenant', () => {
@@ -721,5 +723,44 @@ describe('serveJobListing', () => {
     expect(response.status).toBe(404)
     expect(renderSpy).not.toHaveBeenCalled()
     expect([...cache.store.keys()].filter((url) => url.includes('/page/'))).toHaveLength(0)
+  })
+
+  it('holds the listing for seven days once a content version can invalidate it @S-240', async () => {
+    const cache = pageCache()
+    const { cms } = fakeCms(() => listOf([job()]))
+    const store = createMemoryContentVersionStore({ vwok: 'v1' })
+
+    const response = await serveJobListing({ cache, cms, now: NOW, render: renderView, search: '', site: 'vwok', store, tenant })
+
+    expect(response.headers.get('cache-control')).toBe('public, max-age=604800')
+  })
+
+  it('renders fresh after the content version is bumped, without a purge @S-240', async () => {
+    const cache = pageCache()
+    const { cms } = fakeCms(() => listOf([job()]))
+    const store = createMemoryContentVersionStore({ vwok: 'v1' })
+    const render = vi.fn(renderView)
+    const options = { cache, cms, now: NOW, render, search: '', site: 'vwok', store, tenant }
+
+    await serveJobListing(options)
+    await serveJobListing(options)
+    expect(render).toHaveBeenCalledTimes(1)
+
+    store.values.set('content-version:vwok', 'v2')
+    await serveJobListing(options)
+
+    // The old entry is unreachable rather than purged: the new key has no copy in this colo.
+    expect(render).toHaveBeenCalledTimes(2)
+  })
+
+  it('accepts a version read once for a whole request, so one page reads KV once @S-240', async () => {
+    const cache = pageCache()
+    const { cms } = fakeCms(() => listOf([job()]))
+    const get = vi.fn(async () => 'v9')
+    const store = { get, put: async () => {} }
+
+    await serveJobListing({ cache, cms, now: NOW, render: renderView, search: '', site: 'vwok', tenant, version: 'v9' })
+
+    expect(get).not.toHaveBeenCalled()
   })
 })

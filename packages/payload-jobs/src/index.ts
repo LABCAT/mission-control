@@ -22,6 +22,13 @@ import {
 import { couponCollection, removeTenantCouponsFor, removeTenantCoupons } from './coupons'
 import { withLegacyPasswords } from './legacy-password'
 import { tenantLocationSettings, type TenantLocationSource } from './location-settings'
+import {
+  tenantContentVersionDeleteHook,
+  tenantContentVersionHook,
+  withContentVersionHooks,
+  withGlobalContentVersions,
+  type ContentVersionOptions,
+} from './content-version'
 import { addOnCollection } from './add-ons'
 import {
   APPLICATION_FILES_SLUG,
@@ -94,6 +101,7 @@ export * from './tax'
 export * from './tax-settings'
 export * from './taxonomies'
 export * from './tenancy'
+export * from './content-version'
 
 export type TenancyMode = 'multi' | 'single'
 
@@ -197,6 +205,13 @@ export type PayloadJobsOptions = {
    * The users collection must enable `auth.verify`. Pass `false` to leave them out.
    */
   accountAuth?: AccountAuthOptions | false
+  /**
+   * Global cache invalidation (PJ-41). When set, a write to jobs, organisations, pages, menus,
+   * taxonomies, locations, plans or the site settings bumps the tenant's content version in the
+   * store, and every aggregate site's. The host passes its KV binding getter, e.g.
+   * `store: (req) => req.context.env?.CONTENT_CACHE`. Without it no hooks are added.
+   */
+  contentVersions?: ContentVersionOptions
   /**
    * Per-collection overrides: rename any slug and/or override its access. Every internal
    * relationship and query uses the resolved slug, so choosing a slug before your first schema migration needs nothing extra. Renaming one on an installation that already has the tables changes the schema: generate and apply your own app migration for it.
@@ -395,6 +410,29 @@ export const payloadJobs =
 
     const settingsSlug = options.settingsSlug ?? 'job-board-settings'
 
+    // Global cache invalidation (PJ-41). The slugs whose writes change a page: every collection
+    // the sites render, except orders, applications, their files and the ledger, which are
+    // private and never cached.
+    const cacheInvalidation = options.contentVersions
+      ? {
+          ...options.contentVersions,
+          tenantsSlug,
+          siteScope: options.contentVersions.siteScope ?? settingsSlug,
+        }
+      : undefined
+    const cachedContentSlugs: ReadonlySet<string> = new Set([
+      slugs.locations,
+      slugs.organisations,
+      slugs.pages,
+      slugs.menus,
+      slugs.jobCategories,
+      slugs.jobTypes,
+      slugs.salaryBands,
+      slugs.plans,
+      slugs.addOns,
+      slugs.jobs,
+    ])
+
     // The location tree may be capped per tenant. Read the limit at write time, so an admin's
     // change to the tenant settings takes effect on the next save.
     const locationsOptions: LocationsOptions = {
@@ -518,18 +556,20 @@ export const payloadJobs =
               fields: [...collection.fields, ...jobBoardTenantFields, addOnsField],
               hooks: {
                 ...collection.hooks,
-                ...(features.pages
-                  ? {
-                      // A new site starts with its four system pages (PJ-103).
-                      afterChange: [
-                        ...(collection.hooks?.afterChange ?? []),
+                // A new site starts with its four system pages (PJ-103).
+                afterChange: [
+                  ...(collection.hooks?.afterChange ?? []),
+                  ...(features.pages
+                    ? [
                         seedTenantSystemPages({
                           collectionSlug: slugs.pages,
                           tenantScoped: tenancy === 'multi',
                         }),
-                      ],
-                    }
-                  : {}),
+                      ]
+                    : []),
+                  // The site settings live on the tenant row, so saving it bumps the site (PJ-41).
+                  ...(cacheInvalidation ? [tenantContentVersionHook(cacheInvalidation)] : []),
+                ],
                 // Coupons are removed with the tenant: the tenant foreign key would otherwise
                 // null them. Add-ons clean up their own data the same way (PJ-115).
                 beforeDelete: [
@@ -552,6 +592,10 @@ export const payloadJobs =
                   ...(features.coupons
                     ? [slugs.coupons === 'coupons' ? removeTenantCoupons : removeTenantCouponsFor(slugs.coupons)]
                     : []),
+                ],
+                afterDelete: [
+                  ...(collection.hooks?.afterDelete ?? []),
+                  ...(cacheInvalidation ? [tenantContentVersionDeleteHook(cacheInvalidation)] : []),
                 ],
               },
             }
@@ -576,7 +620,13 @@ export const payloadJobs =
         ...config,
         globals: [
           ...(config.globals ?? []),
-          jobBoardSettingsGlobal(settingsSlug, [addOnsField]) as GlobalConfig,
+          // In single mode the site settings are one global, so its save bumps the site (PJ-41).
+          (cacheInvalidation
+            ? withGlobalContentVersions(
+                jobBoardSettingsGlobal(settingsSlug, [addOnsField]) as GlobalConfig,
+                cacheInvalidation,
+              )
+            : jobBoardSettingsGlobal(settingsSlug, [addOnsField])) as GlobalConfig,
         ],
       }
     }
@@ -702,44 +752,48 @@ export const payloadJobs =
       // plans' existing `tenant_key_idx` must keep its name.
       // Applications and their files go after jobs: they relate to it, and the compound
       // index names of the collections before them must not shift.
-      collections: [
-        ...(config.collections ?? []).map((collection) => {
-          if (collection.slug !== slugs.organisations) return collection
-          const guarded = features.applications
-            ? withApplicationDeleteGuard(collection, 'organisation', 'organisation')
-            : collection
-          // The History tab's data (PJ-24): orders, credit movements and job events.
-          return features.credits
-            ? withCreditLedger(guarded, 'organisation', 'organisation', slugs.creditLedger, {
-                endpoints: [organisationHistoryEndpoint({ slugs, tenantScoped: tenancy === 'multi' })],
-              })
-            : guarded
-        }),
-        ...taxonomies,
-        plans,
-        addOns,
-        features.applications ? withApplicationDeleteGuard(jobs, 'job', 'job') : jobs,
-        ...coupons,
-        ...(features.applications
-          ? [
-              applicationFilesCollection({
-                applicantsSlug: usersSlug,
-                organisationsSlug: slugs.organisations,
-                tenantScoped: tenancy === 'multi',
-              }),
-              applicationsCollection({
-                applicantsSlug: usersSlug,
-                jobsSlug: slugs.jobs,
-                organisationsSlug: slugs.organisations,
-                tenantScoped: tenancy === 'multi',
-              }),
-            ]
-          : []),
-        // Orders go last (PJ-23), so no existing compound index name shifts.
-        orders,
-        // The credit ledger after orders (PJ-24), for the same reason.
-        ...creditLedger,
-      ],
+      collections: withContentVersionHooks(
+        [
+          ...(config.collections ?? []).map((collection) => {
+            if (collection.slug !== slugs.organisations) return collection
+            const guarded = features.applications
+              ? withApplicationDeleteGuard(collection, 'organisation', 'organisation')
+              : collection
+            // The History tab's data (PJ-24): orders, credit movements and job events.
+            return features.credits
+              ? withCreditLedger(guarded, 'organisation', 'organisation', slugs.creditLedger, {
+                  endpoints: [organisationHistoryEndpoint({ slugs, tenantScoped: tenancy === 'multi' })],
+                })
+              : guarded
+          }),
+          ...taxonomies,
+          plans,
+          addOns,
+          features.applications ? withApplicationDeleteGuard(jobs, 'job', 'job') : jobs,
+          ...coupons,
+          ...(features.applications
+            ? [
+                applicationFilesCollection({
+                  applicantsSlug: usersSlug,
+                  organisationsSlug: slugs.organisations,
+                  tenantScoped: tenancy === 'multi',
+                }),
+                applicationsCollection({
+                  applicantsSlug: usersSlug,
+                  jobsSlug: slugs.jobs,
+                  organisationsSlug: slugs.organisations,
+                  tenantScoped: tenancy === 'multi',
+                }),
+              ]
+            : []),
+          // Orders go last (PJ-23), so no existing compound index name shifts.
+          orders,
+          // The credit ledger after orders (PJ-24), for the same reason.
+          ...creditLedger,
+        ],
+        cacheInvalidation,
+        cachedContentSlugs,
+      ),
       jobs: jobsConfig,
       custom: {
         ...config.custom,

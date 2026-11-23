@@ -6,9 +6,18 @@
  * view that comes back; `jobListingView` builds the same view from data already in hand, so a
  * demo or a test can render a listing without a CMS.
  */
+import { DEFAULT_CONTENT_VERSION, readContentVersion, type ContentVersionStore } from '@mission-control/content-cache'
+
 import { cacheTag, cachedResponse, type CacheLike } from '../cms/cache'
+import { HTML_EDGE_TTL_SECONDS } from '../cms/headers'
 import type { CmsClient } from '../cms/client'
 import type { CmsWhere } from '../cms/types'
+import {
+  cacheQueryString,
+  contentCacheKey,
+  readCacheQuery,
+  type CacheParamRule,
+} from '../tenant/cache-key'
 import {
   filterQuery,
   parseFilters,
@@ -24,7 +33,11 @@ import type { JobSummary } from '../types'
 /** A page of jobs. The CMS does the pagination; the listing never renders more than this. */
 export const JOB_LISTING_PAGE_SIZE = 20
 
-/** HTML is held at the edge for five minutes: long enough to absorb a burst, short enough to feel live. */
+/**
+ * HTML is held at the edge for five minutes when nothing can invalidate it: long enough to absorb
+ * a burst, short enough to feel live. A site with a content version store uses the seven-day
+ * lifetime instead, because the version, not the clock, is what refreshes the page (PJ-41).
+ */
 export const JOB_LISTING_HTML_TTL_SECONDS = 5 * 60
 
 /**
@@ -279,19 +292,19 @@ export const toJobSummary = (job: ListingJob, hrefs: ListingHrefs = {}): JobSumm
   }
 }
 
-/** The query string for a filter set: form order, no empty values, the page number last. */
+/**
+ * The query string for a filter set: validated values sorted by name, which is the canonical order
+ * the cache key and the 301 use, with the page number last. Sorting here means a link the site
+ * emits is already canonical, so following it never redirects.
+ */
 const canonicalQuery = (
   values: FilterValues,
   definitions: readonly FilterDefinition[],
   page: number,
 ): string => {
-  const rest: FilterValues = { ...values }
-  delete rest.page
+  const { page: _ignored, ...rest } = values
 
-  const params = new URLSearchParams(filterQuery(rest, definitions))
-  if (page > 1) params.set('page', String(page))
-
-  return params.toString()
+  return cacheQueryString(Object.fromEntries(new URLSearchParams(filterQuery(rest, definitions))), page)
 }
 
 export type ListingHrefOptions = {
@@ -369,92 +382,81 @@ export type ListingCacheOptions = {
   /** The request's raw query string; `page` included. */
   search: null | string | URLSearchParams
   site: string
+  /**
+   * The tenant's content version (PJ-41). A CMS write bumps it, so every data centre misses instead
+   * of relying on a per-colo `purgeTags`. Defaults to `DEFAULT_CONTENT_VERSION` for a site with no
+   * KV store, such as the demo.
+   */
+  version?: string
+  /** The edge lifetime of the entry. Defaults to `JOB_LISTING_HTML_TTL_SECONDS`. */
+  ttl?: number
 }
 
-/**
- * The highest page the listing will serve. Twenty jobs a page makes this 10,000 jobs, far past any
+export type ListingQuery = { filters: FilterValues; page: number }
+
+/** The highest page the listing will serve. Twenty jobs a page makes this 10,000 jobs, far past any
  * real listing, so the clamp costs nothing; without it every number would be its own cache key and
  * a stranger could mint a million entries that all hold the last page.
  */
 const MAX_LISTING_PAGE = 500
-
-/** A taxonomy slug as a URL carries it; anything else cannot name a filter, so it is dropped. */
-const SLUG_PATTERN = /^[\w-]{1,64}$/
 const MAX_KEYWORD_LENGTH = 100
 
-/** One reading of a listing request: the filters it applies and the page it shows. */
-export type ListingQuery = { filters: FilterValues; page: number }
+/** The query parameters the listing owns, as cache-key rules. One list for the key and the query. */
+export const jobListingCacheRules = (): CacheParamRule[] => [
+  { kind: 'keyword', maxLength: MAX_KEYWORD_LENGTH, name: 'q' },
+  { kind: 'value', name: 'category' },
+  { kind: 'value', name: 'type' },
+  { kind: 'value', name: 'location' },
+  { kind: 'flag', name: VOLUNTARY_PARAM, value: '1' },
+  { kind: 'page', max: MAX_LISTING_PAGE, name: 'page' },
+]
 
 /**
  * Read a listing request once, for both the cache key and the CMS query. Going through a single
  * function is what keeps the two from disagreeing: a filter this drops is a filter the listing
- * does not apply, and a page it clamps is the page the listing serves. If the key dropped
- * something the query kept, a filtered response would be stored under a bare URL's key.
+ * does not apply, and a page it clamps is the page the listing serves.
  *
- * Two values are settled here rather than later:
- *
- * - A keyword is cut to `MAX_KEYWORD_LENGTH`, so an enormous search is still a search rather than
- *   a silent "show everything".
- * - A page is clamped to `[1, MAX_LISTING_PAGE]`.
+ * A keyword is cut to `MAX_KEYWORD_LENGTH`, so an enormous search is still a search rather than a
+ * silent "show everything". A page is clamped to `[1, MAX_LISTING_PAGE]`.
  *
  * Taxonomy membership is the one check this cannot make, because it needs the CMS. The loader
  * then drops a slug the tenant does not have, so such a URL renders the unfiltered listing under
  * its own key: correct, merely a wasted entry, and bounded by the slug shape.
  */
 export const readListingQuery = (search: null | string | URLSearchParams): ListingQuery => {
-  const params = typeof search === 'string' ? new URLSearchParams(search) : (search ?? new URLSearchParams())
-  const filters: FilterValues = {}
+  const { page, values } = readCacheQuery(search, jobListingCacheRules())
 
-  for (const name of JOB_LISTING_FILTER_NAMES) {
-    const value = params.get(name)?.trim()
-    if (!value) continue
-
-    if (name === 'page') continue // read below, it is not a filter
-    if (name === 'q') {
-      filters[name] = value.slice(0, MAX_KEYWORD_LENGTH)
-      continue
-    }
-    if (name === VOLUNTARY_PARAM) {
-      if (value === '1') filters[name] = value
-      continue
-    }
-    if (SLUG_PATTERN.test(value)) filters[name] = value
-  }
-
-  const raw = params.get('page')?.trim() ?? ''
-  const requested = /^\d{1,12}$/.test(raw) ? Number(raw) : 1
-  const page = Math.min(Math.max(1, requested), MAX_LISTING_PAGE)
-
-  return { filters, page }
+  return { filters: values, page }
 }
 
 /**
- * The edge-cache identity of a listing request: site, path and the filters in the URL. It is
- * derived from the request alone, so `serveJobListing` can look the page up before it queries
- * the CMS. Two URLs that differ only in a dropped parameter (a `utm_` tag, `?page=1`) share an
- * entry; two that differ in a filter do not.
+ * The edge-cache identity of a listing request: site, content version, path and the filters in the
+ * URL. It is derived from the request alone, so `serveJobListing` can look the page up before it
+ * queries the CMS. Two URLs that differ only in a dropped parameter (a `utm_` tag, `?page=1`) share
+ * an entry; two that differ in a filter do not. The version is the same for every page of a site,
+ * so bumping it misses the whole site at once (PJ-41).
  */
 export const listingCache = ({
   basePath,
   lockedKeys = [],
   search,
   site,
+  ttl = JOB_LISTING_HTML_TTL_SECONDS,
+  version = DEFAULT_CONTENT_VERSION,
 }: ListingCacheOptions): ListingCache => {
   const { filters, page } = readListingQuery(search)
 
-  const params = new URLSearchParams()
+  const values: FilterValues = { ...filters }
   for (const name of JOB_LISTING_FILTER_NAMES) {
-    const value = filters[name]
-    if (value && !lockedKeys.includes(name)) params.set(name, value)
+    if (lockedKeys.includes(name)) delete values[name]
   }
-  if (page > 1) params.set('page', String(page))
 
-  const query = params.toString()
+  const query = cacheQueryString(values, page)
 
   return {
-    key: `${site}:html:${query ? `${basePath}?${query}` : basePath}`,
+    key: contentCacheKey({ site, url: query ? `${basePath}?${query}` : basePath, version }),
     tags: jobListingCacheTags(site),
-    ttl: JOB_LISTING_HTML_TTL_SECONDS,
+    ttl,
   }
 }
 
@@ -654,23 +656,37 @@ export type ServeJobListingOptions = LoadJobListingOptions & {
   render: (view: JobListingView) => Promise<Response>
   /** The tenant slug; scopes the cache key and the purge tags. */
   site: string
+  /** The tenant's content version store (KV in production). Absent means version `0`. */
+  store?: ContentVersionStore
+  /**
+   * The version already read for this request. A site that renders several cached pages from one
+   * request reads the version once and passes it here.
+   */
+  version?: string
 }
 
 /**
- * The whole SSR listing in one call: load the view, render it, and hold the HTML at the edge for
- * five minutes under the site's purge tag (PJ-41 purges it).
+ * The whole SSR listing in one call: load the view, render it, and hold the HTML at the edge under
+ * the site's content version (PJ-41).
+ *
+ * The edge lifetime is seven days when a version store exists, because the version, not the clock,
+ * is what refreshes the page; five minutes without one, because then nothing can invalidate the
+ * entry and its TTL is the only way a change reaches the site.
  *
  * A missing section is a 404 and is not cached: a slug that does not exist must not be stored as
- * "not found" for five minutes after the taxonomy gains it.
+ * "not found" for days after the taxonomy gains it.
  */
 export const serveJobListing = async (options: ServeJobListingOptions): Promise<Response> => {
-  const { cache, render, ...loadOptions } = options
+  const { cache, render, store, version, ...loadOptions } = options
+  const contentVersion = version ?? (await readContentVersion(store, loadOptions.site))
   // The key comes from the request, so a hit is answered without touching the CMS.
   const { key, tags, ttl } = listingCache({
     basePath: loadOptions.basePath ?? '/jobs',
     lockedKeys: Object.keys(loadOptions.locked ?? {}),
     search: loadOptions.search,
     site: loadOptions.site,
+    ttl: store || version ? HTML_EDGE_TTL_SECONDS : JOB_LISTING_HTML_TTL_SECONDS,
+    version: contentVersion,
   })
 
   return cachedResponse(
