@@ -1095,7 +1095,8 @@ stories:
     steps:
       - "While viewing, change the email, password, role or memberships."
       - "Delete the account, refresh the token, request a password reset, register, or create an order."
-    expected: "Each is refused with 403 and logged as blocked with the super admin's id; only the profile name can be changed; the admin panel and the audit log are not reachable."
+      - "Call Payload's own logout, with and without allSessions."
+    expected: "Each is refused with 403 and logged as blocked with the super admin's id; only the profile name can be changed; Payload's own logout is refused so no other session is touched; the admin panel and the audit log are not reachable."
     settings:
       - security.viewAsUser
     mvp: true
