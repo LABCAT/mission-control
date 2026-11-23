@@ -30,3 +30,35 @@ A Xero failure never fails the order: it is recorded on the `xero-invoices` row 
 can help, a retry job is queued (see payload-xero's README).
 
 `seedXeroSettings` creates a tenant's settings row once (vwok: `apps/cms/src/seed/vwok-xero.ts`).
+
+## The invoice link (PJ-58)
+
+An employer needs something to download and pay from, and a Xero invoice only has an online link
+once it is submitted or authorised. So the add-on serves both, on the orders collection:
+
+| Request | Answer |
+|---|---|
+| `GET /api/orders/:id/invoice` | 302 to the Xero online invoice, or the HTML fallback inline |
+| `GET /api/orders/:id/invoice?format=json` | the link itself: `{ kind: 'xero', url }` or `{ kind: 'html', filename, total }` |
+| `GET /api/orders/:id/invoice?download=1` | the HTML as an attachment |
+
+Who may open it is the orders collection's own rule: the order is loaded with the caller's user
+and `overrideAccess: false`, so the order's organisation members and the tenant's site managers
+get it, and everyone else (another organisation, another tenant, a seeker) gets `not_found` rather
+than a hint that the order exists. A caller with no user gets `not_signed_in` (401), and an order
+with no invoice, or a tenant with the `xero` add-on off, gets `no_invoice` (404).
+
+The HTML fallback is rendered by payload-xero from the same money mapping as the Xero invoice
+(`orderInvoiceSummary`), so the page and the invoice can never disagree. Prices, tax and
+discounts come from the order; the issuer is the tenant's name unless you pass `invoiceIssuer`.
+
+The same link appears on the order's edit view in the admin (`beforeDocumentControls`), as a
+server component with no client JS: Xero's page in a new tab, or the fallback endpoint. Pass
+`orderInvoiceLink: false` to leave the collection untouched.
+
+```ts
+payloadJobsXero({
+  // Optional: who the invoice is from. Defaults to the tenant's name.
+  invoiceIssuer: (tenant) => ({ name: tenant.name, email: 'accounts@example.com' }),
+})
+```

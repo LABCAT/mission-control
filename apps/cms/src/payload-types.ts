@@ -62,18 +62,18 @@ export type SupportedTimezones =
   | 'Pacific/Fiji';
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "LexicalNodes_E31716F5".
+ * via the `definition` "LexicalNodes_AAA45A19".
  */
-export type LexicalNodes_E31716F5 =
+export type LexicalNodes_AAA45A19 =
   | SerializedTextNode
   | SerializedTabNode
   | SerializedLineBreakNode
-  | SerializedParagraphNode<LexicalNodes_E31716F5>
+  | SerializedParagraphNode<LexicalNodes_AAA45A19>
   | SerializedHorizontalRuleNode
   | SerializedUploadNode<'media'>
   | SerializedUploadNode<'documents'>
   | SerializedUploadNode<'application-files'>
-  | SerializedQuoteNode<LexicalNodes_E31716F5>
+  | SerializedQuoteNode<LexicalNodes_AAA45A19>
   | SerializedRelationshipNode<
       | 'users'
       | 'folders'
@@ -94,6 +94,7 @@ export type LexicalNodes_E31716F5 =
       | 'applications'
       | 'orders'
       | 'credit-ledger'
+      | 'audit-log'
       | 'alert-subscriptions'
       | 'xero-settings'
       | 'xero-invoices'
@@ -103,11 +104,11 @@ export type LexicalNodes_E31716F5 =
       | 'payload-preferences'
       | 'payload-migrations'
     >
-  | SerializedAutoLinkNode<LexicalNodes_E31716F5, LexicalLinkFields>
-  | SerializedLinkNode<LexicalNodes_E31716F5, LexicalLinkFields>
-  | SerializedListNode<LexicalNodes_E31716F5>
-  | SerializedListItemNode<LexicalNodes_E31716F5>
-  | SerializedHeadingNode<LexicalNodes_E31716F5>;
+  | SerializedAutoLinkNode<LexicalNodes_AAA45A19, LexicalLinkFields>
+  | SerializedLinkNode<LexicalNodes_AAA45A19, LexicalLinkFields>
+  | SerializedListNode<LexicalNodes_AAA45A19>
+  | SerializedListItemNode<LexicalNodes_AAA45A19>
+  | SerializedHeadingNode<LexicalNodes_AAA45A19>;
 /**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "LexicalNodes_3DE324E4".
@@ -157,6 +158,7 @@ export interface Config {
     applications: Application;
     orders: Order;
     'credit-ledger': CreditLedger;
+    'audit-log': AuditLog;
     'alert-subscriptions': AlertSubscription;
     'xero-settings': XeroSetting;
     'xero-invoices': XeroInvoice;
@@ -191,6 +193,7 @@ export interface Config {
     applications: ApplicationsSelect<false> | ApplicationsSelect<true>;
     orders: OrdersSelect<false> | OrdersSelect<true>;
     'credit-ledger': CreditLedgerSelect<false> | CreditLedgerSelect<true>;
+    'audit-log': AuditLogSelect<false> | AuditLogSelect<true>;
     'alert-subscriptions': AlertSubscriptionsSelect<false> | AlertSubscriptionsSelect<true>;
     'xero-settings': XeroSettingsSelect<false> | XeroSettingsSelect<true>;
     'xero-invoices': XeroInvoicesSelect<false> | XeroInvoicesSelect<true>;
@@ -773,7 +776,7 @@ export interface FeatureBoxesBlock {
  */
 export interface RichTextBlock {
   heading?: string | null;
-  content: LexicalRichText<LexicalNodes_E31716F5>;
+  content: LexicalRichText<LexicalNodes_AAA45A19>;
   id?: string | null;
   blockName?: string | null;
   blockType: 'rich-text';
@@ -828,7 +831,7 @@ export interface FaqBlock {
   heading?: string | null;
   items: {
     question: string;
-    answer: LexicalRichText<LexicalNodes_E31716F5>;
+    answer: LexicalRichText<LexicalNodes_AAA45A19>;
     id?: string | null;
   }[];
   id?: string | null;
@@ -1327,7 +1330,7 @@ export interface Job {
   publishedAt?: string | null;
   expiresAt?: string | null;
   organisation: number | Organisation;
-  description?: LexicalRichText<LexicalNodes_E31716F5> | null;
+  description?: LexicalRichText<LexicalNodes_AAA45A19> | null;
   jobType?: (number | null) | JobType;
   categories?: (number | JobCategory)[] | null;
   salaryBand?: (number | null) | SalaryBand;
@@ -1700,6 +1703,39 @@ export interface CreditLedger {
    * Makes a movement happen once. Filled in automatically.
    */
   idempotencyKey?: string | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * Privileged actions: who did what, to whom, and when. Append only.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "audit-log".
+ */
+export interface AuditLog {
+  id: number;
+  action: string;
+  actorID: string;
+  targetID?: string | null;
+  tenantID?: string | null;
+  sessionID?: string | null;
+  detail?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
   createdBy?: {
     relationTo: 'users';
     value: number | User;
@@ -2110,6 +2146,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'credit-ledger';
         value: number | CreditLedger;
+      } | null)
+    | ({
+        relationTo: 'audit-log';
+        value: number | AuditLog;
       } | null)
     | ({
         relationTo: 'alert-subscriptions';
@@ -2945,6 +2985,22 @@ export interface CreditLedgerSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "audit-log_select".
+ */
+export interface AuditLogSelect<T extends boolean = true> {
+  action?: T;
+  actorID?: T;
+  targetID?: T;
+  tenantID?: T;
+  sessionID?: T;
+  detail?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "alert-subscriptions_select".
  */
 export interface AlertSubscriptionsSelect<T extends boolean = true> {
@@ -3241,6 +3297,7 @@ export interface CollectionQueryWidget {
       | 'applications'
       | 'orders'
       | 'credit-ledger'
+      | 'audit-log'
       | 'alert-subscriptions'
       | 'xero-settings'
       | 'xero-invoices';
@@ -3289,6 +3346,7 @@ export interface ActivityWidget {
           | 'applications'
           | 'orders'
           | 'credit-ledger'
+          | 'audit-log'
           | 'alert-subscriptions'
           | 'xero-settings'
           | 'xero-invoices'

@@ -1,0 +1,82 @@
+---
+import type { MenuLink } from '../pages/menus'
+
+type Props = {
+  /** Accessible name for the nav landmark, e.g. `Main`. */
+  label: string
+  links: MenuLink[]
+  /** Path of the page being rendered, so its own link is marked. */
+  currentPath?: string
+  class?: string
+}
+
+const { label, links, currentPath, class: className } = Astro.props as Props
+
+const normalise = (path: string): string => {
+  const withoutQuery = path.split(/[?#]/)[0] ?? '/'
+  const trimmed = withoutQuery.replace(/\/+$/, '')
+  return trimmed === '' ? '/' : trimmed
+}
+
+const current = currentPath ? normalise(currentPath) : undefined
+const isCurrent = (href: string): boolean =>
+  current !== undefined && !href.includes('://') && normalise(href) === current
+---
+
+{
+  links.length > 0 && (
+    <nav aria-label={label} class:list={['lp-nav', className]}>
+      <ul class="lp-nav__list">
+        {links.map((link) => (
+          <li>
+            <a
+              aria-current={isCurrent(link.href) ? 'page' : undefined}
+              class="lp-nav__link"
+              href={link.href}
+              rel={link.newTab ? 'noopener' : undefined}
+              target={link.newTab ? '_blank' : undefined}
+            >
+              {link.label}
+              {link.newTab && <span class="lp-nav__external"> (opens in a new tab)</span>}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  )
+}
+
+<style>
+  .lp-nav__list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--rs-space-4);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .lp-nav__link {
+    color: var(--rs-color-fg);
+    text-decoration: none;
+  }
+
+  .lp-nav__link:hover {
+    color: var(--rs-color-link-hover);
+  }
+
+  .lp-nav__link[aria-current='page'] {
+    border-block-end: 2px solid var(--rs-color-accent);
+    color: var(--rs-color-link);
+  }
+
+  /* Visible to screen readers only: the icon-free theme must still announce the new tab. */
+  .lp-nav__external {
+    clip-path: inset(50%);
+    height: 1px;
+    overflow: hidden;
+    position: absolute;
+    white-space: nowrap;
+    width: 1px;
+  }
+</style>
