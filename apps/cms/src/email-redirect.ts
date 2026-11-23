@@ -7,7 +7,7 @@ type EmailEnv = { ENVIRONMENT?: string; EMAIL_REDIRECT_TO?: string }
  * `production`. Falls back to `process.env` outside Workers (Node CLI, tests, `pnpm dev`).
  */
 export const emailRedirect = (workerEnv?: EmailEnv): RedirectConfig | undefined => {
-  const proc = typeof process !== 'undefined' ? process.env : {}
+  const proc: EmailEnv = typeof process !== 'undefined' ? (process.env as EmailEnv) : {}
   const environment = (workerEnv?.ENVIRONMENT ?? proc.ENVIRONMENT)?.trim().toLowerCase()
   if (environment === 'production') return undefined
   return { to: workerEnv?.EMAIL_REDIRECT_TO ?? proc.EMAIL_REDIRECT_TO, label: environment || 'non-production' }
