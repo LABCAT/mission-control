@@ -1,0 +1,100 @@
+---
+/**
+ * A whole CMS page: the document head, the site chrome with its menus, and the page's blocks in
+ * the editor's order. A site app loads the page (see `@mission-control/launchpad/pages`) and
+ * passes the renderers it imports, so only those block components reach the bundle.
+ *
+ * Nothing here ships client JavaScript: the generic blocks and the latest-jobs list are plain
+ * Astro, which is what a public, indexed page needs.
+ */
+import RenderBlocks from '@mission-control/rocketship-payload/astro/render-blocks'
+import type { BlockComponentMap } from '@mission-control/rocketship-payload/render'
+
+import BaseLayout from './BaseLayout.astro'
+import LatestJobs from './LatestJobs.astro'
+import SiteNav from './SiteNav.astro'
+import { menuFor, type MenuView } from '../pages/menus'
+import type { PageView } from '../pages/view'
+import { resolveLocale } from '../tenant/locale'
+import type { SiteTenant } from '../tenant/types'
+
+type Props = {
+  components: BlockComponentMap
+  menus: MenuView[]
+  tenant: SiteTenant
+  view: PageView
+  /** Absolute origin of this deployment, for the canonical link. */
+  siteUrl?: string
+  /** Link under the latest-jobs block, e.g. the full listing. */
+  allJobsHref?: string
+  allJobsLabel?: string
+}
+
+const { allJobsHref, allJobsLabel, components, menus, siteUrl, tenant, view } = Astro.props as Props
+
+const top = menuFor(menus, 'top')
+const primary = menuFor(menus, 'primary')
+const footer = menuFor(menus, 'footer')
+const latest = view.latestJobs
+const locale = resolveLocale(tenant)
+
+/** A block field is editor input, so only a non-empty string is drawn. */
+const text = (value: unknown): string | undefined =>
+  typeof value === 'string' && value.trim() ? value.trim() : undefined
+---
+
+<BaseLayout
+  description={view.metadata.description}
+  image={view.metadata.image}
+  noindex={view.metadata.noindex}
+  path={view.path}
+  siteUrl={siteUrl}
+  tenant={tenant}
+  title={view.metadata.title}
+>
+  <slot name="head" slot="head" />
+
+  <Fragment slot="nav">
+    <div class="lp-header__nav">
+      <SiteNav currentPath={view.path} label="Top bar" links={top} />
+      <SiteNav currentPath={view.path} label="Main" links={primary} />
+    </div>
+  </Fragment>
+
+  <Fragment slot="footer-nav">
+    <SiteNav class="lp-footer__nav" currentPath={view.path} label="Footer" links={footer} />
+  </Fragment>
+
+  {
+    view.segments.map((segment) =>
+      segment.kind === 'latest-jobs' ? (
+        <LatestJobs
+          allHref={allJobsHref}
+          allLabel={allJobsLabel}
+          emptyLabel={text(segment.block.emptyLabel)}
+          heading={text(segment.block.heading)}
+          jobs={latest?.jobs ?? []}
+          locale={locale}
+          rssHref={latest?.rssHref}
+          rssLabel={text(segment.block.rssLabel)}
+          timezone={tenant.timezone ?? undefined}
+        />
+      ) : (
+        <RenderBlocks blocks={segment.blocks} components={components} />
+      ),
+    )
+  }
+</BaseLayout>
+
+<style>
+  .lp-header__nav {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--rs-space-5);
+  }
+
+  .lp-footer__nav {
+    margin-block-end: var(--rs-space-3);
+  }
+</style>

@@ -1,9 +1,13 @@
 # Local values for `astro dev` and `wrangler dev`. Copy to `.dev.vars` (git-ignored).
 #
-# Nothing here is needed yet: the home page is a placeholder and nothing in this app reads the
-# CMS. PJ-35 adds the CMS client, which will need
+# The public pages read the site's content from the CMS (PJ-39). Both values are server-side
+# secrets, declared in `astro.config.mjs`, so they never reach a browser:
 #   CMS_URL=https://mc-cms.labcat.workers.dev
-#   SITE_KEY=sk_…                  the vwok tenant's site key (a secret, never public)
-# and the form islands (PJ-45, PJ-47) will need the public Turnstile site key, whose documented
-# test value always passes:
+#   SITE_KEY=sk_…                  the vwok tenant's site key
+#
+# With either one empty the site serves only `/`, from its static shell, and every other path is
+# a 404: a local checkout, a preview build and the Lighthouse run need no CMS.
+#
+# The form islands (PJ-45, PJ-47) will need the public Turnstile site key, whose documented test
+# value always passes:
 #   PUBLIC_TURNSTILE_SITE_KEY=1x00000000000000000000AA

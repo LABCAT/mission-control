@@ -2247,3 +2247,126 @@ stories:
     status: built
     tests:
       - packages/payload-jobs/src/plug-points/plug-points.test.ts
+
+  # ---------------------------------------------------------------------------
+  # Site pages (PJ-39): the home page, system pages and normal CMS pages, rendered from
+  # blocks with the site's menus. Stories S-290 to S-299 belong to this task.
+  # ---------------------------------------------------------------------------
+  - id: S-290
+    area: Site pages
+    role: site manager
+    story: "The home page is a CMS page: visitors see the blocks the site manager arranged, in that order."
+    steps:
+      - "Open / on a site whose home page has a hero block and a latest-jobs block."
+      - "Move the hero below the jobs in the admin, then reload /."
+    expected: "The home page renders the blocks in the editor's order, with no template copy of its own; with no CMS configured the site still serves a home page shell."
+    settings:
+      - site.pages.home
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/pages/view.test.ts
+      - packages/launchpad/src/pages/pathing.test.ts
+      - packages/launchpad/src/pages/collections.test.ts
+      - apps/vwok/src/page-route.test.ts
+      - apps/vwok/src/site.test.ts
+
+  - id: S-291
+    area: Site pages
+    role: site manager
+    story: "A page created in the CMS is live at its path, and a page under another page is live at /<parent>/<slug>."
+    steps:
+      - "Create an About us page, then a Team page under it."
+      - "Open /about and /about/team, with and without a trailing slash."
+    expected: "Each page renders at the path its slug chain gives it; the home page is / whatever its slug says, and Organisations keeps /organisations."
+    settings:
+      - site.pages.paths
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/pages/pathing.test.ts
+      - packages/launchpad/src/pages/view.test.ts
+      - apps/vwok/src/page-route.test.ts
+
+  - id: S-292
+    area: Site pages
+    role: site manager
+    story: "A path with no page behind it is a 404, and a page's own SEO fields set its title, description and robots tag."
+    steps:
+      - "Open /no-such-page on the site."
+      - "Set a page's SEO title, description and 'do not index', then open the page."
+    expected: "An unknown path answers 404 with the not-found page and no menu links to it; the page head uses the page's SEO overrides and falls back to the page title."
+    settings:
+      - site.pages.seo
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/pages/pathing.test.ts
+      - packages/launchpad/src/pages/view.test.ts
+      - packages/launchpad/src/components/PageView.test.ts
+
+  - id: S-293
+    area: Site pages
+    role: site manager
+    story: "Every block type a site registers renders on a page, and a block that needs data (latest jobs) renders where the editor put it."
+    steps:
+      - "Build a page with a hero, three feature boxes, a latest-jobs block and rich text."
+      - "Save and open the page."
+    expected: "Blocks render in order through the explicit component map; a block with no renderer is skipped instead of breaking the page; the jobs block draws the loaded jobs at its place in the layout."
+    settings:
+      - site.blocks
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/pages/blocks.test.ts
+      - packages/launchpad/src/pages/view.test.ts
+      - packages/launchpad/src/components/PageView.test.ts
+
+  - id: S-294
+    area: Site pages
+    role: seeker
+    story: "The latest-jobs block shows live jobs with featured jobs first, then the rest newest first, and links the full listing."
+    steps:
+      - "Have one job with a live featured placement and several without."
+      - "Open the home page."
+    expected: "Live jobs only, featured first, newest first within each group; the block is bounded by its limit, shows an empty state when there are no jobs, and links the full listing."
+    settings:
+      - site.blocks.latestJobs.limit
+      - site.jobs.featuredSort
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/pages/latest-jobs.test.ts
+      - packages/launchpad/src/components/PageView.test.ts
+
+  - id: S-295
+    area: Site pages
+    role: site manager
+    story: "The site's menus render in the header and footer, with a page item following the page's current path."
+    steps:
+      - "Add primary, top and footer menus, with page items and one external link."
+      - "Rename a linked page's slug and reload the site."
+    expected: "Each menu renders in its own place, a page item's href follows the page's current path, a custom URL is kept with its new-tab flag, and an unsafe URL is not rendered."
+    settings:
+      - site.menus
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/pages/menus.test.ts
+      - packages/launchpad/src/components/PageView.test.ts
+
+  - id: S-296
+    area: Site pages
+    role: seeker
+    story: "A public page ships no client JavaScript, so it can be cached at the edge and passes the Lighthouse budget."
+    steps:
+      - "Open a CMS page with the browser's network panel."
+      - "Run Lighthouse against the page."
+    expected: "No script tags and no islands in the HTML; a menu location the theme has no place for is not rendered twice; the page is cacheable per PJ-41."
+    settings:
+      - site.pages.cache
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/components/PageView.test.ts
+      - packages/launchpad/src/pages/menus.test.ts
