@@ -2530,7 +2530,7 @@ stories:
 
   - id: S-303
     area: Applications
-    role: tenant admin
+    role: site manager
     story: "A tenant admin can delete one applicant's data on request."
     steps:
       - "Open an application in the admin and choose 'Delete applicant data'."
