@@ -638,7 +638,6 @@ export const formEndpoints = (incoming: FormsOptions = {}): Endpoint[] => {
 export type PurgeFormSubmissionsOptions = {
   batchSize?: number
   cron?: string
-  formsSlug?: string
   queue?: string
   /** Ignored without a forms collection: the task only deletes submissions. */
   submissionsSlug?: string
@@ -701,7 +700,6 @@ const deleteOlderThan = async (
 export const purgeFormSubmissionsTask = ({
   batchSize = 100,
   cron = '0 30 3 * * *',
-  formsSlug = 'forms',
   queue = 'hourly',
   settingsSlug = 'job-board-settings',
   submissionsSlug = 'form-submissions',

@@ -742,7 +742,6 @@ const jobBoardPlugin =
                 (task) => task.slug !== (PURGE_FORM_SUBMISSIONS_TASK as TaskSlug),
               ),
               purgeFormSubmissionsTask({
-                formsSlug,
                 settingsSlug,
                 submissionsSlug: formSubmissionsSlug,
                 tenantScoped: tenancy === 'multi',

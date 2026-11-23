@@ -901,7 +901,7 @@ export interface Form {
   fields?: (Checkbox | Country | Email | Message | Number | Select | State | Text | Textarea)[] | null;
   submitButtonLabel?: string | null;
   confirmationType?: ('message' | 'redirect') | null;
-  confirmationMessage?: LexicalRichText<LexicalNodes_E31716F5>;
+  confirmationMessage?: LexicalRichText<LexicalNodes_AAA45A19>;
   redirect?: {
     url: string;
   };
@@ -913,7 +913,7 @@ export interface Form {
         replyTo?: string | null;
         emailFrom?: string | null;
         subject: string;
-        message?: LexicalRichText<LexicalNodes_E31716F5> | null;
+        message?: LexicalRichText<LexicalNodes_AAA45A19> | null;
         id?: string | null;
       }[]
     | null;
@@ -973,7 +973,7 @@ export interface Email {
  * via the `definition` "Message".
  */
 export interface Message {
-  message?: LexicalRichText<LexicalNodes_E31716F5> | null;
+  message?: LexicalRichText<LexicalNodes_AAA45A19> | null;
   id?: string | null;
   blockName?: string | null;
   blockType: 'message';
