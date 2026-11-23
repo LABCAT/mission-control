@@ -54,8 +54,8 @@ import { UploadDropzoneCollectionsField as UploadDropzoneCollectionsField_3817bf
 /** @type import('payload').ImportMap */
 export const importMap = {
   "@payloadcms/ui#LLMInstructionsMenuItem": LLMInstructionsMenuItem_3817bf644402e67bfe6577f60ef982de,
-import { RemovePersonalDataButton as RemovePersonalDataButton_9f9c8706d2027ec60132fe8d925d10a8 } from '@mission-control/payload-jobs/client'
-import { ViewAsUserButton as ViewAsUserButton_9f9c8706d2027ec60132fe8d925d10a8 } from '@mission-control/payload-jobs/client'
+  "@mission-control/payload-jobs/client#RemovePersonalDataButton": RemovePersonalDataButton_9f9c8706d2027ec60132fe8d925d10a8,
+  "@mission-control/payload-jobs/client#ViewAsUserButton": ViewAsUserButton_9f9c8706d2027ec60132fe8d925d10a8,
   "@payloadcms/plugin-multi-tenant/client#TenantField": TenantField_1d0591e3cf4f332c83a86da13a0de59a,
   "@payloadcms/ui#NullField": NullField_3817bf644402e67bfe6577f60ef982de,
   "@payloadcms/ui/rsc#HierarchyField": HierarchyField_ab83ff7e88da8d3530831f296ec4756a,

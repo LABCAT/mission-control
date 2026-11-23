@@ -9,6 +9,7 @@ import {
 } from 'payload'
 
 import { isSuperAdmin, getUserTenantIDsByRole, type MissionControlUser } from './access'
+import { hasAuditLog, writeAuditLog } from './audit-log'
 import { APPLICATION_FILES_SLUG, APPLICATIONS_SLUG } from './collections/applications'
 
 /**
@@ -30,9 +31,6 @@ export const REMOVE_PERSONAL_DATA_CSRF_VALUE = 'confirm'
 
 /** Default slug of the job alerts collection (`payload-jobs-alerts`); used only if it exists. */
 export const ALERT_SUBSCRIPTIONS_SLUG = 'alert-subscriptions'
-
-/** Audit collection built by PJ-119. Written to only when it is registered. */
-export const AUDIT_LOG_SLUG = 'audit-log'
 
 export const REMOVED_USER_EMAIL_DOMAIN = 'removed.invalid'
 
@@ -100,17 +98,16 @@ const writeRemovalAudit = async ({
 }): Promise<void> => {
   const { payload } = args
 
-  if (hasCollection(payload, AUDIT_LOG_SLUG)) {
-    await payload.create({
-      collection: AUDIT_LOG_SLUG as never,
-      data: {
+  if (hasAuditLog(payload)) {
+    await writeAuditLog({
+      entry: {
         action: 'user.personal-data-removed',
-        actorID: String(args.actorID),
+        actorID: args.actorID,
         detail: entry,
-        targetID: String(args.userID),
-        ...(entry.tenantID === undefined ? {} : { tenantID: String(entry.tenantID) }),
-      } as never,
-      overrideAccess: true,
+        targetID: args.userID,
+        ...(entry.tenantID === undefined ? {} : { tenantID: entry.tenantID as number | string }),
+      },
+      payload,
       ...(args.req ? { req: args.req } : {}),
     })
 
