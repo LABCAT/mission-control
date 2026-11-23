@@ -303,6 +303,114 @@ describe('application retention job in Postgres @S-300', () => {
   })
 })
 
+describe('delete applicant data access @S-303', () => {
+  let harness: TestHarness
+  let applicationID: number
+  let fileID: number
+
+  const asUser = (role: string, tenant: number) =>
+    ({
+      payload: harness.payload,
+      user: { id: 999_001, collection: 'users', role: 'user', tenants: [{ role, tenant }] },
+    }) as never
+
+  beforeAll(async () => {
+    harness = await bootTestPayload({
+      collections: [
+        organisationsCollection({ mediaSlug: null, tenantScoped: true }),
+        locationsCollection({ requireTenant: true }),
+        ...withPlanRestrictionGuards(taxonomyCollections({ tenantScoped: true })),
+        planCollection(),
+        addOnCollection(),
+        jobsCollection({ tenantScoped: true }),
+        applicationFilesCollection({ tenantScoped: true }),
+        applicationsCollection({ tenantScoped: true }),
+      ],
+      tenantData: () => ({ currency: 'VUV' }),
+      tenantFields,
+    })
+  })
+
+  afterAll(async () => {
+    if (harness) await harness.destroy()
+  })
+
+  const seed = async () => {
+    const { tenantA } = harness
+    const create = async (collection: string, data: Record<string, unknown>) =>
+      ((await harness.payload.create({ collection, data, overrideAccess: true } as never)) as { id: number }).id
+    const organisation = await create('organisations', {
+      name: `Org ${Math.random()}`,
+      slug: `org-${Math.random().toString(36).slice(2, 8)}`,
+      tenant: tenantA.id,
+    })
+    const job = await create('jobs', { organisation, status: 'published', tenant: tenantA.id, title: 'Job' })
+    fileID = Number(
+      (
+        await (harness.payload as never as { db: { create: (a: unknown) => Promise<{ id: unknown }> } }).db.create({
+          collection: APPLICATION_FILES_SLUG,
+          data: { filename: 'cv.pdf', filesize: 10, mimeType: 'application/pdf', organisation, tenant: tenantA.id },
+        })
+      ).id,
+    )
+    applicationID = await create(APPLICATIONS_SLUG, {
+      consentAt: new Date().toISOString(),
+      cv: fileID,
+      email: 'someone@example.invalid',
+      job,
+      name: 'Someone',
+    })
+  }
+
+  const remaining = async (collection: string, id: number) =>
+    (await harness.payload.count({ collection, overrideAccess: true, where: { id: { equals: id } } } as never)).totalDocs
+
+  const load = async () =>
+    (await harness.payload.findByID({
+      collection: APPLICATIONS_SLUG,
+      depth: 0,
+      id: applicationID,
+      overrideAccess: true,
+    })) as never
+
+  it('refuses a user who may read applications but not delete them, and deletes nothing', async () => {
+    await seed()
+
+    await expect(
+      deleteApplicationData({
+        application: await load(),
+        overrideAccess: false,
+        req: asUser('editor', harness.tenantA.id),
+      }),
+    ).rejects.toMatchObject({ status: 403 })
+    expect(await remaining(APPLICATIONS_SLUG, applicationID)).toBe(1)
+    expect(await remaining(APPLICATION_FILES_SLUG, fileID)).toBe(1)
+  })
+
+  it('refuses a tenant admin of another tenant', async () => {
+    await expect(
+      deleteApplicationData({
+        application: await load(),
+        overrideAccess: false,
+        req: asUser('tenant-admin', harness.tenantB.id),
+      }),
+    ).rejects.toMatchObject({ status: 403 })
+    expect(await remaining(APPLICATIONS_SLUG, applicationID)).toBe(1)
+  })
+
+  it('lets the tenant’s admin delete the application and its file', async () => {
+    expect(
+      await deleteApplicationData({
+        application: await load(),
+        overrideAccess: false,
+        req: asUser('tenant-admin', harness.tenantA.id),
+      }),
+    ).toEqual({ filesDeleted: 1 })
+    expect(await remaining(APPLICATIONS_SLUG, applicationID)).toBe(0)
+    expect(await remaining(APPLICATION_FILES_SLUG, fileID)).toBe(0)
+  })
+})
+
 describe('application data action wiring @S-303', () => {
   it('adds the endpoint and the button to the applications collection', () => {
     const collection = withApplicationDataAction(applicationsCollection({ tenantScoped: true }))

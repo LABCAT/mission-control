@@ -201,6 +201,11 @@ export type DeleteApplicationDataArgs = {
   application: ApplicationDoc
   applicationsSlug?: string
   filesSlug?: string
+  /**
+   * Skip access control. The daily job runs as the system (true); the admin action passes false
+   * so that deleting is limited to who may delete an application, not merely who may read it.
+   */
+  overrideAccess?: boolean
   req: PayloadRequest
 }
 
@@ -216,15 +221,15 @@ export const deleteApplicationData = async ({
   application,
   applicationsSlug = APPLICATIONS_SLUG,
   filesSlug = APPLICATION_FILES_SLUG,
+  overrideAccess = true,
   req,
 }: DeleteApplicationDataArgs): Promise<{ filesDeleted: number }> => {
   const fileIDs = fileIDsOf(application)
 
   await req.payload.delete({
     collection: applicationsSlug as CollectionSlug,
-    context: { payloadJobsRetention: true },
     id: application.id,
-    overrideAccess: true,
+    overrideAccess,
     req,
   })
 
@@ -243,9 +248,8 @@ export const deleteApplicationData = async ({
     try {
       await req.payload.delete({
         collection: filesSlug as CollectionSlug,
-        context: { payloadJobsRetention: true },
         id: fileID,
-        overrideAccess: true,
+        overrideAccess,
         req,
       })
       filesDeleted += 1
@@ -474,7 +478,6 @@ const removeOrphanFiles = async ({
       try {
         await req.payload.delete({
           collection: filesSlug as CollectionSlug,
-          context: { payloadJobsRetention: true },
           id: file.id,
           overrideAccess: true,
           req,
@@ -568,6 +571,7 @@ export const applicationDataEndpoints = ({
           application: application as unknown as ApplicationDoc,
           applicationsSlug,
           filesSlug,
+          overrideAccess: false,
           req,
         }))
       } catch (error) {
