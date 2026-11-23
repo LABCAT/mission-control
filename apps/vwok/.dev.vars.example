@@ -2,6 +2,7 @@
 #
 # The sitemap reads the CMS, so these two are needed for `/sitemap.xml`. Without them the route
 # answers 404 rather than an empty sitemap, which would tell a crawler the site has no pages.
+# 'View as user' (PJ-119, docs/VIEW-AS-USER.md) and PJ-35's CMS client need them too.
 #   CMS_URL=https://mc-cms.labcat.workers.dev
 #   SITE_KEY=sk_…                  the vwok tenant's site key (a secret, never public)
 #

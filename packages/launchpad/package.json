@@ -11,7 +11,8 @@
     "./jobs": "./src/jobs/listing.ts",
     "./seo": "./src/seo/index.ts",
     "./seo/*": "./src/seo/*.ts",
-    "./tenant/*": "./src/tenant/*.ts"
+    "./tenant/*": "./src/tenant/*.ts",
+    "./view-as": "./src/view-as/index.ts"
   },
   "scripts": {
     "build": "astro build --root demo",

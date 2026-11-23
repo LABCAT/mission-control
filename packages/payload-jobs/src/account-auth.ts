@@ -1,4 +1,5 @@
 import {
+  Forbidden,
   logoutOperation,
   type CollectionBeforeChangeHook,
   type CollectionBeforeOperationHook,
@@ -12,6 +13,7 @@ import { getTenantRole, type MissionControlUser, type TenantRole } from './acces
 import { createTenantEmailSender, type TenantEmailSender } from './email'
 import { createMemoryRateLimiter, type RateLimiter } from './rate-limit'
 import { resolveSiteKey } from './site-keys'
+import { assertNotViewingAs, exitViewAs, getViewAs, redeemViewAsCode } from './view-as'
 
 /**
  * Front-end account auth (PJ-81). The Astro sites call these endpoints server-side with their
@@ -102,6 +104,11 @@ const ERRORS = {
     code: 'invalid_credentials',
     message: 'The email or password is incorrect.',
     status: 401,
+  },
+  viewAsBlocked: {
+    code: 'view_as_blocked',
+    message: 'This is not available while viewing the site as a user.',
+    status: 403,
   },
   invalidSiteKey: {
     code: 'invalid_site_key',
@@ -566,6 +573,8 @@ const endpoint = (
       return await handler({ options, req, tenant })
     } catch (error) {
       if (error instanceof AccountAuthError) return errorResponse(error)
+      // A view-as guard rail (assertNotViewingAs) refused the action.
+      if (error instanceof Forbidden) return errorResponse(new AccountAuthError(ERRORS.viewAsBlocked))
 
       req.payload.logger.error({ err: error, msg: `account-auth: ${path} failed` })
 
@@ -641,6 +650,10 @@ const currentUser = async (
 
   if (!session || session.collection !== options.usersSlug) return null
 
+  // A view-as token works only on the tenant it was issued for.
+  const viewAs = getViewAs(session)
+  if (viewAs && String(viewAs.tenant) !== String(tenant.id)) return null
+
   const fresh = (await req.payload.db.findOne({
     collection: options.usersSlug as CollectionSlug,
     where: { id: { equals: session.id } },
@@ -663,13 +676,22 @@ const me: Handler = async ({ options, req, tenant }) => {
   const user = await currentUser(req, tenant, options)
   if (!user) throw new AccountAuthError(ERRORS.notAuthenticated)
 
-  return accountResponse({ user: publicUser(user, tenant.id) })
+  // The banner reads this: no personal data beyond the name the user already shows on the site.
+  const viewAs = getViewAs(req.user)
+
+  return accountResponse({
+    ...(viewAs ? { viewAs: { expiresAt: new Date(viewAs.expiresAt).toISOString() } } : {}),
+    user: publicUser(user, tenant.id),
+  })
 }
 
 const logout: Handler = async ({ options, req, tenant }) => {
   // Logging out is idempotent: a missing or expired token still answers 200, so the site can
   // always clear its cookie.
   if (await currentUser(req, tenant, options)) {
+    // Signing out of a view-as session is the same as exiting it, and is logged.
+    if (await exitViewAs({ req, usersSlug: options.usersSlug })) return accountResponse(SUBMITTED_OK)
+
     await logoutOperation({
       collection: req.payload.collections[options.usersSlug as CollectionSlug],
       req,
@@ -680,6 +702,7 @@ const logout: Handler = async ({ options, req, tenant }) => {
 }
 
 const forgotPassword: Handler = async ({ options, req, tenant }) => {
+  await assertNotViewingAs(req, 'account.forgot-password')
   const body = await readBody(req)
   const email = normaliseEmail(body.email)
 
@@ -723,6 +746,7 @@ const forgotPassword: Handler = async ({ options, req, tenant }) => {
 }
 
 const resetPassword: Handler = async ({ options, req, tenant }) => {
+  await assertNotViewingAs(req, 'account.reset-password')
   const body = await readBody(req)
   const password = readPassword(body)
 
@@ -750,6 +774,7 @@ const resetPassword: Handler = async ({ options, req, tenant }) => {
 }
 
 const register: Handler = async ({ options, req, tenant }) => {
+  await assertNotViewingAs(req, 'account.register')
   const body = await readBody(req)
   const email = normaliseEmail(body.email)
 
@@ -775,6 +800,7 @@ const register: Handler = async ({ options, req, tenant }) => {
 }
 
 const verifyEmail: Handler = async ({ options, req, tenant }) => {
+  await assertNotViewingAs(req, 'account.verify-email')
   const body = await readBody(req)
 
   await enforceRateLimit({ action: 'verify-email', options, req, tenant })
@@ -799,6 +825,44 @@ const verifyEmail: Handler = async ({ options, req, tenant }) => {
   return accountResponse(SUBMITTED_OK)
 }
 
+/**
+ * View as user (PJ-119). The site swaps the one-time code from the admin for the view-as token.
+ * Needs the site key, like every account endpoint, and the code only works on its own tenant.
+ */
+const viewAsRedeem: Handler = async ({ options, req, tenant }) => {
+  const body = await readBody(req)
+
+  await enforceRateLimit({ action: 'view-as-redeem', options, req, tenant })
+
+  const result = await redeemViewAsCode({
+    accountRoles: options.accountRoles,
+    code: body.code,
+    payload: req.payload,
+    tenantID: tenant.id,
+    usersSlug: options.usersSlug,
+  })
+
+  if (!result) throw new AccountAuthError(ERRORS.invalidToken)
+
+  return accountResponse({
+    expiresIn: result.expiresIn,
+    token: result.token,
+    user: publicUser(result.user as unknown as RawUser, tenant.id),
+    viewAs: true,
+  })
+}
+
+/** End a view-as session. Always answers 200 so the site can always clear its cookies. */
+const viewAsExit: Handler = async ({ options, req, tenant }) => {
+  const viewAs = getViewAs(req.user)
+
+  if (viewAs && String(viewAs.tenant) === String(tenant.id)) {
+    await exitViewAs({ req, usersSlug: options.usersSlug })
+  }
+
+  return accountResponse(SUBMITTED_OK)
+}
+
 /** The account auth endpoints, to add to the tenants collection's `endpoints`. */
 export const accountAuthEndpoints = (incoming: AccountAuthOptions = {}): Endpoint[] => {
   const options = resolveOptions(incoming)
@@ -811,5 +875,7 @@ export const accountAuthEndpoints = (incoming: AccountAuthOptions = {}): Endpoin
     endpoint(options, 'post', 'reset-password', resetPassword),
     endpoint(options, 'post', 'register', register),
     endpoint(options, 'post', 'verify-email', verifyEmail),
+    endpoint(options, 'post', 'view-as/redeem', viewAsRedeem),
+    endpoint(options, 'post', 'view-as/exit', viewAsExit),
   ]
 }
