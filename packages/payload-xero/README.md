@@ -254,6 +254,36 @@ Money is integer minor units in and out: amounts go to Xero as decimals built fr
 
 The task runs on the `hourly` queue by default (`invoicing.queue`): run that queue from your scheduler.
 
+## The HTML invoice fallback (PJ-58)
+
+A Xero invoice has no online link until it is authorised, and a document may never reach Xero at
+all. `renderInvoiceHTML` turns a neutral document into a self-contained, printable page instead:
+no stylesheet, font or script is fetched, so it renders the same in the admin, in an email client
+and on a Worker.
+
+```ts
+import { renderInvoiceHTML, invoiceFileName, invoiceMoney } from '@mission-control/payload-xero'
+
+renderInvoiceHTML({
+  currency: 'NZD', // ISO 4217; every amount below is whole minor units
+  dueDate: '2026-12-05',
+  invoiceDate: '2026-11-21',
+  invoiceNumber: 'INV-0042',
+  issuer: { name: 'Youth Challenge Vanuatu' },
+  lines: [{ description: 'Listing', quantity: 1, unitAmount: 1000, discountAmount: 100, taxAmount: 135 }],
+  payer: { name: 'Brew', email: 'accounts@brew.example.invalid' },
+  reference: 'Order 7',
+  taxLabel: 'GST',
+  taxTotal: 135,
+  total: 1035,
+}, { locale: 'en' })
+```
+
+Amounts never pass through float arithmetic: `invoiceMoney` prints the digits of the minor units
+in the currency's own places (NZD 2, VUV 0) with `Intl.NumberFormat`. Every value that comes from
+the document is escaped, so a job title or an organisation name can never become markup.
+`invoiceFileName('Order 7')` makes a safe download name.
+
 ## Payment sync (PJ-118)
 
 `xeroPaymentSyncTask({ oauth, orders })` returns a Payload task that runs hourly (`0 0 * * * *`, six fields, seconds first). For every connected organisation it reads the status of the Xero invoices behind your open orders and calls your `InvoiceOrderStore`:

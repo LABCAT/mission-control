@@ -1,0 +1,44 @@
+---
+import Container from '@labcat2020/rocketship/components/Container'
+import Stack from '@labcat2020/rocketship/components/Stack'
+import Typography from '@labcat2020/rocketship/components/Typography'
+
+import SiteLayout from '../layouts/SiteLayout.astro'
+import type { MenuView } from '@mission-control/launchpad/pages'
+import SiteNav from '@mission-control/launchpad/components/SiteNav'
+import { menuFor } from '@mission-control/launchpad/pages'
+
+type Props = {
+  menus?: MenuView[]
+  /** Path the visitor asked for, so a menu link to it is not marked as current. */
+  path: string
+}
+
+const { menus = [], path } = Astro.props as Props
+const primary = menuFor(menus, 'primary')
+const footer = menuFor(menus, 'footer')
+---
+
+<SiteLayout noindex path={path} title="Page not found | Vanuatu Wok">
+  <Fragment slot="nav">
+    <SiteNav currentPath={path} label="Main" links={primary} />
+  </Fragment>
+  <Fragment slot="footer-nav">
+    <SiteNav class="lp-footer__nav" currentPath={path} label="Footer" links={footer} />
+  </Fragment>
+  <Container size="wide">
+    <Stack gap="large">
+      <Typography>
+        <h1>Page not found</h1>
+        <p>That page has moved or never existed.</p>
+        <p><a href="/">Go to the home page</a></p>
+      </Typography>
+    </Stack>
+  </Container>
+</SiteLayout>
+
+<style>
+  .lp-footer__nav {
+    margin-block-end: var(--rs-space-3);
+  }
+</style>

@@ -1,0 +1,62 @@
+---
+import { VIEW_AS_BANNER_SCRIPT, VIEW_AS_EXIT_PATH } from '../view-as'
+---
+
+{
+  /*
+    "View as user" banner (PJ-119). Rendered on EVERY page, hidden. The same HTML is cached for
+    everyone, so it holds nothing personal: the inline script below shows it when the
+    `impersonating=1` hint cookie is set and fills in the name from /api/me. Exit is a real POST
+    form, so it works without JavaScript and cannot be triggered by a link or image.
+  */
+}
+<div class="lp-view-as" hidden id="mc-view-as" role="region" aria-label="Viewing as another user">
+  <p>
+    You're viewing as <strong data-view-as-name>a user</strong>.
+  </p>
+  <form action={VIEW_AS_EXIT_PATH} method="post">
+    <button type="submit">Exit</button>
+  </form>
+</div>
+<script is:inline set:html={VIEW_AS_BANNER_SCRIPT}></script>
+
+<style>
+  /* Deliberately loud: nobody should forget they are acting as someone else. */
+  .lp-view-as {
+    align-items: center;
+    background: #b00020;
+    color: #fff;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    inset-block-start: 0;
+    justify-content: center;
+    padding: 0.5rem 1rem;
+    position: sticky;
+    z-index: 1000;
+  }
+
+  .lp-view-as[hidden] {
+    display: none;
+  }
+
+  .lp-view-as p {
+    margin: 0;
+  }
+
+  .lp-view-as button {
+    background: #fff;
+    border: 0;
+    border-radius: 4px;
+    color: #b00020;
+    cursor: pointer;
+    font: inherit;
+    font-weight: 600;
+    padding: 0.25rem 0.75rem;
+  }
+
+  .lp-view-as button:focus-visible {
+    outline: 3px solid #fff;
+    outline-offset: 2px;
+  }
+</style>
