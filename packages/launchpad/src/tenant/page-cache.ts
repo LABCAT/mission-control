@@ -66,13 +66,13 @@ export const servePublicPage = async ({
   store,
   ttl,
 }: PublicPageOptions): Promise<Response> => {
-  const { changed, url } = normaliseCacheRequest(normalise)
+  const { changed, keyUrl, url } = normaliseCacheRequest(normalise)
   if (changed) return redirect(url)
 
   const version = await readContentVersion(store, site)
   const edgeTtl = ttl ?? (store ? HTML_EDGE_TTL_SECONDS : FALLBACK_EDGE_TTL_SECONDS)
 
-  return cachedResponse(contentCacheKey({ site, url, version }), edgeTtl, render, {
+  return cachedResponse(contentCacheKey({ site, url: keyUrl, version }), edgeTtl, render, {
     browserCacheControl: htmlCacheControl(edgeTtl, HTML_BROWSER_MAX_AGE_SECONDS).browser,
     cache,
     tags: [cacheTag('site', site)],

@@ -73,6 +73,20 @@ describe('servePublicPage @S-242', () => {
     expect(render).toHaveBeenCalledTimes(1)
   })
 
+  it('shares one entry between URLs that differ only in tracking parameters', async () => {
+    const { cache } = pageCache()
+    const store = createMemoryContentVersionStore({ vwok: 'v1' })
+    const render = renderBody('page')
+    const serve = (search: string) =>
+      servePublicPage({ cache, normalise: { pathname: '/about', rules: [], search }, render, site: 'vwok', store })
+
+    await serve('?utm_source=a')
+    await serve('?utm_source=b&gclid=123')
+    await serve('')
+
+    expect(render).toHaveBeenCalledTimes(1)
+  })
+
   it('stores the edge lifetime but answers the browser with the short one, even on a hit', async () => {
     const { cache, store: entries } = pageCache()
     const store = createMemoryContentVersionStore({ vwok: 'v1' })

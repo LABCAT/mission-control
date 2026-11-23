@@ -15,7 +15,6 @@ const UNCACHED_PREFIXES = ['/account', '/api', '/health', '/jobs', '/_'] as cons
 
 export const isCacheablePath = (pathname: string): boolean =>
   !UNCACHED_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)) &&
-  !pathname.startsWith('/_') &&
   !/\.[a-z0-9]{1,8}$/i.test(pathname)
 
 /**

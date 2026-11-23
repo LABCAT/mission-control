@@ -94,6 +94,8 @@ export type ReconciledQuery = {
   changed: boolean
   /** The canonical path and query, tracking parameters kept where they were. */
   url: string
+  /** The same without the tracking parameters: the cache identity, so `utm_*` values share an entry. */
+  keyUrl: string
 }
 
 /**
@@ -129,6 +131,7 @@ export const reconcileCacheQuery = ({
 
   return {
     changed: requested.toString() !== query,
+    keyUrl: query ? `${pathname}?${query}` : pathname,
     url: canonical ? `${pathname}?${canonical}` : pathname,
   }
 }

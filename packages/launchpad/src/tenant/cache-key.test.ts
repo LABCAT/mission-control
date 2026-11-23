@@ -76,22 +76,24 @@ describe('normaliseCacheRequest @S-241', () => {
   it('leaves a canonical URL alone, so it is served rather than redirected', () => {
     const request = normaliseCacheRequest({ ...base, search: '?category=trades&q=chef' })
 
-    expect(request).toEqual({ changed: false, url: '/jobs?category=trades&q=chef' })
+    expect(request).toEqual({ changed: false, keyUrl: '/jobs?category=trades&q=chef', url: '/jobs?category=trades&q=chef' })
   })
 
   it('sorts a reordered URL and reports it changed, so it becomes a 301', () => {
     const request = normaliseCacheRequest({ ...base, search: '?q=chef&category=trades' })
 
-    expect(request).toEqual({ changed: true, url: '/jobs?category=trades&q=chef' })
+    expect(request).toEqual({ changed: true, keyUrl: '/jobs?category=trades&q=chef', url: '/jobs?category=trades&q=chef' })
   })
 
   it('redirects junk and `?page=1` to the bare path', () => {
     expect(normaliseCacheRequest({ ...base, search: '?type=asdf123' })).toEqual({
       changed: true,
+      keyUrl: '/jobs',
       url: '/jobs',
     })
     expect(normaliseCacheRequest({ ...base, search: '?page=1' })).toEqual({
       changed: true,
+      keyUrl: '/jobs',
       url: '/jobs',
     })
   })
@@ -99,7 +101,7 @@ describe('normaliseCacheRequest @S-241', () => {
   it('keeps tracking parameters in the URL and never redirects because of them', () => {
     const request = normaliseCacheRequest({ ...base, search: '?q=chef&utm_source=chatgpt.com' })
 
-    expect(request).toEqual({ changed: false, url: '/jobs?q=chef&utm_source=chatgpt.com' })
+    expect(request).toEqual({ changed: false, keyUrl: '/jobs?q=chef', url: '/jobs?q=chef&utm_source=chatgpt.com' })
   })
 
   it('keeps tracking parameters when it redirects for another reason', () => {
