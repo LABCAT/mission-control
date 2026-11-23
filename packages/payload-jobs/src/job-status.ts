@@ -1,25 +1,35 @@
 import type { Where } from 'payload'
 
+import { endOfLocalDayAfter, validTimeZone } from './local-time'
+
 /**
  * The job lifecycle, as a small state machine (pure: no database, no clock of its own).
  *
- *   draft ──► pending ──► published ──► expired
- *     │  ◄──    │             │            │
- *     │         │             ▼            │ relist (publishedAt resets)
- *     └────► cancelled ◄──────┘     published ◄┘
+ *   draft ──► waiting_for_purchase ──► pending ──► published ──► expired
+ *     │              │  ▲                │            │            │
+ *     │              │  └────────────────┘            ▼            │ relist
+ *     └──────────────┴──────► cancelled ◄─────────────┘   published ◄┘
  *
  * - `draft`: the employer is still writing it.
- * - `pending`: submitted, waiting for checkout or moderation (PJ-31, PJ-32).
+ * - `waiting_for_purchase`: submitted, but the order waits for the organisation owner (PJ-31).
+ * - `pending`: submitted, waiting for a site manager's approval (PJ-32).
  * - `published`: live until `expiresAt`.
  * - `expired`: ended (time ran out, or ended early). Still readable, never listed.
  * - `cancelled`: withdrawn for good.
  *
- * Employers move their own jobs between draft and pending, or cancel them. Publishing, expiring
- * and relisting are for staff and for system code (checkout, the hourly expiry), which act with
- * `overrideAccess` and no user.
+ * Employers move their own jobs between draft, pending and waiting-for-purchase, or cancel them.
+ * Publishing, expiring and relisting are for staff and for system code (checkout, the Approve
+ * action, the hourly expiry), which act with `overrideAccess`.
  */
 
-export const JOB_STATUSES = ['draft', 'pending', 'published', 'expired', 'cancelled'] as const
+export const JOB_STATUSES = [
+  'draft',
+  'waiting_for_purchase',
+  'pending',
+  'published',
+  'expired',
+  'cancelled',
+] as const
 export type JobStatus = (typeof JOB_STATUSES)[number]
 
 export const JOB_STATUS_LABELS: Record<JobStatus, string> = {
@@ -28,29 +38,37 @@ export const JOB_STATUS_LABELS: Record<JobStatus, string> = {
   expired: 'Expired',
   pending: 'Pending',
   published: 'Published',
+  waiting_for_purchase: 'Waiting for purchase',
 }
 
 /** Every allowed move. Anything else, including staying put with a different meaning, is refused. */
 export const JOB_TRANSITIONS: Readonly<Record<JobStatus, readonly JobStatus[]>> = {
   cancelled: [],
-  draft: ['pending', 'published', 'cancelled'],
+  draft: ['waiting_for_purchase', 'pending', 'published', 'cancelled'],
   expired: ['published'],
   pending: ['draft', 'published', 'cancelled'],
   published: ['expired', 'cancelled'],
+  waiting_for_purchase: ['cancelled', 'pending', 'published'],
 }
 
 /** The statuses a new job may start in. Expired and cancelled jobs are never created. */
-export const JOB_INITIAL_STATUSES: readonly JobStatus[] = ['draft', 'pending', 'published']
+export const JOB_INITIAL_STATUSES: readonly JobStatus[] = [
+  'draft',
+  'pending',
+  'published',
+  'waiting_for_purchase',
+]
 
 /** Who is acting: an employer on their own job, staff, or system code (no user). */
 export type JobActor = 'employer' | 'staff' | 'system'
 
-/** What an employer may do themselves; the rest goes through checkout or staff. */
+/** What an employer may do themselves; the rest goes through checkout, approval or staff. */
 const EMPLOYER_MOVES: readonly (readonly [JobStatus, JobStatus])[] = [
   ['draft', 'pending'],
   ['pending', 'draft'],
   ['draft', 'cancelled'],
   ['pending', 'cancelled'],
+  ['waiting_for_purchase', 'cancelled'],
 ]
 
 /** The statuses an employer may create a job in. */
@@ -58,6 +76,9 @@ export const EMPLOYER_INITIAL_STATUSES: readonly JobStatus[] = ['draft', 'pendin
 
 /** The statuses in which an employer may still edit their own job. */
 export const EMPLOYER_EDITABLE_STATUSES: readonly JobStatus[] = ['draft', 'pending']
+
+/** The statuses in which a job is submitted but not live yet (PJ-31, PJ-32). */
+export const HELD_JOB_STATUSES: readonly JobStatus[] = ['waiting_for_purchase', 'pending']
 
 export const isJobStatus = (value: unknown): value is JobStatus =>
   typeof value === 'string' && (JOB_STATUSES as readonly string[]).includes(value)
@@ -91,43 +112,42 @@ export const jobTransitionProblem = (
   return null
 }
 
-const DAY_MS = 24 * 60 * 60 * 1000
-
 /** The dates a job gets when its status changes. */
 export type JobStatusDates = { expiresAt?: null | string; publishedAt?: null | string }
 
 /**
  * The date fields to set alongside a status change, at `now`:
- * - published (from draft or pending): `publishedAt` = now, `expiresAt` = now + the listing
- *   duration, or the close date chosen at checkout (PJ-31) when that is earlier and still ahead.
- *   Without a duration the expiry is left as it is (staff set it by hand).
- * - published again from expired (relist): the same, so `publishedAt` resets.
+ * - published (from draft, pending, waiting-for-purchase or expired): `publishedAt` = now, and
+ *   `expiresAt` = the end of the local day `durationDays` days later in the tenant's timezone,
+ *   or the close date chosen at checkout (PJ-31) when that is earlier and still ahead. Without a
+ *   duration the expiry is left as it is (staff set it by hand).
  * - expired early (before `expiresAt`): `expiresAt` = now, so the record says when it ended.
  * - anything else: no date changes.
- *
- * PJ-32 replaces the plain day count with the tenant's timezone rule.
  */
 export const datesForTransition = ({
   durationDays,
   expiresAt,
   from,
   now,
+  timeZone,
   to,
 }: {
   durationDays?: null | number
   expiresAt?: null | string
   from: JobStatus | null
   now: Date
+  timeZone?: null | string
   to: JobStatus
 }): JobStatusDates => {
   if (to === 'published' && from !== 'published') {
     const publishedAt = now.toISOString()
     if (!Number.isSafeInteger(durationDays) || (durationDays as number) < 1) return { publishedAt }
-    const latest = now.getTime() + (durationDays as number) * DAY_MS
+    const latest = endOfLocalDayAfter(now.getTime(), durationDays as number, validTimeZone(timeZone))
     // The close date the employer chose at checkout (PJ-31) is kept when it is still ahead, but
     // never past the plan's duration from now. A relist (from expired) always starts afresh.
     const chosen = from !== 'expired' && expiresAt ? Date.parse(expiresAt) : Number.NaN
-    const ends = Number.isFinite(chosen) && chosen > now.getTime() ? Math.min(chosen, latest) : latest
+    const ends =
+      Number.isFinite(chosen) && chosen > now.getTime() ? Math.min(chosen, Date.parse(latest)) : Date.parse(latest)
     return { expiresAt: new Date(ends).toISOString(), publishedAt }
   }
 
@@ -164,40 +184,4 @@ export const isLiveJob = (
   if (job.status !== 'published') return false
   if (job.expiresAt === null || job.expiresAt === undefined) return true
   return Date.parse(job.expiresAt) > now.getTime()
-}
-
-/**
- * Moderation: what happens to a job after checkout (PJ-32 calls this; it decides, it doesn't
- * write). Configured per tenant (`jobModeration`):
- * - `legacy` (the old site's rule, the default): publish straight away if the organisation is
- *   approved, or the order cost more than 0, or the organisation pays by invoice; otherwise
- *   wait for an admin.
- * - `review`: every job waits for an admin.
- * - `auto`: every job publishes straight away.
- */
-export const JOB_MODERATION_MODES = ['legacy', 'review', 'auto'] as const
-export type JobModerationMode = (typeof JOB_MODERATION_MODES)[number]
-
-export const decidePublication = ({
-  mode,
-  organisation,
-  orderTotal,
-}: {
-  mode: JobModerationMode
-  organisation: { approved?: boolean | null; canPayByInvoice?: boolean | null }
-  orderTotal: number
-}): 'pending' | 'published' => {
-  switch (mode) {
-    case 'auto':
-      return 'published'
-    case 'review':
-      return 'pending'
-    case 'legacy':
-      return organisation.approved === true || orderTotal > 0 || organisation.canPayByInvoice === true
-        ? 'published'
-        : 'pending'
-    default:
-      // An unknown mode is a configuration error; holding the job for review is the safe side.
-      return 'pending'
-  }
 }

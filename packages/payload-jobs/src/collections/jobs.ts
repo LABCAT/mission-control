@@ -24,6 +24,7 @@ import {
   type TenantRole,
 } from '../access'
 import { idsOf, resultingTenantID, submitsTenant, tenantIDOf } from '../catalog'
+import { jobLogField, jobStatusLog } from '../job-log'
 import {
   datesForTransition,
   EMPLOYER_EDITABLE_STATUSES,
@@ -586,6 +587,8 @@ export type JobsCollectionOptions = {
   /** Resolved collection slugs, so relationships and queries never use a literal. */
   slugs?: PayloadJobsCollectionSlugs
   tenantScoped?: boolean
+  /** The auth collection the status log's `by` relation points at. Defaults to `users`. */
+  usersSlug?: string
   /**
    * Add the `order` relationship (PJ-23). The plugin always does, since it registers orders; a
    * config that uses this collection without the orders collection leaves it off.
@@ -599,6 +602,7 @@ export const jobsCollection = ({
   richTextDescription = true,
   slugs = DEFAULT_PAYLOAD_JOBS_SLUGS,
   tenantScoped = true,
+  usersSlug = 'users',
   withOrder = false,
 }: JobsCollectionOptions = {}): CollectionConfig => {
   const staffOnly = jobStaffFieldAccess(tenantScoped)
@@ -782,6 +786,7 @@ export const jobsCollection = ({
       min: 0,
       admin: { position: 'sidebar', readOnly: true },
     },
+    { ...jobLogField(usersSlug), access: { create: () => false, read: privateRead, update: () => false } } as Field,
     {
       name: 'legacyId',
       type: 'number',
@@ -817,6 +822,7 @@ export const jobsCollection = ({
         jobPlanAllowsJobWith(slugs),
         jobOrderMatchesOrganisation(slugs),
         protectJobViews,
+        jobStatusLog(),
       ],
       beforeValidate: [
         autoJobSlug(tenantScoped, slugs.jobs),

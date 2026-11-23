@@ -915,7 +915,16 @@ export const refundCreditOnCancel =
 // ---------------------------------------------------------------------------------------------
 // History
 
-export const HISTORY_JOB_EVENTS = ['posted', 'published', 'expired', 'cancelled', 'relisted'] as const
+export const HISTORY_JOB_EVENTS = [
+  'posted',
+  'draft',
+  'waiting_for_purchase',
+  'pending',
+  'published',
+  'expired',
+  'cancelled',
+  'relisted',
+] as const
 export type HistoryJobEvent = (typeof HISTORY_JOB_EVENTS)[number]
 
 export type HistoryEntry = {

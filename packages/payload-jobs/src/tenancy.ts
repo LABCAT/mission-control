@@ -2,6 +2,7 @@ import type { Field, GlobalConfig } from 'payload'
 
 import { authenticatedAccess, superAdminAccess } from './access'
 import { tenantLocationFields } from './location-settings'
+import { tenantPublicationField } from './publication-settings'
 import { tenantTaxField } from './tax-settings'
 
 // Current ISO 4217 list one from SIX (the maintenance agency), fetched 2026-11-06.
@@ -173,21 +174,9 @@ export const jobBoardTenantFields: Field[] = [
   ...tenantLocationFields(showForSiteTenant),
   // Rates, inclusive/exclusive prices, rounding and Xero tax types (PJ-91). Off by default.
   tenantTaxField(showForSiteTenant),
-  // What happens to a job after checkout (PJ-32 applies it with `decidePublication`).
-  {
-    name: 'jobModeration',
-    type: 'select',
-    defaultValue: 'legacy',
-    options: [
-      { label: 'Old site rule: publish if approved, paid or on invoice, else review', value: 'legacy' },
-      { label: 'Review every job', value: 'review' },
-      { label: 'Publish every job straight away', value: 'auto' },
-    ],
-    admin: {
-      condition: showForSiteTenant,
-      description: 'Whether new jobs need an admin’s approval before they go live.',
-    },
-  },
+  // When a job goes live and whether it needs review (PJ-32). The rule itself is in
+  // `publication.ts`; these are the per-tenant switches it reads.
+  tenantPublicationField(showForSiteTenant),
   // Applying (PJ-25, decided 20 Nov). Generic default: guests may apply. vwok turns it on.
   {
     name: 'accountRequiredToApply',
