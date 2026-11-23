@@ -18,10 +18,15 @@ import {
   type PayloadXeroOptions,
 } from '@mission-control/payload-xero'
 
+import { orderInvoiceEndpoints, type OrderInvoiceEndpointOptions } from './invoice-link'
 import { orderInvoiceAdapter, XERO_ADD_ON_KEY, type OrderInvoiceAdapterOptions } from './order-invoice'
 
+export * from './invoice-link'
 export * from './order-invoice'
 export * from './seed'
+
+/** The admin component, resolved by the import map (PJ-58). */
+export const ORDER_INVOICE_COMPONENT_PATH = '@mission-control/payload-jobs-xero/rsc#OrderInvoiceLink'
 
 /**
  * Xero settings and invoice records are billing data: super-admins, and tenant admins (the
@@ -37,6 +42,10 @@ export const xeroTenantAdminAccess: Access = ({ req }) => {
 export type PayloadJobsXeroOptions = Omit<OrderInvoiceAdapterOptions, 'registry'> & {
   /** Turn the add-on off without removing it from the config. Defaults to true. */
   enabled?: boolean
+  /** The issuer printed on the HTML invoice. Defaults to the tenant's name. */
+  invoiceIssuer?: OrderInvoiceEndpointOptions['issuer']
+  /** The link on the order's edit view in the admin. Defaults to on. */
+  orderInvoiceLink?: boolean
   /**
    * payload-xero options (slugs, OAuth credentials, access). `scope` follows payload-jobs'
    * tenancy, and `invoicing` is this add-on's adapter.
@@ -62,7 +71,7 @@ export const xeroTenantCollections = (options: PayloadJobsXeroOptions = {}): str
  */
 export const payloadJobsXero =
   (options: PayloadJobsXeroOptions = {}): Plugin =>
-  (incoming: Config) => {
+  async (incoming: Config) => {
     if (options.enabled === false) return incoming
 
     const registry = getPayloadJobsRegistry(incoming)
@@ -111,6 +120,16 @@ export const payloadJobsXero =
       await syncOrQueueXeroInvoice({ config, payload, req, sourceId: orderID })
     }
 
+    const invoiceLink: null | OrderInvoiceEndpointOptions =
+      options.orderInvoiceLink === false
+        ? null
+        : {
+            config,
+            ...(options.invoiceIssuer ? { issuer: options.invoiceIssuer } : {}),
+            ...(options.reference ? { reference: options.reference } : {}),
+            registry,
+          }
+
     registry.invoiceSync.register({
       addOn: XERO_ADD_ON_KEY,
       key: 'xero',
@@ -125,5 +144,40 @@ export const payloadJobsXero =
       },
     })
 
-    return payloadXero(xeroOptions)(incoming)
+    const applied = await payloadXero(xeroOptions)(incoming)
+
+    return invoiceLink ? withOrderInvoiceLink(applied, invoiceLink) : applied
   }
+
+/**
+ * Adds the invoice endpoint to the orders collection and the link to the order's edit view. The
+ * orders collection belongs to payload-jobs, so this is done by rewriting the collection here
+ * rather than asking the host to wire it (PJ-58).
+ */
+const withOrderInvoiceLink = (config: Config, options: OrderInvoiceEndpointOptions): Config => ({
+  ...config,
+  collections: (config.collections ?? []).map((collection) => {
+    if (collection.slug !== options.registry.context.slugs.orders) return collection
+
+    const before = collection.admin?.components?.edit?.beforeDocumentControls
+    const existing = Array.isArray(before) ? before : before ? [before] : []
+
+    return {
+      ...collection,
+      endpoints: [
+        ...(Array.isArray(collection.endpoints) ? collection.endpoints : []),
+        ...orderInvoiceEndpoints(options),
+      ],
+      admin: {
+        ...collection.admin,
+        components: {
+          ...collection.admin?.components,
+          edit: {
+            ...collection.admin?.components?.edit,
+            beforeDocumentControls: [...existing, { path: ORDER_INVOICE_COMPONENT_PATH }],
+          },
+        },
+      },
+    }
+  }),
+})
