@@ -11,7 +11,7 @@ import { Tags } from './collections/Tags'
 
 // mission-control: job board plugins. Keep this block small so orbit merges stay clean.
 import { payloadJobs, type RateLimiter } from '@mission-control/payload-jobs'
-import { payloadJobsAlerts } from '@mission-control/payload-jobs-alerts'
+import { ALERT_SUBSCRIPTIONS_SLUG, payloadJobsAlerts } from '@mission-control/payload-jobs-alerts'
 import { payloadJobsReports } from '@mission-control/payload-jobs-reports'
 import { payloadJobsXero } from '@mission-control/payload-jobs-xero'
 import { multiTenantPlugin } from '@payloadcms/plugin-multi-tenant'
@@ -128,13 +128,16 @@ export default buildConfig({
     // binding in Workers, and fall back to an in-memory limiter in dev.
     payloadJobs({
       accountAuth: { rateLimiter: () => workerEnv?.ACCOUNT_RATE_LIMIT },
+      // mission-control: personal data removal deletes the person's alert subscriptions, so it
+      // needs the add-on's resolved slug (PJ-89).
+      alertSubscriptionsSlug: ALERT_SUBSCRIPTIONS_SLUG,
       // mission-control: one resolved slug set, shared with the multi-tenant plugin below, so a
       // renamed collection keeps its tenant scoping and site-key reads.
       collections: payloadJobsCollectionOptions,
       tenancy: 'multi',
     }),
     // mission-control: add-ons (PJ-115), after payloadJobs(). Tenants switch them with `addOns`.
-    payloadJobsAlerts(),
+    payloadJobsAlerts({ slug: ALERT_SUBSCRIPTIONS_SLUG }),
     payloadJobsReports(),
     // mission-control: Xero add-on (PJ-57): settings, OAuth, order invoices and their retry task.
     // Secrets are read per request in Workers; the Node CLI falls back to the XERO_* env vars.

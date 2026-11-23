@@ -228,6 +228,9 @@ describe.skipIf(!databaseUrl)('media and documents (R2, tenant scoped)', () => {
       }
       await payload.delete({
         collection: 'users',
+        // mission-control: users are never hard-deleted in production (PJ-89); teardown is the
+        // escape hatch the plugin's guard allows.
+        context: { payloadJobsPurge: true },
         overrideAccess: true,
         where: { id: { in: [superAdmin, adminA, editorA, employerA, adminB].map((u) => u?.id) } },
       })

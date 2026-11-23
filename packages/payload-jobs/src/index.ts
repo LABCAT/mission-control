@@ -41,6 +41,8 @@ import {
 } from './orders'
 import { resolvePaymentProviders, type PaymentProviderDefinition } from './payment-providers'
 import { expireJobPlacementsTask, PLACEMENTS_FIELD } from './placements'
+import { withPersonalDataRemoval } from './anonymise-user'
+import { seedTenantLegalPages } from './legal-pages'
 import { planCollection, withPlanRestrictionGuards } from './plans'
 import {
   DEFAULT_PAYLOAD_JOBS_SLUGS,
@@ -60,6 +62,7 @@ import { withSiteManagerNav } from './admin/nav'
 export * from './access'
 export * from './admin'
 export * from './account-auth'
+export * from './anonymise-user'
 export * from './checkout'
 export * from './collections/locations'
 export * from './collections/menus'
@@ -79,6 +82,7 @@ export * from './add-ons'
 export * from './collections/jobs'
 export * from './collections/applications'
 export * from './job-status'
+export * from './legal-pages'
 export * from './add-ons-seed'
 export * from './catalog'
 export * from './placements'
@@ -221,6 +225,11 @@ export type PayloadJobsOptions = {
   mediaSlug?: null | string
   /** Slug of the auth collection that gets legacy WordPress password support. Defaults to `users`. */
   usersSlug?: string
+  /**
+   * Slug of the job alerts collection, when that add-on is installed. Personal data removal
+   * (PJ-89) deletes the removed person's alert subscriptions. Defaults to `alert-subscriptions`.
+   */
+  alertSubscriptionsSlug?: string
   /** Slug of the tenant settings global in single-tenant mode. */
   settingsSlug?: string
   /** `multi` requires a tenants collection; `single` uses a job-board settings global. */
@@ -384,10 +393,18 @@ export const payloadJobs =
       ...config,
       collections: config.collections?.map((collection) =>
         collection.slug === usersSlug
-          ? withOrganisationField(
-              withLegacyPasswords(collection),
-              tenancy === 'multi',
-              slugs.organisations,
+          ? withPersonalDataRemoval(
+              withOrganisationField(
+                withLegacyPasswords(collection),
+                tenancy === 'multi',
+                slugs.organisations,
+              ),
+              {
+                alertSubscriptionsSlug: options.alertSubscriptionsSlug ?? 'alert-subscriptions',
+                applicationsSlug: APPLICATIONS_SLUG,
+                filesSlug: APPLICATION_FILES_SLUG,
+                usersSlug,
+              },
             )
           : collection,
       ),
@@ -524,6 +541,12 @@ export const payloadJobs =
                       afterChange: [
                         ...(collection.hooks?.afterChange ?? []),
                         seedTenantSystemPages({
+                          collectionSlug: slugs.pages,
+                          tenantScoped: tenancy === 'multi',
+                        }),
+                        // And its privacy policy and terms as drafts (PJ-89).
+                        seedTenantLegalPages({
+                          blockSlugs: registeredBlockSlugs(config),
                           collectionSlug: slugs.pages,
                           tenantScoped: tenancy === 'multi',
                         }),
