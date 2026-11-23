@@ -147,9 +147,6 @@ const monthOf = (postDate: string): string => postDate.slice(0, 7)
 
 type Meta = Record<string, string>
 
-const chunk = <T>(items: readonly T[], size: number): T[][] =>
-  Array.from({ length: Math.ceil(items.length / size) }, (_, i) => items.slice(i * size, (i + 1) * size))
-
 /** Post meta for the wanted posts and keys. A duplicate key: the last one wins, as in WordPress. */
 const readPostMeta = async (reader: MysqlReader, keys: readonly string[], wanted: Set<number>): Promise<Map<number, Meta>> => {
   const metaOf = new Map<number, Meta>()

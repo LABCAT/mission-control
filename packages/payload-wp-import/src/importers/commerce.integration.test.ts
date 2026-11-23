@@ -91,7 +91,7 @@ describe('commerce import against Payload @S-202', () => {
   it('writes valid coupons, orders and opening credits, and a second run changes nothing', async () => {
     const dry = await doImport(true)
     // Only the unreadable pack and the order that charged tax fail; nothing was written.
-    expect(dry.errors.map((e) => e.importer).sort()).toEqual(['credits', 'orders'])
+    expect(dry.errors.map((e) => e.importer).toSorted()).toEqual(['credits', 'orders'])
     expect(await find('orders')).toHaveLength(0)
 
     const first = await doImport(false)

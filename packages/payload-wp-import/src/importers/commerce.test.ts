@@ -134,7 +134,7 @@ describe('coupons @S-201', () => {
     expect(summary.importers.coupons).toMatchObject({ created: 2, skipReasons: { expired: 1 } })
 
     const byCode = Object.fromEntries((store.coupons ?? []).map((c) => [c.code, c]))
-    expect(Object.keys(byCode).sort()).toEqual(['LINKPS', 'SPRING25'])
+    expect(Object.keys(byCode).toSorted()).toEqual(['LINKPS', 'SPRING25'])
     expect(byCode.LINKPS).toMatchObject({ active: true, amount: 1900, discountType: 'flat', legacyId: 38641, maxUses: null, tenant: TENANT, useCount: 501 })
     expect(byCode.SPRING25).toMatchObject({ amount: 25, discountType: 'percent', maxUses: 10, useCount: 3 })
     // The collection resets a use count that is not written under this context.
