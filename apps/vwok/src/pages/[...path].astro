@@ -19,9 +19,9 @@ import PageView from '@mission-control/launchpad/components/PageView'
 import BrandHead from '../components/BrandHead.astro'
 import HomeShell from '../components/HomeShell.astro'
 import NotFoundPage from '../components/NotFoundPage.astro'
-import { CMS_URL, SITE_KEY } from 'astro:env/server'
 
 import { siteTenant } from '../brand'
+import { siteEnv } from '../env'
 import { pageRoute } from '../page-route'
 import { cmsFromEnv } from '../site'
 
@@ -38,7 +38,7 @@ const components: BlockComponentMap = {
 }
 
 const pathname = Astro.url.pathname
-const route = await pageRoute({ cms: cmsFromEnv({ CMS_URL, SITE_KEY }), pathname })
+const route = await pageRoute({ cms: cmsFromEnv(await siteEnv()), pathname })
 
 // An unknown path is a real 404: the status and the page agree, so a crawler and a visitor see
 // the same answer.

@@ -3,6 +3,8 @@ import '@labcat2020/rocketship/styles'
 
 import Container from '@labcat2020/rocketship/components/Container'
 
+import ViewAsBanner from './ViewAsBanner.astro'
+
 import { brandingStyleAttribute } from '../tenant/branding'
 import { resolveLocale } from '../tenant/locale'
 import { seoMeta } from '../tenant/seo'
@@ -65,6 +67,7 @@ const jsonLdText = jsonLd ? JSON.stringify(jsonLd).replace(/</g, '\\u003c') : un
     <slot name="head" />
   </head>
   <body>
+    <ViewAsBanner />
     <a class="lp-skip" href="#main">Skip to content</a>
     <header class="lp-header">
       {

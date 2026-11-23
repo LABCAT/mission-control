@@ -206,6 +206,19 @@ export const locationDescendantIDs = (
   return ids
 }
 
+/**
+ * Jobs that are live at `now`: published and either with no expiry or an expiry still ahead.
+ * That is `liveJobsWhere` in `packages/payload-jobs`, restated here because the theme cannot
+ * import the CMS server package. Listings, the sitemap and (later) feeds share it, so an
+ * expired job can never appear in one while another still lists it.
+ */
+export const liveJobsWhere = (now: Date = new Date()): CmsWhere => ({
+  and: [
+    { status: { equals: 'published' } },
+    { or: [{ expiresAt: { greater_than: now.toISOString() } }, { expiresAt: { exists: false } }] },
+  ],
+})
+
 export type ListingWhereOptions = {
   facets: ListingFacets
   filters: FilterValues
@@ -214,19 +227,15 @@ export type ListingWhereOptions = {
 }
 
 /**
- * The Payload query for a filter set: jobs that are live only, meaning published and either
- * with no expiry or an expiry still ahead. That is `liveJobsWhere` in `packages/payload-jobs`;
- * expired jobs keep their own page and never appear in a listing.
+ * The Payload query for a filter set: live jobs only, plus the filters the URL asked for.
+ * Expired jobs keep their own page and never appear in a listing.
  */
 export const listingWhere = ({
   facets,
   filters,
   now = new Date(),
 }: ListingWhereOptions): CmsWhere => {
-  const and: CmsWhere[] = [
-    { status: { equals: 'published' } },
-    { or: [{ expiresAt: { greater_than: now.toISOString() } }, { expiresAt: { exists: false } }] },
-  ]
+  const and: CmsWhere[] = [...(liveJobsWhere(now).and ?? [])]
 
   const keyword = filters.q?.trim()
   if (keyword) {

@@ -100,13 +100,20 @@ describe('PageView', () => {
     expect(html).toContain('rel="noopener"')
   })
 
-  it('ships no client JavaScript, so a public page stays cacheable @S-296', async () => {
+  it('ships no hydrated JavaScript, so a public page stays cacheable @S-296', async () => {
     const html = await container.renderToString(PageView, {
       props: { components, menus, tenant, view },
     })
 
-    expect(html).not.toContain('<script')
+    // No island, and no module script: nothing here is fetched, parsed or hydrated.
     expect(html).not.toContain('astro-island')
+    expect(html).not.toContain('type="module"')
+
+    // The only script is the view-as banner's inline snippet (PJ-119), which renders nothing
+    // unless the hint cookie is set, so the cached HTML stays the same for every visitor.
+    const scripts = html.match(/<script[^>]*>/g) ?? []
+    expect(scripts).toHaveLength(1)
+    expect(scripts[0]).not.toContain('src=')
   })
 
   it('keeps the page out of the index when its SEO says so @S-292', async () => {

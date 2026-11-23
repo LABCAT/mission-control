@@ -1,11 +1,7 @@
 import { createCmsClient, type CmsClient } from '@mission-control/launchpad/cms'
 import type { SiteCollections } from '@mission-control/launchpad/pages'
 
-/** The server-only values this site reads the CMS with (PJ-35). */
-export type SiteEnv = {
-  CMS_URL?: null | string
-  SITE_KEY?: null | string
-}
+import type { SiteEnv } from './env'
 
 /**
  * The CMS client for this deployment, or `null` when the CMS is not configured. Both values are

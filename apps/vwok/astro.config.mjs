@@ -1,5 +1,5 @@
 import cloudflare from '@astrojs/cloudflare'
-import { defineConfig, envField } from 'astro/config'
+import { defineConfig } from 'astro/config'
 
 // vanuatuwok.vu runs on Cloudflare Workers (`mc-vwok`). Pages render on demand so a later task
 // can read the tenant and the jobs from the CMS; today the shell is static in effect. Nothing
@@ -13,12 +13,4 @@ export default defineConfig({
   // endpoints set (docs/ACCOUNT-AUTH.md), not in Astro's session store.
   session: false,
   output: 'server',
-  env: {
-    schema: {
-      CMS_URL: envField.string({ context: 'server', access: 'secret', optional: true }),
-      // The vwok tenant's site key (PJ-07). A secret: it reads the whole site, so it stays on the
-      // Worker and never reaches a browser.
-      SITE_KEY: envField.string({ context: 'server', access: 'secret', optional: true }),
-    },
-  },
 })
