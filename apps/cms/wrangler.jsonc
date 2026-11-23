@@ -21,6 +21,11 @@
       "localConnectionString": "postgres://orbit:orbit@localhost:8900/orbit"
     }
   ],
+  // mission-control: tenant content versions for cache invalidation (PJ-41). The CMS bumps a
+  // version on every content write and each site reads it into its edge cache key. The id is
+  // added by `wrangler deploy` on the first deploy (automatic provisioning); until then a
+  // Worker with no binding simply leaves the hooks off.
+  "kv_namespaces": [{ "binding": "CONTENT_CACHE" }],
   // mission-control: R2 bucket for the media and documents collections (PJ-10).
   "r2_buckets": [
     { "binding": "MEDIA", "bucket_name": "mission-control-media" }
