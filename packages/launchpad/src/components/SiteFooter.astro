@@ -1,0 +1,69 @@
+---
+/**
+ * The site footer (PJ-89, S-310). It shows the tenant's name and the two legal links. The footer
+ * menu (PJ-103) arrives through the default slot and is rendered once, by the page; the legal
+ * links stay, because the policy and terms must be reachable from every page.
+ */
+import Container from '@labcat2020/rocketship/components/Container'
+
+import { legalFooterLinks, legalKindsInMenu, type LegalMenuItem } from '../legal/links'
+
+type Props = {
+  /** The site's footer menu items, when it has a footer menu. */
+  items?: LegalMenuItem[]
+  /** Tenant name, for the copyright line. */
+  name: string
+  /** Labels in the tenant's language. */
+  labels?: { privacy?: string; terms?: string }
+}
+
+const { items = [], labels, name } = Astro.props as Props
+
+const covered = new Set(legalKindsInMenu(items))
+const legal = legalFooterLinks(items, labels ?? {}).filter((link) => !covered.has(link.kind))
+---
+
+<Container size="wide">
+  <nav aria-label="Footer" class="lp-footer__nav">
+    <slot />
+    <ul class="lp-footer__list lp-footer__legal">
+      {legal.map((link) => (
+        <li>
+          <a href={link.href}>{link.label}</a>
+        </li>
+      ))}
+    </ul>
+  </nav>
+  <p class="lp-footer__copy">
+    &copy; {new Date().getFullYear()}
+    {' '}
+    {name}
+  </p>
+</Container>
+
+<style>
+  .lp-footer__nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--rs-space-4);
+    justify-content: space-between;
+    margin-block-end: var(--rs-space-4);
+  }
+
+  .lp-footer__list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--rs-space-3);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .lp-footer__list a {
+    color: inherit;
+  }
+
+  .lp-footer__copy {
+    margin: 0;
+  }
+</style>

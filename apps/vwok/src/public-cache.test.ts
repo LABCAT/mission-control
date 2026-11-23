@@ -11,7 +11,9 @@ describe('which paths the public edge cache serves @S-242', () => {
   it.each([
     ['/', true],
     ['/about/team', true],
-    ['/jobs', true],
+    ['/jobs', false],
+    ['/jobs/category/trades', false],
+    ['/jobseekers', true],
     ['/account', false],
     ['/account/view-as', false],
     ['/api/me', false],

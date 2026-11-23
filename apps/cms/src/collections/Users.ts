@@ -8,6 +8,7 @@ import {
   globalRoleOptions,
   isSeekerOnly,
   isSuperAdmin,
+  PERSONAL_DATA_REMOVAL_CONTEXT,
   type MissionControlUser,
   superAdminAccess,
   superAdminFieldAccess,
@@ -56,6 +57,9 @@ export const preventTenantAdminCredentialChanges: CollectionBeforeChangeHook = (
   req,
 }) => {
   if (operation !== 'update' || !originalDoc) return data
+  // mission-control: personal data removal (PJ-89) replaces the email and password after its own
+  // permission check; only server code sets this context.
+  if (req.context?.[PERSONAL_DATA_REMOVAL_CONTEXT]) return data
 
   const actor = req.user as MissionControlUser | null | undefined
   if (!actor || isSuperAdmin(actor) || String(actor.id) === String(originalDoc.id)) return data

@@ -12,6 +12,7 @@
     "seed:plans": "cross-env NODE_OPTIONS=--no-deprecation payload run src/seed/plans.ts",
     "seed:tenants": "cross-env NODE_OPTIONS=--no-deprecation payload run src/seed/tenants.ts",
     "seed:locations": "cross-env NODE_OPTIONS=--no-deprecation payload run src/seed/locations.ts",
+    "seed:legal-pages": "cross-env NODE_OPTIONS=--no-deprecation payload run src/seed/legal-pages.ts",
     "seed:pages": "cross-env NODE_OPTIONS=--no-deprecation payload run src/seed/system-pages.ts",
     "start": "cross-env NODE_OPTIONS=--no-deprecation srvx --prod --dir=. --static=dist/client --entry=dist/server/server.js",
     "wp-import": "cross-env NODE_OPTIONS=--no-deprecation payload run src/wp-import.ts",

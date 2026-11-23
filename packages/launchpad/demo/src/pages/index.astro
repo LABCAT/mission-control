@@ -6,6 +6,7 @@ import Stack from '@labcat2020/rocketship/components/Stack'
 import Typography from '@labcat2020/rocketship/components/Typography'
 
 import BaseLayout from '../../../src/components/BaseLayout.astro'
+import ConsentLine from '../../../src/components/ConsentLine.astro'
 import FilterBar from '../../../src/components/FilterBar.astro'
 import JobCard from '../../../src/components/JobCard.astro'
 import OrgCard from '../../../src/components/OrgCard.astro'
@@ -120,6 +121,7 @@ const recentlyViewedJobs = jobs.map((job) => ({
       <form action="/alerts" method="post">
         <Stack gap="small">
           <Turnstile action="alerts" language="en" siteKey={siteKey} />
+          <ConsentLine kind="alert" />
           <Button type="submit">Subscribe</Button>
         </Stack>
       </form>

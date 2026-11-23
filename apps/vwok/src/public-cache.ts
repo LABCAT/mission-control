@@ -9,7 +9,9 @@ import type { SiteEnv } from './env'
  * `/health` and anything with a file extension (sitemaps, robots, assets) answer for themselves.
  * `/account` and forms are never cached; a form is a POST, which this never touches.
  */
-const UNCACHED_PREFIXES = ['/account', '/api', '/health', '/_'] as const
+// `/jobs` is the listing, which caches itself under its own filters (`serveJobListing`): this
+// middleware has no parameter rules, so it would 301 every filter away.
+const UNCACHED_PREFIXES = ['/account', '/api', '/health', '/jobs', '/_'] as const
 
 export const isCacheablePath = (pathname: string): boolean =>
   !UNCACHED_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)) &&
