@@ -21,7 +21,8 @@ pnpm --filter @mission-control/vwok lighthouse # build, then Lighthouse CI again
 | `src/robots.ts`        | `robots.txt` for one hostname; production allows, previews block |
 | `src/sitemap.ts`       | `/sitemap.xml` and its shards, read from the CMS               |
 | `src/layouts/`         | page chrome around the launchpad `BaseLayout`                  |
-| `src/pages/`           | routes                                                         |
+| `src/page-route.ts`    | one request path → the CMS page it names, a 404, or the shell   |
+| `src/pages/`           | the catch-all route, plus `robots.txt`                         |
 | `public/brand/`        | logo and favicons, taken from the legacy WordPress uploads     |
 | `lighthouserc.json`    | the performance budget                                         |
 
@@ -33,6 +34,17 @@ palette. They reach the page only as Rocketship `--rs-*` tokens, written by the 
 
 Everything else a tenant decides — currency, minor units, timezone, locales, domains, the email
 sender — comes from the `vwok` tenant document in the CMS. This app does not repeat any of it.
+
+## Pages
+
+Every public page is a CMS page (PJ-39): `src/pages/[...path].astro` resolves the request path
+against the site's pages, so `/`, `/about` and `/about/team` need no route files. The launchpad
+`PageView` draws the page's blocks in the editor's order, with the site's menus in the header and
+footer. An unknown path answers 404.
+
+The block renderers are named explicitly in the route, so a page bundles only what it can draw.
+With no `CMS_URL`/`SITE_KEY` the site serves a static home shell and every other path is a 404;
+that is what the Lighthouse run measures.
 
 ## Crawling
 
@@ -62,8 +74,8 @@ and `AI_CRAWLERS_ALLOWED=false` turns them away until the per-tenant setting (PJ
 assets directory into `dist/server/wrangler.json`, so `pnpm exec wrangler deploy` from this
 directory deploys the build.
 
-Local values go in `.dev.vars` (copy `.dev.vars.example`); nothing is read yet, and PJ-35 adds the
-CMS URL and site key.
+Local values go in `.dev.vars` (copy `.dev.vars.example`): `CMS_URL` and `SITE_KEY` are the CMS
+secrets (PJ-35).
 
 ## Lighthouse budget
 

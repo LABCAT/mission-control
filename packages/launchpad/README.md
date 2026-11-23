@@ -54,6 +54,37 @@ timezone.
 | `RecentlyViewed` | —                               | browser-local list, filled on idle           |
 | `JobViewTracker` | —                              | records the current job on a detail page     |
 | `Pagination` | —                                    | **temporary**; moves to Rocketship (RCL task) |
+| `PageView`   | `RenderBlocks`, `BaseLayout`         | a whole CMS page: blocks in editor order, menus in the chrome |
+| `SiteNav`    | —                                    | one menu in a landmark; marks the current page |
+| `LatestJobs` | `Grid`, `JobCardBody`                | the latest-jobs block: featured first, empty state, listing link |
+| `JobCardBody` | `Card`                              | the job card without its script, for pages that ship none |
+
+## CMS pages (`@mission-control/launchpad/pages`)
+
+A site renders its pages from CMS data, never from a route per page. One load per request:
+
+```ts
+import { loadSite, pageView } from '@mission-control/launchpad/pages'
+
+const content = await loadSite({ cms, pathname: Astro.url.pathname, tenant })
+if (content.kind !== 'page') return notFound(content.menus) // menus still draw the chrome
+
+const view = pageView(content, { tenant })
+```
+
+- `loadSite` reads the site's pages and menus once and resolves the path against the page tree
+  (`resolveContentRoute`): `/` is the page with role `home`, `/<parent>/<slug>` is the chain of
+  slugs, and anything else is `not-found`. It loads the latest jobs only when the page's layout
+  names that block.
+- `pageView` turns the loaded page into plain data for `PageView.astro`: the layout split into
+  runs of generic blocks and the data-needing block in between (`pageSegments`), the page
+  metadata, and the menus (`menuViews`). Blocks render through an explicit component map the site
+  passes in, so a page bundles only the renderers it names.
+- A menu item that names a page follows that page's current path; a custom URL keeps its
+  new-tab flag and is refused if its scheme is unsafe.
+- Collection slugs come from the plugin options (PJ-80): pass `collections` (pages, menus, jobs)
+  and, when the host registered it under another name, `latestJobsSlug`. The defaults match a
+  stock installation.
 
 ## Viewed jobs (browser-local)
 

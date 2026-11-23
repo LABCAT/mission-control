@@ -75,18 +75,21 @@ const jsonLdText = jsonLd ? JSON.stringify(jsonLd).replace(/</g, '\\u003c') : un
           <slot name="header" />
         ) : (
           <Container size="wide">
-            <a class="lp-brand" href="/">
-              {tenant.branding?.logo?.url ? (
-                <img
-                  alt={tenant.branding.logo.alt ?? tenant.name}
-                  height={tenant.branding.logo.height ?? undefined}
-                  src={tenant.branding.logo.url}
-                  width={tenant.branding.logo.width ?? undefined}
-                />
-              ) : (
-                tenant.name
-              )}
-            </a>
+            <div class="lp-header__bar">
+              <a class="lp-brand" href="/">
+                {tenant.branding?.logo?.url ? (
+                  <img
+                    alt={tenant.branding.logo.alt ?? tenant.name}
+                    height={tenant.branding.logo.height ?? undefined}
+                    src={tenant.branding.logo.url}
+                    width={tenant.branding.logo.width ?? undefined}
+                  />
+                ) : (
+                  tenant.name
+                )}
+              </a>
+              <slot name="nav" />
+            </div>
           </Container>
         )
       }
@@ -100,6 +103,7 @@ const jsonLdText = jsonLd ? JSON.stringify(jsonLd).replace(/</g, '\\u003c') : un
           <slot name="footer" />
         ) : (
           <Container size="wide">
+            <slot name="footer-nav" />
             <p class="lp-footer__copy">
               &copy; {new Date().getFullYear()}
               {' '}
@@ -133,6 +137,14 @@ const jsonLdText = jsonLd ? JSON.stringify(jsonLd).replace(/</g, '\\u003c') : un
   .lp-header {
     border-block-end: 1px solid var(--rs-color-border);
     padding-block: var(--rs-space-3);
+  }
+
+  .lp-header__bar {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--rs-space-4);
+    justify-content: space-between;
   }
 
   .lp-brand {

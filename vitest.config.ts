@@ -17,11 +17,17 @@ export default defineConfig({
             'scripts/**/*.test.ts', // mission-control: features catalogue report
             'tools/*/src/**/*.test.ts', // mission-control: include tools/
           ],
-          exclude: ['packages/launchpad/**', 'packages/rocketship-payload/**'],
+          exclude: [
+            'packages/launchpad/**',
+            'packages/rocketship-payload/**',
+            // mission-control: needs Astro's Vite plugin for .astro components.
+            'apps/vwok/**',
+          ],
         },
       },
       './packages/launchpad',
       './packages/rocketship-payload',
+      './apps/vwok',
     ],
     // The Postgres harness pushes a schema per boot against one TEST_DATABASE_URL; run files
     // one at a time, and allow a boot (schema pull + push) more than the 10s default.
