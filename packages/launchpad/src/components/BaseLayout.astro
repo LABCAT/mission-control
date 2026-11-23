@@ -3,8 +3,9 @@ import '@labcat2020/rocketship/styles'
 
 import Container from '@labcat2020/rocketship/components/Container'
 
+import SiteFooter from './SiteFooter.astro'
 import ViewAsBanner from './ViewAsBanner.astro'
-
+import type { MenuLink } from '../pages/menus'
 import { brandingStyleAttribute } from '../tenant/branding'
 import { resolveLocale } from '../tenant/locale'
 import { seoMeta } from '../tenant/seo'
@@ -24,9 +25,27 @@ type Props = {
   image?: string
   /** Structured data for this page, rendered as JSON-LD in the head. */
   jsonLd?: Record<string, unknown>
+  /**
+   * The links of the footer menu the page renders in the `footer-nav` slot (PJ-103, PJ-39). Only
+   * used so the legal links are not repeated; the menu itself is rendered once, by the slot.
+   */
+  footerMenu?: MenuLink[]
+  /** Labels for the footer's legal links, in the tenant's language (PJ-89). */
+  legalLabels?: { privacy?: string; terms?: string }
 }
 
-const { tenant, title, description, path, siteUrl, noindex, image, jsonLd } = Astro.props as Props
+const {
+  tenant,
+  title,
+  description,
+  path,
+  siteUrl,
+  noindex,
+  image,
+  jsonLd,
+  footerMenu,
+  legalLabels,
+} = Astro.props as Props
 
 const meta = seoMeta({ description, noindex, path, siteUrl, title })
 const branding = brandingStyleAttribute(tenant.branding)
@@ -102,14 +121,9 @@ const jsonLdText = jsonLd ? JSON.stringify(jsonLd).replace(/</g, '\\u003c') : un
         Astro.slots.has('footer') ? (
           <slot name="footer" />
         ) : (
-          <Container size="wide">
+          <SiteFooter items={footerMenu?.map((link) => ({ label: link.label, url: link.href }))} labels={legalLabels} name={tenant.name}>
             <slot name="footer-nav" />
-            <p class="lp-footer__copy">
-              &copy; {new Date().getFullYear()}
-              {' '}
-              {tenant.name}
-            </p>
-          </Container>
+          </SiteFooter>
         )
       }
     </footer>
@@ -163,7 +177,4 @@ const jsonLdText = jsonLd ? JSON.stringify(jsonLd).replace(/</g, '\\u003c') : un
     padding-block: var(--rs-space-6);
   }
 
-  .lp-footer__copy {
-    margin: 0;
-  }
 </style>

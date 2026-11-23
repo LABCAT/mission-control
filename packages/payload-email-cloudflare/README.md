@@ -54,6 +54,7 @@ await payload.sendEmail({
 | `binding` | Workers `env[bindingName]` | Inject a binding (or a function returning one), e.g. in tests. |
 | `provider` | `'cloudflare'` | `'resend'` skips the binding and sends through Resend. |
 | `transport` | | `'console'` forces the console transport: nothing is delivered. |
+| `redirect` | | Redirect-all for previews/staging: `{ to, label }` or a function returning it (or `undefined` to deliver normally). Replaces to/cc/bcc with `to` and prefixes the subject `[label → original recipients]`. With no `to`, nothing is delivered. Applies to every transport. |
 | `resend.apiKey` | `RESEND_API_KEY` | String or function. Read from the Workers env (or `process.env` outside Workers). |
 | `resend.endpoint`, `resend.fetch` | Resend API, global `fetch` | Overrides for proxies and tests. |
 
