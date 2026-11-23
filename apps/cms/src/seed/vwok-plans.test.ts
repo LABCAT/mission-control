@@ -40,7 +40,7 @@ describe('vwok plan seed', () => {
     expect(planSeedProblems(vwokPlans)).toEqual([])
   })
 
-  it('matches the live plans (query 1, 19 Nov): price in vatu, pack size and WordPress post id', () => {
+  it('matches the live plans (query 1, 19 Nov): price in vatu, pack size and WordPress post id @S-200', () => {
     const live = Object.fromEntries(vwokPlans.map((plan) => [plan.legacyId, [plan.price, plan.jobCredits]]))
     expect(live).toEqual({ 26: [3900, 1], 28: [17500, 5], 31: [0, 1], 36082: [33000, 10], 36084: [5900, 1] })
   })

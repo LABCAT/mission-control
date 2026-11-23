@@ -228,3 +228,32 @@ it links `jobDescriptionPdf` to jobs that now exist.
 - The legacy taxonomy keys for `job-cat`/`job-tag`/`areas-of-focus` are read from AUDIT.md; the
   legacy plugin source is not in this repo. Check the imported counts against the live term
   counts before cutover (PJ-68 does the same comparison).
+
+## Plans, coupons, orders and credits (PJ-65)
+
+`pnpm wp-import orders --tenant <slug> [--dry-run]` runs `jobs` and `plans` first (and what they need);
+`coupons` and `credits` run on their own. Orders and credits need the organisations (PJ-62) and the jobs
+(PJ-64) to exist. Options on `commerceImporters()`: `importExpiredCoupons`, `orderMonths`, `orderMeta`,
+`paymentProvider`, `currency`, `slugs`, `tenantsSlug`, `siteUtcOffsetMinutes`.
+
+- **`plans`** writes nothing. The plans are seeded (`apps/cms/src/seed/vwok-plans.ts`); this compares each
+  published `pricing-plan` post with the seeded plan of the same `legacyId` (price, relist price = price,
+  duration, pack size). A difference or a missing plan is a failure that names it. Unpublished plans are skipped.
+- **`coupons`** imports the `discount_coupon` posts that have not expired (LINKPS stays; 19 Nov decision).
+  Flat amounts are minor units, percentages whole numbers, `use_limit` 0 is unlimited. The use count is
+  written when the coupon is created and never again, so a re-run cannot lower what the live site counted.
+- **`orders`** imports `transaction` posts of the last 24 months. `tr_pending` → `invoiced`, `tr_activated` /
+  `tr_completed` → `paid` (paid date = the post's last modified), `tr_failed` → `failed`; anything else is
+  skipped. Money is whole minor units, no tax (an order with a `tax_charge` fails rather than losing it).
+  The order belongs to the organisation of the job it paid for (P2P `order-connection`), else of the buyer;
+  the plan is the connected `pricing-plan`; `_xero_invoice_id` becomes an external reference (provider `xero`).
+  What the order was sold for is written once, at creation. PayPal data and order logs are never read.
+- **`credits`** writes one `opening` ledger row per `_jr_user_pack-*` user meta with credits left, attached to
+  the buyer's organisation, no expiry, with the legacy reference `wp-user-pack:<user id>:<meta key>`. Rows are
+  matched by that reference (the ledger has no `legacyId` and is append-only), so a re-run adds nothing.
+- **Dry run report**: orders by month, by status and the total; coupons imported and expired with each use
+  count; opening credits per legacy organisation and in total.
+
+The legacy meta key names are in one place (`LEGACY_ORDER_META`, `PACK_META_PREFIX`) and follow AppThemes
+Payments and JobRoller. Confirm them with a dry run against the live copy: a row whose total or pack balance
+cannot be read is counted and named, never guessed.
