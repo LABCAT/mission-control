@@ -3,8 +3,10 @@
 import { writeFile } from 'node:fs/promises'
 
 import {
+  deleteOffboardedTenant,
   exportTenantData,
   formatOffboardingReport,
+  offboardingStoppedMessage,
   offboardTenant,
   parseOffboardingArgs,
 } from '@mission-control/payload-jobs'
@@ -55,10 +57,10 @@ try {
   for (const line of formatOffboardingReport(result)) console.log(line)
 
   if (result.errors.length > 0) {
-    console.error('Offboarding stopped. Nothing was deleted for the collections listed above.')
+    console.error(offboardingStoppedMessage(result))
   } else if (args.deleteTenant) {
     // No purge context: the accounting guards must still refuse if a row slipped through.
-    await payload.delete({ collection: 'tenants', id: tenant.id, overrideAccess: true })
+    await deleteOffboardedTenant({ actor: operator, payload, tenant: tenant.id })
     console.log(`Tenant ${args.tenant} deleted. Its users keep their accounts.`)
   } else if (!args.dryRun) {
     console.log(`Tenant ${args.tenant} is offboarded. Re-run with --delete-tenant to remove it.`)

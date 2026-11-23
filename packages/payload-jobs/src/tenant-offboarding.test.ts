@@ -6,6 +6,7 @@ import { DEFAULT_PAYLOAD_JOBS_SLUGS } from './slugs'
 import {
   accountingCollections,
   auditTenantDelete,
+  deleteOffboardedTenant,
   exportTenantData,
   offboardTenant,
   purgeContext,
@@ -176,6 +177,21 @@ describe('offboardTenant @S-271', () => {
       { docs: 3, slug: 'jobs' },
       { docs: 1, slug: 'organisations' },
     ])
+    expect(deleted).toEqual([])
+  })
+
+  it('plans a dry run the way the real run would end: accounting records block it @S-271', async () => {
+    const { deleted, payload } = fakePayload(configWith('jobs', slugs.orders), {
+      jobs: 1,
+      [slugs.orders]: 2,
+    })
+
+    const dry = await offboardTenant({ dryRun: true, payload, tenant: 7 })
+    const real = await offboardTenant({ payload, tenant: 7 })
+
+    expect(dry.removed).toEqual([])
+    expect(dry.errors.map(({ slug }) => slug)).toEqual([slugs.orders])
+    expect(dry).toEqual(real)
     expect(deleted).toEqual([])
   })
 
@@ -389,5 +405,25 @@ describe('offboarding audit entries @S-122', () => {
     await expect(offboardTenant({ actor: 'ops', payload, tenant: 7 })).resolves.toMatchObject({
       removed: [{ docs: 1, slug: 'jobs' }],
     })
+  })
+})
+
+describe('deleteOffboardedTenant @S-271', () => {
+  it('records who deleted the tenant when a CLI run has no request user', async () => {
+    const { audit, payload } = fakePayload(configWith('jobs'), {}, { auditLog: true })
+
+    await deleteOffboardedTenant({ actor: 'operator', payload, tenant: 7 })
+
+    expect(audit).toEqual([
+      expect.objectContaining({ action: 'tenant.delete', actorID: 'operator', tenantID: '7' }),
+    ])
+  })
+
+  it('leaves the entry to the delete hook when the request has a user', async () => {
+    const { audit, payload } = fakePayload(configWith('jobs'), {}, { auditLog: true })
+
+    await deleteOffboardedTenant({ actor: 'operator', payload, req: { user: { id: 3 } } as never, tenant: 7 })
+
+    expect(audit).toEqual([])
   })
 })

@@ -95,3 +95,12 @@ export const formatOffboardingReport = (result: TenantOffboardingResult): string
 
   return lines
 }
+
+/**
+ * What to tell the operator when a run reported errors: only claim nothing was deleted when
+ * nothing was, since offboarding carries on past a refused collection.
+ */
+export const offboardingStoppedMessage = (result: TenantOffboardingResult): string =>
+  result.removed.length > 0
+    ? `Offboarding stopped part-way. Already removed: ${listed(result.removed)}. The collections marked "refused" above were left as they were.`
+    : 'Offboarding stopped. Nothing was deleted.'

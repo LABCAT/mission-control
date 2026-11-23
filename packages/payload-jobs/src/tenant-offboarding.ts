@@ -356,17 +356,8 @@ export const offboardTenant = async ({
     slugs,
   )
 
-  if (dryRun) {
-    const bySlug = new Map(counts.map((count) => [count.slug, count.docs]))
-
-    return {
-      errors: [],
-      kept,
-      removed: removable.map((slug) => ({ docs: bySlug.get(slug) ?? 0, slug })),
-      tenant,
-    }
-  }
-
+  // Accounting records stop a real run, so they stop a dry run too: the plan must match what
+  // the real run would do, or an operator reads "would remove jobs" and nothing is removed.
   const blocking = kept.filter(({ slug }) => accounting.has(slug))
   if (blocking.length > 0) {
     return {
@@ -376,6 +367,17 @@ export const offboardTenant = async ({
       })),
       kept,
       removed: [],
+      tenant,
+    }
+  }
+
+  if (dryRun) {
+    const bySlug = new Map(counts.map((count) => [count.slug, count.docs]))
+
+    return {
+      errors: [],
+      kept,
+      removed: removable.map((slug) => ({ docs: bySlug.get(slug) ?? 0, slug })),
       tenant,
     }
   }
@@ -458,4 +460,35 @@ export const exportTenantData = async ({
   }
 
   return exported
+}
+
+/**
+ * Delete the tenant row after an offboarding run, and record it (S-122). A CLI run has no request
+ * user, so the `tenant.delete` hook cannot name anyone; the operator is recorded here instead.
+ * The accounting guards still apply: no purge context is passed.
+ */
+export const deleteOffboardedTenant = async ({
+  actor,
+  payload,
+  req,
+  tenant,
+  tenantsSlug = 'tenants',
+}: {
+  actor: number | string
+  payload: Payload
+  req?: Partial<PayloadRequest>
+  tenant: number | string
+  tenantsSlug?: string
+}): Promise<void> => {
+  await payload.delete({
+    collection: tenantsSlug as CollectionSlug,
+    id: tenant,
+    overrideAccess: true,
+    ...(req ? { req } : {}),
+  })
+
+  // A request with a user was already logged by the delete hook.
+  if (actorID(req) !== undefined) return
+
+  await writeTenantAuditEntry({ action: 'tenant.delete', actor, detail: {}, payload, req, tenant })
 }

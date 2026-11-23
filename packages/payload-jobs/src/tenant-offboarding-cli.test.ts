@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { formatOffboardingReport, OFFBOARDING_USAGE, parseOffboardingArgs } from './tenant-offboarding-cli'
+import {
+  formatOffboardingReport,
+  OFFBOARDING_USAGE,
+  offboardingStoppedMessage,
+  parseOffboardingArgs,
+} from './tenant-offboarding-cli'
 
 const failure = (argv: string[]): string => {
   try {
@@ -77,5 +82,27 @@ describe('formatOffboardingReport @S-271', () => {
     expect(
       formatOffboardingReport({ errors: [], kept: [], removed: [], tenant: 7 }),
     ).toEqual(['Tenant 7:', '  removed (or would remove): nothing', '  kept: nothing'])
+  })
+})
+
+describe('offboardingStoppedMessage @S-271', () => {
+  const refused = [{ message: 'nope', slug: 'jobs' }]
+
+  it('says nothing was deleted only when nothing was', () => {
+    expect(offboardingStoppedMessage({ errors: refused, kept: [], removed: [], tenant: 7 })).toBe(
+      'Offboarding stopped. Nothing was deleted.',
+    )
+  })
+
+  it('names what already went when a later collection was refused', () => {
+    const message = offboardingStoppedMessage({
+      errors: refused,
+      kept: [],
+      removed: [{ docs: 4, slug: 'pages' }],
+      tenant: 7,
+    })
+
+    expect(message).not.toMatch(/Nothing was deleted/)
+    expect(message).toMatch(/4 pages/)
   })
 })
