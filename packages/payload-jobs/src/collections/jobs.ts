@@ -566,11 +566,18 @@ export const jobOrganisationRules =
     return organisation?.name ? { ...data, companyName: organisation.name } : data
   }
 
-/** `views` only changes through the view counter (`JOB_VIEWS_CONTEXT`); a new job starts at 0. */
+/**
+ * `views` and `viewDays` only change through the view counter (`JOB_VIEWS_CONTEXT`); a new job
+ * starts at 0 with no day rows.
+ */
 export const protectJobViews: CollectionBeforeChangeHook = ({ context, data, operation, originalDoc }) => {
   if (context?.[JOB_VIEWS_CONTEXT] === true) return data
+
   const current = operation === 'update' ? (originalDoc?.views ?? 0) : 0
-  return data?.views === current ? data : { ...data, views: current }
+  const days = operation === 'update' ? (originalDoc?.viewDays ?? []) : []
+  const next = data?.views === current ? data : { ...data, views: current }
+
+  return data?.viewDays === days ? next : { ...next, viewDays: days }
 }
 
 export type JobsCollectionOptions = {
@@ -781,6 +788,22 @@ export const jobsCollection = ({
       defaultValue: 0,
       min: 0,
       admin: { position: 'sidebar', readOnly: true },
+    },
+    // Per-day visits, newest first (PJ-37). Only today's row is shown publicly; the report and
+    // /account stats read the rest. The view beacon keeps the list at a week.
+    {
+      name: 'viewDays',
+      type: 'array',
+      access: { read: privateRead },
+      admin: {
+        description: 'Views per day, newest first. Written by the view beacon.',
+        position: 'sidebar',
+        readOnly: true,
+      },
+      fields: [
+        { name: 'day', type: 'text', required: true },
+        { name: 'count', type: 'number', min: 0, required: true },
+      ],
     },
     {
       name: 'legacyId',

@@ -56,6 +56,8 @@ import { createPayloadJobsRegistry } from './plug-points/payload-jobs-registry'
 import { jobBoardAddOnsField } from './plug-points/tenant-field'
 import { jobBoardSettingsGlobal, jobBoardTenantFields } from './tenancy'
 import { withSiteManagerNav } from './admin/nav'
+import { siteSettingsEndpoint } from './site-settings'
+import { jobViewEndpoint, type JobViewOptions } from './views'
 
 export * from './access'
 export * from './admin'
@@ -89,10 +91,12 @@ export * from './rate-limit'
 export * from './seed/vanuatu'
 export * from './slugs'
 export * from './site-keys'
+export * from './site-settings'
 export * from './system-pages'
 export * from './tax'
 export * from './tax-settings'
 export * from './taxonomies'
+export * from './views'
 export * from './tenancy'
 
 export type TenancyMode = 'multi' | 'single'
@@ -219,6 +223,11 @@ export type PayloadJobsOptions = {
   documentsSlug?: null | string
   /** Slug of the host's upload collection for organisation logos and covers. Defaults to `media`. */
   mediaSlug?: null | string
+  /**
+   * Job page view counting (PJ-37). The beacon endpoint is always registered; pass the
+   * Cloudflare Rate Limiting binding so production limits per visitor, not per isolate.
+   */
+  jobViews?: JobViewOptions
   /** Slug of the auth collection that gets legacy WordPress password support. Defaults to `users`. */
   usersSlug?: string
   /** Slug of the tenant settings global in single-tenant mode. */
@@ -665,11 +674,20 @@ export const payloadJobs =
     }
     // Credits (PJ-24): a job cancelled before publishing gets its credit back, and documents the
     // ledger points at are kept.
-    const jobs = features.credits
+    const creditedJobs = features.credits
       ? withCreditLedger(lifecycleJobs, 'job', 'job', slugs.creditLedger, {
           afterChange: [refundCreditOnCancel({ slug: slugs.creditLedger })],
         })
       : lifecycleJobs
+    // The view beacon (PJ-37) lives on the jobs collection, so it is the same URL whoever hosts
+    // the site: POST /api/<jobs>/:id/view.
+    const jobs: CollectionConfig = {
+      ...creditedJobs,
+      endpoints: [
+        ...(Array.isArray(creditedJobs.endpoints) ? creditedJobs.endpoints : []),
+        jobViewEndpoint({ rateLimiter: options.jobViews?.rateLimiter, slugs }),
+      ],
+    }
     // Invoice-sync adapters hear about new orders and status changes (PJ-115, PJ-57).
     const eventOrders: CollectionConfig = {
       ...baseOrders,
@@ -698,6 +716,12 @@ export const payloadJobs =
 
     const jobBoardConfig: Config = {
       ...config,
+      // The tenant's public settings for its own site (PJ-37). It lives on the API root, not on
+      // the tenants collection: a site has no user, and the collection is readable by staff only.
+      endpoints: [
+        ...(Array.isArray(config.endpoints) ? config.endpoints : []),
+        siteSettingsEndpoint({ jobsSlug: slugs.jobs, tenantsSlug }),
+      ],
       // Plans before add-ons: Payload numbers compound index names in collection order, and
       // plans' existing `tenant_key_idx` must keep its name.
       // Applications and their files go after jobs: they relate to it, and the compound

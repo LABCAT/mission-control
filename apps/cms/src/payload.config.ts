@@ -51,6 +51,7 @@ const workerEnv =
     ? ((await import('cloudflare:workers')).env as {
         ACCOUNT_RATE_LIMIT?: RateLimiter // mission-control: account auth rate limit (PJ-81)
         HYPERDRIVE?: { connectionString: string }
+        JOB_VIEW_RATE_LIMIT?: RateLimiter // mission-control: job page view beacon (PJ-37)
         MEDIA?: R2Bucket // mission-control: R2 bucket `mission-control-media`
         // mission-control: Xero app and token key (PJ-55/57), Worker secrets. See .dev.vars.example.
         XERO_CLIENT_ID?: string
@@ -128,6 +129,8 @@ export default buildConfig({
     // binding in Workers, and fall back to an in-memory limiter in dev.
     payloadJobs({
       accountAuth: { rateLimiter: () => workerEnv?.ACCOUNT_RATE_LIMIT },
+      // mission-control: job page views (PJ-37) limit per visitor in Workers, per isolate in dev.
+      jobViews: { rateLimiter: () => workerEnv?.JOB_VIEW_RATE_LIMIT },
       // mission-control: one resolved slug set, shared with the multi-tenant plugin below, so a
       // renamed collection keeps its tenant scoping and site-key reads.
       collections: payloadJobsCollectionOptions,

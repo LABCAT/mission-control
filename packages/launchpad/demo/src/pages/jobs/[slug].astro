@@ -1,77 +1,33 @@
 ---
-import Container from '@labcat2020/rocketship/components/Container'
-import Grid from '@labcat2020/rocketship/components/Grid'
-import Stack from '@labcat2020/rocketship/components/Stack'
-import Typography from '@labcat2020/rocketship/components/Typography'
-
-import BaseLayout from '../../../../src/components/BaseLayout.astro'
-import JobCard from '../../../../src/components/JobCard.astro'
-import JobViewTracker from '../../../../src/components/JobViewTracker.astro'
-import { formatDate } from '../../../../src/tenant/date'
-import { formatMoney } from '../../../../src/tenant/money'
-import type { JobSummary } from '../../../../src/types'
-import { jobs, tenant } from '../../data'
+/**
+ * `/jobs/{slug}` in the demo: built from `loadJobDetail`, the same loader a site app calls, so
+ * the page exercises the real state rules (live, expired notice, 410 Gone) and the real mapping.
+ */
+import JobDetailPage from '../../../../src/components/JobDetailPage.astro'
+import { demoJobDetail } from '../../listing'
+import { detailJobs, tenant } from '../../data'
 
 export function getStaticPaths() {
-  return jobs.map((job) => ({
-    params: { slug: job.url.split('/').filter(Boolean).at(-1) ?? job.url },
-    props: { job },
-  }))
+  return detailJobs.map((job) => ({ params: { slug: job.slug } }))
 }
 
-type Props = { job: JobSummary }
+const slug = Astro.params.slug ?? ''
+const result = await demoJobDetail(slug)
 
-const { job } = Astro.props as Props
+// A 410 page is the site's own; the demo has no body for it beyond this marker.
+if (!result.found || result.status === 'gone') {
+  return new Response('Gone', { status: result.found ? 410 : 404 })
+}
 
-const jobId = String(job.id ?? job.url)
-const salary = job.salary
-  ? formatMoney(
-      { amountMinor: job.salary.amountMinor, currency: job.salary.currency },
-      { locale: 'en', minorUnits: job.salary.minorUnits ?? undefined },
-    )
-  : undefined
-const salaryLabel = salary && job.salary?.period ? `${salary} / ${job.salary.period}` : salary
-const closes = job.closes
-  ? formatDate(job.closes, { locale: 'en', timezone: tenant.timezone ?? undefined })
-  : undefined
-const related = jobs.filter((item) => item.url !== job.url).slice(0, 2)
+const siteUrl = new URL(Astro.request.url).origin
 ---
 
-<BaseLayout
-  description={job.summary ?? `${job.title} at ${job.organisation.name}`}
-  path={job.url}
-  siteUrl={new URL(Astro.request.url).origin}
+<JobDetailPage
+  applyHref={`/jobs/${encodeURIComponent(slug)}/apply`}
+  image={`${siteUrl}/og/jobs/${encodeURIComponent(slug)}.png`}
+  locale="en"
+  siteUrl={siteUrl}
   tenant={tenant}
-  title={`${job.title} | ${tenant.name}`}
->
-  <Container size="wide">
-    <Stack gap="large">
-      <JobViewTracker jobId={jobId} />
-
-      <Typography>
-        <h1>{job.title}</h1>
-        <p>{job.organisation.name}</p>
-        {job.summary && <p>{job.summary}</p>}
-      </Typography>
-
-      <ul>
-        {job.location && <li>{job.location}</li>}
-        {salaryLabel && <li>{salaryLabel}</li>}
-        {closes && <li>Closes {closes}</li>}
-      </ul>
-
-      <Typography>
-        <h2>More jobs</h2>
-      </Typography>
-      <Grid as="ul" columns={2}>
-        {
-          related.map((item) => (
-            <li>
-              <JobCard job={item} locale="en" timezone={tenant.timezone ?? undefined} />
-            </li>
-          ))
-        }
-      </Grid>
-    </Stack>
-  </Container>
-</BaseLayout>
+  view={result.view}
+  viewEndpoint="/api/jobs/view"
+/>

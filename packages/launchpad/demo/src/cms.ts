@@ -115,6 +115,10 @@ export const createDemoCms = (collections: DemoCollections) => ({
       localizeDoc(doc, options?.locale),
     ),
 
+  /** The first row with this slug. A demo has one locale, so no `locale` is applied here. */
+  findBySlug: async (collection: string, slug: string) =>
+    (collections[collection as keyof DemoCollections] ?? []).find((doc) => doc.slug === slug) ?? null,
+
   find: async (collection: string, options: DemoFindOptions = {}) => {
     const rows = sortRows(
       (collections[collection as keyof DemoCollections] ?? []).filter((doc) => matchesWhere(doc, options.where)),

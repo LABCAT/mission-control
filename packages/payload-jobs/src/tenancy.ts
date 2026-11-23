@@ -188,6 +188,44 @@ export const jobBoardTenantFields: Field[] = [
       description: 'Whether new jobs need an admin’s approval before they go live.',
     },
   },
+  // Expired jobs (PJ-37, decision 17). Default: the URL keeps resolving with a notice and
+  // similar jobs, then answers 410 after `expiredJobGoneAfterMonths`. `gone` matches the legacy
+  // site, which hid an expired job the moment it closed.
+  {
+    name: 'expiredJobMode',
+    type: 'select',
+    defaultValue: 'notice',
+    options: [
+      { label: 'Keep the page: notice, noindex, similar jobs, then 410', value: 'notice' },
+      { label: 'Gone as soon as it expires (legacy behaviour)', value: 'gone' },
+    ],
+    admin: {
+      condition: showForSiteTenant,
+      description: 'What a visitor sees on a job that has closed.',
+    },
+  },
+  {
+    name: 'expiredJobGoneAfterMonths',
+    type: 'number',
+    defaultValue: 12,
+    min: 0,
+    admin: {
+      condition: showForSiteTenant,
+      description:
+        'Months after an expiry before the page turns into 410 Gone. 0 keeps the notice page for ever.',
+    },
+  },
+  // Public view counter (PJ-37, decision 20 Nov). Generic default off; vwok turns it on.
+  {
+    name: 'publicJobViews',
+    type: 'checkbox',
+    defaultValue: false,
+    admin: {
+      condition: showForSiteTenant,
+      description:
+        'Show “N views” on a job page. The count comes from the view beacon after the page loads.',
+    },
+  },
   // Applying (PJ-25, decided 20 Nov). Generic default: guests may apply. vwok turns it on.
   {
     name: 'accountRequiredToApply',

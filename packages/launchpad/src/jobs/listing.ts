@@ -195,6 +195,18 @@ export const locationDescendantIDs = (
   return ids
 }
 
+/**
+ * The live-jobs query: published, and either with no expiry or an expiry still ahead. It is
+ * `liveJobsWhere` in `packages/payload-jobs`, restated here because the theme must not depend on
+ * the CMS plugin; the two must stay in step.
+ */
+export const liveJobsCmsWhere = (now: Date = new Date()): CmsWhere => ({
+  and: [
+    { status: { equals: 'published' } },
+    { or: [{ expiresAt: { greater_than: now.toISOString() } }, { expiresAt: { exists: false } }] },
+  ],
+})
+
 export type ListingWhereOptions = {
   facets: ListingFacets
   filters: FilterValues
@@ -212,10 +224,7 @@ export const listingWhere = ({
   filters,
   now = new Date(),
 }: ListingWhereOptions): CmsWhere => {
-  const and: CmsWhere[] = [
-    { status: { equals: 'published' } },
-    { or: [{ expiresAt: { greater_than: now.toISOString() } }, { expiresAt: { exists: false } }] },
-  ]
+  const and: CmsWhere[] = [...(liveJobsCmsWhere(now).and ?? [])]
 
   const keyword = filters.q?.trim()
   if (keyword) {

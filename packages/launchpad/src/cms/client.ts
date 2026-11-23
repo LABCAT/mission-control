@@ -111,6 +111,28 @@ export type CmsClient = {
     slug: K,
     query?: Pick<CmsQuery, 'depth' | 'draft' | 'locale' | 'select'>,
   ): Promise<CmsGlobal<K>>
+  /**
+   * This site's own settings (PJ-37), resolved from its key. `null` when the CMS has none, so a
+   * site falls back to its own branding instead of failing.
+   */
+  siteSettings(): Promise<CmsSiteSettings | null>
+}
+
+/** The public settings the plugin's `GET /api/site-settings` returns (PJ-37). */
+export type CmsSiteSettings = {
+  branding?: { colorAccent?: null | string; colorHover?: null | string; colorPrimary?: null | string } | null
+  currency?: string
+  currencyMinorUnits?: number
+  defaultLocale?: string
+  expiredJobGoneAfterMonths?: number
+  expiredJobMode?: string
+  /** Resolved jobs slug (PJ-80). */
+  jobsSlug?: string
+  locales?: { locale?: string }[]
+  name: string
+  publicJobViews?: boolean
+  slug: string
+  timezone?: string
 }
 
 /**
@@ -209,5 +231,6 @@ export const createCmsClient = (options: CmsClientOptions): CmsClient => {
       return result.docs[0] ?? null
     },
     global: (slug, query = {}) => required(`globals/${slug}`, queryParams(query)),
+    siteSettings: () => request<CmsSiteSettings>('site-settings'),
   }
 }
