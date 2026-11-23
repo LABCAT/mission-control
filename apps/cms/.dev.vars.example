@@ -15,6 +15,9 @@ PAYLOAD_SECRET=change-me-to-a-long-random-string
 # Optional: HMAC key for the OAuth state; defaults to PAYLOAD_SECRET.
 # XERO_STATE_SECRET=
 
+# Cache invalidation (PJ-41): no secret. The CMS and every site bind the SAME KV namespace as
+# `CONTENT_CACHE` (wrangler.jsonc). Locally wrangler simulates it; without it the hooks are no-ops.
+
 # Email safety (PJ-94). Redirect-all is ON unless ENVIRONMENT=production: every email goes to
 # EMAIL_REDIRECT_TO with the original recipients in the subject. With no inbox set, nothing is
 # delivered (console). In Cloudflare, set ENVIRONMENT=production on the production Worker only,

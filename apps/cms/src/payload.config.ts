@@ -51,6 +51,8 @@ const workerEnv =
   isWorkers
     ? ((await import('cloudflare:workers')).env as {
         ACCOUNT_RATE_LIMIT?: RateLimiter // mission-control: account auth rate limit (PJ-81)
+        // mission-control: tenant content versions for cache invalidation (PJ-41)
+        CONTENT_CACHE?: KVNamespace
         HYPERDRIVE?: { connectionString: string }
         // mission-control: email safety (PJ-94). Redirect is ON unless ENVIRONMENT is 'production'.
         ENVIRONMENT?: string
@@ -134,6 +136,10 @@ export default buildConfig({
     // binding in Workers, and fall back to an in-memory limiter in dev.
     payloadJobs({
       accountAuth: { rateLimiter: () => workerEnv?.ACCOUNT_RATE_LIMIT },
+      // mission-control: a content write bumps the tenant's KV content version, which every
+      // site's edge cache key includes (PJ-41). A getter: workerd forbids reading a binding at
+      // module scope. Without the binding (the Node CLI, a preview) the hooks are no-ops.
+      contentVersions: { store: () => workerEnv?.CONTENT_CACHE },
       // mission-control: personal data removal deletes the person's alert subscriptions, so it
       // needs the add-on's resolved slug (PJ-89).
       alertSubscriptionsSlug: ALERT_SUBSCRIPTIONS_SLUG,

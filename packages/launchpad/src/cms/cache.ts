@@ -7,8 +7,10 @@
  * (and expires on its own TTL). Entries also carry a `Cache-Tag` header, so a zone-level
  * purge by tag can be added later without changing callers.
  *
- * Limit: the Workers Cache API is per data centre. `purgeTags` only affects the colo that
- * runs it; cross-colo invalidation (PJ-41) needs a shared store or the zone purge API.
+ * Limit: the Workers Cache API is per data centre, so `purgeTags` only affects the colo that runs
+ * it. Global invalidation is the per-tenant content version in Cloudflare KV: it goes into the key
+ * of every page (see `tenant/cache-key.ts`), and the CMS bumps it on a write (PJ-41). `purgeTags`
+ * remains for the JSON reads within a colo, where a stale copy is harmless.
  */
 
 /** The slice of the Cache API used here; `caches.default` satisfies it. */
@@ -104,7 +106,13 @@ export const cached = async <T>(
  * The Cache API can store a `Response` whole, which is what a rendered page needs: the HTML
  * body and its headers. `cached` above stores JSON, so a page uses this instead.
  */
-export type CachedResponseOptions = Pick<CachedOptions, 'cache' | 'namespace' | 'tags'>
+export type CachedResponseOptions = Pick<CachedOptions, 'cache' | 'namespace' | 'tags'> & {
+  /**
+   * What a browser is told. The entry itself is stored for `ttl` (the edge copy), so a page can be
+   * held at the edge for days while the browser revalidates every minute; see `cms/headers.ts`.
+   */
+  browserCacheControl?: string
+}
 
 const responseRequest = (namespace: string, key: string, versions: readonly string[]): Request =>
   new Request(
@@ -112,6 +120,15 @@ const responseRequest = (namespace: string, key: string, versions: readonly stri
       .map(encodeURIComponent)
       .join(',')}`,
   )
+
+const withBrowserCache = (response: Response, browserCacheControl: string | undefined): Response => {
+  if (!browserCacheControl) return response
+
+  const headers = new Headers(response.headers)
+  headers.set('cache-control', browserCacheControl)
+
+  return new Response(response.body, { headers, status: response.status })
+}
 
 /**
  * Store a rendered page for `ttl` seconds under `key`, tagged for purging, and return it.
@@ -147,27 +164,30 @@ export const cachedResponse = async (
     )
 
     const hit = await cache.match(request)
-    if (hit) return hit
+    // A stored page carries the edge lifetime; a browser must get the short one even on a hit.
+    if (hit) return withBrowserCache(hit, options.browserCacheControl)
   } catch {
     // Unreadable entry: treat it as a miss.
   }
 
   const response = await render()
-  const refusable = /\bno-store\b/i.test(response.headers.get('cache-control') ?? '')
+  // A response that sets a cookie is for one visitor: never store it for everyone.
+  const refusable =
+    /\bno-store\b/i.test(response.headers.get('cache-control') ?? '') || response.headers.has('set-cookie')
   if (!request || response.status !== 200 || refusable) return response
 
   const body = await response.text()
-  const headers = new Headers(response.headers)
-  headers.set('cache-control', `public, max-age=${Math.floor(Math.min(ttl, MAX_TTL_SECONDS))}`)
-  if (tags.length > 0) headers.set('cache-tag', tags.join(','))
+  const stored = new Headers(response.headers)
+  stored.set('cache-control', `public, max-age=${Math.floor(Math.min(ttl, MAX_TTL_SECONDS))}`)
+  if (tags.length > 0) stored.set('cache-tag', tags.join(','))
 
   try {
-    await cache.put(request, new Response(body, { headers, status: 200 }))
+    await cache.put(request, new Response(body, { headers: stored, status: 200 }))
   } catch {
     // Storing is best effort.
   }
 
-  return new Response(body, { headers, status: 200 })
+  return withBrowserCache(new Response(body, { headers: stored, status: 200 }), options.browserCacheControl)
 }
 
 /** Invalidate every entry stored with any of these tags (in this colo; see the file note). */

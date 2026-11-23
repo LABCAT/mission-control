@@ -5,5 +5,10 @@
   "name": "mc-vwok",
   "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
+  // Per-tenant content versions (PJ-41). This must be the SAME namespace the CMS writes to
+  // (`CONTENT_CACHE` in apps/cms/wrangler.jsonc): after the CMS first deploys, copy its namespace
+  // id here as `"id"`. Automatic provisioning would otherwise create a separate, empty namespace
+  // and the sites would never see a bump. Without the binding pages fall back to a 5 minute TTL.
+  "kv_namespaces": [{ "binding": "CONTENT_CACHE" }],
   "observability": { "enabled": true }
 }
