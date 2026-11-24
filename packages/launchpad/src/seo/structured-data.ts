@@ -325,13 +325,17 @@ export type OrganisationStructuredDataInput = {
 
 /**
  * An organisation page: the organisation itself, its live jobs as a list, and the trail. A
- * private organisation has no page at all, so there is nothing to describe.
+ * private organisation has no page at all, and a noindex one asks not to be indexed, so there
+ * is nothing to describe.
  */
 export const organisationStructuredData = ({
   profile,
   siteUrl,
   tenant,
 }: OrganisationStructuredDataInput): JsonLdNode | null => {
+  // A noindex organisation carries no structured data, like a noindex page or job (S-349).
+  if (profile.seoNoIndex === true) return null
+
   const path = `/organisations/${encodeURIComponent(profile.slug)}`
   const site = webSiteStructuredData({ name: tenant.name, siteUrl })
   const organisation = {

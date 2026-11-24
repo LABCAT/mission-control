@@ -318,6 +318,12 @@ describe('organisationStructuredData @S-346', () => {
     expect(organisation).toMatchObject({ url: 'https://santobakery.example/' })
   })
 
+  it('emits nothing for an organisation whose SEO tab says noindex @S-349', () => {
+    expect(
+      organisationStructuredData({ profile: { ...profile, seoNoIndex: true }, siteUrl: SITE, tenant }),
+    ).toBeNull()
+  })
+
   it('leaves the job list out when the organisation has no live jobs', () => {
     const data = organisationStructuredData({ profile: { ...profile, jobs: [] }, siteUrl: SITE, tenant })
     if (!data) throw new Error('expected structured data')

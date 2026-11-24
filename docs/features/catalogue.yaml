@@ -3434,6 +3434,9 @@ stories:
     mvp: true
     status: built
     tests:
+      - packages/launchpad/src/seo/structured-data.test.ts
+      - packages/launchpad/src/seo/serve.test.ts
+      - packages/launchpad/src/seo/llms-serve.test.ts
       - packages/payload-jobs/src/seo-fields.test.ts
       - packages/payload-jobs/src/collections/jobs.test.ts
       - packages/payload-jobs/src/collections/organisations.test.ts

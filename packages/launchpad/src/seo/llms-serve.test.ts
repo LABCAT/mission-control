@@ -94,6 +94,23 @@ describe('loadLlms @S-348', () => {
     expect(paths).toEqual(['/about'])
   })
 
+  it('leaves a noindex job and a noindex organisation out @S-349', async () => {
+    const { cms } = fakeCms({
+      jobs: [
+        { slug: 'head-chef', title: 'Head Chef' },
+        { seo: { noIndex: true }, slug: 'hidden-job', title: 'Hidden' },
+      ],
+      organisations: [
+        { name: 'Santo Bakery', slug: 'santo-bakery' },
+        { name: 'Hidden Org', seo: { noIndex: true }, slug: 'hidden-org' },
+      ],
+    })
+    const { jobs, organisations } = await loadLlms({ cms, now: NOW, tenant })
+
+    expect(jobs).toEqual([{ name: 'Head Chef', path: '/jobs/head-chef' }])
+    expect(organisations).toEqual([{ name: 'Santo Bakery', path: '/organisations/santo-bakery' }])
+  })
+
   it('honours renamed collection slugs from the plugin options', async () => {
     const { calls, cms } = fakeCms({ companies: docs.organisations })
     await loadLlms({

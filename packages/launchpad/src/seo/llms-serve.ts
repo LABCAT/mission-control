@@ -36,9 +36,13 @@ const DEFAULT_SLUGS: Required<LlmsSlugs> = {
   pages: 'pages',
 }
 
-type JobDoc = { slug?: null | string; title?: null | string }
-type OrganisationDoc = { name?: null | string; slug?: null | string }
+type NoIndexSeo = { seo?: null | { noIndex?: null | boolean } }
+type JobDoc = NoIndexSeo & { slug?: null | string; title?: null | string }
+type OrganisationDoc = NoIndexSeo & { name?: null | string; slug?: null | string }
 type PageDoc = ContentPage & { seo?: null | { noIndex?: null | boolean } }
+
+/** A job or organisation is listed unless its SEO tab says `noIndex` (S-349). */
+const isIndexable = (doc: NoIndexSeo): boolean => doc.seo?.noIndex !== true
 
 /** A page is listed unless its SEO tab says `noIndex`, or it is still a draft. */
 const isIndexablePage = (page: PageDoc): boolean =>
@@ -80,14 +84,14 @@ export const loadLlms = async ({
     cms.findAll(slugs.pages, { draft: false, locale, sort: 'title' }),
   ])
 
-  const jobs = (jobDocs as JobDoc[]).flatMap((job) => {
+  const jobs = (jobDocs as JobDoc[]).filter(isIndexable).flatMap((job) => {
     const slug = job.slug?.trim()
     const entry = slug ? link(job.title, `/jobs/${encodeURIComponent(slug)}`) : null
 
     return entry ? [entry] : []
   })
 
-  const organisations = (organisationDocs as OrganisationDoc[]).flatMap((organisation) => {
+  const organisations = (organisationDocs as OrganisationDoc[]).filter(isIndexable).flatMap((organisation) => {
     const slug = organisation.slug?.trim()
     const entry = slug ? link(organisation.name, `/organisations/${encodeURIComponent(slug)}`) : null
 
