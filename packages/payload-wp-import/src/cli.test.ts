@@ -6,9 +6,9 @@ import { createFakePayload, fakeReader, rowsImporter } from './test-utils'
 describe('parseArgs', () => {
   it('parses entity, tenant, flags and --flag=value', () => {
     expect(parseArgs(['terms', '--tenant', 'vwok', '--dry-run', '--limit=5'])).toEqual({
-      apply: false,
+      applyDeletions: false,
       dryRun: true,
-      prune: false,
+      refreshCredentials: false,
       entity: 'terms',
       limit: 5,
       tenant: 'vwok',

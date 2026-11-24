@@ -1,7 +1,7 @@
 import { MysqlReader } from './mysql-reader'
 import type {
   ImportContext,
-  ImportDeletion,
+  ImportRemoval,
   ImportFailure,
   ImportPayload,
   ImporterResult,
@@ -12,14 +12,16 @@ import type {
 export type RunImportOptions = {
   dryRun?: boolean
   importers: Importer[]
-  /** One line per deletion, before and after it happens. Default: silent. */
+  /** One line per removal found or applied. Default: silent. */
   log?: (line: string) => void
   payload: ImportPayload
   /**
-   * Delete documents of opted-in importers (`Importer.prune`) that were imported into this
-   * tenant but are no longer in the source. In a dry run they are only listed.
+   * Sync mode: report documents imported earlier whose legacy row is gone (importers with a
+   * `removal` policy only). Nothing is changed unless `applyRemovals` is also set.
    */
-  prune?: boolean
+  syncRemovals?: boolean
+  /** With `syncRemovals`: apply each importer's removal policy (unpublish/archive, never delete). */
+  applyRemovals?: boolean
   /** Apply `MappedDoc.refreshWhileSet` on re-runs. */
   refreshCredentials?: boolean
   /** Defaults to a reader configured from `WP_IMPORT_MYSQL_URL`. */
@@ -79,7 +81,7 @@ export const runImport = async (options: RunImportOptions): Promise<ImportSummar
   const ctx: ImportContext = { dryRun, payload, refreshCredentials: options.refreshCredentials ?? false, tenant }
   const log = options.log ?? (() => {})
   const summary: ImportSummary = {
-    deletions: [],
+    removals: [],
     dryRun,
     errors: [],
     importers: {},
@@ -110,8 +112,8 @@ export const runImport = async (options: RunImportOptions): Promise<ImportSummar
           await importRow(importer, row, ctx, tenantField, result, summary.errors, seen)
         }
         if (importer.report) result.report = importer.report()
-        if (options.prune && importer.prune) {
-          await pruneImporter({ ctx, importer, log, result, seen, summary, tenantField })
+        if (options.syncRemovals && importer.removal) {
+          await handleRemovals({ apply: options.applyRemovals ?? false, ctx, importer, log, result, seen, summary, tenantField })
         }
       } catch (error) {
         result.aborted = `read failed: ${messageOf(error)}`
@@ -125,23 +127,24 @@ export const runImport = async (options: RunImportOptions): Promise<ImportSummar
   return summary
 }
 
-const pruneRefusal = (importer: Importer, result: ImporterResult, seen: Set<number>): string | undefined => {
+const removalRefusal = (importer: Importer, result: ImporterResult, seen: Set<number>): string | undefined => {
   if (importer.findExisting) return 'the importer adopts existing documents, so it cannot tell which it created'
   if (importer.matchBy) return 'the importer has no legacyId'
   if (importer.tenantScope && importer.tenantScope.path !== 'tenant') return 'the importer does not scope by a plain tenant field'
   if (result.failed > 0) return `${result.failed} row(s) failed, so the source list is incomplete`
   if (result.skippedUnidentified) return `${result.skippedUnidentified} skipped row(s) gave no legacyId, so the source list is incomplete`
-  if (seen.size === 0) return 'the source returned no rows, which would delete everything'
+  if (seen.size === 0) return 'the source returned no rows, so every document would look removed'
   return undefined
 }
 
 /**
- * Delete (or, in a dry run, list) documents of `importer` that were imported into the run's
- * tenant but whose legacy row is gone. Scope: the importer's collection, the run's tenant, and
- * documents with a `legacyId`, so nothing created in the CMS is touched. Refused unless the
- * whole source was read cleanly.
+ * Find documents of `importer` that were imported into the run's tenant but whose legacy row is
+ * gone, report them, and (with `apply`, outside a dry run) apply the importer's `removal` policy.
+ * Scope: the importer's collection, the run's tenant, documents with a `legacyId` (nothing made in
+ * the CMS). Never a hard delete. Refused unless the whole source was read cleanly.
  */
-const pruneImporter = async (args: {
+const handleRemovals = async (args: {
+  apply: boolean
   ctx: ImportContext
   importer: Importer
   log: (line: string) => void
@@ -150,43 +153,44 @@ const pruneImporter = async (args: {
   summary: ImportSummary
   tenantField: string
 }): Promise<void> => {
-  const { ctx, importer, log, result, seen, summary, tenantField } = args
-  const refusal = pruneRefusal(importer, result, seen)
+  const { apply, ctx, importer, log, result, seen, summary, tenantField } = args
+  const refusal = removalRefusal(importer, result, seen)
   if (refusal) {
-    result.pruneRefused = refusal
-    log(`prune ${importer.name}: refused, ${refusal}`)
+    result.removalsRefused = refusal
+    log(`removals ${importer.name}: not checked, ${refusal}`)
     return
   }
-  if (!ctx.payload.delete) throw new Error('prune needs payload.delete')
 
   const { collection } = importer
-  const tenantPath = importer.tenantScope?.path ?? tenantField
   const found = await ctx.payload.find({
     collection,
     depth: 0,
     overrideAccess: true,
     pagination: false,
-    where: { and: [{ legacyId: { exists: true } }, { [tenantPath]: { equals: ctx.tenant } }] },
+    where: { and: [{ legacyId: { exists: true } }, { [tenantField]: { equals: ctx.tenant } }] },
   })
   for (const doc of found.docs) {
     const legacyId = doc.legacyId
     if (!Number.isInteger(legacyId) || seen.has(legacyId)) continue
-    // Belt and braces: the query is already scoped, but a delete must never cross tenants.
-    const owner = doc[tenantPath]
+    // Belt and braces: the query is already scoped, but a change must never cross tenants.
+    const owner = doc[tenantField]
     if (String(owner?.id ?? owner) !== String(ctx.tenant)) continue
+    const action = importer.removal!(doc)
+    if (!action) continue // already off the site
 
-    const deletion: ImportDeletion = { applied: false, collection, id: doc.id, importer: importer.name, legacyId }
-    summary.deletions.push(deletion)
-    if (ctx.dryRun) {
-      log(`would delete ${collection} legacyId ${legacyId} (id ${doc.id})`)
+    const removal: ImportRemoval = { action, applied: false, collection, id: doc.id, importer: importer.name, legacyId }
+    summary.removals.push(removal)
+    const label = `${collection} legacyId ${legacyId} (id ${doc.id}): ${JSON.stringify(action)}`
+    if (!apply || ctx.dryRun) {
+      log(`removed from legacy, ${apply ? 'would change' : 'no change made'}: ${label}`)
       continue
     }
     try {
-      await ctx.payload.delete({ collection, id: doc.id, overrideAccess: true })
-      deletion.applied = true
-      log(`deleted ${collection} legacyId ${legacyId} (id ${doc.id})`)
+      await ctx.payload.update({ collection, data: action, id: doc.id, overrideAccess: true })
+      removal.applied = true
+      log(`removed from legacy, changed: ${label}`)
     } catch (error) {
-      summary.errors.push({ importer: importer.name, legacyId, message: `delete failed: ${messageOf(error)}` })
+      summary.errors.push({ importer: importer.name, legacyId, message: `removal failed: ${messageOf(error)}` })
     }
   }
 }

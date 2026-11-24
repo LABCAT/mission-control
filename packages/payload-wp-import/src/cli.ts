@@ -4,16 +4,16 @@ import type { ImportPayload, Importer, ImportSummary } from './types'
 
 export const USAGE =
   'Usage: pnpm wp-import <entity|all> --tenant <slug> [--dry-run] [--limit N]\n' +
-  '       pnpm wp-import sync --tenant <slug> [--apply] [--prune]   (dry run unless --apply)'
+  '       pnpm wp-import sync --tenant <slug> [--dry-run] [--refresh-credentials] [--apply-deletions]'
 
 export type CliArgs = {
-  /** `sync` only: write for real. */
-  apply: boolean
+  /** `sync` only: apply each importer's removal policy (unpublish/archive) to documents gone from the legacy site. */
+  applyDeletions: boolean
   dryRun: boolean
   entity: string
   limit?: number
-  /** `sync` only: also delete imported documents that left the source. */
-  prune: boolean
+  /** `sync` only: refresh the legacy password hash of users who have not signed in yet. */
+  refreshCredentials: boolean
   tenant: string
 }
 
@@ -22,8 +22,8 @@ export const parseArgs = (argv: string[]): CliArgs => {
   let tenant: string | undefined
   let limit: number | undefined
   let dryRun = false
-  let apply = false
-  let prune = false
+  let applyDeletions = false
+  let refreshCredentials = false
   const positional: string[] = []
 
   for (let i = 0; i < argv.length; i++) {
@@ -41,8 +41,8 @@ export const parseArgs = (argv: string[]): CliArgs => {
       limit = Number(raw)
       if (!Number.isInteger(limit) || limit < 1) throw new Error(`--limit must be a positive integer, got "${raw}"`)
     } else if (flag === '--dry-run') dryRun = true
-    else if (flag === '--apply') apply = true
-    else if (flag === '--prune') prune = true
+    else if (flag === '--apply-deletions') applyDeletions = true
+    else if (flag === '--refresh-credentials') refreshCredentials = true
     else if (arg.startsWith('--')) throw new Error(`Unknown option ${flag}`)
     else positional.push(arg)
   }
@@ -50,13 +50,13 @@ export const parseArgs = (argv: string[]): CliArgs => {
   if (positional.length !== 1) throw new Error('Give exactly one entity (or "all")')
   if (!tenant) throw new Error('--tenant <slug> is required')
   const entity = positional[0]!
-  if (entity !== 'sync' && (apply || prune)) throw new Error('--apply and --prune are only for sync')
-  if (entity === 'sync') {
-    if (apply && dryRun) throw new Error('--apply and --dry-run contradict each other')
-    if (limit) throw new Error('--limit cannot be used with sync: a partial read must never drive deletions')
-    dryRun = !apply
+  if (entity !== 'sync' && (applyDeletions || refreshCredentials)) {
+    throw new Error('--apply-deletions and --refresh-credentials are only for sync')
   }
-  return { apply, dryRun, entity, limit, prune, tenant }
+  if (entity === 'sync' && limit) {
+    throw new Error('--limit cannot be used with sync: a partial read must never drive removals')
+  }
+  return { applyDeletions, dryRun, entity, limit, refreshCredentials, tenant }
 }
 
 /** Check the registry as a whole: names match keys and every dependency is registered. */
@@ -142,14 +142,15 @@ export const formatSummary = (summary: ImportSummary): string => {
   }
   for (const [name, result] of Object.entries(summary.importers)) {
     if (result.refreshed) lines.push(`  ${name}: refreshed credentials for ${result.refreshed}`)
-    if (result.pruneRefused) lines.push(`  ${name}: deletions refused, ${result.pruneRefused}`)
+    if (result.removalsRefused) lines.push(`  ${name}: removals not checked, ${result.removalsRefused}`)
   }
-  if (summary.deletions.length) {
-    lines.push(`${summary.dryRun ? 'Would delete' : 'Deleted'} (${summary.deletions.length}):`)
-    for (const d of summary.deletions.slice(0, 50)) {
-      lines.push(`  ${d.collection} legacyId ${d.legacyId} (id ${d.id})${d.applied || summary.dryRun ? '' : ' - FAILED'}`)
+  if (summary.removals.length) {
+    const applied = summary.removals.filter((r) => r.applied).length
+    lines.push(`Gone from the legacy site (${summary.removals.length}, ${applied} changed):`)
+    for (const r of summary.removals.slice(0, 50)) {
+      lines.push(`  ${r.collection} legacyId ${r.legacyId} (id ${r.id}): ${JSON.stringify(r.action)}${r.applied ? ' [changed]' : ''}`)
     }
-    if (summary.deletions.length > 50) lines.push(`  …and ${summary.deletions.length - 50} more`)
+    if (summary.removals.length > 50) lines.push(`  …and ${summary.removals.length - 50} more`)
   }
   if (summary.errors.length) {
     lines.push(`Errors (${summary.errors.length}):`)
@@ -183,10 +184,11 @@ export const runCli = async (options: RunCliOptions): Promise<number> => {
     const summary = await runImport({
       dryRun: args.dryRun,
       importers,
+      applyRemovals: sync && args.applyDeletions,
       log: sync ? log : undefined,
       payload: options.payload,
-      prune: sync && args.prune,
-      refreshCredentials: sync,
+      refreshCredentials: sync && args.refreshCredentials,
+      syncRemovals: sync,
       reader: options.reader,
       tenant,
     })

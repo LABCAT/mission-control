@@ -30,8 +30,6 @@ export type ImportPayload = {
     pagination?: boolean
     where?: any
   }) => Promise<{ docs: ({ id: number | string } & Record<string, any>)[] }>
-  /** Needed only by a sync run with `prune`. Real `payload.delete` satisfies it. */
-  delete?: (args: { collection: any; id: number | string; overrideAccess?: boolean }) => Promise<unknown>
   update: (args: {
     collection: any
     /** Request context for the collection's hooks (see `MappedDoc.updateContext`). */
@@ -96,7 +94,7 @@ export type SkippedRow = {
   legacyId?: number
   /**
    * With `legacyId`: the row is skipped for a data problem, not because it left the site, so a
-   * document an earlier run imported for it must stay. Without it, that document may be pruned.
+   * document an earlier run imported for it must stay. Without it, that document may be taken off the site.
    */
   keep?: boolean
   skip: string
@@ -117,11 +115,13 @@ export type Importer<Row = any> = {
   /** Names of importers that must run first. */
   dependsOn: string[]
   /**
-   * Sync only. Documents of this importer that carry a `legacyId` in the run's tenant, but whose
-   * row is no longer in the source, may be deleted (`prune`). Off by default; never for an
-   * importer that adopts existing documents (`findExisting`) or has no `legacyId` (`matchBy`).
+   * Sync only. Policy for documents of this importer that carry a `legacyId` in the run's tenant
+   * but whose row is no longer in the source. Returns the update that takes the document off the
+   * site (unpublish / archive), or `undefined` when it already is. Documents are never hard-deleted.
+   * No policy, no removal handling: orders, ledgers and users have none. Not allowed on an importer
+   * that adopts existing documents (`findExisting`) or has no `legacyId` (`matchBy`).
    */
-  prune?: boolean
+  removal?: (doc: Record<string, any>) => Record<string, unknown> | undefined
   /**
    * Map one row. Return `null` to skip it, or `{ skip: reason }` to skip it and count the reason.
    * Throwing records a failure for this row only.
@@ -163,8 +163,10 @@ export type ImportFailure = {
   message: string
 }
 
-export type ImportDeletion = {
-  /** False in a dry run, or when the delete failed. */
+export type ImportRemoval = {
+  /** The update applied (or that would be). */
+  action: Record<string, unknown>
+  /** False when only reported: no `--apply-deletions`, a dry run, or the update failed. */
   applied: boolean
   collection: string
   id: number | string
@@ -173,8 +175,8 @@ export type ImportDeletion = {
 }
 
 export type ImporterResult = ImportCounts & {
-  /** Why nothing was deleted although pruning was on. */
-  pruneRefused?: string
+  /** Why removals of this importer were not looked at (incomplete source read). */
+  removalsRefused?: string
   /** Documents whose `refreshWhileSet` fields changed (counted in a dry run too). */
   refreshed?: number
   /** Extra counts the importer reports about its source data. */
@@ -188,8 +190,8 @@ export type ImporterResult = ImportCounts & {
 }
 
 export type ImportSummary = {
-  /** Documents deleted by a sync with `prune` (or, in a dry run, that would be). */
-  deletions: ImportDeletion[]
+  /** Sync: documents whose legacy row is gone, and what was (or would be) done to them. */
+  removals: ImportRemoval[]
   dryRun: boolean
   errors: ImportFailure[]
   /** Importers in the order they ran (or were attempted). */

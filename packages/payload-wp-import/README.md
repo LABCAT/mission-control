@@ -260,17 +260,26 @@ cannot be read is counted and named, never guessed.
 
 ## Sync mode (PJ-121)
 
-`pnpm wp-import sync --tenant <slug>` runs every importer in order and is a **dry run unless
-`--apply` is given**. It is for re-syncing a tenant while the legacy site is still live.
+`pnpm wp-import sync --tenant <slug> [--dry-run] [--refresh-credentials] [--apply-deletions]` runs
+every importer in dependency order and prints a summary, to keep a tenant current while the legacy
+site is live. A second run creates nothing: it updates or skips.
 
-- **Credential refresh.** A user's WordPress password hash follows the legacy site until the user
-  signs in (which clears it). It is never brought back afterwards, and an empty hash never blanks
-  a stored one. Normal (non-sync) runs leave credentials alone.
-- **Deletions need `--prune`** (and `--apply` to take effect; without `--apply` they are only
-  listed). They are limited to the run's tenant, to documents with a `legacyId` (so nothing made
-  in the CMS), and to importers that opt in with `prune: true` (today: `jobs`). Each deletion is
-  logged. Nothing is deleted for an importer whose read was incomplete: no rows, a failed row, a
-  skipped row without a `legacyId`, or an aborted read. `--limit` is refused with `sync`.
-- A skipped row can return `{ skip, legacyId }` (its document is then pruned like a removed row) or
-  `{ skip, legacyId, keep: true }` (data problem: an earlier import stays).
-- Media is a separate command (`wp-import-media`, needs the uploads directory) and is not part of `sync`.
+- **Re-runs overwrite.** Fields an importer maps are rewritten on every run, so edits made to
+  imported documents in the new site are lost. Sync is for the pre-launch period only. Create-only
+  fields (written once, never refreshed): a user's `email`, `role`, `tenants`, organisation and
+  organisation role, verified flag and login attempts, and the legacy password hash (see below); a
+  coupon's use count; a job's featured `placements`. Ledger-style collections (`matchBy`) are
+  never updated.
+- **Removals are reported, never applied by default.** Imported documents (with a `legacyId`, in
+  the run's tenant) whose legacy row is gone or trashed are listed. With `--apply-deletions`, an
+  importer's `removal` policy runs (`jobs`: status becomes `cancelled`). Nothing is hard-deleted,
+  and orders, the credit ledger and users have no policy, so they are never touched. Nothing is
+  checked for an importer whose read was incomplete (no rows, a failed row, a skipped row without a
+  `legacyId`, an aborted read). A skipped row can return `{ skip, legacyId }` (its earlier import is
+  treated as removed) or `{ skip, legacyId, keep: true }` (data problem, the earlier import stays).
+- **`--refresh-credentials`** replaces a user's legacy password hash while the user has not signed
+  in (signing in clears it). It is never brought back afterwards, and an empty hash never blanks a
+  stored one.
+- `--limit` is refused with `sync`. Logs carry collection, ids and the change only, no personal data.
+- **Not included yet:** media (`wp-import-media` needs the uploads directory) and role/organisation
+  change reporting for users.

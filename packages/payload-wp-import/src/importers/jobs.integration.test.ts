@@ -44,7 +44,7 @@ describe('jobs import against Payload @S-155', () => {
     await harness?.destroy()
   })
 
-  const doImport = async (dryRun: boolean, sync: { prune?: boolean } = {}) => {
+  const doImport = async (dryRun: boolean, sync: { apply?: boolean } = {}) => {
     const planProvider = createPlanProvider({ now: () => NOW })
     const { jobOrganisations, jobs } = jobsImporters({ now: () => NOW, planProvider })
     const reader = new MysqlReader({ connect: async () => createFixtureConnection(jobTables), pageSize: 4 })
@@ -52,7 +52,8 @@ describe('jobs import against Payload @S-155', () => {
       dryRun,
       importers: [...taxonomyImporters(), { ...jobOrganisations, dependsOn: [] }, { ...jobs, dependsOn: ['job-organisations', 'job-categories', 'job-types', 'salary-bands'] }],
       payload: harness.payload as never,
-      prune: sync.prune,
+      applyRemovals: sync.apply,
+      syncRemovals: true,
       reader,
       tenant: harness.tenantA.id,
     })
@@ -114,23 +115,26 @@ describe('jobs import against Payload @S-155', () => {
     expect(total.totalDocs).toBe(5)
   }, 120_000)
 
-  it('a sync deletes only the imported job that left the legacy site, in its own tenant @S-330', async () => {
+  it('a sync cancels, never deletes, the imported job that left the legacy site @S-330', async () => {
     const { payload, tenantA } = harness
     const jobWhere = (legacyId: number) => ({ and: [{ legacyId: { equals: legacyId } }, { tenant: { equals: tenantA.id } }] }) as never
     // Job 1001 is renumbered to an id the legacy site no longer has: as if it had been trashed there.
     const [gone] = (await payload.find({ collection: 'jobs', depth: 0, limit: 1, where: jobWhere(1001), ...system })).docs
     await payload.db.updateOne({ collection: 'jobs', data: { legacyId: 9999, slug: 'trashed-on-legacy' }, where: { id: { equals: gone!.id } } } as never)
 
-    const dry = await doImport(true, { prune: true })
-    expect(dry.deletions).toEqual([expect.objectContaining({ applied: false, legacyId: 9999 })])
-    expect((await payload.count({ collection: 'jobs', where: jobWhere(9999), ...system })).totalDocs).toBe(1)
+    const report = await doImport(false)
+    expect(report.errors).toEqual([])
+    expect(report.removals).toEqual([expect.objectContaining({ applied: false, legacyId: 9999 })])
+    expect((await payload.findByID({ collection: 'jobs', id: gone!.id, depth: 0, ...system })).status).toBe('published')
 
-    const real = await doImport(false, { prune: true })
+    const real = await doImport(false, { apply: true })
     expect(real.errors).toEqual([])
-    expect(real.deletions).toEqual([expect.objectContaining({ applied: true, legacyId: 9999 })])
-    expect((await payload.count({ collection: 'jobs', where: jobWhere(9999), ...system })).totalDocs).toBe(0)
-    // The same run re-created 1001 from the source; the other tenant has no jobs to lose.
-    expect((await payload.count({ collection: 'jobs', where: { tenant: { equals: tenantA.id } }, ...system })).totalDocs).toBe(5)
+    expect(real.removals).toEqual([expect.objectContaining({ applied: true, legacyId: 9999 })])
+    const after = await payload.findByID({ collection: 'jobs', id: gone!.id, depth: 0, ...system })
+    expect(after.status).toBe('cancelled')
+
+    // Already off the site: the next sync has nothing to do. The other tenant is untouched.
+    expect((await doImport(false, { apply: true })).removals).toEqual([])
     expect((await payload.count({ collection: 'jobs', where: { tenant: { equals: harness.tenantB.id } }, ...system })).totalDocs).toBe(0)
   }, 120_000)
 })
