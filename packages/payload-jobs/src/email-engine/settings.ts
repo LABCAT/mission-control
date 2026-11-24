@@ -1,3 +1,11 @@
+import {
+  BoldFeature,
+  ItalicFeature,
+  lexicalEditor,
+  LinkFeature,
+  ParagraphFeature,
+  UnderlineFeature,
+} from '@payloadcms/richtext-lexical'
 import type { Field } from 'payload'
 
 import {
@@ -50,6 +58,10 @@ export const tenantEmailFields = (condition?: (data: Record<string, unknown>) =>
       {
         name: 'footer',
         type: 'richText',
+        // Its own small editor: a tenant field cannot rely on the host having a default one.
+        editor: lexicalEditor({
+          features: () => [ParagraphFeature(), BoldFeature(), ItalicFeature(), UnderlineFeature(), LinkFeature()],
+        }),
         admin: { description: 'Shown at the bottom of every email: address, unsubscribe note and so on.' },
       },
     ],

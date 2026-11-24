@@ -62,6 +62,17 @@ export type SupportedTimezones =
   | 'Pacific/Fiji';
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "LexicalNodes_FD1CD0FA".
+ */
+export type LexicalNodes_FD1CD0FA =
+  | SerializedTextNode
+  | SerializedTabNode
+  | SerializedLineBreakNode
+  | SerializedParagraphNode<LexicalNodes_FD1CD0FA>
+  | SerializedAutoLinkNode<LexicalNodes_FD1CD0FA, LexicalLinkFields>
+  | SerializedLinkNode<LexicalNodes_FD1CD0FA, LexicalLinkFields>;
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "LexicalNodes_F1CAA341".
  */
 export type LexicalNodes_F1CAA341 =
@@ -615,7 +626,7 @@ export interface Tenant {
     /**
      * Shown at the bottom of every email: address, unsubscribe note and so on.
      */
-    footer?: LexicalRichText<LexicalNodes_F1CAA341> | null;
+    footer?: LexicalRichText<LexicalNodes_FD1CD0FA> | null;
   };
   /**
    * The email log keeps no message text. Recipient addresses are masked, then rows deleted, by the nightly job.
@@ -4346,6 +4357,39 @@ export interface SerializedParagraphNode<TChildren> extends SerializedLexicalEle
   textStyle: string;
 }
 
+export interface LexicalLinkFields {
+  [k: string]: unknown;
+  doc?: {
+    relationTo: string;
+    value: Config['db']['defaultIDType'] | { [k: string]: unknown; id: Config['db']['defaultIDType'] };
+  } | null;
+  linkType: 'custom' | 'internal';
+  newTab: boolean;
+  url?: string;
+}
+export interface SerializedLinkNode<TChildren, TFields = LexicalLinkFields> extends SerializedLexicalElementBase<TChildren> {
+  type: 'link';
+  fields: TFields;
+  id?: string;
+}
+export interface SerializedAutoLinkNode<TChildren, TFields = LexicalLinkFields> extends SerializedLexicalElementBase<TChildren> {
+  type: 'autolink';
+  fields: TFields;
+}
+
+/** Shape of a Lexical `richText` field. */
+export interface LexicalRichText<TNode> {
+  root: {
+    children: TNode[];
+    direction: LexicalElementDirection;
+    format: LexicalElementFormat;
+    indent: number;
+    type: 'root';
+    /** @deprecated Ignored when loading. Typed as required only to match Lexical's types: rich text sent through the API, CLI or MCP may not contain it. */
+    version: number;
+  };
+}
+
 export interface SerializedHorizontalRuleNode {
   type: 'horizontalrule';
   /** @deprecated Ignored when loading. Typed as required only to match Lexical's types: rich text sent through the API, CLI or MCP may not contain it. */
@@ -4382,26 +4426,6 @@ export type SerializedRelationshipNode<TSlugs extends keyof Config['collections'
   };
 }[TSlugs];
 
-export interface LexicalLinkFields {
-  [k: string]: unknown;
-  doc?: {
-    relationTo: string;
-    value: Config['db']['defaultIDType'] | { [k: string]: unknown; id: Config['db']['defaultIDType'] };
-  } | null;
-  linkType: 'custom' | 'internal';
-  newTab: boolean;
-  url?: string;
-}
-export interface SerializedLinkNode<TChildren, TFields = LexicalLinkFields> extends SerializedLexicalElementBase<TChildren> {
-  type: 'link';
-  fields: TFields;
-  id?: string;
-}
-export interface SerializedAutoLinkNode<TChildren, TFields = LexicalLinkFields> extends SerializedLexicalElementBase<TChildren> {
-  type: 'autolink';
-  fields: TFields;
-}
-
 export interface SerializedListNode<TChildren> extends SerializedLexicalElementBase<TChildren> {
   type: 'list';
   checked?: boolean;
@@ -4422,19 +4446,6 @@ export interface SerializedHeadingNode<
 > extends SerializedLexicalElementBase<TChildren> {
   type: 'heading';
   tag: TTag;
-}
-
-/** Shape of a Lexical `richText` field. */
-export interface LexicalRichText<TNode> {
-  root: {
-    children: TNode[];
-    direction: LexicalElementDirection;
-    format: LexicalElementFormat;
-    indent: number;
-    type: 'root';
-    /** @deprecated Ignored when loading. Typed as required only to match Lexical's types: rich text sent through the API, CLI or MCP may not contain it. */
-    version: number;
-  };
 }
 
 export type SerializedBlockNode<TFields extends { blockType: string }> = TFields extends unknown ? {
