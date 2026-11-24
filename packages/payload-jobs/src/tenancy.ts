@@ -8,6 +8,7 @@ import {
   MAX_FORM_RETENTION_DAYS,
 } from './forms'
 import { tenantLocationFields } from './location-settings'
+import { tenantRetentionField } from './retention'
 import { tenantTaxField } from './tax-settings'
 
 // Current ISO 4217 list one from SIX (the maintenance agency), fetched 2026-11-06.
@@ -196,6 +197,8 @@ export const jobBoardTenantFields: Field[] = [
       description: 'Whether new jobs need an admin’s approval before they go live.',
     },
   },
+  // How long personal data is kept after a job closes (PJ-88). Default: 12 months, as vwok did.
+  tenantRetentionField(showForSiteTenant),
   // Expired jobs (PJ-37, decision 17). Default: the URL keeps resolving with a notice and
   // similar jobs, then answers 410 after `expiredJobGoneAfterMonths`. `gone` matches the legacy
   // site, which hid an expired job the moment it closed.

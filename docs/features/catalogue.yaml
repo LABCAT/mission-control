@@ -3130,3 +3130,64 @@ stories:
     tests:
       - packages/launchpad/src/organisations/organisations.test.ts
       - packages/launchpad/src/components/PageView.test.ts
+
+  - id: S-300
+    area: Applications
+    role: site manager
+    story: "Applications and their CV files are deleted a set time after the job closes, so personal data is not kept longer than needed."
+    steps:
+      - "Set the tenant's application retention (default 12 months)."
+      - "Let the daily retention task run after a job has been closed for longer than that."
+    expected: "The task deletes the applications of jobs closed past the tenant's retention and their CV and cover-letter files, leaves newer and live jobs alone, and a second run deletes nothing."
+    settings:
+      - tenant.retention.applicationsMonths
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/retention.test.ts
+      - packages/payload-jobs/src/retention.storage.test.ts
+
+  - id: S-301
+    area: Applications
+    role: site manager
+    story: "The retention period starts when the job ended, not when its record was last touched."
+    steps:
+      - "Close a job early, then edit it later."
+      - "Cancel a job."
+    expected: "An expired job's clock starts at its expiry date, a cancelled job's at its cancellation, a live, draft or pending job never starts it, and a job is due exactly at the cutoff."
+    settings:
+      - tenant.retention.applicationsMonths
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/retention.test.ts
+
+  - id: S-302
+    area: Applications
+    role: site manager
+    story: "One tenant's retention setting and close dates never affect another tenant's applications."
+    steps:
+      - "Give two tenants different retention periods and jobs that closed on the same day."
+      - "Run the retention task."
+    expected: "Each tenant's applications are deleted by its own period only."
+    settings:
+      - tenant.retention.applicationsMonths
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/retention.test.ts
+
+  - id: S-303
+    area: Applications
+    role: site manager
+    story: "A tenant admin can delete one applicant's data on request."
+    steps:
+      - "Open an application in the admin and choose 'Delete applicant data'."
+    expected: "The application and the CV and cover-letter files no other application uses are deleted. Only super admins and the tenant's own admins may do it; employers and editors, and admins of other tenants, are refused and nothing is deleted."
+    settings: []
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/retention.test.ts
+      - packages/payload-jobs/src/retention.storage.test.ts
+      - packages/payload-jobs/src/admin/DeleteApplicantData.test.ts

@@ -58,6 +58,7 @@ import { resolvePaymentProviders, type PaymentProviderDefinition } from './payme
 import { expireJobPlacementsTask, PLACEMENTS_FIELD } from './placements'
 import { withPersonalDataRemoval } from './anonymise-user'
 import { seedTenantLegalPages } from './legal-pages'
+import { deleteExpiredApplicationsTask, withApplicationDataAction } from './retention'
 import { planCollection, withPlanRestrictionGuards } from './plans'
 import {
   DEFAULT_PAYLOAD_JOBS_SLUGS,
@@ -119,6 +120,7 @@ export * from './plans'
 export * from './plans-seed'
 export * from './pricing'
 export * from './rate-limit'
+export * from './retention'
 export * from './seed/vanuatu'
 export * from './slugs'
 export * from './site-keys'
@@ -861,6 +863,25 @@ const jobBoardPlugin =
           }
         : jobsConfig
 
+    // Retention (PJ-88): a daily task deletes applications and CV files once the job has been
+    // closed for the tenant's retention period.
+    const tasksWithRetention: Config['jobs'] = features.applications
+      ? {
+          ...jobsWithForms,
+          tasks: [
+            ...(jobsWithForms?.tasks ?? []),
+            deleteExpiredApplicationsTask({
+              applicationsSlug: APPLICATIONS_SLUG,
+              filesSlug: APPLICATION_FILES_SLUG,
+              jobsSlug: slugs.jobs,
+              settingsSlug,
+              tenancy,
+              tenantsSlug,
+            }),
+          ],
+        }
+      : jobsWithForms
+
     const jobBoardConfig: Config = {
       ...config,
       // The tenant's public settings for its own site (PJ-37). It lives on the API root, not on
@@ -898,12 +919,15 @@ const jobBoardPlugin =
                 organisationsSlug: slugs.organisations,
                 tenantScoped: tenancy === 'multi',
               }),
-              applicationsCollection({
-                applicantsSlug: usersSlug,
-                jobsSlug: slugs.jobs,
-                organisationsSlug: slugs.organisations,
-                tenantScoped: tenancy === 'multi',
-              }),
+              withApplicationDataAction(
+                applicationsCollection({
+                  applicantsSlug: usersSlug,
+                  jobsSlug: slugs.jobs,
+                  organisationsSlug: slugs.organisations,
+                  tenantScoped: tenancy === 'multi',
+                }),
+                { applicationsSlug: APPLICATIONS_SLUG, filesSlug: APPLICATION_FILES_SLUG },
+              ),
             ]
           : []),
         // Orders go last (PJ-23), so no existing compound index name shifts.
@@ -911,7 +935,7 @@ const jobBoardPlugin =
         // The credit ledger after orders (PJ-24), for the same reason.
         ...creditLedger,
       ],
-      jobs: jobsWithForms,
+      jobs: tasksWithRetention,
       custom: {
         ...config.custom,
         payloadJobs: {
