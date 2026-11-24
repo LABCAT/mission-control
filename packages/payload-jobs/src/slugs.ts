@@ -19,6 +19,8 @@ export type PayloadJobsCollectionKey =
   | 'addOns'
   | 'coupons'
   | 'creditLedger'
+  | 'emailLog'
+  | 'emailTemplates'
   | 'jobCategories'
   | 'jobs'
   | 'jobTypes'
@@ -47,6 +49,8 @@ export const DEFAULT_PAYLOAD_JOBS_SLUGS: PayloadJobsCollectionSlugs = {
   addOns: 'add-ons',
   coupons: 'coupons',
   creditLedger: 'credit-ledger',
+  emailLog: 'email-log',
+  emailTemplates: 'email-templates',
   jobCategories: 'job-categories',
   jobs: 'jobs',
   jobTypes: 'job-types',

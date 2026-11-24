@@ -81,6 +81,10 @@ export const multiTenantOptionsFor = (
       // mission-control: the credit ledger is private to the organisation and site managers, never
       // readable with a site key; seekers are denied (PJ-24).
       [slugs.creditLedger]: { accessResultOverride: privateToTenant },
+      // mission-control: email templates and the email log (PJ-50) are staff-only, never readable
+      // with a site key; seekers are denied.
+      [slugs.emailTemplates]: { accessResultOverride: privateToTenant },
+      [slugs.emailLog]: { accessResultOverride: privateToTenant },
       // mission-control: Xero settings and invoice records are billing data: tenant admins and
       // super admins only (their own access), never a site key; seekers are denied (PJ-57).
       ...Object.fromEntries(xeroSlugs.map((slug) => [slug, { accessResultOverride: privateToTenant }])),
