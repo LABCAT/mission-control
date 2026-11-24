@@ -36,6 +36,7 @@ import {
   type JobStatus,
 } from '../job-status'
 import { jobPlacementsField } from '../placements'
+import { seoFields, SEO_TAB_LABEL } from '../seo-fields'
 import { assertPlanAllowsJob, PricingError, type QuoteJob } from '../pricing'
 import { getSiteKeyHeader, resolveSiteKey } from '../site-keys'
 import { TAXONOMY_SLUG_PATTERN, uniqueSlugPerTenant } from '../taxonomies'
@@ -751,6 +752,9 @@ export const jobsCollection = ({
         // The PDF sits with the other attachments, away from the details a site manager edits
         // most often. Without a documents collection there is no tab.
         ...(jobDescriptionPdf ? [{ label: 'Files', fields: [jobDescriptionPdf] }] : []),
+        // The one SEO tab (PJ-104), the same group pages and organisations carry. The share image
+        // is generated per job (PJ-105), so this tab has no upload.
+        { label: SEO_TAB_LABEL, fields: [seoFields()] },
       ],
     },
     {

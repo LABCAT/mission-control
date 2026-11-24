@@ -231,6 +231,19 @@ export const jobBoardTenantFields: Field[] = [
         'Show “N views” on a job page. The count comes from the view beacon after the page loads.',
     },
   },
+  // AI crawlers in robots.txt (PJ-104, decided 19 Nov). Default allow, which is vwok's legacy
+  // behaviour; Bot Fight Mode stays off either way, so a site that turns this off still answers
+  // a normal browser and a normal agent.
+  {
+    name: 'allowAiCrawlers',
+    type: 'checkbox',
+    defaultValue: true,
+    admin: {
+      condition: showForSiteTenant,
+      description:
+        'Let AI crawlers (GPTBot, ClaudeBot, PerplexityBot and the rest) read the public site in robots.txt.',
+    },
+  },
   // Applying (PJ-25, decided 20 Nov). Generic default: guests may apply. vwok turns it on.
   {
     name: 'accountRequiredToApply',

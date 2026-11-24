@@ -20,6 +20,8 @@ export type TenantLogo = {
 export type TenantDomain = string | { domain?: null | string }
 
 export type SiteTenant = {
+  /** The tenant's robots.txt switch for AI crawlers (PJ-104). Absent means allow. */
+  allowAiCrawlers?: null | boolean
   branding?: null | TenantBranding
   /** ISO 4217 code. Money everywhere is an integer amount of minor units plus this code. */
   currency?: null | string

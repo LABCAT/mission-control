@@ -425,12 +425,30 @@ const tabFieldNames = (documentsSlug: null | string) =>
   )
 
 describe('job edit view tabs @S-117', () => {
-  it('groups the editable fields into Details, Location, Apply and Files', () => {
-    expect(tabsOf('documents').map((tab) => tab.label)).toEqual(['Details', 'Location', 'Apply', 'Files'])
+  it('groups the editable fields into Details, Location, Apply, Files and SEO', () => {
+    expect(tabsOf('documents').map((tab) => tab.label)).toEqual([
+      'Details',
+      'Location',
+      'Apply',
+      'Files',
+      'SEO',
+    ])
   })
 
   it('leaves the Files tab out when the host has no documents collection', () => {
-    expect(tabsOf(null).map((tab) => tab.label)).toEqual(['Details', 'Location', 'Apply'])
+    // The SEO tab stays: it needs no upload, because a job's share image is generated (PJ-105).
+    expect(tabsOf(null).map((tab) => tab.label)).toEqual(['Details', 'Location', 'Apply', 'SEO'])
+  })
+
+  it('gives the job the same SEO overrides a page has, in one group @S-349', () => {
+    const seo = tabsOf('documents')
+      .flatMap((tab) => tab.fields)
+      .find((field) => 'name' in field && field.name === 'seo')
+
+    expect(seo).toMatchObject({ name: 'seo', type: 'group' })
+    expect(
+      ((seo as { fields: { name?: string }[] }).fields ?? []).map((field) => field.name),
+    ).toEqual(['title', 'description', 'noIndex'])
   })
 
   it('keeps every field it had before the tabs, including the sidebar ones', () => {

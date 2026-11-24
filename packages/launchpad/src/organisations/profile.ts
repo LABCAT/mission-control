@@ -30,6 +30,12 @@ export type OrganisationProfile = {
   location?: string
   logo?: MediaImage
   name: string
+  /** The SEO tab's meta description, when it sets one (PJ-104). */
+  seoDescription?: string
+  /** Present and true when the SEO tab asks search engines to skip the profile (PJ-104). */
+  seoNoIndex?: true
+  /** The SEO tab's browser title, when it sets one (PJ-104). */
+  seoTitle?: string
   sizeLabel?: string
   slug: string
   typeLabel?: string
@@ -107,6 +113,8 @@ export const loadOrganisationProfile = async ({
   const website = safeWebsite(doc.website)
   const sizeLabel = ORGANISATION_SIZE_OPTIONS.find((option) => option.value === doc.size)?.label
   const typeLabel = ORGANISATION_TYPE_OPTIONS.find((option) => option.value === doc.type)?.label
+  const seoDescription = doc.seo?.description?.trim()
+  const seoTitle = doc.seo?.title?.trim()
 
   return {
     kind: 'found',
@@ -117,6 +125,9 @@ export const loadOrganisationProfile = async ({
       ...(location ? { location } : {}),
       ...(logo ? { logo } : {}),
       name,
+      ...(seoDescription ? { seoDescription } : {}),
+      ...(doc.seo?.noIndex === true ? { seoNoIndex: true as const } : {}),
+      ...(seoTitle ? { seoTitle } : {}),
       ...(sizeLabel ? { sizeLabel } : {}),
       slug: doc.slug?.trim() || clean,
       ...(typeLabel ? { typeLabel } : {}),

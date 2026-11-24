@@ -58,6 +58,8 @@ export type OrganisationDoc = {
   location?: Populated<{ name?: null | string }>
   logo?: Populated<MediaImage>
   name?: null | string
+  /** The SEO tab's overrides (PJ-104). */
+  seo?: null | { description?: null | string; noIndex?: null | boolean; title?: null | string }
   size?: null | string
   slug?: null | string
   type?: null | string
@@ -70,6 +72,8 @@ export type OrganisationDoc = {
  */
 export const ORGANISATION_SELECT = {
   about: true,
+  // The SEO tab's overrides (PJ-104), so the page reads them with the profile.
+  seo: true,
   location: true,
   logo: true,
   name: true,

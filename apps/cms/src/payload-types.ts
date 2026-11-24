@@ -526,6 +526,10 @@ export interface Tenant {
    */
   publicJobViews?: boolean | null;
   /**
+   * Let AI crawlers (GPTBot, ClaudeBot, PerplexityBot and the rest) read the public site in robots.txt.
+   */
+  allowAiCrawlers?: boolean | null;
+  /**
    * When on, only signed-in accounts can apply to a job. Off: guests can apply with an email address.
    */
   accountRequiredToApply?: boolean | null;
@@ -690,6 +694,27 @@ export interface Organisation {
    * Xero contact for this organisation, used by invoice orders.
    */
   xeroContactCode?: string | null;
+  /**
+   * Overrides for the page metadata. Empty fields fall back to the title.
+   */
+  seo?: {
+    /**
+     * Browser tab and search result title.
+     */
+    title?: string | null;
+    /**
+     * Meta description, ideally 50 to 160 characters.
+     */
+    description?: string | null;
+    /**
+     * Open Graph image. Falls back to the site-wide default.
+     */
+    image?: (number | null) | Media;
+    /**
+     * Ask search engines not to index this page.
+     */
+    noIndex?: boolean | null;
+  };
   /**
    * WordPress user id of the legacy employer, for the import.
    */
@@ -1676,6 +1701,23 @@ export interface Job {
    * An optional PDF of the full job description.
    */
   jobDescriptionPdf?: (number | null) | Document;
+  /**
+   * Overrides for the page metadata. Empty fields fall back to the title.
+   */
+  seo?: {
+    /**
+     * Browser tab and search result title.
+     */
+    title?: string | null;
+    /**
+     * Meta description, ideally 50 to 160 characters.
+     */
+    description?: string | null;
+    /**
+     * Ask search engines not to index this page.
+     */
+    noIndex?: boolean | null;
+  };
   /**
    * Set at checkout.
    */
@@ -2867,6 +2909,7 @@ export interface TenantsSelect<T extends boolean = true> {
   expiredJobMode?: T;
   expiredJobGoneAfterMonths?: T;
   publicJobViews?: T;
+  allowAiCrawlers?: T;
   accountRequiredToApply?: T;
   organisationPagesNeedApproval?: T;
   emailFromName?: T;
@@ -2977,6 +3020,14 @@ export interface OrganisationsSelect<T extends boolean = true> {
   canPayByInvoice?: T;
   billingEmail?: T;
   xeroContactCode?: T;
+  seo?:
+    | T
+    | {
+        title?: T;
+        description?: T;
+        image?: T;
+        noIndex?: T;
+      };
   legacyId?: T;
   createdBy?: T;
   updatedBy?: T;
@@ -3185,6 +3236,13 @@ export interface JobsSelect<T extends boolean = true> {
   applyOnline?: T;
   applicationsRecipient?: T;
   jobDescriptionPdf?: T;
+  seo?:
+    | T
+    | {
+        title?: T;
+        description?: T;
+        noIndex?: T;
+      };
   plan?: T;
   order?: T;
   createdBy?: T;

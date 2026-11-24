@@ -126,6 +126,22 @@ describe('organisations collection config', () => {
     ])
   })
 
+  it('carries the one SEO tab as a collapsible group with an optional share image @S-349', () => {
+    const seo = fieldNamed('seo') as { fields: Field[]; type: string }
+    const names = seo.fields.map((field) => ('name' in field ? field.name : ''))
+
+    expect(seo.type).toBe('group')
+    expect(names).toEqual(['title', 'description', 'image', 'noIndex'])
+
+    // Without an upload collection there is no image to relate to, so the field goes.
+    const single = fieldNamed('seo', organisationsCollection({ mediaSlug: null })) as { fields: Field[] }
+    expect(single.fields.map((field) => ('name' in field ? field.name : ''))).toEqual([
+      'title',
+      'description',
+      'noIndex',
+    ])
+  })
+
   it('offers the legacy organisation types and size bands', () => {
     expect(fieldNamed('type')).toMatchObject({ type: 'select', options: organisationTypeOptions })
     expect(ORGANISATION_TYPES).toEqual([
