@@ -93,6 +93,23 @@ describe('share image route handler @S-250', () => {
     expect(second.headers.get('etag')).toBe(first.headers.get('etag'))
   })
 
+  it('regenerates when the job changes, over the same R2 object @S-257', async () => {
+    const before = await GET(request('jobs/head-chef.png'))
+    const key = [...bucket.objects.keys()].at(-1)!
+
+    const title = jobDoc.title
+    jobDoc.title = 'Sous Chef'
+    const after = await GET(request('jobs/head-chef.png'))
+    jobDoc.title = title
+
+    expect(after.headers.get('etag')).not.toBe(before.headers.get('etag'))
+    const beforeBytes = new Uint8Array(await before.arrayBuffer())
+    const afterBytes = new Uint8Array(await after.arrayBuffer())
+    expect(afterBytes).not.toEqual(beforeBytes)
+    // The version changed, the key did not: one object per page, overwritten.
+    expect([...bucket.objects.keys()].at(-1)).toBe(key)
+  })
+
   it('answers the home page PNG @S-254', async () => {
     const response = await GET(request('home.png'))
 
