@@ -38,15 +38,24 @@ const components: BlockComponentMap = {
 }
 
 const pathname = Astro.url.pathname
-const route = await pageRoute({
-  cms: cmsFromEnv(await siteEnv()),
-  pathname,
-  searchParams: Astro.url.searchParams,
-})
+// A retired legacy page (PJ-42) is a 410, and the middleware already said so by setting this.
+// Checking it first keeps a CMS page with a clashing slug from turning a "gone" into a 200.
+const legacyGone = Astro.locals.legacyGone === true
+const route: Awaited<ReturnType<typeof pageRoute>> = legacyGone
+  ? { kind: 'not-found', menus: [] }
+  : await pageRoute({
+      cms: cmsFromEnv(await siteEnv()),
+      pathname,
+      searchParams: Astro.url.searchParams,
+    })
 
 // An unknown path is a real 404: the status and the page agree, so a crawler and a visitor see
-// the same answer.
-if (route.kind === 'not-found') Astro.response.status = 404
+// the same answer. A retired legacy page is a 410 instead.
+if (route.kind === 'not-found') {
+  Astro.response.status = legacyGone ? 410 : 404
+  // A 404 could gain a page later, so it is not worth a shared cache.
+  Astro.response.headers.set('cache-control', 'no-store')
+}
 ---
 
 {
@@ -64,6 +73,6 @@ if (route.kind === 'not-found') Astro.response.status = 404
   ) : route.kind === 'shell' ? (
     <HomeShell />
   ) : (
-    <NotFoundPage menus={route.menus} path={pathname} />
+    <NotFoundPage gone={legacyGone} menus={route.menus} path={pathname} />
   )
 }
