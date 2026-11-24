@@ -24,6 +24,7 @@ import { ORGANISATION_DIRECTORY_BLOCK, organisationDirectoryBlock } from './bloc
 import { organisationsCollection, withOrganisationField } from './collections/organisations'
 import {
   creditLedgerCollection,
+  grantPackCreditsOnPaid,
   organisationHistoryEndpoint,
   refundCreditOnCancel,
   refuseDeleteWhileInCreditLedger,
@@ -95,6 +96,7 @@ export * from './blocks/organisation-directory'
 export * from './collections/pages'
 export * from './collections/site-settings'
 export * from './coupons'
+export * from './credit-settings'
 export * from './credits'
 export * from './email'
 export * from './forms'
@@ -810,6 +812,19 @@ const jobBoardPlugin =
       },
     }
     const orders = features.credits ? withCreditLedger(eventOrders, 'order', 'order', slugs.creditLedger) : eventOrders
+    // A paid order grants its pack's credits when the site grants them on payment (PJ-120).
+    const grantingOrders: CollectionConfig = features.credits
+      ? {
+          ...orders,
+          hooks: {
+            ...orders.hooks,
+            afterChange: [
+              ...(orders.hooks?.afterChange ?? []),
+              grantPackCreditsOnPaid({ slug: slugs.creditLedger, tenantScoped: tenancy === 'multi' }),
+            ],
+          },
+        }
+      : orders
     const creditLedger = features.credits
       ? [creditLedgerCollection({ access: collectionOptions.creditLedger?.access, slugs, tenantScoped: tenancy === 'multi', usersSlug })]
       : []
@@ -892,7 +907,7 @@ const jobBoardPlugin =
             ]
           : []),
         // Orders go last (PJ-23), so no existing compound index name shifts.
-        orders,
+        grantingOrders,
         // The credit ledger after orders (PJ-24), for the same reason.
         ...creditLedger,
       ],

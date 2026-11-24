@@ -510,6 +510,10 @@ export interface Tenant {
     exemptXeroTaxType?: string | null;
   };
   /**
+   * When a job pack’s credits become usable: once the order is paid (the old site’s rule), or as soon as it is invoiced.
+   */
+  packCreditsUsableAt?: ('on_payment' | 'on_invoice') | null;
+  /**
    * Whether new jobs need an admin’s approval before they go live.
    */
   jobModeration?: ('legacy' | 'review' | 'auto') | null;
@@ -2863,6 +2867,7 @@ export interface TenantsSelect<T extends boolean = true> {
         defaultRateKey?: T;
         exemptXeroTaxType?: T;
       };
+  packCreditsUsableAt?: T;
   jobModeration?: T;
   expiredJobMode?: T;
   expiredJobGoneAfterMonths?: T;

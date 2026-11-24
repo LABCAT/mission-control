@@ -2035,14 +2035,52 @@ stories:
     role: employer
     story: "Buying a job pack at checkout adds its credits to the ledger and uses one for the job."
     steps:
-      - "Check out a job with the 5 Job Pack plan."
-      - "Check out the next job with Use credits."
-    expected: "The ledger records 5 credits bought and 1 used against the pack's order, and the next job is paid with a credit."
+      - "Check out a job with the 5 Job Pack plan, on a site that grants pack credits when the order is paid."
+      - "Mark the order paid, then check out the next job with Use credits."
+    expected: "Once the pack's order is payable, the ledger records 5 credits bought and 1 used against that order, and the next job is paid with a credit."
     settings:
+      - billing.creditsExpire
+      - packCreditsUsableAt
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/checkout.integration.test.ts
+      - packages/payload-jobs/src/pack-credit-modes.integration.test.ts
+
+  - id: S-210
+    area: Commerce
+    role: site manager
+    story: "A site grants pack credits only when the pack's order is paid (the old site's rule, the default): until then the job bought with the pack follows its own payment rule, and a pack order cancelled or failed before payment grants nothing."
+    steps:
+      - "Leave the tenant's packCreditsUsableAt setting unset, and check out a job with the 5 Job Pack plan."
+      - "Mark the order paid; mark it paid again."
+      - "Check out another pack order and cancel it before it is paid."
+    expected: "An invoiced pack order grants no credits and the job waits on its own rules; paying the order grants the pack's 5 credits once and uses one for that job; a repeat payment grants nothing more; a cancelled order grants nothing."
+    settings:
+      - packCreditsUsableAt
       - billing.creditsExpire
     mvp: true
     status: built
     tests:
+      - packages/payload-jobs/src/pack-credit-modes.integration.test.ts
+      - packages/payload-jobs/src/checkout.integration.test.ts
+      - packages/payload-jobs/src/credit-settings.test.ts
+
+  - id: S-211
+    area: Commerce
+    role: site manager
+    story: "A site can choose to make pack credits usable as soon as the pack's order is invoiced, and each tenant keeps its own rule."
+    steps:
+      - "Set a tenant's packCreditsUsableAt to on_invoice and check out a job with a pack."
+      - "Check out the same way on another tenant that left it unset."
+    expected: "The invoiced pack order grants its 5 credits and uses one for the job straight away; paying it later adds nothing; a tenant that left the setting unset still grants nothing until payment, and neither tenant's ledger sees the other's rows."
+    settings:
+      - packCreditsUsableAt
+      - billing.creditsExpire
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/pack-credit-modes.integration.test.ts
       - packages/payload-jobs/src/checkout.integration.test.ts
 
   - id: S-118
