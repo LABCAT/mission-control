@@ -1,10 +1,19 @@
 /** What a legacy file is used for. Decides the target collection and the relation that is set. */
-export type MediaKind = 'cover' | 'job-pdf' | 'logo' | 'page-image'
+export type MediaKind =
+  | 'banner-desktop'
+  | 'banner-mobile'
+  | 'cover'
+  | 'job-pdf'
+  | 'logo'
+  | 'page-image'
 
 /** The imported record that owns a file. Looked up by `legacyId` and tenant. */
 export type MediaOwner = {
-  collection: 'jobs' | 'organisations' | 'pages'
-  /** WordPress id: the owner user's id for an organisation, the post id for a job or page. */
+  collection: 'jobs' | 'organisations' | 'pages' | 'site-settings'
+  /**
+   * WordPress id: the owner user's id for an organisation, the post id for a job or page, and
+   * the fixed `SITE_SETTINGS_LEGACY_ID` for a site's settings.
+   */
   legacyId: number
 }
 

@@ -46,6 +46,7 @@ describe('payloadJobs', () => {
       'organisations',
       'pages',
       'menus',
+      'site-settings',
       ...TAXONOMY_SLUGS,
       'plans',
       'add-ons',
@@ -407,6 +408,7 @@ describe('collection slug overrides', () => {
       'employers',
       'content-pages',
       'navigation',
+      'site-settings',
       'categories',
       'employment-types',
       'salaries',
@@ -471,6 +473,7 @@ describe('collection slug overrides', () => {
       'applications',
       'purchases',
       'credit-moves',
+      'site-settings',
     ])
   })
 

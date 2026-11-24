@@ -1,0 +1,44 @@
+---
+/**
+ * The consent line above a form's submit button (PJ-89, S-312). Used by the apply, job alert and
+ * sign-up forms. It is plain markup with two links, so a public page keeps shipping no client
+ * JavaScript.
+ */
+import { consentLine, type ConsentLineKind } from '../legal/links'
+
+type Props = {
+  /** Which form this line sits in: it decides the wording. */
+  kind: ConsentLineKind
+  /** Labels in the tenant's language. */
+  privacyLabel?: string
+  privacyPath?: string
+  termsLabel?: string
+  termsPath?: string
+}
+
+const { kind, privacyLabel, privacyPath, termsLabel, termsPath } = Astro.props as Props
+
+const line = consentLine(kind, { privacyLabel, privacyPath, termsLabel, termsPath })
+---
+
+<p class="lp-consent">
+  {line.text}
+  {' '}
+  <a href={line.privacy.href}>{line.privacy.label}</a>
+  {' '}
+  and our
+  {' '}
+  <a href={line.terms.href}>{line.terms.label}</a>.
+</p>
+
+<style>
+  .lp-consent {
+    color: var(--rs-color-muted);
+    font-size: var(--rs-font-size-sm);
+    margin-block: var(--rs-space-3) 0;
+  }
+
+  .lp-consent a {
+    color: inherit;
+  }
+</style>
