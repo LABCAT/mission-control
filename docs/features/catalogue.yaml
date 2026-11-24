@@ -3294,3 +3294,154 @@ stories:
     tests:
       - packages/payload-jobs/src/checkout.integration.test.ts
       - packages/payload-jobs/src/admin/ApproveJobButton.test.ts
+
+  # ---------------------------------------------------------------------------
+  # Share (Open Graph) images (PJ-105)
+  # ---------------------------------------------------------------------------
+  - id: S-250
+    area: Share images
+    role: site manager
+    story: "A job, organisation or home page has a share image at a predictable URL, so a link to it renders a card on social sites."
+    steps:
+      - "Open /og/jobs/{slug}.png, /og/organisations/{slug}.png and /og/home.png."
+      - "Fetch the same path twice."
+    expected: "Each answers 200 with an image/png of 1200x630. A path that is not one of those shapes, or a page the site itself refuses, answers 404, never an empty image."
+    settings: []
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/og/card.test.ts
+      - packages/launchpad/src/og/render.test.ts
+      - apps/vwok/src/og-handler.test.ts
+
+  - id: S-251
+    area: Share images
+    role: seeker
+    story: "A shared job link shows the job title, its organisation's logo and the facts a seeker scans for, in the site's own colours."
+    steps:
+      - "Share a live job whose organisation has a logo."
+      - "Share a job whose organisation has none."
+    expected: "The image shows the job title, the employer's name, location, job type and salary when the page shows them, on the tenant's primary colour with readable pills. The organisation's logo is used, falling back to the site logo, and a logo that cannot be resolved is left out rather than drawn broken."
+    settings: []
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/og/card.test.ts
+      - apps/vwok/src/og-route.test.ts
+
+  - id: S-252
+    area: Share images
+    role: seeker
+    story: "A very long job title or description is cut to fit, so the image never overflows or draws off the card."
+    steps:
+      - "Share a job with a title longer than two lines and a long subtitle."
+    expected: "Text is cut at a word boundary near the limit and ends in an ellipsis; short text is left exactly as written."
+    settings: []
+    mvp: false
+    status: built
+    tests:
+      - packages/launchpad/src/og/card.test.ts
+
+  - id: S-253
+    area: Share images
+    role: seeker
+    story: "A shared organisation page shows the organisation's name, what kind of organisation it is and where it is."
+    steps:
+      - "Share a public organisation page."
+      - "Share one whose page is private or unapproved."
+    expected: "The image shows the name, type, size and location with the organisation's own logo, falling back to the site logo. A page the site refuses has no image, it is a 404."
+    settings:
+      - organisationPagesNeedApproval
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/og/card.test.ts
+      - apps/vwok/src/og-route.test.ts
+
+  - id: S-254
+    area: Share images
+    role: site manager
+    story: "A shared home page shows the site's own name and description, and every page points its share tags at the generated image."
+    steps:
+      - "Share the home page."
+      - "View a page's source and read its Open Graph and Twitter tags."
+    expected: "The home image shows the tenant's name and the home page's CMS title and description. Pages carry the generated image as og:image (and twitter:image), which wins over an editor-chosen image for the same page; a page with no generated image keeps whatever image the CMS gives it, and Twitter falls back to a summary card."
+    settings: []
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/og/card.test.ts
+      - packages/launchpad/src/components/PageView.test.ts
+      - apps/vwok/src/og-handler.test.ts
+
+  - id: S-255
+    area: Share images
+    role: site manager
+    story: "The card is drawn as one element tree, so the same layout serves every page kind."
+    steps:
+      - "Draw a job card, an organisation card and a home card."
+    expected: "Each text appears once, in reading order, on a full 1200x630 canvas; every multi-child node declares its flex display; the logo is drawn only when the card has one; the facts row and subtitle are skipped when empty; and each kind is labelled differently."
+    settings: []
+    mvp: false
+    status: built
+    tests:
+      - packages/launchpad/src/og/layout.test.ts
+
+  - id: S-256
+    area: Share images
+    role: site manager
+    story: "The card is rasterised to a PNG on the Worker, with no headless browser."
+    steps:
+      - "Request a job, organisation and home image."
+      - "Check the response and its size."
+    expected: "Satori turns the card into SVG and resvg-wasm rasterises it to a PNG of 1200x630, including a card with no logo and no facts. The build stays inside the Worker's bundle limit, with the WASM loaded as a module because workerd refuses a runtime compile."
+    settings: []
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/og/render.test.ts
+      - apps/vwok/src/og-handler.test.ts
+
+  - id: S-257
+    area: Share images
+    role: site manager
+    story: "An image is regenerated only when something it shows changes, not on every request and not for unrelated edits."
+    steps:
+      - "Render an image, then render the same card again."
+      - "Change the job's title, and separately edit a field the image does not show."
+    expected: "The version is a digest of the card's own content, so the same card keeps its version and a changed title makes a new one; an edit the image does not draw leaves the version alone. Each page owns exactly one R2 object, keyed without the version."
+    settings: []
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/og/store.test.ts
+
+  - id: S-258
+    area: Share images
+    role: site manager
+    story: "A generated image is cached at the edge and kept in R2, so a second visitor does not pay for a render."
+    steps:
+      - "Request an image twice, then request it after the edge cache is cleared."
+      - "Change the job and request it again."
+    expected: "The second request is served the same bytes; after a lost edge entry the PNG comes back from R2; a changed version misses both stores and re-renders, leaving the old entry unreachable. A failed render is not stored, storage failures still serve the image, and the response is immutable with the version as its ETag."
+    settings: []
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/og/store.test.ts
+
+  - id: S-259
+    area: Share images
+    role: seeker
+    story: "A share image exists exactly when its page does, so a link never previews a page the site will not serve."
+    steps:
+      - "Request the image of an unknown slug, a private organisation, and a path with the wrong suffix."
+      - "Request the image of a job the site keeps as a closed page."
+    expected: "The image route resolves only /og/home.png, /og/jobs/{slug}.png and /og/organisations/{slug}.png, tolerating a trailing slash and an encoded slug. Everything else is a 404, and a job or organisation the page refuses is a 404 too, while a closed job the site still serves gets its image."
+    settings:
+      - organisationPagesNeedApproval
+    mvp: true
+    status: built
+    tests:
+      - apps/vwok/src/og-route.test.ts
+      - apps/vwok/src/og-handler.test.ts
