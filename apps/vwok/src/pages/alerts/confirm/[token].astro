@@ -1,0 +1,19 @@
+---
+/** `GET /alerts/confirm/:token` (PJ-47): the link in the confirmation email. */
+import AlertsView from '../../../components/AlertsView.astro'
+import { alertsChrome, alertsClientFromEnv, confirmPage } from '../../../alerts'
+import { siteEnv } from '../../../env'
+import { cmsFromEnv } from '../../../site'
+
+export const prerender = false
+
+const env = await siteEnv()
+const page = await confirmPage(alertsClientFromEnv(env), Astro.params.token ?? '', {
+  clientIp: Astro.clientAddress,
+})
+if (page.kind === 'redirect') return Astro.redirect(page.location)
+if (page.kind === 'one-click') return new Response(null, { status: page.status })
+const menus = await alertsChrome(cmsFromEnv(env))
+---
+
+<AlertsView menus={menus} page={page} path={Astro.url.pathname} />

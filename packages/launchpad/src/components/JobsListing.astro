@@ -11,10 +11,12 @@ import Alert from '@labcat2020/rocketship/components/Alert'
 import Grid from '@labcat2020/rocketship/components/Grid'
 import Typography from '@labcat2020/rocketship/components/Typography'
 
+import AlertSignup from './AlertSignup.astro'
 import FilterBar from './FilterBar.astro'
 import JobCard from './JobCard.astro'
 import Pagination from './Pagination.astro'
 import { jobFilterControls, type JobListingView } from '../jobs/listing'
+import { humaniseFilterValue } from '../tenant/filters'
 
 type Props = {
   view: JobListingView
@@ -26,6 +28,11 @@ type Props = {
   timezone?: null | string
   emptyMessage?: string
   noResultsMessage?: string
+  /**
+   * "Get these jobs by email" (PJ-47). Pass it where the tenant has the alerts add-on on; the
+   * form saves exactly the filters this page shows. Leave it out and no form is drawn.
+   */
+  alerts?: { action?: string; language?: string; turnstileSiteKey?: string }
 }
 
 const {
@@ -36,6 +43,7 @@ const {
   timezone,
   emptyMessage = 'No jobs are listed yet.',
   noResultsMessage = 'No jobs match these filters.',
+  alerts,
 } = Astro.props as Props
 
 const { filters: values } = view
@@ -44,6 +52,16 @@ const controls = jobFilterControls(view.facets)
 // A query-string filter is switched on, so offer a way back to the unfiltered listing. The
 // section's own slug does not count: it is in the path, not something the visitor chose here.
 const clear = view.hasActiveFilters ? clearHref : undefined
+
+// The alert is the listing's own filter, in words: `“cook”, Hospitality, Efate`.
+const alertSummary = [
+  values.q ? `“${values.q}”` : '',
+  ...(['category', 'type', 'location'] as const).map((name) =>
+    values[name] ? humaniseFilterValue(values[name]!) : '',
+  ),
+]
+  .filter(Boolean)
+  .join(' · ')
 ---
 
 <section class="lp-listing">
@@ -78,6 +96,18 @@ const clear = view.hasActiveFilters ? clearHref : undefined
   }
 
   <Pagination href={view.href} page={view.page} totalPages={view.totalPages} />
+
+  {
+    alerts && (
+      <AlertSignup
+        action={alerts.action}
+        filters={values}
+        language={alerts.language}
+        summary={alertSummary || undefined}
+        turnstileSiteKey={alerts.turnstileSiteKey}
+      />
+    )
+  }
 </section>
 
 <style>

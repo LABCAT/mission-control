@@ -27,9 +27,11 @@ type Props = {
   clearHref?: string
   /** Keep the page out of the index whatever the filters say. */
   noindex?: boolean
+  /** "Get these jobs by email" (PJ-47): pass where the tenant has the alerts add-on on. */
+  alerts?: { action?: string; language?: string; turnstileSiteKey?: string }
 }
 
-const { tenant, view, path, title, description, siteUrl, clearHref = '/jobs', noindex = false } = Astro.props as Props
+const { tenant, view, path, title, description, siteUrl, clearHref = '/jobs', noindex = false, alerts } = Astro.props as Props
 
 // A filtered or paged view is a variant of the section, not a page of its own.
 const variant = view.hasActiveFilters || view.page > 1
@@ -44,6 +46,6 @@ const variant = view.hasActiveFilters || view.page > 1
   title={title}
 >
   <Container size="wide">
-    <JobsListing clearHref={clearHref} description={description} timezone={tenant.timezone} title={title} view={view} />
+    <JobsListing alerts={alerts} clearHref={clearHref} description={description} timezone={tenant.timezone} title={title} view={view} />
   </Container>
 </BaseLayout>

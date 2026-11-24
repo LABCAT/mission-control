@@ -1,0 +1,75 @@
+---
+/**
+ * Every alert page (PJ-47) draws through this one view, so the header, footer, headers and
+ * wording agree. It renders what `alerts.ts` decided; it decides nothing itself.
+ */
+import Button from '@labcat2020/rocketship/components/Button'
+import Container from '@labcat2020/rocketship/components/Container'
+import Stack from '@labcat2020/rocketship/components/Stack'
+import Typography from '@labcat2020/rocketship/components/Typography'
+import AlertManageList from '@mission-control/launchpad/components/AlertManageList'
+import AlertManageRequest from '@mission-control/launchpad/components/AlertManageRequest'
+import AlertNotice from '@mission-control/launchpad/components/AlertNotice'
+import SiteNav from '@mission-control/launchpad/components/SiteNav'
+import { menuFor, type MenuView } from '@mission-control/launchpad/pages'
+
+import { ALERT_PAGE_HEADERS, type AlertPage } from '../alerts'
+import { siteTenant } from '../brand'
+import SiteLayout from '../layouts/SiteLayout.astro'
+
+type Props = {
+  menus?: MenuView[]
+  page: Exclude<AlertPage, { kind: 'one-click' } | { kind: 'redirect' }>
+  /** Where this page's own forms post: the page itself. */
+  path: string
+  turnstileSiteKey?: string
+}
+
+const { menus = [], page, path, turnstileSiteKey } = Astro.props as Props
+
+// The link is the secret: never cached, never indexed, no referrer to other sites.
+for (const [name, value] of Object.entries(ALERT_PAGE_HEADERS)) Astro.response.headers.set(name, value)
+Astro.response.status = page.status
+
+const primary = menuFor(menus, 'primary')
+const footer = menuFor(menus, 'footer')
+---
+
+<SiteLayout noindex path={path} title={`Job alerts | ${siteTenant.name}`}>
+  <Fragment slot="nav">
+    <SiteNav currentPath={path} label="Main" links={primary} />
+  </Fragment>
+  <Fragment slot="footer-nav">
+    <SiteNav currentPath={path} label="Footer" links={footer} />
+  </Fragment>
+  <Container size="content">
+    <Stack gap="large">
+      {
+        page.kind === 'notice' ? (
+          <AlertNotice notice={page.notice}>
+            <p>
+              <a href="/jobs">Browse jobs</a> · <a href="/alerts/manage">Manage my job alerts</a>
+            </p>
+          </AlertNotice>
+        ) : page.kind === 'manage-list' ? (
+          <AlertManageList action={path} alerts={page.alerts} message={page.message} />
+        ) : page.kind === 'manage-request' ? (
+          <>
+            {page.notice && <AlertNotice notice={page.notice} />}
+            <AlertManageRequest action={path} turnstileSiteKey={turnstileSiteKey} />
+          </>
+        ) : (
+          <>
+            <Typography>
+              <h1>Unsubscribe from this job alert?</h1>
+              <p>You will stop getting emails from this alert. Your other job alerts are not affected.</p>
+            </Typography>
+            <form action={path} method="post">
+              <Button name="confirm" type="submit" value="1">Unsubscribe</Button>
+            </form>
+          </>
+        )
+      }
+    </Stack>
+  </Container>
+</SiteLayout>

@@ -1,0 +1,92 @@
+---
+/**
+ * The alerts behind a manage link (PJ-47): one small form per alert, so each one changes, pauses
+ * and deletes on its own, and the page works with JavaScript off. Only the alert's search in
+ * words is shown, never the address or anyone else's data.
+ */
+import Button from '@labcat2020/rocketship/components/Button'
+import Card from '@labcat2020/rocketship/components/Card'
+import Checkbox from '@labcat2020/rocketship/components/Checkbox'
+import Field from '@labcat2020/rocketship/components/Field'
+import Label from '@labcat2020/rocketship/components/Label'
+import Select from '@labcat2020/rocketship/components/Select'
+import Typography from '@labcat2020/rocketship/components/Typography'
+
+import type { AlertSummary } from '../alerts/client'
+
+type Props = {
+  alerts: readonly AlertSummary[]
+  /** The manage page's own URL: each form posts back to it. */
+  action: string
+  /** A short line above the list, such as the outcome of the last change. */
+  message?: string
+}
+
+const { alerts, action, message } = Astro.props as Props
+---
+
+<Typography>
+  <h1>Your job alerts</h1>
+  {message && <p role="status">{message}</p>}
+  {alerts.length === 0 && <p>You have no job alerts. You can set one up from any jobs page.</p>}
+</Typography>
+
+<ul class="lp-alert-list">
+  {
+    alerts.map((alert) => (
+      <li>
+        <Card as="div">
+          <form action={action} method="post" class="lp-alert-list__form">
+            <input type="hidden" name="id" value={String(alert.id)} />
+            <p class="lp-alert-list__summary">
+              <strong>{alert.summary}</strong>
+              {!alert.confirmed && <span> (waiting for confirmation)</span>}
+            </p>
+            <Field>
+              <Label for={`alert-${alert.id}-frequency`}>How often</Label>
+              <Select id={`alert-${alert.id}-frequency`} name="frequency">
+                <option value="daily" selected={alert.frequency === 'daily'}>Daily</option>
+                <option value="weekly" selected={alert.frequency === 'weekly'}>Weekly</option>
+              </Select>
+            </Field>
+            <Field inline>
+              <Checkbox id={`alert-${alert.id}-active`} name="active" value="on" checked={alert.active} />
+              <Label for={`alert-${alert.id}-active`}>Send this alert</Label>
+            </Field>
+            <div class="lp-alert-list__actions">
+              <Button name="action" type="submit" value="save">Save</Button>
+              <Button name="action" type="submit" value="delete" variant="ghost">Delete alert</Button>
+            </div>
+          </form>
+        </Card>
+      </li>
+    ))
+  }
+</ul>
+
+<style>
+  .lp-alert-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--rs-space-4);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .lp-alert-list__form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--rs-space-3);
+  }
+
+  .lp-alert-list__summary {
+    margin: 0;
+  }
+
+  .lp-alert-list__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--rs-space-3);
+  }
+</style>

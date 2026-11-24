@@ -1,0 +1,62 @@
+---
+/**
+ * "Email me a link to manage my alerts" (PJ-47): for a subscriber who lost the link. The answer
+ * is the same for any address, so the form cannot be used to find out who subscribes.
+ */
+import Button from '@labcat2020/rocketship/components/Button'
+import Field from '@labcat2020/rocketship/components/Field'
+import Input from '@labcat2020/rocketship/components/Input'
+import Label from '@labcat2020/rocketship/components/Label'
+import Typography from '@labcat2020/rocketship/components/Typography'
+
+import Turnstile from './Turnstile.astro'
+
+type Props = {
+  action?: string
+  turnstileSiteKey?: string
+  language?: string
+}
+
+const { action = '/alerts/manage', turnstileSiteKey, language } = Astro.props as Props
+---
+
+<Typography>
+  <h1>Manage your job alerts</h1>
+  <p>Enter the email address your alerts go to. We will email you a link to change or stop them.</p>
+</Typography>
+
+<form action={action} method="post" class="lp-alert-request">
+  <Field>
+    <Label for="alert-manage-email">Email address</Label>
+    <Input autocomplete="email" id="alert-manage-email" name="email" required type="email" />
+  </Field>
+
+  <div class="lp-alert-request__trap" aria-hidden="true">
+    <label for="alert-manage-website">Leave this empty</label>
+    <input id="alert-manage-website" name="alert_website" tabindex="-1" autocomplete="off" type="text" />
+  </div>
+
+  {
+    turnstileSiteKey && (
+      <Turnstile action="alert-manage" id="alert-manage-turnstile" language={language} siteKey={turnstileSiteKey} />
+    )
+  }
+
+  <Button type="submit">Email me the link</Button>
+</form>
+
+<style>
+  .lp-alert-request {
+    display: flex;
+    flex-direction: column;
+    gap: var(--rs-space-4);
+    max-inline-size: 28rem;
+  }
+
+  .lp-alert-request__trap {
+    block-size: 0;
+    inline-size: 0;
+    overflow: hidden;
+    position: absolute;
+  }
+</style>
