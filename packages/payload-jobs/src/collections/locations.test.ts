@@ -51,6 +51,7 @@ describe('locations collection @S-120', () => {
       'organisations',
       PAGES_SLUG,
       MENUS_SLUG,
+      'site-settings',
       ...TAXONOMY_SLUGS,
       'plans',
       'add-ons',

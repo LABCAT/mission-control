@@ -96,6 +96,9 @@ export const multiTenantOptionsFor = (
         [FORMS_SLUG]: { accessResultOverride: tenantContentOverride },
         [FORMS_SUBMISSIONS_SLUG]: { accessResultOverride: privateToTenant },
       } as MultiTenantPluginConfig['collections']),
+      // mission-control: site settings (PJ-67) are one document per site, so `isGlobal` makes the
+      // tenant field unique and hides "create new". A site key reads the key's own site only.
+      [slugs.siteSettings]: { accessResultOverride: tenantContentOverride, isGlobal: true },
     },
     tenantsArrayField: {
       rowFields: [
