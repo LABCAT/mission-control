@@ -174,6 +174,7 @@ describe('toJobDetail @S-280', () => {
   it('maps every field the page shows', () => {
     expect(toJobDetail(published, { descriptionHtml: '<p>Run the kitchen</p>' })).toEqual({
       categories: ['Hospitality'],
+      categoryIds: [1],
       closes: '2026-12-01T00:00:00.000Z',
       descriptionHtml: '<p>Run the kitchen</p>',
       displayedSalary: 'Vt 150,000 a month',
@@ -298,10 +299,26 @@ const cmsWith = (docs: Record<string, Record<string, unknown>[]>, calls: unknown
   const bySlug = (collection: string, slug: string) =>
     (docs[collection] ?? []).find((doc) => doc.slug === slug) ?? null
 
+  const categoryFilter = (where: unknown): (number | string)[] | null => {
+    const clauses = (where as { and?: Record<string, unknown>[] } | undefined)?.and ?? []
+    const clause = clauses.find((item) => item.categories)
+
+    return (clause?.categories as { in: (number | string)[] } | undefined)?.in ?? null
+  }
+
   const find = async (collection: string, options: { where?: unknown } = {}) => {
     calls.push({ collection, options })
+    const wanted = categoryFilter(options.where)
+    const matching = (docs[collection] ?? []).filter(
+      (doc) =>
+        !wanted ||
+        ((doc.categories as { id?: number | string }[] | undefined) ?? []).some((ref) =>
+          wanted.includes(ref.id as number | string),
+        ),
+    )
+
     return {
-      docs: docs[collection] ?? [],
+      docs: matching,
       hasNextPage: false,
       hasPrevPage: false,
       limit: 10,
@@ -368,6 +385,25 @@ describe('loadJobDetail @S-282 @S-283', () => {
     expect(result.view.showViews).toBe(false)
     expect(result.view.similar.map((job) => job.title).sort()).toEqual(['Baker', 'Head Chef'])
     expect(calls.length).toBeGreaterThan(0)
+  })
+
+  it('queries similar jobs by category id, and ranks same-category jobs ahead of the newest @S-282', async () => {
+    const calls: { options: { where?: unknown } }[] = []
+    const unrelated = {
+      ...published,
+      categories: [{ id: 2, name: 'Retail', slug: 'retail' }],
+      id: 11,
+      slug: 'cashier',
+      title: 'Cashier',
+    }
+    const cms = cmsWith({ jobs: [expired, unrelated, other] }, calls as unknown[])
+    const result = await loadJobDetail({ cms, now: NOW, slug: 'closed-chef', tenant })
+
+    if (!result.found || result.status === 'gone') throw new Error('expected an expired page')
+    const categoryQuery = JSON.stringify(calls.map((call) => call.options.where))
+    expect(categoryQuery).toContain('"in":[1]')
+    expect(categoryQuery).not.toContain('Hospitality')
+    expect(result.view.similar[0]?.title).toBe('Baker')
   })
 
   it('answers gone after the tenant’s window, and for a draft', async () => {

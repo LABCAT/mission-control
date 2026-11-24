@@ -130,7 +130,9 @@ export type DetailJob = {
 }
 
 export type JobDetail = {
+  /** Display names. Filtering by category uses `categoryIds`, because the relationship matches IDs. */
   categories: string[]
+  categoryIds: (number | string)[]
   /** ISO date of the closing date, for display in the tenant's timezone. */
   closes?: string
   /** Sanitised? No: the CMS's own rich text, already HTML. */
@@ -213,6 +215,9 @@ export const toJobDetail = (
     categories: (job.categories ?? [])
       .map((value) => nameOf(value))
       .filter((value): value is string => Boolean(value)),
+    categoryIds: (job.categories ?? [])
+      .map((value) => (typeof value === 'object' && value !== null ? value.id : value))
+      .filter((value): value is number | string => value !== null && value !== undefined),
     ...(job.expiresAt ? { closes: job.expiresAt } : {}),
     ...(textOf(descriptionHtml ?? undefined) ? { descriptionHtml: descriptionHtml!.trim() } : {}),
     ...(textOf(job.displayedSalary) ? { displayedSalary: job.displayedSalary!.trim() } : {}),
@@ -447,13 +452,13 @@ const similarJobs = async ({ cms, detail, locale, now }: SimilarJobsOptions): Pr
   const live = liveJobsWhere(now)
   const wanted = SIMILAR_JOB_LIMIT + 1
 
-  const byCategory = detail.categories.length
+  const byCategory = detail.categoryIds.length
     ? await cms.find('jobs', {
         depth: 2,
         limit: wanted,
         locale,
         sort: ['-publishedAt', '-id'],
-        where: { and: [live, { categories: { in: detail.categories } }] },
+        where: { and: [live, { categories: { in: detail.categoryIds } }] },
       })
     : null
 
