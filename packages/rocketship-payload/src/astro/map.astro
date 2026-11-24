@@ -1,0 +1,54 @@
+---
+import Container from '@labcat2020/rocketship/components/Container'
+import Stack from '@labcat2020/rocketship/components/Stack'
+import Typography from '@labcat2020/rocketship/components/Typography'
+
+import './blocks.css'
+import { mapEmbedUrl, mapHeightPixels } from '../map'
+import type { MapBlock } from '../types'
+
+/**
+ * A keyless map embed. The iframe is lazy, so a page with a map still ships no JavaScript of
+ * its own and only loads the provider when a visitor scrolls to it.
+ */
+type Props = {
+  block: MapBlock
+  /** The iframe's title when the block does not set one; the site supplies its wording. */
+  defaultTitle?: string
+  /** `loading` is lazy by default; `eager` shows it above the fold. */
+  loading?: 'eager' | 'lazy'
+}
+
+const { block, defaultTitle, loading = 'lazy' } = Astro.props as Props
+
+const src = mapEmbedUrl(block)
+const title = block.title?.trim() || defaultTitle || block.heading?.trim() || 'Map'
+const height = `${mapHeightPixels(block.height)}px`
+---
+
+{
+  src === null ? null : (
+    <section class="rp-block">
+      <Container size="wide">
+        <Stack gap="medium">
+          {block.heading && (
+            <Typography>
+              <h2>{block.heading}</h2>
+            </Typography>
+          )}
+          <div class="rp-map" style={`--rp-map-height:${height}`}>
+            <iframe
+              class="rp-map__frame"
+              height={String(mapHeightPixels(block.height))}
+              loading={loading}
+              referrerpolicy="no-referrer-when-downgrade"
+              src={src}
+              title={title}
+              width="100%"
+            />
+          </div>
+        </Stack>
+      </Container>
+    </section>
+  )
+}
