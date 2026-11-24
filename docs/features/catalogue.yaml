@@ -3581,3 +3581,73 @@ stories:
     status: built
     tests:
       - packages/payload-jobs/src/email-engine/email-engine.integration.test.ts
+
+  # ---------------------------------------------------------------------------
+  # Performance pass (PJ-44)
+  # ---------------------------------------------------------------------------
+  - id: S-360
+    area: Public site
+    role: seeker
+    story: "The public pages score a perfect 100 in Lighthouse on a phone, and CI keeps them there."
+    steps:
+      - "Run `pnpm --filter @mission-control/vwok lighthouse` and `lighthouse:listing`."
+    expected: "Performance, accessibility, best practices and SEO are 1.0 (mobile) on the home page, a job page and the listing, and the run fails below that or above 50 KB of JavaScript."
+    settings: []
+    mvp: true
+    status: built
+    tests:
+      - apps/vwok/src/config.test.ts
+
+  - id: S-361
+    area: Public site
+    role: seeker
+    story: "Every public page, job and listing included, carries the site's icons, so the browser never asks for a missing favicon."
+    steps:
+      - "Open a job page and the listing and read the document head."
+    expected: "The site's icon links are in the head of both pages, because they take the site's head content."
+    settings: []
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/components/components.test.ts
+
+  - id: S-362
+    area: Public site
+    role: seeker
+    story: "The header logo is sharp on a phone and never shifts the page."
+    steps:
+      - "Load a page with a 400 x 86 logo on a phone."
+    expected: "The logo is drawn at most 200 px wide with its own shape and size attributes; a smaller logo is never enlarged, and a logo with no usable size is left to the browser."
+    settings:
+      - tenant.branding.logo
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/tenant/logo.test.ts
+      - packages/launchpad/src/components/components.test.ts
+
+  - id: S-363
+    area: Public site
+    role: seeker
+    story: "No stylesheet blocks the first paint."
+    steps:
+      - "Load a page with the network throttled and read the document."
+    expected: "The page's CSS is inlined in the HTML, so there is no render-blocking CSS request."
+    settings: []
+    mvp: true
+    status: built
+    tests:
+      - apps/vwok/src/config.test.ts
+
+  - id: S-364
+    area: Public site
+    role: seeker
+    story: "A screen-reader user finds the listing's jobs under its heading, with no skipped level."
+    steps:
+      - "Open the job listing and list its headings."
+    expected: "The page has one h1 and each job title is an h2 directly under it."
+    settings: []
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/components/components.test.ts
