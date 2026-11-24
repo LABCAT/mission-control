@@ -27,7 +27,7 @@ import { APPLICATION_FILES_SLUG, APPLICATIONS_SLUG } from './collections/applica
 
 export const DELETE_APPLICATIONS_TASK = 'delete-expired-applications'
 export const APPLICATION_DATA_COMPONENT_PATH =
-  '@mission-control/payload-jobs/rsc#DeleteApplicantData'
+  '@mission-control/payload-jobs/client#DeleteApplicantData'
 
 /** The legacy period, and the default for a tenant that has not chosen one. */
 export const DEFAULT_APPLICATION_RETENTION_MONTHS = 12
@@ -525,7 +525,7 @@ export const withApplicationDataAction = (
           ...collection.admin?.components?.edit,
           beforeDocumentControls: [
             ...before,
-            { path: APPLICATION_DATA_COMPONENT_PATH, serverProps: { applicationsSlug } },
+            { clientProps: { applicationsSlug }, path: APPLICATION_DATA_COMPONENT_PATH },
           ],
         },
       },

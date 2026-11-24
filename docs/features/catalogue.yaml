@@ -2743,6 +2743,7 @@ stories:
     status: built
     tests:
       - packages/payload-jobs/src/retention.test.ts
+      - packages/payload-jobs/src/retention.storage.test.ts
 
   - id: S-301
     area: Applications
@@ -2786,3 +2787,5 @@ stories:
     status: built
     tests:
       - packages/payload-jobs/src/retention.test.ts
+      - packages/payload-jobs/src/retention.storage.test.ts
+      - packages/payload-jobs/src/admin/DeleteApplicantData.test.ts

@@ -1,54 +1,123 @@
-import type { ServerProps } from 'payload'
+'use client'
 
-import { isSuperAdmin, type MissionControlUser } from '../access'
+import { useEffect, useState } from 'react'
 
-/** The extra prop the plugin passes when it registers the component. */
-export type DeleteApplicantDataProps = { applicationsSlug?: string }
+/** The application id from the admin URL, e.g. `/admin/collections/applications/12`. */
+export const applicationIDFromPath = (pathname: string, applicationsSlug: string): null | string => {
+  const escaped = applicationsSlug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const match = new RegExp(`/collections/${escaped}/([^/?#]+)/?$`).exec(pathname)
+
+  return match?.[1] && match[1] !== 'create' ? decodeURIComponent(match[1]) : null
+}
+
+type Membership = { role?: string; tenant?: { id?: number | string } | number | string | null }
+type Me = { id: number | string; role?: string; tenants?: Membership[] | null }
+type ApplicationRow = { tenant?: { id?: number | string } | number | string | null }
+
+const idOf = (value: { id?: number | string } | number | string | null | undefined): null | string => {
+  if (value === null || value === undefined) return null
+
+  return String(typeof value === 'object' ? value.id : value)
+}
+
+/**
+ * True when this user may delete the application: a super admin, or an admin of the
+ * application's own tenant. The endpoint checks again, so this only hides a button that would
+ * be refused.
+ */
+export const mayDeleteApplication = (me: Me | null | undefined, application: ApplicationRow): boolean => {
+  if (!me) return false
+  if (me.role === 'super-admin') return true
+
+  const admins = (me.tenants ?? []).filter((membership) => membership?.role === 'tenant-admin')
+  const tenant = idOf(application.tenant)
+  // Single-tenant sites have no tenant on the row: any tenant admin may act.
+  if (tenant === null) return admins.length > 0
+
+  return admins.some((membership) => idOf(membership.tenant) === tenant)
+}
 
 /**
  * "Delete applicant data" on an application's edit view (PJ-88): the privacy request an
- * applicant makes by email. It is a plain HTML form posting to
- * `POST /api/applications/:id/delete-data`, so it ships no client JavaScript and the endpoint
- * re-checks the caller's own delete access.
+ * applicant makes by email.
  *
- * It renders nothing for a caller who may not delete the application, so the button is never a
- * dead end.
+ * It must not be a form element: the admin renders `beforeDocumentControls` inside the document's
+ * own form, and the application is read-only there, so a nested submit never leaves the page.
+ * It is a button that confirms, then calls `POST /api/applications/:id/delete-data`, which
+ * re-checks the caller's own delete access.
  */
-export const DeleteApplicantData = async ({
-  applicationsSlug = 'applications',
-  id,
-  payload,
-  user,
-}: ServerProps & DeleteApplicantDataProps) => {
-  if (id === undefined) return null
+export const DeleteApplicantData = ({ applicationsSlug = 'applications' }: { applicationsSlug?: string }) => {
+  const [id, setId] = useState<null | string>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<null | string>(null)
 
-  const actor = (user as MissionControlUser | null | undefined) ?? null
-  const mayDelete =
-    actor !== null &&
-    (isSuperAdmin(actor) || (actor.tenants ?? []).some((membership) => membership?.role === 'tenant-admin'))
-  if (!mayDelete) return null
+  useEffect(() => {
+    const applicationID = applicationIDFromPath(window.location.pathname, applicationsSlug)
+    if (!applicationID) return
+
+    const load = async () => {
+      const meResponse = await fetch('/api/users/me', { credentials: 'same-origin' })
+      const me = ((await meResponse.json()) as { user?: Me }).user
+      if (!me) return
+
+      const response = await fetch(`/api/${applicationsSlug}/${encodeURIComponent(applicationID)}?depth=0`, {
+        credentials: 'same-origin',
+      })
+      if (!response.ok) return
+
+      if (mayDeleteApplication(me, (await response.json()) as ApplicationRow)) setId(applicationID)
+    }
+
+    load().catch(() => {})
+  }, [applicationsSlug])
+
+  if (!id) return null
+
+  const remove = async () => {
+    if (!window.confirm('Delete this application and its CV and cover letter for good? This cannot be undone.')) return
+
+    setBusy(true)
+    setError(null)
+
+    try {
+      const response = await fetch(`/api/${applicationsSlug}/${encodeURIComponent(id)}/delete-data?format=json`, {
+        credentials: 'same-origin',
+        method: 'POST',
+      })
+
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as null | { error?: string }
+        setError(body?.error ?? 'Could not delete the applicant data.')
+
+        return
+      }
+
+      window.location.assign(`${window.location.pathname.split('/collections/')[0]}/collections/${applicationsSlug}`)
+    } catch {
+      setError('Could not delete the applicant data.')
+    } finally {
+      setBusy(false)
+    }
+  }
 
   return (
-    <form
-      action={`${payload.config.routes.api}/${applicationsSlug}/${encodeURIComponent(String(id))}/delete-data`}
-      method="post"
-      style={{ marginBottom: '1rem' }}
-    >
+    <div style={{ alignItems: 'center', display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem' }}>
       <button
-        style={{
-          background: 'none',
-          border: '1px solid currentColor',
-          borderRadius: 4,
-          cursor: 'pointer',
-          padding: '0.4rem 0.75rem',
-        }}
-        type="submit"
+        className="btn btn--style-secondary btn--size-medium"
+        data-testid="delete-applicant-data"
+        disabled={busy}
+        onClick={() => void remove()}
+        style={{ cursor: 'pointer' }}
+        type="button"
       >
         Delete applicant data
       </button>
-      <span style={{ marginLeft: '0.5rem', opacity: 0.7 }}>
-        Removes this application and its CV files for good.
-      </span>
-    </form>
+      <span style={{ opacity: 0.7 }}>Removes this application and its CV files for good.</span>
+      {error ? (
+        <span role="alert" style={{ color: 'var(--theme-error-500)' }}>
+          {error}
+        </span>
+      ) : null}
+    </div>
   )
 }

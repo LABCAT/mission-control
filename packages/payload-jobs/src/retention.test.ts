@@ -418,7 +418,7 @@ describe('application data action wiring @S-303', () => {
 
     expect(endpoints.map((endpoint) => `${endpoint.method} ${endpoint.path}`)).toContain('post /:id/delete-data')
     expect(JSON.stringify(collection.admin?.components?.edit?.beforeDocumentControls)).toContain(
-      '@mission-control/payload-jobs/rsc#DeleteApplicantData',
+      '@mission-control/payload-jobs/client#DeleteApplicantData',
     )
   })
 
@@ -432,7 +432,7 @@ describe('application data action wiring @S-303', () => {
 
     expect(before.map((component) => component.path)).toEqual([
       '@host/before',
-      '@mission-control/payload-jobs/rsc#DeleteApplicantData',
+      '@mission-control/payload-jobs/client#DeleteApplicantData',
     ])
 
     const endpoints = Array.isArray(collection.endpoints) ? collection.endpoints : []
