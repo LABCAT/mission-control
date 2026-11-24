@@ -59,6 +59,8 @@ export const siteManagerNavCollections = ({
   APPLICATIONS_SLUG,
   slugs.pages,
   slugs.menus,
+  // The site's name, logo, footer, language and header banner (PJ-67).
+  slugs.siteSettings,
   slugs.plans,
   slugs.coupons,
   slugs.addOns,

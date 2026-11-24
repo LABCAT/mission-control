@@ -24,14 +24,14 @@ export const jobRoute = async ({
   siteUrl,
   slug,
 }: {
-  cms: Pick<CmsClient, 'find' | 'findBySlug' | 'siteSettings'> | null
+  cms: Pick<CmsClient, 'find' | 'findBySlug' | 'tenantSettings'> | null
   now?: Date
   siteUrl?: string
   slug: string
 }): Promise<JobRoute> => {
   if (!cms || !slug) return { kind: 'not-found' }
 
-  const settings = await cms.siteSettings().catch(() => null)
+  const settings = await cms.tenantSettings().catch(() => null)
   const result = await loadJobDetail({
     cms,
     descriptionHtml: lexicalToHtml,

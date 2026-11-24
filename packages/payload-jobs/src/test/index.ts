@@ -4,6 +4,7 @@ import { lexicalEditor } from '@payloadcms/richtext-lexical'
 import {
   buildConfig,
   getPayload,
+  type Block,
   type CollectionConfig,
   type Field,
   type Payload,
@@ -81,6 +82,8 @@ const Users = (extraFields: Field[] = []): CollectionConfig => ({
 })
 
 type BootTestPayloadArgs = {
+  /** Page blocks the host registers, e.g. `rich-text` for the legal pages (PJ-89). */
+  blocks?: Block[]
   /** Tenant-scoped collections under test, scoped by the multi-tenant plugin. */
   collections: CollectionConfig[]
   /** Explicit disposable Postgres database; schema push must not target the CMS database. */
@@ -97,6 +100,8 @@ type BootTestPayloadArgs = {
   tenantHooks?: CollectionConfig['hooks']
   /** Extra fields on the users collection, e.g. `organisation` (PJ-18). */
   userFields?: Field[]
+  /** Wraps the users collection, e.g. `withPersonalDataRemoval` (PJ-89). */
+  wrapUsers?: (collection: CollectionConfig) => CollectionConfig
 }
 
 let bootCount = 0
@@ -112,6 +117,7 @@ let bootCount = 0
  * disposable database.
  */
 export const bootTestPayload = async ({
+  blocks = [],
   collections,
   databaseUrl,
   globalCollections = [],
@@ -120,7 +126,9 @@ export const bootTestPayload = async ({
   tenantFields = [],
   tenantHooks,
   userFields = [],
+  wrapUsers,
 }: BootTestPayloadArgs): Promise<TestHarness> => {
+  const usersCollection = Users(userFields)
   const testDatabaseUrl = databaseUrl ?? process.env.TEST_DATABASE_URL
 
   if (!testDatabaseUrl) {
@@ -138,8 +146,14 @@ export const bootTestPayload = async ({
   const config = await buildConfig({
     admin: { user: 'users' },
     auth: { passwordHashIterations: 100000 },
+    ...(blocks.length > 0 ? { blocks } : {}),
     secret: 'test-secret',
-    collections: [Users(userFields), tenantsCollection(tenantFields, tenantHooks), ...globalCollections, ...collections],
+    collections: [
+      wrapUsers ? wrapUsers(usersCollection) : usersCollection,
+      tenantsCollection(tenantFields, tenantHooks),
+      ...globalCollections,
+      ...collections,
+    ],
     // Jobs have a rich-text description; the CMS uses Lexical, so the harness does too.
     editor: lexicalEditor(),
     ...(localization ? { localization } : {}),
@@ -200,6 +214,8 @@ export const bootTestPayload = async ({
       try {
         await payload.delete({
           collection: 'users',
+          // Users are never hard-deleted in production (PJ-89); teardown is the escape hatch.
+          context: { payloadJobsPurge: true },
           overrideAccess: true,
           where: { id: { in: userIds } },
         })

@@ -17,7 +17,7 @@ const job = (overrides: Record<string, unknown> = {}) => ({
 const cmsWith = (doc: unknown, settings: Record<string, unknown> | null = {}) => ({
   find: async () => ({ docs: [], totalDocs: 0 }) as never,
   findBySlug: async () => doc as never,
-  siteSettings: async () => {
+  tenantSettings: async () => {
     if (settings === null) throw new Error('down')
     return settings as never
   },

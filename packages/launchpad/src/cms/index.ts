@@ -1,4 +1,4 @@
 export * from './cache'
 export * from './client'
-export * from './site-settings'
+export * from './tenant-settings'
 export * from './types'

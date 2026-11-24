@@ -1,0 +1,242 @@
+---
+import Alert from '@labcat2020/rocketship/components/Alert'
+import Button from '@labcat2020/rocketship/components/Button'
+import Container from '@labcat2020/rocketship/components/Container'
+import Field from '@labcat2020/rocketship/components/Field'
+import Input from '@labcat2020/rocketship/components/Input'
+import Label from '@labcat2020/rocketship/components/Label'
+import Stack from '@labcat2020/rocketship/components/Stack'
+import Textarea from '@labcat2020/rocketship/components/Textarea'
+import Typography from '@labcat2020/rocketship/components/Typography'
+
+import './blocks.css'
+import { formFields, formFrom, formIsMultiColumn, HONEYPOT_FIELD } from '../form'
+import { lexicalToHtml } from '../richtext'
+import type { FormBlock } from '../types'
+
+/**
+ * A Payload form-builder form as plain HTML: no client JavaScript, so the page stays zero-JS
+ * and the form still works in a text browser. The site supplies the endpoint. Turnstile, a
+ * honeypot and the site's own error text go in through slots, because they are the site's
+ * decisions, not the block's.
+ */
+type Props = {
+  block: FormBlock
+  /** Where the browser posts. The site owns the endpoint, so nothing is hardcoded here. */
+  action: string
+  /** Shown above the form after the endpoint redirects back. */
+  status?: 'error' | 'sent'
+  /** The site's wording; nothing tenant-specific is baked into the package. */
+  messages?: {
+    error?: string
+    sent?: string
+    submit?: string
+  }
+}
+
+const { action, block, messages = {}, status } = Astro.props as Props
+
+const form = formFrom(block.form)
+const fields = formFields(form, { richText: lexicalToHtml })
+const multiColumn = formIsMultiColumn(fields)
+const submitLabel = messages.submit ?? form?.submitButtonLabel ?? 'Send'
+const confirmation = lexicalToHtml(form?.confirmationMessage)
+
+const errorText = messages.error ?? 'Something went wrong. Please try again.'
+const sentText = messages.sent ?? 'Thank you. Your message has been sent.'
+---
+
+<section class="rp-block">
+  <Container size="content">
+    <Stack gap="large">
+      {
+        (block.heading || block.intro) && (
+          <Stack gap="small">
+            {block.heading && (
+              <Typography>
+                <h2>{block.heading}</h2>
+              </Typography>
+            )}
+            {block.intro && <p class="rp-block__intro">{block.intro}</p>}
+          </Stack>
+        )
+      }
+      {
+        form === null ? null : (
+          <Stack gap="medium">
+            {status === 'sent' && (
+              <Alert role="status" variant="success">
+                {confirmation ? (
+                  <Typography html={confirmation} />
+                ) : (
+                  <p class="rp-form__message">{sentText}</p>
+                )}
+              </Alert>
+            )}
+            {status === 'error' && (
+              <Alert role="alert" variant="error">
+                <p class="rp-form__message">{errorText}</p>
+              </Alert>
+            )}
+
+            <form
+              action={action}
+              class:list={['rp-form', multiColumn && 'rp-form--columns']}
+              data-form-id={form.id}
+              method="POST"
+            >
+              <input name="form" type="hidden" value={String(form.id)} />
+              {/* A person never fills this; a bot that does is rejected by the endpoint. */}
+              <Field class="rp-form__honeypot" aria-hidden="true">
+                <Label for={`${form.id}-${HONEYPOT_FIELD}`}>{'Leave this field empty'}</Label>
+                <Input
+                  autocomplete="off"
+                  id={`${form.id}-${HONEYPOT_FIELD}`}
+                  name={HONEYPOT_FIELD}
+                  tabindex="-1"
+                />
+              </Field>
+
+              {fields.map((field) => {
+                const id = `${form.id}-${field.id}`
+                const width = `${Math.min(100, Math.max(0, field.width))}%`
+
+                if (field.kind === 'message') {
+                  return (
+                    <div class="rp-form__message-field" style={`--rp-field-width:${width}`}>
+                      <Typography html={field.html ?? ''} />
+                    </div>
+                  )
+                }
+
+                if (field.kind === 'textarea') {
+                  return (
+                    <Field style={`--rp-field-width:${width}`}>
+                      <Label for={id} required={field.required}>
+                        {field.label}
+                      </Label>
+                      <Textarea
+                        id={id}
+                        name={field.name}
+                        required={field.required}
+                        rows="5"
+                      >{field.defaultValue ?? ''}</Textarea>
+                    </Field>
+                  )
+                }
+
+                if (field.kind === 'select') {
+                  return (
+                    <Field style={`--rp-field-width:${width}`}>
+                      <Label for={id} required={field.required}>
+                        {field.label}
+                      </Label>
+                      <select class="rs-select" id={id} name={field.name} required={field.required}>
+                        <option value="">{'Please choose'}</option>
+                        {field.options.map((option) => (
+                          <option selected={option.value === field.defaultValue} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                  )
+                }
+
+                if (field.kind === 'checkbox') {
+                  return (
+                    <Field class="rp-form__choice" inline style={`--rp-field-width:${width}`}>
+                      <input
+                        class="rs-checkbox"
+                        id={id}
+                        name={field.name}
+                        required={field.required}
+                        type="checkbox"
+                        value="true"
+                        checked={field.defaultValue === 'true'}
+                      />
+                      <Label for={id} required={field.required}>
+                        {field.label}
+                      </Label>
+                    </Field>
+                  )
+                }
+
+                if (field.kind === 'radio') {
+                  return (
+                    <fieldset class="rs-fieldset" style={`--rp-field-width:${width}`}>
+                      <legend class="rs-fieldset__legend">
+                        {field.label}
+                        {field.required && (
+                          <span class="rs-label__required" aria-hidden="true">
+                            *
+                          </span>
+                        )}
+                      </legend>
+                      {field.options.map((option, index) => (
+                        <Field class="rp-form__choice" inline>
+                          <input
+                            class="rs-radio"
+                            id={`${id}-${index}`}
+                            name={field.name}
+                            required={field.required}
+                            type="radio"
+                            value={option.value}
+                            checked={option.value === field.defaultValue}
+                          />
+                          <Label for={`${id}-${index}`}>{option.label}</Label>
+                        </Field>
+                      ))}
+                    </fieldset>
+                  )
+                }
+
+                // Rocketship's Input has no `date` type yet (flagged for LABCAT/rocketship);
+                // a native date input keeps the picker and the same styling class.
+                if (field.inputType === 'date') {
+                  return (
+                    <Field style={`--rp-field-width:${width}`}>
+                      <Label for={id} required={field.required}>
+                        {field.label}
+                      </Label>
+                      <input
+                        class="rs-input"
+                        id={id}
+                        name={field.name}
+                        required={field.required}
+                        type="date"
+                        value={field.defaultValue ?? ''}
+                      />
+                    </Field>
+                  )
+                }
+
+                return (
+                  <Field style={`--rp-field-width:${width}`}>
+                    <Label for={id} required={field.required}>
+                      {field.label}
+                    </Label>
+                    <Input
+                      id={id}
+                      name={field.name}
+                      required={field.required}
+                      type={(field.inputType as 'email' | 'number' | 'text') ?? 'text'}
+                      value={field.defaultValue ?? ''}
+                    />
+                  </Field>
+                )
+              })}
+
+              {/* Turnstile, extra hidden fields, anything the site needs before the button. */}
+              <slot name="before-submit" />
+
+              <div class="rp-form__actions">
+                <Button type="submit">{submitLabel}</Button>
+              </div>
+            </form>
+          </Stack>
+        )
+      }
+    </Stack>
+  </Container>
+</section>

@@ -10,7 +10,7 @@ import { resolveSiteKey } from './site-keys'
  * The list is an allowlist. Anything private (the admin email, the email sender, domains) stays
  * out, so adding a field to the tenant never exposes it by accident.
  */
-export const PUBLIC_SITE_SETTINGS_FIELDS = [
+export const PUBLIC_TENANT_SETTINGS_FIELDS = [
   'branding',
   'currency',
   'currencyMinorUnits',
@@ -24,7 +24,7 @@ export const PUBLIC_SITE_SETTINGS_FIELDS = [
   'timezone',
 ] as const
 
-export type PublicSiteSettings = {
+export type PublicTenantSettings = {
   branding?: { colorAccent?: string; colorHover?: string; colorPrimary?: string; logo?: unknown }
   currency?: string
   currencyMinorUnits?: number
@@ -55,12 +55,12 @@ const number = (value: unknown): number | undefined =>
  * One tenant document, reduced to the fields a site may read. A missing name or slug means the
  * document is not a tenant, so it is refused rather than half-rendered.
  */
-export const publicSiteSettings = (tenant: TenantDoc): PublicSiteSettings | null => {
+export const publicTenantSettings = (tenant: TenantDoc): PublicTenantSettings | null => {
   const name = text(tenant.name)
   const slug = text(tenant.slug)
   if (!name || !slug) return null
 
-  const branding = tenant.branding as PublicSiteSettings['branding'] | null | undefined
+  const branding = tenant.branding as PublicTenantSettings['branding'] | null | undefined
   const locales = Array.isArray(tenant.locales)
     ? (tenant.locales as { locale?: null | string }[])
         .map((row) => ({ locale: text(row?.locale) }))
@@ -86,8 +86,8 @@ export const publicSiteSettings = (tenant: TenantDoc): PublicSiteSettings | null
   }
 }
 
-/** Path on the API root: `GET /api/site-settings`. */
-export const SITE_SETTINGS_PATH = '/site-settings'
+/** Path on the API root: `GET /api/tenant-settings`. */
+export const TENANT_SETTINGS_PATH = '/tenant-settings'
 
 export type SiteSettingsEndpointOptions = {
   /** Resolved jobs slug, so the site can build the beacon URL without guessing it. */
@@ -102,13 +102,13 @@ const respond = (body: unknown, status: number, headers: Record<string, string> 
   })
 
 /**
- * `GET /api/site-settings` — the tenant's public settings for the site whose key made the call.
+ * `GET /api/tenant-settings` — the tenant's public settings for the site whose key made the call.
  *
  * The site key decides the tenant: a key reads its own tenant only, and the aggregate (hub) key
  * reads none, because these settings describe one site. A missing or unknown key is 401, so a
  * probe learns nothing about which sites exist.
  */
-export const siteSettingsEndpoint = ({
+export const tenantSettingsEndpoint = ({
   jobsSlug,
   tenantsSlug = 'tenants',
 }: SiteSettingsEndpointOptions = {}): Endpoint => ({
@@ -129,11 +129,11 @@ export const siteSettingsEndpoint = ({
     const tenant = result.docs[0] as unknown as TenantDoc | undefined
     if (!tenant) return respond({ error: 'not_found' }, 404)
 
-    const settings = publicSiteSettings(tenant)
+    const settings = publicTenantSettings(tenant)
     if (!settings) return respond({ error: 'not_found' }, 404)
 
     return respond(jobsSlug ? { ...settings, jobsSlug } : settings, 200)
   },
   method: 'get',
-  path: SITE_SETTINGS_PATH,
+  path: TENANT_SETTINGS_PATH,
 })

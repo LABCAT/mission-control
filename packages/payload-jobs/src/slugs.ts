@@ -29,6 +29,7 @@ export type PayloadJobsCollectionKey =
   | 'pages'
   | 'plans'
   | 'salaryBands'
+  | 'siteSettings'
 
 export type PayloadJobsCollectionsOptions = Partial<
   Record<PayloadJobsCollectionKey, PayloadJobsCollectionOptions>
@@ -56,6 +57,7 @@ export const DEFAULT_PAYLOAD_JOBS_SLUGS: PayloadJobsCollectionSlugs = {
   pages: 'pages',
   plans: 'plans',
   salaryBands: 'salary-bands',
+  siteSettings: 'site-settings',
 }
 
 /** Resolve each collection's slug from `collections: { locations: { slug } }`, filling defaults. */

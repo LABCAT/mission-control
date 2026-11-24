@@ -101,7 +101,7 @@ describe('payloadJobs tenancy modes', () => {
     ])
     // Payload routes /api/tenants/* to the collection's endpoints, so nothing tenant-specific goes
     // at the root: the only root endpoint is the site's own settings read (PJ-37).
-    expect(result.endpoints?.map((endpoint) => endpoint.path)).toEqual(['/site-settings'])
+    expect(result.endpoints?.map((endpoint) => endpoint.path)).toEqual(['/tenant-settings'])
   })
 
   it('leaves the account auth endpoints out when asked', async () => {
