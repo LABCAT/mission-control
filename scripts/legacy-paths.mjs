@@ -36,7 +36,7 @@ export const legacyPaths = (markdown) => {
     }
   }
 
-  return [...found].sort()
+  return [...found].toSorted()
 }
 
 const main = async () => {

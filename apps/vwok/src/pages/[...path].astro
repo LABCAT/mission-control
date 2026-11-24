@@ -41,8 +41,8 @@ const pathname = Astro.url.pathname
 // A retired legacy page (PJ-42) is a 410, and the middleware already said so by setting this.
 // Checking it first keeps a CMS page with a clashing slug from turning a "gone" into a 200.
 const legacyGone = Astro.locals.legacyGone === true
-const route = legacyGone
-  ? ({ kind: 'not-found', menus: [] } as const)
+const route: Awaited<ReturnType<typeof pageRoute>> = legacyGone
+  ? { kind: 'not-found', menus: [] }
   : await pageRoute({
       cms: cmsFromEnv(await siteEnv()),
       pathname,
@@ -73,6 +73,6 @@ if (route.kind === 'not-found') {
   ) : route.kind === 'shell' ? (
     <HomeShell />
   ) : (
-    <NotFoundPage menus={route.menus} path={pathname} />
+    <NotFoundPage gone={legacyGone} menus={route.menus} path={pathname} />
   )
 }

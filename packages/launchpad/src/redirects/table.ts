@@ -42,9 +42,9 @@ export const legacyTable = (
   }
 
   return {
-    gone: gone.sort(),
-    redirects: Object.fromEntries(Object.entries(redirects).sort(([a], [b]) => a.localeCompare(b))),
-    routes: routes.sort(),
+    gone: gone.toSorted(),
+    redirects: Object.fromEntries(Object.entries(redirects).toSorted(([a], [b]) => a.localeCompare(b))),
+    routes: routes.toSorted(),
   }
 }
 

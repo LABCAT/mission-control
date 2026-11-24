@@ -18,8 +18,8 @@ const paths = crawl.paths as string[]
  */
 const table = legacyTable(paths, { shortlinks: VWOK_SHORTLINKS })
 
-describe('the whole crawl is answered @S-350', () => {
-  it('leaves no crawled URL unanswered @S-350', () => {
+describe('the whole crawl is answered @S-126 @S-350', () => {
+  it('leaves no crawled URL unanswered @S-126 @S-350', () => {
     const unanswered = paths.filter(
       (path) => !(path in table.redirects) && !table.gone.includes(path) && !table.routes.includes(path),
     )
@@ -99,11 +99,14 @@ describe('the whole crawl is answered @S-350', () => {
     expect(table.redirects['/job-date-archive/?time=week&jobs_by_date=1']).toBe('/jobs')
     expect(table.redirects['/feed/?rss_featured=1']).toBe('/feed/jobs.xml')
   })
+})
 
+const normalised = (path: string): string => normaliseLegacyPath(splitPath(path)[0]).path
+
+describe('legacy table: duplicate spellings @S-350', () => {
   it('collapses the duplicate spellings of a path onto one target @S-350', () => {
     // The crawl found `/jobs` and `/jobs/`, `/about-us` and `/about-us/`; they are one URL. A
     // shortlink is keyed by its id, not its path, so those are compared separately (above).
-    const normalised = (path: string): string => normaliseLegacyPath(splitPath(path)[0]).path
     const targets = new Map<string, string>()
     for (const [from, to] of Object.entries(table.redirects)) {
       if (from.includes('?p=')) continue

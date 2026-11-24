@@ -332,8 +332,8 @@ export const legacyRedirect = (
     // An attachment page (`/jobs/{slug}/attachment/{id}/`) is a file, not a page: it redirects to
     // the file on R2 when the importer carried it over, and is gone when it did not (20 Nov).
     if (rest[1] === 'attachment') {
-      const file = attachments?.get(Number(rest[2] ?? ''))
-      return file ? redirect(file) : gone()
+      const attachment = attachments?.get(Number(rest[2] ?? ''))
+      return attachment ? redirect(attachment) : gone()
     }
 
     // Anything else under a job (`/jobs/{slug}/feed/`, `/jobs/{slug}/iiss-logo/`) belongs to the
