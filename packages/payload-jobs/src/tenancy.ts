@@ -241,6 +241,18 @@ export const jobBoardTenantFields: Field[] = [
       description: 'When on, only signed-in accounts can apply to a job. Off: guests can apply with an email address.',
     },
   },
+  // Organisation pages (PJ-38, decided 19 Nov). vwok keeps the legacy flow: the lister requests a
+  // public page and an admin approves it. A tenant that turns this off publishes on the owner's say.
+  {
+    name: 'organisationPagesNeedApproval',
+    type: 'checkbox',
+    defaultValue: true,
+    admin: {
+      condition: showForSiteTenant,
+      description:
+        'When on, an organisation page only goes public once an admin approves it. Off: the owner switching the page on is enough.',
+    },
+  },
   {
     name: 'emailFromName',
     type: 'text',

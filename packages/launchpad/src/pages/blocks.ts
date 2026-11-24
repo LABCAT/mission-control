@@ -20,9 +20,13 @@ export const isLatestJobsBlock = (
   slug: string = LATEST_JOBS_BLOCK,
 ): boolean => block?.blockType === slug
 
+/** The slug of the organisation directory block (PJ-38), registered by payload-jobs. */
+export const ORGANISATION_DIRECTORY_BLOCK = 'organisation-directory'
+
 export type PageSegment =
   | { blocks: BlockLike[]; kind: 'blocks' }
   | { block: BlockLike; kind: 'latest-jobs' }
+  | { block: BlockLike; kind: 'organisation-directory' }
 
 /**
  * Split a layout into runs. Empty and malformed entries are dropped, and consecutive generic
@@ -46,6 +50,12 @@ export const pageSegments = (
     if (isLatestJobsBlock(block, slug)) {
       flush()
       segments.push({ block, kind: 'latest-jobs' })
+      continue
+    }
+
+    if (block.blockType === ORGANISATION_DIRECTORY_BLOCK) {
+      flush()
+      segments.push({ block, kind: 'organisation-directory' })
       continue
     }
 

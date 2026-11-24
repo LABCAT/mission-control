@@ -142,6 +142,12 @@ export type SiteKeyAccessOverrideArgs = AccessArgs & {
 export type SiteKeyAccessOverrideOptions = {
   /** Collections a site key may read. Keep this explicit and small. */
   allowedCollections: Iterable<string>
+  /**
+   * Allowed collections whose own read access already says what a site key may see (organisations:
+   * private pages and possible duplicates are not "published"). For these the collection's result
+   * is kept after the key is verified, instead of being replaced by the published/tenant scope.
+   */
+  ownAccessCollections?: Iterable<string>
 }
 
 type CollectionsBySlug = Record<string, undefined | { config?: { versions?: { drafts?: unknown } } }>
@@ -165,7 +171,7 @@ const isDraftEnabled = (req: PayloadRequest, slug: string): boolean => {
  * Use it as `accessResultOverride` for the collections in the allowlist.
  */
 export const createSiteKeyAccessOverride =
-  ({ allowedCollections }: SiteKeyAccessOverrideOptions) =>
+  ({ allowedCollections, ownAccessCollections = [] }: SiteKeyAccessOverrideOptions) =>
   async ({
     accessKey,
     accessResult,
@@ -183,6 +189,9 @@ export const createSiteKeyAccessOverride =
 
     const siteKey = await resolveSiteKey(req)
     if (!siteKey) return false
+
+    // The collection's own rule is stricter than "published" and already scopes by tenant.
+    if (new Set(ownAccessCollections).has(slug)) return accessResult
 
     const published: AccessResult = isDraftEnabled(req, slug)
       ? { _status: { equals: 'published' } }

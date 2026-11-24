@@ -617,7 +617,7 @@ describe('organisations (PJ-18)', () => {
     expect(await collectionAccess(config, 'read', 'organisations', null)).toBe(false)
   })
 
-  it('lets a site key read only approved, page-enabled organisations of its tenant', async () => {
+  it('lets a site key read only public organisations of its tenant', async () => {
     const config = await buildConfig()
     const req = await siteKeyRequest({ key: 'sk_tenant', tenant: tenantA.id })
     ;(req.payload.collections as Record<string, unknown>)['site-keys'] = {}
@@ -627,7 +627,15 @@ describe('organisations (PJ-18)', () => {
     expect(await collectionAccessWithReq(config, 'read', 'organisations', req)).toEqual({
       and: [
         { tenant: { equals: tenantA.id } },
-        { and: [{ approved: { equals: true } }, { pageEnabled: { equals: true } }] },
+        // Page on, not a possible duplicate, and approved (the strict default when the tenant's
+        // setting cannot be read: PJ-38).
+        {
+          and: [
+            { pageEnabled: { equals: true } },
+            { possibleDuplicate: { not_equals: true } },
+            { approved: { equals: true } },
+          ],
+        },
       ],
     })
   })

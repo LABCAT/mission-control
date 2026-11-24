@@ -38,7 +38,11 @@ const components: BlockComponentMap = {
 }
 
 const pathname = Astro.url.pathname
-const route = await pageRoute({ cms: cmsFromEnv(await siteEnv()), pathname })
+const route = await pageRoute({
+  cms: cmsFromEnv(await siteEnv()),
+  pathname,
+  searchParams: Astro.url.searchParams,
+})
 
 // An unknown path is a real 404: the status and the page agree, so a crawler and a visitor see
 // the same answer.

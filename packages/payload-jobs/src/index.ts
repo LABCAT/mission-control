@@ -20,6 +20,7 @@ import { DASHBOARD_COMPONENT_PATH, type SiteManagerAdminOptions } from './admin'
 import { accountCheckoutEndpoints, type PurchaseRightsCheck } from './checkout'
 import type { LocationsOptions } from './collections/locations'
 import { locationsCollection, locationsTenantSlugIndex } from './collections/locations'
+import { ORGANISATION_DIRECTORY_BLOCK, organisationDirectoryBlock } from './blocks/organisation-directory'
 import { organisationsCollection, withOrganisationField } from './collections/organisations'
 import {
   creditLedgerCollection,
@@ -90,6 +91,7 @@ export * from './view-as'
 export * from './collections/locations'
 export * from './collections/menus'
 export * from './collections/organisations'
+export * from './blocks/organisation-directory'
 export * from './collections/pages'
 export * from './collections/site-settings'
 export * from './coupons'
@@ -362,6 +364,7 @@ const jobBoardCollections = (
   slugs: PayloadJobsCollectionSlugs,
   collections: PayloadJobsCollectionsOptions,
   blockSlugs: readonly string[],
+  tenantsSlug: string,
 ): CollectionConfig[] => [
   locationsCollection({
     ...locationsOptions,
@@ -376,6 +379,7 @@ const jobBoardCollections = (
       mediaSlug,
       slug: slugs.organisations,
       tenantScoped: tenancy === 'multi',
+      tenantsSlug,
     }),
     'organisation',
     'organisation',
@@ -508,6 +512,12 @@ const jobBoardPlugin =
           : null
         : options.mediaSlug
 
+    // mission-control: the organisation directory block (PJ-38) is the plugin's own, so a host that
+    // enables pages gets it in the layout without listing it.
+    if (features.pages && !(config.blocks ?? []).some((block) => typeof block !== 'string' && block.slug === ORGANISATION_DIRECTORY_BLOCK)) {
+      config = { ...config, blocks: [...(config.blocks ?? []), organisationDirectoryBlock] }
+    }
+
     const added = jobBoardCollections(
       tenancy,
       features,
@@ -516,6 +526,7 @@ const jobBoardPlugin =
       slugs,
       collectionOptions,
       registeredBlockSlugs(config),
+      tenantsSlug,
     )
     const existingSlugs = new Set((config.collections ?? []).map((collection) => collection.slug))
     const clashes = added.filter((collection) => existingSlugs.has(collection.slug))

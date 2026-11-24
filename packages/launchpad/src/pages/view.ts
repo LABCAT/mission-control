@@ -10,6 +10,7 @@ import type { CmsCollectionSlug } from '../cms/types'
 import type { SiteTenant } from '../tenant/types'
 import { pageSegments, type PageSegment } from './blocks'
 import { siteCollections, type SiteCollections } from './collections'
+import { loadOrganisationDirectory, parseDirectoryFilters, type OrganisationDirectory } from '../organisations/directory'
 import { loadLatestJobs, type LatestJobsResult } from './latest-jobs'
 import { menuViews, type ContentMenu, type MenuView } from './menus'
 import { resolveContentRoute, type ContentPage } from './pathing'
@@ -19,6 +20,8 @@ import { pageMetadata, type PageMetadata } from './seo'
 export type LatestJobsView = LatestJobsResult & { rssHref?: string }
 
 export type LoadedPage = {
+  /** Present only when the layout names the organisation directory block (PJ-38). */
+  directory?: OrganisationDirectory
   latestJobs?: LatestJobsResult
   page: ContentPage
   /** `/`, `/about` … no trailing slash; the canonical link adds it. */
@@ -28,6 +31,8 @@ export type LoadedPage = {
 }
 
 export type PageView = {
+  /** Present only when the layout names the organisation directory block. */
+  directory?: OrganisationDirectory
   /** The blocks in the order the editor arranged them. */
   segments: PageSegment[]
   /** Present only when the layout names the latest-jobs block. */
@@ -50,6 +55,7 @@ export const pageView = (loaded: LoadedPage, { rssHref, tenant }: PageViewOption
     : undefined
 
   return {
+    ...(loaded.directory ? { directory: loaded.directory } : {}),
     ...(latestJobs ? { latestJobs } : {}),
     metadata: pageMetadata(loaded.page, tenant),
     page: loaded.page,
@@ -68,6 +74,8 @@ export type LoadSiteOptions = {
   locale?: string
   /** Path of the request, e.g. `/about/team`. Query and trailing slash are ignored. */
   pathname: string
+  /** The request's query string: the organisation directory's type and size filters. */
+  searchParams?: Pick<URLSearchParams, 'get'>
   tenant: SiteTenant
 }
 
@@ -86,6 +94,7 @@ export const loadSite = async ({
   latestJobsSlug,
   locale,
   pathname,
+  searchParams,
   tenant,
 }: LoadSiteOptions): Promise<SiteContent> => {
   const slugs = siteCollections(collections)
@@ -103,14 +112,29 @@ export const loadSite = async ({
   const { page, path } = route
   const segments = pageSegments(page.layout, latestJobsSlug)
   const latestJobsBlock = segments.find((segment) => segment.kind === 'latest-jobs')
-  if (latestJobsBlock?.kind !== 'latest-jobs') return { kind: 'page', menus, page, path, segments }
+  const directoryBlock = segments.find((segment) => segment.kind === 'organisation-directory')
 
-  const latestJobs = await loadLatestJobs({
-    cms,
-    collection: slugs.jobs,
-    limit: latestJobsBlock.block.limit,
-    tenant,
-  })
+  const [latestJobs, directory] = await Promise.all([
+    latestJobsBlock?.kind === 'latest-jobs'
+      ? loadLatestJobs({ cms, collection: slugs.jobs, limit: latestJobsBlock.block.limit, tenant })
+      : undefined,
+    directoryBlock
+      ? loadOrganisationDirectory({
+          cms,
+          collections: { jobs: slugs.jobs, organisations: slugs.organisations },
+          filters: parseDirectoryFilters(searchParams),
+          tenant,
+        })
+      : undefined,
+  ])
 
-  return { kind: 'page', latestJobs, menus, page, path, segments }
+  return {
+    kind: 'page',
+    ...(directory ? { directory } : {}),
+    ...(latestJobs ? { latestJobs } : {}),
+    menus,
+    page,
+    path,
+    segments,
+  }
 }
