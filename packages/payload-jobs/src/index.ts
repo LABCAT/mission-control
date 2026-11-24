@@ -65,6 +65,11 @@ import {
 } from './slugs'
 import { slugRulesFor } from './slug-rules'
 import { removeTenantPages, seedTenantSystemPages } from './system-pages'
+import {
+  auditTenantDelete,
+  refuseDeleteWhileTenantHasData,
+  tenantCleanup,
+} from './tenant-offboarding'
 import { taxonomyCollections } from './taxonomies'
 import { jobLifecycleHook, orderEventHook } from './plug-points/gate'
 import { createPayloadJobsRegistry } from './plug-points/payload-jobs-registry'
@@ -120,6 +125,8 @@ export * from './tax-settings'
 export * from './taxonomies'
 export * from './views'
 export * from './tenancy'
+export * from './tenant-offboarding'
+export * from './tenant-offboarding-cli'
 
 export type TenancyMode = 'multi' | 'single'
 
@@ -629,16 +636,32 @@ const jobBoardPlugin =
                   ...(features.credits
                     ? [refuseDeleteWhileInCreditLedger({ field: 'tenant', ledgerSlug: slugs.creditLedger, noun: 'tenant' })]
                     : []),
+                  // Everything else has to be offboarded first (PJ-93, decision 19): a tenant
+                  // goes only once its job-board data is gone. Checked before the cleanups
+                  // below run, so a refused delete leaves them untouched.
+                  refuseDeleteWhileTenantHasData({ slugs, tenantsSlug }),
+                  // A delete that goes through is recorded (S-122), inside its transaction.
+                  auditTenantDelete(),
                   // A deleted site takes its pages and menus with it.
                   ...(features.pages
                     ? [
-                        removeTenantPages({ collectionSlug: slugs.pages }),
-                        removeTenantMenus({ collectionSlug: slugs.menus }),
-                        removeTenantSiteSettings({ collectionSlug: slugs.siteSettings }),
+                        tenantCleanup([slugs.pages], removeTenantPages({ collectionSlug: slugs.pages })),
+                        tenantCleanup([slugs.menus], removeTenantMenus({ collectionSlug: slugs.menus })),
+                        tenantCleanup(
+                          [slugs.siteSettings],
+                          removeTenantSiteSettings({ collectionSlug: slugs.siteSettings }),
+                        ),
                       ]
                     : []),
                   ...(features.coupons
-                    ? [slugs.coupons === 'coupons' ? removeTenantCoupons : removeTenantCouponsFor(slugs.coupons)]
+                    ? [
+                        tenantCleanup(
+                          [slugs.coupons],
+                          slugs.coupons === 'coupons'
+                            ? removeTenantCoupons
+                            : removeTenantCouponsFor(slugs.coupons),
+                        ),
+                      ]
                     : []),
                 ],
               },

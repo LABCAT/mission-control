@@ -18,6 +18,7 @@ import {
   payloadJobs,
   taxonomyCollections,
   type MissionControlUser,
+  type TenantCleanupHook,
 } from '@mission-control/payload-jobs'
 import { bootTestPayload, type TestHarness, type TestUser } from '@mission-control/payload-jobs/test'
 
@@ -179,13 +180,18 @@ describe('alert subscription collection config', () => {
 
     const withAlerts = await tenantsOf(true)
     const hooks = withAlerts?.hooks?.beforeDelete ?? []
-    expect(hooks).toEqual(expect.arrayContaining([removeTenantAlertSubscriptions]))
+    const cleanup = hooks.find((hook) =>
+      (hook as Partial<TenantCleanupHook>).tenantCleanupCollections?.includes(ALERT_SUBSCRIPTIONS_SLUG),
+    ) as TenantCleanupHook | undefined
+    // Marked as a tenant cleanup, so the tenant data guard (PJ-93) knows these rows never
+    // outlive the tenant and never block its deletion.
+    expect(cleanup?.tenantCleanupCollections).toEqual([ALERT_SUBSCRIPTIONS_SLUG])
     // The host's own hook keeps running: the plugin appends, it does not replace.
     expect(hooks[0]).toBe(hostHook)
 
     const withoutAlerts = await tenantsOf(false)
     const hooksWithoutAlerts = withoutAlerts?.hooks?.beforeDelete ?? []
-    expect(hooksWithoutAlerts).not.toContain(removeTenantAlertSubscriptions)
+    expect(hooksWithoutAlerts.some((hook) => (hook as Partial<TenantCleanupHook>).tenantCleanupCollections !== undefined && (hook as TenantCleanupHook).tenantCleanupCollections.includes(ALERT_SUBSCRIPTIONS_SLUG))).toBe(false)
     expect(hooksWithoutAlerts).toContain(hostHook)
     // Pages, menus and orders keep their own cleanup; the only difference is the subscription hook.
     expect(hooks.length).toBe(hooksWithoutAlerts.length + 1)

@@ -8,7 +8,9 @@ import {
   PAYLOAD_JOBS_TENANT_COLLECTIONS,
   payloadJobs,
   resolvePayloadJobsSlugs,
+  selfCleanedCollections,
   type MissionControlUser,
+  type TenantCleanupHook,
 } from '@mission-control/payload-jobs'
 import { payloadJobsAlerts, removeTenantAlertSubscriptions } from '@mission-control/payload-jobs-alerts'
 import { payloadJobsXero } from '@mission-control/payload-jobs-xero'
@@ -714,6 +716,104 @@ describe('orders', () => {
     await expect(
       (guard as (args: unknown) => Promise<void>)({ collection: { slug: 'tenants' }, id: 1, req }),
     ).rejects.toMatchObject({ data: { errors: [expect.objectContaining({ message: expect.stringMatching(/kept for accounting/) })] } })
+  })
+})
+
+describe('tenant offboarding wiring (PJ-93)', () => {
+  it('offers the tenant delete to super admins only @S-270', async () => {
+    const config = await buildConfig()
+    const deleteAccess = config.collections?.find((collection) => collection.slug === 'tenants')
+      ?.access?.delete as (args: unknown) => Promise<unknown>
+
+    expect(await deleteAccess({ req: requestFor(superAdmin) })).toBe(true)
+    expect(await deleteAccess({ req: requestFor(tenantAdminA) })).toBe(false)
+    expect(await deleteAccess({ req: requestFor(null) })).toBe(false)
+  })
+
+  it('refuses the delete while the tenant has job-board data, after the accounting guards @S-270', async () => {
+    const config = await buildConfig()
+    const hooks = config.collections?.find((collection) => collection.slug === 'tenants')?.hooks
+      ?.beforeDelete ?? []
+
+    // The host's own two hooks, then the order and credit guards, then the data guard.
+    const guardIndex = 4
+    expect(hooks.length).toBeGreaterThan(guardIndex)
+
+    const req = {
+      context: {},
+      payload: {
+        collections: { jobs: {}, orders: {}, 'credit-ledger': {} },
+        config: {
+          collections: [
+            { slug: 'tenants', fields: [] },
+            { slug: 'jobs', fields: [{ name: 'tenant', type: 'relationship' }] },
+          ],
+        },
+        count: async () => ({ totalDocs: 2 }),
+      },
+    }
+
+    await expect(
+      (hooks[guardIndex] as (args: unknown) => Promise<void>)({
+        collection: { slug: 'tenants' },
+        id: 1,
+        req,
+      }),
+    ).rejects.toMatchObject({
+      data: { errors: [expect.objectContaining({ message: expect.stringMatching(/2 jobs/) })] },
+    })
+  })
+
+  it('never counts the rows its own cleanups remove, whichever plugin appended them @S-270', async () => {
+    const config = await buildConfig()
+    const hooks = config.collections?.find((collection) => collection.slug === 'tenants')?.hooks
+      ?.beforeDelete ?? []
+    const cleaned = selfCleanedCollections(
+      config.collections?.find((collection) => collection.slug === 'tenants'),
+    )
+
+    // Pages, menus and coupons come from payload-jobs; the alert subscribers from the add-on,
+    // which appends after the guard, so the guard must read the markers at request time.
+    expect(cleaned).toEqual(
+      expect.arrayContaining(['pages', 'menus', 'coupons', 'alert-subscriptions']),
+    )
+    expect(
+      hooks.some(
+        (hook) =>
+          (hook as Partial<TenantCleanupHook>).tenantCleanupCollections?.includes(
+            'alert-subscriptions',
+          ) === true,
+      ),
+    ).toBe(true)
+
+    const counted: string[] = []
+    const req = {
+      context: {},
+      payload: {
+        collections: Object.fromEntries(
+          ['jobs', 'pages', 'menus', 'coupons', 'alert-subscriptions'].map((slug) => [slug, {}]),
+        ),
+        config: {
+          collections: [
+            // The real tenants collection, so the guard sees the cleanups the plugins appended.
+            config.collections?.find((collection) => collection.slug === 'tenants'),
+            ...['jobs', 'pages', 'menus', 'coupons', 'alert-subscriptions'].map((slug) => ({
+              fields: [{ name: 'tenant', type: 'relationship' }],
+              slug,
+            })),
+          ],
+        },
+        count: async ({ collection }: { collection: string }) => {
+          counted.push(collection)
+          return { totalDocs: 0 }
+        },
+      },
+    }
+
+    const guard = hooks[4] as (args: unknown) => Promise<void>
+    await guard({ collection: { slug: 'tenants' }, id: 1, req })
+
+    expect(counted).toEqual(['jobs'])
   })
 })
 

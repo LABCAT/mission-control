@@ -2606,6 +2606,53 @@ stories:
     tests:
       - packages/payload-jobs/src/plug-points/plug-points.test.ts
 
+  - id: S-270
+    area: Platform
+    role: super admin
+    story: "A tenant is deleted only when it holds no job-board data, and the refusal names what is left."
+    steps:
+      - "Give a tenant a job and a menu, then try to delete the tenant."
+      - "Empty the tenant's collections, then delete it again."
+    expected: "The first delete is refused with the counts that block it and removes nothing, not even the pages and menus its own hooks would clean; the second delete succeeds."
+    settings:
+      - tenancy.tenantDeletion
+    mvp: false
+    status: built
+    tests:
+      - packages/payload-jobs/src/tenant-offboarding.test.ts
+      - packages/payload-jobs/src/tenant-offboarding.integration.test.ts
+
+  - id: S-271
+    area: Platform
+    role: super admin
+    story: "Offboarding empties a leaving tenant's job-board data in dependency order, and its user accounts survive with only that membership removed."
+    steps:
+      - "Run the offboarding script with --dry-run, then for real, on a tenant with jobs, plans and an organisation."
+      - "Delete the tenant and read back a user who was a member of it."
+    expected: "The dry run reports what would go and deletes nothing; the real run removes jobs, then plans, then organisations; orders and the credit ledger are kept and named instead; after the tenant goes, the user account still exists with only the other tenant's membership."
+    settings:
+      - tenancy.tenantOffboarding
+    mvp: false
+    status: built
+    tests:
+      - packages/payload-jobs/src/tenant-offboarding.test.ts
+      - packages/payload-jobs/src/tenant-offboarding.integration.test.ts
+      - packages/payload-jobs/src/tenant-offboarding-cli.test.ts
+
+  - id: S-272
+    area: Platform
+    role: super admin
+    story: "A tenant's documents can be exported before a destructive offboarding run."
+    steps:
+      - "Run the offboarding script with --export and a file path."
+    expected: "Every tenant-scoped collection's documents for that tenant are written to the file before anything is deleted."
+    settings:
+      - tenancy.tenantOffboarding
+    mvp: false
+    status: built
+    tests:
+      - packages/payload-jobs/src/tenant-offboarding.test.ts
+
   # ---------------------------------------------------------------------------
   # Job detail page (PJ-37)
   # ---------------------------------------------------------------------------
