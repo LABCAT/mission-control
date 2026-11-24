@@ -21,10 +21,12 @@ import {
   balanceFor,
   creditLedgerCollection,
   grantCredits,
+  grantPackCreditsOnPaid,
   organisationHistory,
   refundCreditOnCancel,
   refuseDeleteWhileInCreditLedger,
 } from './credits'
+import { tenantPackCreditsField } from './credit-settings'
 import { endOfLocalDayAfter } from './local-time'
 import { orderCollection, refuseDeleteWhileOrdered } from './orders'
 import { DEFAULT_PUBLICATION_SETTINGS, tenantPublicationSettings } from './publication'
@@ -91,7 +93,7 @@ const Outbox: CollectionConfig = { slug: 'outbox', fields: [{ name: 'orderID', t
 /** The ledger and orders first: the harness deletes in this order, and the guards keep referenced rows. */
 const collections = (): CollectionConfig[] => [
   creditLedgerCollection(),
-  withHooks(orderCollection(), { afterChange: [orderEventHook(registry), releaseJobsOnSettle()] }),
+  withHooks(orderCollection(), { afterChange: [orderEventHook(registry), releaseJobsOnSettle(), grantPackCreditsOnPaid()] }),
   withHooks(jobsCollection({ richTextDescription: false, withOrder: true }), {
     afterChange: [refundCreditOnCancel()],
     beforeDelete: [refuseDeleteWhileInCreditLedger({ field: 'job', noun: 'job' }), refuseDeleteWhileOrdered({ field: 'jobs', noun: 'job' })],
@@ -119,6 +121,7 @@ const tenantFields: Field[] = [
   { name: 'currency', type: 'text' },
   { name: 'timezone', type: 'text' },
   tenantPublicationField(),
+  tenantPackCreditsField(),
 ]
 
 /** PJ-29's per-member switches, as the default purchase rights read them. */
@@ -236,7 +239,11 @@ describe('checkout integration', () => {
     harness = await bootTestPayload({
       collections: collections(),
       globalCollections: [SiteKeys, Outbox],
-      tenantData: (which) => (which === 'A' ? { currency: 'VUV', timezone: 'Pacific/Efate' } : { currency: 'NZD', timezone: 'Pacific/Auckland' }),
+      tenantData: (which) =>
+        which === 'A'
+          ? { currency: 'VUV', timezone: 'Pacific/Efate' }
+          // Tenant B grants a pack's credits on invoice instead of on payment (PJ-120).
+          : { currency: 'NZD', packCreditsUsableAt: 'on_invoice', timezone: 'Pacific/Auckland' },
       tenantFields,
       tenantHooks: {
         beforeDelete: [
@@ -277,6 +284,7 @@ describe('checkout integration', () => {
     plans.finance = await plan(tenantA.id, { allowedJobCategories: [otherCategory.id], key: 'finance-only', name: 'Finance only', price: 1000 })
     plans.archived = await plan(tenantA.id, { key: 'old', name: 'Old', price: 100, status: 'archived' })
     plans.b = await plan(tenantB.id, { key: 'regular-listing', name: 'Regular', price: 5000 })
+    plans.packB = await plan(tenantB.id, { jobCredits: 5, key: 'job-pack-5', name: '5 Job Pack', price: 17500 })
 
     enhanced = (await payload.create({
       collection: 'add-ons',
@@ -490,7 +498,7 @@ describe('checkout integration', () => {
       await expect(checkout(users.noCredits, { jobId: (await job(orgs.brew)).id, useCredit: true })).rejects.toSatisfy(refused('forbidden'))
     })
 
-    it('grants a pack’s credits through the ledger and uses one for the job @S-154', async () => {
+    it('waits for payment for a pack’s credits, then grants them and uses one for the job @S-154 @S-210', async () => {
       const organisation = await org(harness.tenantA.id, 'Packco')
       const owner = await makeUser('pack-owner', [{ role: 'employer', tenant: harness.tenantA.id }], {
         organisation: organisation.id,
@@ -499,17 +507,70 @@ describe('checkout integration', () => {
       const listing = await job(organisation)
       const result = await checkout(owner, { jobId: listing.id, planId: plans.pack.id })
 
+      // Tenant A never set the option: the old site's rule applies, so the invoice grants nothing.
       expect(result.order).toMatchObject({ paymentMethod: 'invoice', status: 'invoiced', total: 17500 })
-      expect(result.credits).toEqual({ balance: 4, granted: 5, used: 1 })
+      expect(result.credits).toEqual({ balance: 0, granted: 0, used: 0 })
+      expect(await ledger(organisation)).toEqual([])
+      // Only the job waits on its own rule; that says nothing about the pack.
+      expect((await read('jobs', listing.id)).status).toBe('pending')
+
+      // Marking the order paid (staff, a provider or the Xero sync, PJ-118) grants and spends.
+      await payload.update({ collection: 'orders', data: { status: 'paid' }, id: result.order.id, ...system })
       expect((await ledger(organisation)).map((row) => [row.reason, row.delta, row.order])).toEqual([
         ['bought', 5, result.order.id],
         ['used', -1, result.order.id],
       ])
+      expect(await balanceFor({ organisation: organisation.id, payload })).toBe(4)
+
+      // Marking it paid again grants nothing more.
+      await payload.update({ collection: 'orders', data: { status: 'paid' }, id: result.order.id, ...system })
+      expect(await balanceFor({ organisation: organisation.id, payload })).toBe(4)
 
       // The next job is paid from the pack.
       const next = await checkout(owner, { jobId: (await job(organisation)).id, useCredit: true })
       expect(next.order.paymentMethod).toBe('credit')
       expect(next.credits.balance).toBe(3)
+    })
+
+    it('grants nothing for a pack order cancelled before it is paid @S-210', async () => {
+      const organisation = await org(harness.tenantA.id, 'Packcancel')
+      const owner = await makeUser('pack-cancel-owner', [{ role: 'employer', tenant: harness.tenantA.id }], {
+        organisation: organisation.id,
+        organisationRole: 'owner',
+      })
+      const result = await checkout(owner, { jobId: (await job(organisation)).id, planId: plans.pack.id })
+      await payload.update({ collection: 'orders', data: { status: 'cancelled' }, id: result.order.id, ...system })
+
+      expect(await ledger(organisation)).toEqual([])
+      expect(await balanceFor({ organisation: organisation.id, payload })).toBe(0)
+    })
+
+    it('grants a pack’s credits at invoicing on a site that chooses that @S-211', async () => {
+      const listing = await job(orgs.shop, { categories: [] })
+      const tenantALedgerBefore = (await ledger(orgs.brew)).length
+      const result = await checkout(
+        users.ownerB,
+        { jobId: listing.id, planId: plans.packB.id },
+        harness.tenantB.id,
+      )
+
+      expect(result.order).toMatchObject({ paymentMethod: 'invoice', status: 'invoiced', total: 17500 })
+      expect(result.credits).toEqual({ balance: 4, granted: 5, used: 1 })
+      expect((await ledger(orgs.shop)).map((row) => [row.reason, row.delta, row.order])).toEqual([
+        ['bought', 5, result.order.id],
+        ['used', -1, result.order.id],
+      ])
+
+      // The next job is paid from the pack, and tenant A's ledger is untouched by tenant B.
+      const next = await checkout(
+        users.ownerB,
+        { jobId: (await job(orgs.shop, { categories: [] })).id, planId: plans.b.id, useCredit: true },
+        harness.tenantB.id,
+      )
+      expect(next.order.paymentMethod).toBe('credit')
+      expect(next.credits.balance).toBe(3)
+      // Tenant B's pack touched only its own organisation's ledger.
+      expect((await ledger(orgs.brew)).length).toBe(tenantALedgerBefore)
     })
   })
 

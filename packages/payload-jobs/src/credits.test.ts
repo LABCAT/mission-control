@@ -14,6 +14,7 @@ import {
   creditMovementProblems,
   creditsGrantedByQuote,
   isCreditDelta,
+  packCreditsGrantedByQuote,
   refuseCreditLedgerDelete,
   sumCreditDeltas,
 } from './credits'
@@ -98,6 +99,19 @@ describe('credit movements @S-149', () => {
     expect(creditsGrantedByQuote({ entitlements: { jobCreditsGranted: 5 } })).toBe(5)
     expect(creditsGrantedByQuote({ entitlements: {} })).toBeNull()
     expect(creditsGrantedByQuote(null)).toBeNull()
+  })
+
+  it('reads a pack’s credits from its quote, and none from a single listing', () => {
+    const quote = (jobCredits: number, jobCreditsGranted: number) => ({
+      entitlements: { jobCreditsGranted },
+      plan: { jobCredits },
+    })
+    expect(packCreditsGrantedByQuote(quote(5, 5))).toBe(5)
+    // A listing plan sells the one listing it grants; nothing is banked.
+    expect(packCreditsGrantedByQuote(quote(1, 1))).toBe(0)
+    expect(packCreditsGrantedByQuote(quote(5, 0))).toBe(0)
+    expect(packCreditsGrantedByQuote({ entitlements: { jobCreditsGranted: 5 } })).toBe(0)
+    expect(packCreditsGrantedByQuote(null)).toBe(0)
   })
 })
 

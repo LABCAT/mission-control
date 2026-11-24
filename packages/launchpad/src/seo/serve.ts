@@ -55,11 +55,6 @@ const DEFAULT_SLUGS: Required<SitemapSlugs> = {
   pages: 'pages',
 }
 
-/** Payload's public-organisation rule (PJ-18): approved, with its page switched on. */
-const PUBLIC_ORGANISATION_FILTER = {
-  and: [{ approved: { equals: true } }, { pageEnabled: { equals: true } }],
-}
-
 export type LoadSitemapOptions = {
   cms: SitemapCms
   filterPaths?: FilterPaths
@@ -117,9 +112,9 @@ export const loadSitemap = async ({
     cms.findAll(slugs.jobTypes, { locale, sort: 'name' }) as Promise<TypeRef[]>,
     cms.findAll(slugs.locations, { locale, sort: 'name' }) as Promise<LocationRef[]>,
     cms.findAll(slugs.jobs, { where: liveJobsWhere(now) }) as Promise<JobRef[]>,
-    cms.findAll(slugs.organisations, { where: PUBLIC_ORGANISATION_FILTER }) as Promise<
-      OrganisationRef[]
-    >,
+    // No `where`: a site key only reads the organisations the CMS calls public (PJ-38), so the
+    // sitemap cannot list a page the profile route would 404.
+    cms.findAll(slugs.organisations, {}) as Promise<OrganisationRef[]>,
     cms.findAll(slugs.pages, { draft: false }) as Promise<PageDoc[]>,
   ])
 

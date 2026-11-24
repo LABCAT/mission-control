@@ -29,6 +29,10 @@ import * as migration_20261121_163345_xero_invoices from './20261121_163345_xero
 import * as migration_20261123_001810_view_as_audit_log from './20261123_001810_view_as_audit_log';
 import * as migration_20261123_080818_pages_site_settings from './20261123_080818_pages_site_settings';
 import * as migration_20261124_044341_form_map_blocks from './20261124_044341_form_map_blocks';
+import * as migration_20261124_051310_job_detail_views from './20261124_051310_job_detail_views';
+import * as migration_20261124_081812_org_directory from './20261124_081812_org_directory';
+import * as migration_20261124_084533_pack_credit_timing from './20261124_084533_pack_credit_timing';
+import * as migration_20261124_091222_application_retention from './20261124_091222_application_retention';
 
 export const migrations = [
   {
@@ -184,6 +188,26 @@ export const migrations = [
   {
     up: migration_20261124_044341_form_map_blocks.up,
     down: migration_20261124_044341_form_map_blocks.down,
-    name: '20261124_044341_form_map_blocks'
+    name: '20261124_044341_form_map_blocks',
+  },
+  {
+    up: migration_20261124_051310_job_detail_views.up,
+    down: migration_20261124_051310_job_detail_views.down,
+    name: '20261124_051310_job_detail_views',
+  },
+  {
+    up: migration_20261124_081812_org_directory.up,
+    down: migration_20261124_081812_org_directory.down,
+    name: '20261124_081812_org_directory',
+  },
+  {
+    up: migration_20261124_084533_pack_credit_timing.up,
+    down: migration_20261124_084533_pack_credit_timing.down,
+    name: '20261124_084533_pack_credit_timing',
+  },
+  {
+    up: migration_20261124_091222_application_retention.up,
+    down: migration_20261124_091222_application_retention.down,
+    name: '20261124_091222_application_retention'
   },
 ];

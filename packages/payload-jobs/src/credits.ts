@@ -28,7 +28,12 @@ import {
   type MissionControlUser,
   type TenantRole,
 } from './access'
-import { resultingTenantID, tenantIDOf } from './catalog'
+import { idsOf, resultingTenantID, tenantIDOf } from './catalog'
+import {
+  packCreditGrantProblem,
+  packCreditModeForOrder,
+  type PackCreditMode,
+} from './credit-settings'
 import {
   DEFAULT_PAYLOAD_JOBS_SLUGS,
   mergeCollectionAccess,
@@ -749,7 +754,11 @@ const load = async (req: PayloadRequest, collection: string, id: ID): Promise<Lo
   }
 }
 
-/** Order statuses that may grant their credits: the pack was sold (invoiced) or paid for. */
+/**
+ * Every order status that may grant a pack's credits, whatever the tenant's
+ * `packCreditsUsableAt` says: invoiced or paid. Which of the two applies is the tenant's choice
+ * (`packCreditGrantProblem`).
+ */
 export const CREDIT_GRANTING_ORDER_STATUSES = ['invoiced', 'paid'] as const
 
 /** The credits an order's quote snapshot grants (`entitlements.jobCreditsGranted`), or `null`. */
@@ -760,13 +769,29 @@ export const creditsGrantedByQuote = (quote: unknown): null | number => {
 }
 
 /**
+ * The credits an order buys as a *pack*, or 0. A plan that includes more than the one listing it
+ * sells is a pack (the same `jobCredits > 1` rule checkout uses); a single listing grants nothing
+ * extra, whatever its quote says.
+ */
+export const packCreditsGrantedByQuote = (quote: unknown): number => {
+  if (!isRecord(quote) || !isRecord(quote.plan)) return 0
+  const planCredits = quote.plan.jobCredits
+  if (typeof planCredits !== 'number' || planCredits <= 1) return 0
+  const granted = creditsGrantedByQuote(quote) ?? 0
+  return granted > 0 ? granted : 0
+}
+
+/**
  * Add an order's credits to its organisation (reason `bought`). The number comes from the order's
  * quote (`entitlements.jobCreditsGranted`); `credits` is only for an order without one and must
- * agree with it otherwise. An order grants once: calling again returns the first row. The order
- * must be invoiced or paid; checkout (PJ-31) and the payment sync decide which.
+ * agree with it otherwise. An order grants once: calling again returns the first row.
+ *
+ * The order must be in a status the tenant's `packCreditsUsableAt` accepts: paid, or invoiced or
+ * paid when the site grants on invoice (PJ-120). Checkout (PJ-31), the payment sync and the
+ * order's own paid hook decide when that is.
  */
 export const grantCredits = async (
-  args: CreditHelperArgs & { credits?: number; order: ID },
+  args: CreditHelperArgs & { credits?: number; order: ID; packCreditMode?: PackCreditMode },
 ): Promise<CreditWriteResult> => {
   const req = await requestFor(args)
   const slugs = slugsFor(args.payload)
@@ -780,9 +805,9 @@ export const grantCredits = async (
   if (credits === undefined || !Number.isSafeInteger(credits) || credits < 1) {
     throw new CreditLedgerError('invalid', 'This order grants no job credits')
   }
-  if (!(CREDIT_GRANTING_ORDER_STATUSES as readonly string[]).includes(String(order.status))) {
-    throw new CreditLedgerError('invalid', `A ${String(order.status)} order grants no credits`)
-  }
+  const mode = args.packCreditMode ?? (await packCreditModeForOrder({ order, payload: args.payload, req }))
+  const problem = packCreditGrantProblem({ mode, status: order.status })
+  if (problem !== null) throw new CreditLedgerError('invalid', problem)
 
   return recordMovement(
     { ...args, req },
@@ -795,6 +820,48 @@ export const grantCredits = async (
     },
   )
 }
+
+/**
+ * Orders hook: when an order becomes paid, grant the pack's credits and use one for the job it
+ * paid for (PJ-120). A site that grants on invoice already did both at checkout; a site that
+ * grants on payment waited for this, whether the order was marked paid by staff, by the Xero
+ * payment sync (PJ-118) or by a payment provider. Paid is the one status both modes accept, so
+ * the mode needs no check here, and the ledger's idempotency keys make a second run a no-op.
+ *
+ * Only a transition into `paid` is handled, so an order cancelled or failed before payment
+ * grants nothing. A job cancelled before the order was paid keeps every credit: it can't use one.
+ */
+export const grantPackCreditsOnPaid =
+  ({ slug, tenantScoped = true }: { slug?: string; tenantScoped?: boolean } = {}): CollectionAfterChangeHook =>
+  async ({ doc, operation, previousDoc, req }) => {
+    if (doc?.status !== 'paid' || (operation === 'update' && previousDoc?.status === 'paid')) return doc
+
+    const ledger = slug ?? creditLedgerSlugFor(req.payload)
+    if (!hasCollection(req, ledger)) return doc
+    if (packCreditsGrantedByQuote(doc.quote) < 1) return doc
+    if (tenantScoped && tenantIDOf(doc.tenant) === null) return doc
+
+    await grantCredits({ order: doc.id, payload: req.payload, req, slug: ledger })
+
+    // The credit that pays for the job the pack was bought with, exactly as checkout would have
+    // used it. Only when this order still pays for that job: a relisted job has its own order.
+    const jobsSlug = slugsFor(req.payload).jobs
+    const jobID = idsOf([doc.jobs].flat())[0] ?? null
+    if (jobID === null || !hasCollection(req, jobsSlug)) return doc
+    const job = (await req.payload.findByID({
+      collection: jobsSlug as CollectionSlug,
+      depth: 0,
+      disableErrors: true,
+      id: jobID,
+      overrideAccess: true,
+      req,
+      select: { order: true, status: true } as never,
+    })) as null | { order?: unknown; status?: unknown }
+    if (!job || job.status === 'cancelled' || refKey(job.order) !== refKey(doc.id)) return doc
+
+    await consumeCredit({ job: jobID, order: doc.id, payload: req.payload, req, slug: ledger })
+    return doc
+  }
 
 /**
  * Take one credit from the job's organisation for the job (reason `used`), optionally for the

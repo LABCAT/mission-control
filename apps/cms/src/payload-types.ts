@@ -137,6 +137,7 @@ export interface Config {
     banner: BannerBlock;
     form: FormBlock;
     map: MapBlock;
+    'organisation-directory': OrganisationDirectoryBlock;
   };
   collections: {
     users: User;
@@ -238,6 +239,7 @@ export interface Config {
     tasks: {
       heartbeat: TaskHeartbeat;
       'expire-job-placements': TaskExpireJobPlacements;
+      'delete-expired-applications': TaskDeleteExpiredApplications;
       'xero-invoice-sync': TaskXeroInvoiceSync;
       inline: {
         input: unknown;
@@ -530,9 +532,42 @@ export interface Tenant {
     trustOnApproval?: boolean | null;
   };
   /**
+   * When a job pack’s credits become usable: once the order is paid (the old site’s rule), or as soon as it is invoiced.
+   */
+  packCreditsUsableAt?: ('on_payment' | 'on_invoice') | null;
+  /**
+   * Whether new jobs need an admin’s approval before they go live.
+   */
+  jobModeration?: ('legacy' | 'review' | 'auto') | null;
+  /**
+   * How long personal data is kept after a job closes. Applications and their CV files are deleted by the daily job once this period has passed.
+   */
+  retention?: {
+    /**
+     * Months to keep applications and their CV files after the job closes. Default 12, as the old site did.
+     */
+    applicationsMonths?: number | null;
+  };
+  /**
+   * What a visitor sees on a job that has closed.
+   */
+  expiredJobMode?: ('notice' | 'gone') | null;
+  /**
+   * Months after an expiry before the page turns into 410 Gone. 0 keeps the notice page for ever.
+   */
+  expiredJobGoneAfterMonths?: number | null;
+  /**
+   * Show “N views” on a job page. The count comes from the view beacon after the page loads.
+   */
+  publicJobViews?: boolean | null;
+  /**
    * When on, only signed-in accounts can apply to a job. Off: guests can apply with an email address.
    */
   accountRequiredToApply?: boolean | null;
+  /**
+   * When on, an organisation page only goes public once an admin approves it. Off: the owner switching the page on is enough.
+   */
+  organisationPagesNeedApproval?: boolean | null;
   emailFromName?: string | null;
   emailFromAddress?: string | null;
   /**
@@ -675,9 +710,13 @@ export interface Organisation {
    */
   trusted?: boolean | null;
   /**
-   * Set by a tenant admin. The public page and directory entry go live.
+   * Private by default. Switch on to put the public page and directory entry live (needs approval where the tenant requires it).
    */
   pageEnabled?: boolean | null;
+  /**
+   * Flagged as a possible duplicate of another organisation. Its page cannot be public, and its jobs stay off any official page, until a site manager merges or clears it.
+   */
+  possibleDuplicate?: boolean | null;
   /**
    * Known customers pay by invoice instead of at checkout.
    */
@@ -1106,6 +1145,23 @@ export interface MapBlock {
   blockType: 'map';
 }
 /**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "OrganisationDirectoryBlock".
+ */
+export interface OrganisationDirectoryBlock {
+  heading?: string | null;
+  intro?: string | null;
+  showTypeFilter?: boolean | null;
+  showSizeFilter?: boolean | null;
+  /**
+   * Shown when no organisation matches.
+   */
+  emptyLabel?: string | null;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'organisation-directory';
+}
+/**
  * Keys public sites use to read their own tenant. The raw key is shown once.
  *
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1214,6 +1270,7 @@ export interface Page {
         | BannerBlock
         | FormBlock
         | MapBlock
+        | OrganisationDirectoryBlock
       )[]
     | null;
   /**
@@ -1695,6 +1752,16 @@ export interface Job {
         from?: ('draft' | 'waiting_for_purchase' | 'pending' | 'published' | 'expired' | 'cancelled') | null;
         to: 'draft' | 'waiting_for_purchase' | 'pending' | 'published' | 'expired' | 'cancelled';
         note?: string | null;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * Views per day, newest first. Written by the view beacon.
+   */
+  viewDays?:
+    | {
+        day: string;
+        count: number;
         id?: string | null;
       }[]
     | null;
@@ -2344,7 +2411,8 @@ export interface PayloadJob {
     | {
         executedAt: string;
         completedAt: string;
-        taskSlug: 'inline' | 'heartbeat' | 'expire-job-placements' | 'xero-invoice-sync';
+        taskSlug:
+          'inline' | 'heartbeat' | 'expire-job-placements' | 'delete-expired-applications' | 'xero-invoice-sync';
         taskID: string;
         input:
           | {
@@ -2375,13 +2443,16 @@ export interface PayloadJob {
           | boolean
           | null;
         parent?: {
-          taskSlug?: ('inline' | 'heartbeat' | 'expire-job-placements' | 'xero-invoice-sync') | null;
+          taskSlug?:
+            | ('inline' | 'heartbeat' | 'expire-job-placements' | 'delete-expired-applications' | 'xero-invoice-sync')
+            | null;
           taskID?: string | null;
         };
         id?: string | null;
       }[]
     | null;
-  taskSlug?: ('inline' | 'heartbeat' | 'expire-job-placements' | 'xero-invoice-sync') | null;
+  taskSlug?:
+    ('inline' | 'heartbeat' | 'expire-job-placements' | 'delete-expired-applications' | 'xero-invoice-sync') | null;
   queue?: string | null;
   waitUntil?: string | null;
   processingUntil?: string | null;
@@ -2858,7 +2929,18 @@ export interface TenantsSelect<T extends boolean = true> {
         newEmployerGoLive?: T;
         trustOnApproval?: T;
       };
+  packCreditsUsableAt?: T;
+  jobModeration?: T;
+  retention?:
+    | T
+    | {
+        applicationsMonths?: T;
+      };
+  expiredJobMode?: T;
+  expiredJobGoneAfterMonths?: T;
+  publicJobViews?: T;
   accountRequiredToApply?: T;
+  organisationPagesNeedApproval?: T;
   emailFromName?: T;
   emailFromAddress?: T;
   adminEmail?: T;
@@ -2964,6 +3046,7 @@ export interface OrganisationsSelect<T extends boolean = true> {
   approved?: T;
   trusted?: T;
   pageEnabled?: T;
+  possibleDuplicate?: T;
   canPayByInvoice?: T;
   billingEmail?: T;
   xeroContactCode?: T;
@@ -3198,6 +3281,13 @@ export interface JobsSelect<T extends boolean = true> {
         from?: T;
         to?: T;
         note?: T;
+        id?: T;
+      };
+  viewDays?:
+    | T
+    | {
+        day?: T;
+        count?: T;
         id?: T;
       };
   legacyId?: T;
@@ -3935,6 +4025,17 @@ export interface TaskExpireJobPlacements {
   output: {
     jobsUpdated?: number | null;
     placementsRemoved?: number | null;
+  };
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "TaskDelete-expired-applications".
+ */
+export interface TaskDeleteExpiredApplications {
+  input?: unknown;
+  output: {
+    applicationsDeleted?: number | null;
+    filesDeleted?: number | null;
   };
 }
 /**

@@ -24,5 +24,6 @@ export const cmsFromEnv = (env: SiteEnv): CmsClient | null => {
 export const SITE_COLLECTIONS: SiteCollections = {
   jobs: 'jobs',
   menus: 'menus',
+  organisations: 'organisations',
   pages: 'pages',
 }

@@ -132,7 +132,7 @@ export const createFixtureConnection = (
         .map((part) => part.trim())
         .filter((part) => part && part !== '1 = 1')
         .map((part) => {
-          const condition = /^`?(\w+)`?\s*(=|>|IN)\s*(\?|\(?[\s?,]+\)?)$/i.exec(part)
+          const condition = /^`?(\w+)`?\s*(=|>=|>|IN|LIKE)\s*(\?|\(?[\s?,]+\)?)$/i.exec(part)
           if (!condition) throw new Error(`Fixture connection cannot parse condition: ${part}`)
           const [, column, operator, placeholders] = condition
           const count = (placeholders!.match(/\?/g) ?? []).length
@@ -142,6 +142,11 @@ export const createFixtureConnection = (
             const value = row[column!] as never
             if (operator === '=') return value === values[0]
             if (operator === '>') return value > (values[0] as never)
+            if (operator === '>=') return value >= (values[0] as never)
+            if (operator.toUpperCase() === 'LIKE') {
+              const pattern = String(values[0]).replaceAll('\\', '')
+              return String(value).startsWith(pattern.replace(/%$/, ''))
+            }
             return values.includes(value)
           }
         })

@@ -1,6 +1,7 @@
 import type { Field, GlobalConfig } from 'payload'
 
 import { authenticatedAccess, superAdminAccess } from './access'
+import { tenantPackCreditsField } from './credit-settings'
 import {
   DEFAULT_FORM_RETENTION_DAYS,
   FORM_RETENTION_FIELD,
@@ -8,6 +9,7 @@ import {
 } from './forms'
 import { tenantLocationFields } from './location-settings'
 import { tenantPublicationField } from './publication-settings'
+import { tenantRetentionField } from './retention'
 import { tenantTaxField } from './tax-settings'
 
 // Current ISO 4217 list one from SIX (the maintenance agency), fetched 2026-11-06.
@@ -182,6 +184,63 @@ export const jobBoardTenantFields: Field[] = [
   // When a job goes live and whether it needs review (PJ-32). The rule itself is in
   // `publication.ts`; these are the per-tenant switches it reads.
   tenantPublicationField(showForSiteTenant),
+  // When a pack's credits become usable: on payment (old site's rule) or on invoice (PJ-120).
+  tenantPackCreditsField(showForSiteTenant),
+  // What happens to a job after checkout (PJ-32 applies it with `decidePublication`).
+  {
+    name: 'jobModeration',
+    type: 'select',
+    defaultValue: 'legacy',
+    options: [
+      { label: 'Old site rule: publish if approved, paid or on invoice, else review', value: 'legacy' },
+      { label: 'Review every job', value: 'review' },
+      { label: 'Publish every job straight away', value: 'auto' },
+    ],
+    admin: {
+      condition: showForSiteTenant,
+      description: 'Whether new jobs need an admin’s approval before they go live.',
+    },
+  },
+  // How long personal data is kept after a job closes (PJ-88). Default: 12 months, as vwok did.
+  tenantRetentionField(showForSiteTenant),
+  // Expired jobs (PJ-37, decision 17). Default: the URL keeps resolving with a notice and
+  // similar jobs, then answers 410 after `expiredJobGoneAfterMonths`. `gone` matches the legacy
+  // site, which hid an expired job the moment it closed.
+  {
+    name: 'expiredJobMode',
+    type: 'select',
+    defaultValue: 'notice',
+    options: [
+      { label: 'Keep the page: notice, noindex, similar jobs, then 410', value: 'notice' },
+      { label: 'Gone as soon as it expires (legacy behaviour)', value: 'gone' },
+    ],
+    admin: {
+      condition: showForSiteTenant,
+      description: 'What a visitor sees on a job that has closed.',
+    },
+  },
+  {
+    name: 'expiredJobGoneAfterMonths',
+    type: 'number',
+    defaultValue: 12,
+    min: 0,
+    admin: {
+      condition: showForSiteTenant,
+      description:
+        'Months after an expiry before the page turns into 410 Gone. 0 keeps the notice page for ever.',
+    },
+  },
+  // Public view counter (PJ-37, decision 20 Nov). Generic default off; vwok turns it on.
+  {
+    name: 'publicJobViews',
+    type: 'checkbox',
+    defaultValue: false,
+    admin: {
+      condition: showForSiteTenant,
+      description:
+        'Show “N views” on a job page. The count comes from the view beacon after the page loads.',
+    },
+  },
   // Applying (PJ-25, decided 20 Nov). Generic default: guests may apply. vwok turns it on.
   {
     name: 'accountRequiredToApply',
@@ -190,6 +249,18 @@ export const jobBoardTenantFields: Field[] = [
     admin: {
       condition: showForSiteTenant,
       description: 'When on, only signed-in accounts can apply to a job. Off: guests can apply with an email address.',
+    },
+  },
+  // Organisation pages (PJ-38, decided 19 Nov). vwok keeps the legacy flow: the lister requests a
+  // public page and an admin approves it. A tenant that turns this off publishes on the owner's say.
+  {
+    name: 'organisationPagesNeedApproval',
+    type: 'checkbox',
+    defaultValue: true,
+    admin: {
+      condition: showForSiteTenant,
+      description:
+        'When on, an organisation page only goes public once an admin approves it. Off: the owner switching the page on is enough.',
     },
   },
   {

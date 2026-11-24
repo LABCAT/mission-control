@@ -8,6 +8,7 @@ import {
   type CollectionConfig,
   type Field,
   type Payload,
+  type StorageAdapter,
 } from 'payload'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
@@ -92,6 +93,8 @@ type BootTestPayloadArgs = {
   globalCollections?: CollectionConfig[]
   /** Turn localization on, as the CMS does. Default off. */
   localization?: { defaultLocale: string; locales: string[] }
+  /** Storage adapters, e.g. `r2Storage` over an in-memory bucket to prove deletes reach storage (PJ-88). */
+  storage?: StorageAdapter[]
   /** Extra data for the seeded tenants, e.g. a currency. Needs matching `tenantFields`. */
   tenantData?: (which: 'A' | 'B') => Record<string, unknown>
   /** Extra fields on the tenants collection. */
@@ -122,6 +125,7 @@ export const bootTestPayload = async ({
   databaseUrl,
   globalCollections = [],
   localization,
+  storage,
   tenantData = () => ({}),
   tenantFields = [],
   tenantHooks,
@@ -157,6 +161,7 @@ export const bootTestPayload = async ({
     // Jobs have a rich-text description; the CMS uses Lexical, so the harness does too.
     editor: lexicalEditor(),
     ...(localization ? { localization } : {}),
+    ...(storage ? { storage } : {}),
     db: postgresAdapter({
       pool: {
         connectionString: testDatabaseUrl,

@@ -21,9 +21,11 @@ import { approveJobEndpoint, releaseJobsOnSettle } from './approval'
 import { accountCheckoutEndpoints, type PurchaseRightsCheck } from './checkout'
 import type { LocationsOptions } from './collections/locations'
 import { locationsCollection, locationsTenantSlugIndex } from './collections/locations'
+import { ORGANISATION_DIRECTORY_BLOCK, organisationDirectoryBlock } from './blocks/organisation-directory'
 import { organisationsCollection, withOrganisationField } from './collections/organisations'
 import {
   creditLedgerCollection,
+  grantPackCreditsOnPaid,
   organisationHistoryEndpoint,
   refundCreditOnCancel,
   refuseDeleteWhileInCreditLedger,
@@ -57,6 +59,7 @@ import { resolvePaymentProviders, type PaymentProviderDefinition } from './payme
 import { expireJobPlacementsTask, PLACEMENTS_FIELD } from './placements'
 import { withPersonalDataRemoval } from './anonymise-user'
 import { seedTenantLegalPages } from './legal-pages'
+import { deleteExpiredApplicationsTask, withApplicationDataAction } from './retention'
 import { planCollection, withPlanRestrictionGuards } from './plans'
 import {
   DEFAULT_PAYLOAD_JOBS_SLUGS,
@@ -66,12 +69,19 @@ import {
 } from './slugs'
 import { slugRulesFor } from './slug-rules'
 import { removeTenantPages, seedTenantSystemPages } from './system-pages'
+import {
+  auditTenantDelete,
+  refuseDeleteWhileTenantHasData,
+  tenantCleanup,
+} from './tenant-offboarding'
 import { taxonomyCollections } from './taxonomies'
 import { jobLifecycleHook, orderEventHook } from './plug-points/gate'
 import { createPayloadJobsRegistry } from './plug-points/payload-jobs-registry'
 import { jobBoardAddOnsField } from './plug-points/tenant-field'
 import { jobBoardSettingsGlobal, jobBoardTenantFields } from './tenancy'
 import { withSiteManagerNav } from './admin/nav'
+import { tenantSettingsEndpoint } from './tenant-settings'
+import { jobViewEndpoint, type JobViewOptions } from './views'
 
 export * from './access'
 export * from './admin'
@@ -84,9 +94,11 @@ export * from './view-as'
 export * from './collections/locations'
 export * from './collections/menus'
 export * from './collections/organisations'
+export * from './blocks/organisation-directory'
 export * from './collections/pages'
 export * from './collections/site-settings'
 export * from './coupons'
+export * from './credit-settings'
 export * from './credits'
 export * from './email'
 export * from './forms'
@@ -114,14 +126,19 @@ export * from './plans'
 export * from './plans-seed'
 export * from './pricing'
 export * from './rate-limit'
+export * from './retention'
 export * from './seed/vanuatu'
 export * from './slugs'
 export * from './site-keys'
+export * from './tenant-settings'
 export * from './system-pages'
 export * from './tax'
 export * from './tax-settings'
 export * from './taxonomies'
+export * from './views'
 export * from './tenancy'
+export * from './tenant-offboarding'
+export * from './tenant-offboarding-cli'
 
 export type TenancyMode = 'multi' | 'single'
 
@@ -258,6 +275,11 @@ export type PayloadJobsOptions = {
   documentsSlug?: null | string
   /** Slug of the host's upload collection for organisation logos and covers. Defaults to `media`. */
   mediaSlug?: null | string
+  /**
+   * Job page view counting (PJ-37). The beacon endpoint is always registered; pass the
+   * Cloudflare Rate Limiting binding so production limits per visitor, not per isolate.
+   */
+  jobViews?: JobViewOptions
   /** Slug of the auth collection that gets legacy WordPress password support. Defaults to `users`. */
   usersSlug?: string
   /**
@@ -352,6 +374,7 @@ const jobBoardCollections = (
   slugs: PayloadJobsCollectionSlugs,
   collections: PayloadJobsCollectionsOptions,
   blockSlugs: readonly string[],
+  tenantsSlug: string,
 ): CollectionConfig[] => [
   locationsCollection({
     ...locationsOptions,
@@ -366,6 +389,7 @@ const jobBoardCollections = (
       mediaSlug,
       slug: slugs.organisations,
       tenantScoped: tenancy === 'multi',
+      tenantsSlug,
     }),
     'organisation',
     'organisation',
@@ -498,6 +522,12 @@ const jobBoardPlugin =
           : null
         : options.mediaSlug
 
+    // mission-control: the organisation directory block (PJ-38) is the plugin's own, so a host that
+    // enables pages gets it in the layout without listing it.
+    if (features.pages && !(config.blocks ?? []).some((block) => typeof block !== 'string' && block.slug === ORGANISATION_DIRECTORY_BLOCK)) {
+      config = { ...config, blocks: [...(config.blocks ?? []), organisationDirectoryBlock] }
+    }
+
     const added = jobBoardCollections(
       tenancy,
       features,
@@ -506,6 +536,7 @@ const jobBoardPlugin =
       slugs,
       collectionOptions,
       registeredBlockSlugs(config),
+      tenantsSlug,
     )
     const existingSlugs = new Set((config.collections ?? []).map((collection) => collection.slug))
     const clashes = added.filter((collection) => existingSlugs.has(collection.slug))
@@ -626,16 +657,32 @@ const jobBoardPlugin =
                   ...(features.credits
                     ? [refuseDeleteWhileInCreditLedger({ field: 'tenant', ledgerSlug: slugs.creditLedger, noun: 'tenant' })]
                     : []),
+                  // Everything else has to be offboarded first (PJ-93, decision 19): a tenant
+                  // goes only once its job-board data is gone. Checked before the cleanups
+                  // below run, so a refused delete leaves them untouched.
+                  refuseDeleteWhileTenantHasData({ slugs, tenantsSlug }),
+                  // A delete that goes through is recorded (S-122), inside its transaction.
+                  auditTenantDelete(),
                   // A deleted site takes its pages and menus with it.
                   ...(features.pages
                     ? [
-                        removeTenantPages({ collectionSlug: slugs.pages }),
-                        removeTenantMenus({ collectionSlug: slugs.menus }),
-                        removeTenantSiteSettings({ collectionSlug: slugs.siteSettings }),
+                        tenantCleanup([slugs.pages], removeTenantPages({ collectionSlug: slugs.pages })),
+                        tenantCleanup([slugs.menus], removeTenantMenus({ collectionSlug: slugs.menus })),
+                        tenantCleanup(
+                          [slugs.siteSettings],
+                          removeTenantSiteSettings({ collectionSlug: slugs.siteSettings }),
+                        ),
                       ]
                     : []),
                   ...(features.coupons
-                    ? [slugs.coupons === 'coupons' ? removeTenantCoupons : removeTenantCouponsFor(slugs.coupons)]
+                    ? [
+                        tenantCleanup(
+                          [slugs.coupons],
+                          slugs.coupons === 'coupons'
+                            ? removeTenantCoupons
+                            : removeTenantCouponsFor(slugs.coupons),
+                        ),
+                      ]
                     : []),
                 ],
               },
@@ -755,11 +802,20 @@ const jobBoardPlugin =
     }
     // Credits (PJ-24): a job cancelled before publishing gets its credit back, and documents the
     // ledger points at are kept.
-    const jobs = features.credits
+    const creditedJobs = features.credits
       ? withCreditLedger(lifecycleJobs, 'job', 'job', slugs.creditLedger, {
           afterChange: [refundCreditOnCancel({ slug: slugs.creditLedger })],
         })
       : lifecycleJobs
+    // The view beacon (PJ-37) lives on the jobs collection, so it is the same URL whoever hosts
+    // the site: POST /api/<jobs>/:id/view.
+    const jobs: CollectionConfig = {
+      ...creditedJobs,
+      endpoints: [
+        ...(Array.isArray(creditedJobs.endpoints) ? creditedJobs.endpoints : []),
+        jobViewEndpoint({ rateLimiter: options.jobViews?.rateLimiter, slugs }),
+      ],
+    }
     // Invoice-sync adapters hear about new orders and status changes (PJ-115, PJ-57).
     const eventOrders: CollectionConfig = {
       ...baseOrders,
@@ -774,6 +830,19 @@ const jobBoardPlugin =
       },
     }
     const orders = features.credits ? withCreditLedger(eventOrders, 'order', 'order', slugs.creditLedger) : eventOrders
+    // A paid order grants its pack's credits when the site grants them on payment (PJ-120).
+    const grantingOrders: CollectionConfig = features.credits
+      ? {
+          ...orders,
+          hooks: {
+            ...orders.hooks,
+            afterChange: [
+              ...(orders.hooks?.afterChange ?? []),
+              grantPackCreditsOnPaid({ slug: slugs.creditLedger, tenantScoped: tenancy === 'multi' }),
+            ],
+          },
+        }
+      : orders
     const creditLedger = features.credits
       ? [creditLedgerCollection({ access: collectionOptions.creditLedger?.access, slugs, tenantScoped: tenancy === 'multi', usersSlug })]
       : []
@@ -810,8 +879,33 @@ const jobBoardPlugin =
           }
         : jobsConfig
 
+    // Retention (PJ-88): a daily task deletes applications and CV files once the job has been
+    // closed for the tenant's retention period.
+    const tasksWithRetention: Config['jobs'] = features.applications
+      ? {
+          ...jobsWithForms,
+          tasks: [
+            ...(jobsWithForms?.tasks ?? []),
+            deleteExpiredApplicationsTask({
+              applicationsSlug: APPLICATIONS_SLUG,
+              filesSlug: APPLICATION_FILES_SLUG,
+              jobsSlug: slugs.jobs,
+              settingsSlug,
+              tenancy,
+              tenantsSlug,
+            }),
+          ],
+        }
+      : jobsWithForms
+
     const jobBoardConfig: Config = {
       ...config,
+      // The tenant's public settings for its own site (PJ-37). It lives on the API root, not on
+      // the tenants collection: a site has no user, and the collection is readable by staff only.
+      endpoints: [
+        ...(Array.isArray(config.endpoints) ? config.endpoints : []),
+        tenantSettingsEndpoint({ jobsSlug: slugs.jobs, tenantsSlug }),
+      ],
       // Plans before add-ons: Payload numbers compound index names in collection order, and
       // plans' existing `tenant_key_idx` must keep its name.
       // Applications and their files go after jobs: they relate to it, and the compound
@@ -841,20 +935,23 @@ const jobBoardPlugin =
                 organisationsSlug: slugs.organisations,
                 tenantScoped: tenancy === 'multi',
               }),
-              applicationsCollection({
-                applicantsSlug: usersSlug,
-                jobsSlug: slugs.jobs,
-                organisationsSlug: slugs.organisations,
-                tenantScoped: tenancy === 'multi',
-              }),
+              withApplicationDataAction(
+                applicationsCollection({
+                  applicantsSlug: usersSlug,
+                  jobsSlug: slugs.jobs,
+                  organisationsSlug: slugs.organisations,
+                  tenantScoped: tenancy === 'multi',
+                }),
+                { applicationsSlug: APPLICATIONS_SLUG, filesSlug: APPLICATION_FILES_SLUG },
+              ),
             ]
           : []),
         // Orders go last (PJ-23), so no existing compound index name shifts.
-        orders,
+        grantingOrders,
         // The credit ledger after orders (PJ-24), for the same reason.
         ...creditLedger,
       ],
-      jobs: jobsWithForms,
+      jobs: tasksWithRetention,
       custom: {
         ...config.custom,
         payloadJobs: {

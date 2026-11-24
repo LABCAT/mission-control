@@ -1,0 +1,111 @@
+---
+/**
+ * The organisation directory block (PJ-38): a type/size filter (a plain GET form, so it works with
+ * JavaScript off) and every public organisation on one page. Links go only to organisations the
+ * CMS already returned as public, so no card can point at a private page.
+ */
+import Container from '@labcat2020/rocketship/components/Container'
+import Grid from '@labcat2020/rocketship/components/Grid'
+import Stack from '@labcat2020/rocketship/components/Stack'
+import Typography from '@labcat2020/rocketship/components/Typography'
+
+import FilterBar from './FilterBar.astro'
+import OrgCard from './OrgCard.astro'
+import {
+  ORGANISATION_SIZE_OPTIONS,
+  ORGANISATION_TYPE_OPTIONS,
+  type OrganisationDirectory,
+} from '../organisations/directory'
+import type { FilterControl } from '../tenant/filters'
+
+type Props = {
+  /** The page the filter form submits back to. */
+  action: string
+  directory: OrganisationDirectory
+  emptyLabel?: string
+  heading?: string
+  intro?: string
+  showSizeFilter?: boolean
+  showTypeFilter?: boolean
+}
+
+const {
+  action,
+  directory,
+  emptyLabel = 'No organisations match.',
+  heading,
+  intro,
+  showSizeFilter = true,
+  showTypeFilter = true,
+} = Astro.props as Props
+
+const controls: FilterControl[] = [
+  ...(showTypeFilter
+    ? [
+        {
+          anyLabel: 'All types',
+          label: 'Type',
+          name: 'type',
+          options: ORGANISATION_TYPE_OPTIONS,
+          type: 'select',
+        } satisfies FilterControl,
+      ]
+    : []),
+  ...(showSizeFilter
+    ? [
+        {
+          anyLabel: 'Any size',
+          label: 'Size',
+          name: 'size',
+          options: ORGANISATION_SIZE_OPTIONS,
+          type: 'select',
+        } satisfies FilterControl,
+      ]
+    : []),
+]
+
+const hasFilters = Boolean(directory.filters.type || directory.filters.size)
+---
+
+<section class="lp-directory">
+  <Container size="wide">
+    <Stack gap="large">
+      {
+        (heading || intro) && (
+          <Typography>
+            {heading && <h2>{heading}</h2>}
+            {intro && <p>{intro}</p>}
+          </Typography>
+        )
+      }
+
+      {
+        controls.length > 0 && (
+          <FilterBar
+            action={action}
+            clearHref={hasFilters ? action : undefined}
+            controls={controls}
+            definitions={[{ name: 'type' }, { name: 'size' }]}
+            values={directory.filters as Record<string, string>}
+          />
+        )
+      }
+
+      {
+        directory.entries.length > 0 ? (
+          <Grid as="ul" columns={3}>
+            {directory.entries.map((org) => (
+              <li>
+                <OrgCard org={org} />
+              </li>
+            ))}
+          </Grid>
+        ) : (
+          <Typography>
+            <p>{emptyLabel}</p>
+          </Typography>
+        )
+      }
+    </Stack>
+  </Container>
+</section>

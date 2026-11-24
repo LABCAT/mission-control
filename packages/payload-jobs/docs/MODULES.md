@@ -57,6 +57,32 @@ A disabled add-on shows nothing for that tenant:
 Data cleanup (for example deleting a tenant's subscribers when the tenant is deleted) runs whether
 or not the add-on is on.
 
+## Pack credits: when they become usable
+
+A pack plan's credits land in the ledger (`bought` rows) and one pays for the job the pack was
+bought with. When they land is a per-tenant setting, `packCreditsUsableAt` on the tenant (or the
+single-tenant settings global):
+
+| Value | Credits become usable | The job bought with the pack |
+| --- | --- | --- |
+| `on_payment` (default) | when the pack's order is paid: staff, a payment provider or the Xero payment sync (PJ-118) marks it paid, and the orders hook grants and spends in that same transaction | follows its own payment rule (publish-before-payment stays job-only, as the old site did) |
+| `on_invoice` | as soon as the order is invoiced, at checkout | is paid by the pack at checkout |
+
+An order cancelled or failed before payment grants nothing in either mode, and an order grants its
+credits once: the ledger's idempotency keys (`bought:order:<id>`, `used:job:<id>:order:<id>`, PJ-24)
+make a re-run of the grant or of the payment sync a no-op.
+
+```ts
+import { packCreditModeForOrder, tenantPackCreditMode, packCreditGrantProblem } from '@mission-control/payload-jobs'
+
+tenantPackCreditMode(tenant)                        // 'on_payment' | 'on_invoice'
+await packCreditModeForOrder({ order, payload })    // resolves the order's tenant (or the global)
+packCreditGrantProblem({ mode, status })            // null when this status may grant in this mode
+```
+
+`grantCredits({ order })` checks that rule itself, so custom code granting a pack's credits cannot
+disagree with checkout. Checkout passes the mode it already has, to avoid a second lookup.
+
 ## Registry
 
 Every plug point is a keyed registry on `PayloadJobsRegistry`. Keys match

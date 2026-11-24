@@ -17,7 +17,7 @@ describe('vwok plan seed', () => {
 
   it('keeps Enhanced listing as a plan that includes the Enhanced add-on', () => {
     expect(vwokPlans.find((plan) => plan.key === 'enhanced-listing')?.includedAddOns).toEqual([
-      { addOnKey: 'enhanced', durationDays: null },
+      { addOnKey: 'enhanced', durationDays: 30 },
     ])
   })
 
@@ -36,15 +36,21 @@ describe('vwok plan seed', () => {
     ])
   })
 
-  it('lets every listing run for at most 45 days @S-190', () => {
+  it('never lets a listing run past 45 days @S-190', () => {
     expect(VWOK_MAX_DURATION_DAYS).toBe(45)
-    expect(vwokPlans.map((plan) => plan.durationDays)).toEqual(vwokPlans.map(() => 45))
+    for (const plan of vwokPlans) expect(plan.durationDays ?? 0).toBeLessThanOrEqual(VWOK_MAX_DURATION_DAYS)
   })
 
-  it('only fails on values that are not confirmed yet, never on malformed ones', () => {
-    // Remove this test's allowance once the live prices are in: the seed must then be ready.
-    for (const problem of planSeedProblems(vwokPlans)) {
-      expect(problem).toMatch(/is not confirmed|are not confirmed/)
-    }
+  it('is complete: every price, duration and pack size is confirmed', () => {
+    expect(planSeedProblems(vwokPlans)).toEqual([])
+  })
+
+  it('matches the live plans (query 1, 19 Nov): price in vatu, pack size and WordPress post id @S-200', () => {
+    const live = Object.fromEntries(vwokPlans.map((plan) => [plan.legacyId, [plan.price, plan.jobCredits]]))
+    expect(live).toEqual({ 26: [3900, 1], 28: [17500, 5], 31: [0, 1], 36082: [33000, 10], 36084: [5900, 1] })
+  })
+
+  it('never expires pack credits', () => {
+    expect(vwokPlans.filter((plan) => plan.creditExpiryDays != null)).toEqual([])
   })
 })

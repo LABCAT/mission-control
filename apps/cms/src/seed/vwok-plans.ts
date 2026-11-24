@@ -8,9 +8,12 @@ import type { PlanSeed } from '@mission-control/payload-jobs'
  *
  * Prices are VUV, which has no minor units, so 5000 is Vt 5,000.
  *
- * `null` = not confirmed yet. The values come from the live `pricing-plan` posts (price,
- * duration, pack size, post ID) and must be copied in exactly. `seedPlans` refuses to run while
- * any value is `null`, so a guessed price can never reach a database.
+ * The values are the live `pricing-plan` posts (query 1 of QUERY-RESULTS-19NOV.md: price,
+ * duration, pack size, post ID), copied in exactly. `legacyId` is the WordPress post id the order
+ * import (PJ-65) links legacy orders to; `wp-import plans` re-checks these values against the
+ * live posts. A plan's relist price equals its price (the legacy `_jr_relist_price`), and pack
+ * credits never expire (no `creditExpiryDays`). `seedPlans` still refuses a `null`, so a guessed
+ * value can never reach a database.
  */
 /**
  * A listing runs for at most 45 days on Vanuatu Wok (founder, PJ-32): the employer's close date
@@ -20,54 +23,52 @@ export const VWOK_MAX_DURATION_DAYS = 45
 
 export const vwokPlans: PlanSeed[] = [
   {
-    durationDays: VWOK_MAX_DURATION_DAYS,
+    durationDays: 30,
     jobCredits: 1,
     key: 'regular-listing',
-    legacyId: null,
+    legacyId: 26,
     name: 'Regular listing',
-    price: null,
+    price: 3900,
     sortOrder: 10,
   },
   {
-    creditExpiryDays: null,
-    durationDays: VWOK_MAX_DURATION_DAYS,
-    jobCredits: null,
+    durationDays: 30,
+    jobCredits: 5,
     key: 'job-pack',
-    legacyId: null,
-    name: 'Job pack',
-    price: null,
+    legacyId: 28,
+    name: '5 Job Pack',
+    price: 17500,
     sortOrder: 20,
   },
   {
-    creditExpiryDays: null,
-    durationDays: VWOK_MAX_DURATION_DAYS,
+    durationDays: 30,
     jobCredits: 10,
     key: '10-job-pack',
-    legacyId: null,
-    name: '10 Job pack',
-    price: null,
+    legacyId: 36082,
+    name: '10 Job Pack',
+    price: 33000,
     sortOrder: 30,
   },
   {
-    durationDays: VWOK_MAX_DURATION_DAYS,
-    // The Enhanced add-on for the listing's duration, unless the live plan says otherwise.
-    includedAddOns: [{ addOnKey: 'enhanced', durationDays: null }],
+    durationDays: 30,
+    // The Enhanced add-on for 30 days (`_jr_featured-listings_duration`).
+    includedAddOns: [{ addOnKey: 'enhanced', durationDays: 30 }],
     jobCredits: 1,
     key: 'enhanced-listing',
-    legacyId: null,
+    legacyId: 36084,
     name: 'Enhanced listing',
-    price: null,
+    price: 5900,
     sortOrder: 35,
   },
   {
     // Free, and only for voluntary jobs (USAGE.md): the Voluntary job type and its children are
     // flagged `isVolunteer` (PJ-16), which checkout passes to quote().
     acceptsCredits: false,
-    durationDays: VWOK_MAX_DURATION_DAYS,
+    durationDays: 30,
     isVolunteer: true,
     jobCredits: 1,
     key: 'volunteer-listing',
-    legacyId: null,
+    legacyId: 31,
     name: 'Volunteer listing',
     price: 0,
     sortOrder: 40,

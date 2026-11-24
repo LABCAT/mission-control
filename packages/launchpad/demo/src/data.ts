@@ -1,11 +1,13 @@
+import type { TenantJobPageSource } from '../../src/tenant/job-page-settings'
 import type { SiteTenant } from '../../src/tenant/types'
 import type { FilterDefinition } from '../../src/tenant/filters'
 import type { JobSummary, OrgSummary } from '../../src/types'
+import type { DetailJob } from '../../src/jobs/detail'
 import type { ListingFacets, ListingJob } from '../../src/jobs/listing'
 
 // Sample data for the demo build. A real site app loads the tenant from the CMS with its
 // site key; none of this is tenant-specific code.
-export const tenant: SiteTenant = {
+export const tenant: SiteTenant & TenantJobPageSource = {
   branding: {
     colorAccent: '#dd3333',
     colorHover: '#b02a2a',
@@ -17,6 +19,8 @@ export const tenant: SiteTenant = {
   domains: ['vanuatuwok.vu'],
   locales: ['en'],
   name: 'Vanuatu Wok',
+  // The demo turns the public view counter on, so the build exercises the beacon and its script.
+  publicJobViews: true,
   slug: 'vwok',
   timezone: 'Pacific/Efate',
 }
@@ -143,5 +147,50 @@ export const listingJobs: ListingJob[] = [
     organisation: { id: 203, name: 'Blue Lagoon Tours', slug: 'blue-lagoon-tours' },
     slug: 'booking-clerk',
     title: 'Booking Clerk',
+  },
+]
+
+// The job documents the detail page reads: refs populated, a description, and one closed job so
+// the demo builds the notice page too. `expiresAt` is fixed and compared with the demo clock.
+export const detailJobs: DetailJob[] = [
+  {
+    ...(listingJobs[0] as DetailJob),
+    description: { root: { children: [] } },
+    displayedSalary: 'Vt 150,000 a month',
+    howToApply: 'Send a CV to the restaurant in Port Vila.',
+    jobDescriptionPdf: { filename: 'head-chef.pdf', url: '/jobs/head-chef.pdf' },
+    locationDetails: 'Waterfront',
+    organisation: { approved: true, id: 201, name: 'Vanuatu Wok', pageEnabled: true, slug: 'vanuatu-wok' },
+    publishedAt: '2026-10-01T00:00:00.000Z',
+    salaryBand: { id: 30, name: 'Vt 100,000–200,000', slug: 'vt-100k-200k' },
+    status: 'published',
+  },
+  {
+    ...(listingJobs[1] as DetailJob),
+    description: { root: { children: [] } },
+    organisation: { id: 202, name: 'Santo Community Trust', slug: 'santo-community-trust' },
+    publishedAt: '2026-10-01T00:00:00.000Z',
+    status: 'published',
+  },
+  {
+    ...(listingJobs[2] as DetailJob),
+    description: { root: { children: [] } },
+    organisation: { approved: true, id: 203, name: 'Blue Lagoon Tours', pageEnabled: true, slug: 'blue-lagoon-tours' },
+    publishedAt: '2026-10-01T00:00:00.000Z',
+    status: 'published',
+  },
+  {
+    categories: [facets.categories[0]!],
+    companyName: 'Vanuatu Wok',
+    description: { root: { children: [] } },
+    expiresAt: '2026-09-01',
+    id: 104,
+    jobType: facets.types[0]!,
+    location: facets.locations[2]!,
+    organisation: { approved: true, id: 201, name: 'Vanuatu Wok', pageEnabled: true, slug: 'vanuatu-wok' },
+    publishedAt: '2026-08-01T00:00:00.000Z',
+    slug: 'sous-chef',
+    status: 'expired',
+    title: 'Sous Chef',
   },
 ]

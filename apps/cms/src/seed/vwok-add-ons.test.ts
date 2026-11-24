@@ -30,6 +30,6 @@ describe('vwok add-on seed', () => {
     for (const plan of vwokPlans) {
       for (const included of plan.includedAddOns ?? []) expect(keys).toContain(included.addOnKey)
     }
-    expect(planSeedProblems(vwokPlans).every((problem) => /not confirmed/.test(problem))).toBe(true)
+    expect(planSeedProblems(vwokPlans)).toEqual([])
   })
 })

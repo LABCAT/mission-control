@@ -13,14 +13,18 @@ describe('registry', () => {
   it('offers every entity PJ-61, PJ-62, PJ-64 and PJ-67 import, plus the location audit', () => {
     expect(Object.keys(registry).toSorted()).toEqual(
       [
+        'coupons',
+        'credits',
         'job-categories',
         'job-organisations',
         'job-types',
         'jobs',
         'locations',
         'menus',
+        'orders',
         'organisations',
         'pages',
+        'plans',
         'salary-bands',
         'site-settings',
         'users',
