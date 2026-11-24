@@ -17,7 +17,9 @@ import type { ImportPlan, PlanProvider } from './users'
  *   organisation of the job they paid for; `tr_pending` (a bank transfer nobody marked complete,
  *   paid through Xero) becomes `invoiced`.
  * - `credits` writes each active job pack's remaining credits as one opening-balance ledger row
- *   with a legacy reference, no expiry.
+ *   with a legacy reference, no expiry. Only packs in the user's `_jr_user_packs_active` list and
+ *   not past their `end_date` count, as in JobRoller. Packs of plans that take no credits (the free
+ *   Volunteer plan) are skipped and counted. An unlimited pack (`jobs_limit` 0) fails by name.
  *
  * Everything is idempotent: orders and coupons by `legacyId` + tenant, ledger rows by their
  * legacy reference. PayPal data and order logs are never read.
@@ -54,8 +56,12 @@ export const LEGACY_ORDER_META = {
 } as const
 export type OrderMetaKeys = { [K in keyof typeof LEGACY_ORDER_META]: string }
 
-/** User meta `_jr_user_pack-<plan id>-<order id>` holds one pack's remaining credits. */
+/**
+ * User meta `_jr_user_pack-<plan id>-<umeta id>` is one serialized pack (limit, used, end date);
+ * `_jr_user_packs_active` lists the ones JobRoller still counts.
+ */
 export const PACK_META_PREFIX = '_jr_user_pack-'
+export const ACTIVE_PACKS_META = '_jr_user_packs_active'
 
 const ORDER_CONNECTION = 'order-connection'
 
@@ -122,22 +128,37 @@ export const orderCutoff = (now: Date, months: number): Date => {
   return cutoff
 }
 
+/** What `jr_give_pack_to_user` stores in `_jr_user_pack-<plan>-<umeta>`, as far as the import needs it. */
+export type LegacyPackData = { count: number; endDate: number; limit: number; offers: number }
+
 /**
- * Remaining credits of one legacy pack. The value is either the number left, or a serialized
- * PHP array with `jobs_limit` and `jobs_count` (what was bought, what was used). `null` when it
- * is neither: the row is reported, not guessed.
+ * Reads one serialized `_jr_user_pack-*` array (`jobs_limit`, `jobs_count`, `end_date`, and the
+ * optional `jobs_offers_limit`; the numbers are `i:` or `s:` encoded). `null` when `jobs_limit`,
+ * `jobs_count` or `end_date` is missing: the row is reported, not guessed. A bare number is not
+ * a legacy shape and is refused too.
  */
-export const remainingPackCredits = (value: null | string | undefined): null | number => {
+export const parseLegacyPack = (value: null | string | undefined): LegacyPackData | null => {
   const text = String(value ?? '').trim()
-  if (/^\d+$/.test(text)) return Number(text)
   const field = (name: string): null | number => {
     const match = new RegExp(`s:\\d+:"${name}";(?:i:|s:\\d+:")(\\d+)`).exec(text)
     return match ? Number(match[1]) : null
   }
   const limit = field('jobs_limit')
   const count = field('jobs_count')
-  return limit === null || count === null ? null : Math.max(limit - count, 0)
+  const endDate = field('end_date')
+  if (limit === null || count === null || endDate === null) return null
+  return { count, endDate, limit, offers: field('jobs_offers_limit') ?? 0 }
 }
+
+/**
+ * The `<plan>-<umeta>` ids in `_jr_user_packs_active` (`[ "<plan>-<umeta>" => plan id ]`): the
+ * only packs JobRoller still counts. `jr_expire_user_pack` removes a pack from it.
+ */
+export const activePackIds = (value: null | string | undefined): Set<string> =>
+  new Set([...String(value ?? '').matchAll(/s:\d+:"(\d+-\d+)";/g)].map((match) => match[1]!))
+
+/** Credits left in a pack: what was bought (jobs and job offers) minus what was used. */
+export const remainingPackCredits = (pack: LegacyPackData): number => Math.max(pack.limit + pack.offers - pack.count, 0)
 
 const monthOf = (postDate: string): string => postDate.slice(0, 7)
 
@@ -206,7 +227,7 @@ const idOf = (value: unknown): null | number | string =>
 // ---------------------------------------------------------------------------------------------
 
 type LegacyOrder = LegacyPost & { targets: number[] }
-type LegacyPack = { key: string; remaining: null | number; umetaId: number; userId: number; value: string }
+type LegacyPack = { active: boolean; key: string; pack: LegacyPackData | null; umetaId: number; userId: number; value: string }
 
 const PLAN_META = ['_jr_price', '_jr_relist_price', '_jr_duration', '_jr_jobs_limit'] as const
 const COUPON_META = ['code', 'type', 'amount', 'end_date', 'use_count', 'use_limit'] as const
@@ -445,26 +466,47 @@ export const commerceImporters = (
     collection: slugs.creditLedger,
     dependsOn: ['organisations'],
     map: async (pack, ctx): Promise<MappedDoc | SkippedRow> => {
-      if (pack.remaining === null) throw new Error(`Pack ${pack.key} of user ${pack.userId}: cannot read the remaining credits`)
-      if (pack.remaining < 1) {
+      const ref = `Pack ${pack.key} of user ${pack.userId}`
+      const planId = Number(/^_jr_user_pack-(\d+)-\d+$/.exec(pack.key)?.[1])
+      if (pack.pack === null || !Number.isInteger(planId)) throw new Error(`${ref}: cannot read the remaining credits`)
+      // JobRoller only counts the packs in the user's active list, and drops one when it expires.
+      if (!pack.active) {
+        count('credits', 'packs not in the active list, no row')
+        return { skip: 'inactive-pack' }
+      }
+      if (pack.pack.endDate > 0 && pack.pack.endDate * 1000 < clock().getTime()) {
+        count('credits', 'packs past their end date, no row')
+        return { skip: 'expired-pack' }
+      }
+      // A free plan (Volunteer) takes no credits in the new system, so its pack stays behind.
+      const plan = (await plansOf(ctx)).get(planId)
+      if (!plan) throw new Error(`${ref}: legacy plan ${planId} is not in this tenant: run the plan seed (PJ-87) first`)
+      if (plan.acceptsCredits === false) {
+        count('credits', `packs of plans that take no credits, no row (plan ${planId})`)
+        return { skip: 'free-plan-pack' }
+      }
+      // `jobs_limit` 0 is "unlimited" in JobRoller; a ledger cannot hold that, so fail the row by name.
+      if (pack.pack.limit === 0) throw new Error(`${ref}: unlimited pack (jobs_limit 0) cannot be a credit balance`)
+      const remaining = remainingPackCredits(pack.pack)
+      if (remaining < 1) {
         count('credits', 'packs used up, no row')
         return { skip: 'empty-pack' }
       }
       const legacyOrg = usersPlan?.organisationOf.get(pack.userId)?.organisationLegacyId
       if (legacyOrg === undefined) {
         count('credits', 'credits of users not imported')
-        count('credits', 'credits of users not imported (sum)', pack.remaining)
+        count('credits', 'credits of users not imported (sum)', remaining)
         return { skip: 'user-not-imported' }
       }
       const organisation = (await organisationsOf(ctx)).get(legacyOrg)?.id
       if (organisation === undefined && !ctx.dryRun) throw new Error(`Organisation ${legacyOrg} was not found: run the organisations first`)
 
-      count('credits', 'opening credits (sum)', pack.remaining)
+      count('credits', 'opening credits (sum)', remaining)
       count('credits', 'opening rows')
-      count('credits', `opening credits of legacy organisation ${legacyOrg}`, pack.remaining)
+      count('credits', `opening credits of legacy organisation ${legacyOrg}`, remaining)
       return {
         data: {
-          delta: pack.remaining,
+          delta: remaining,
           legacyRef: `wp-user-pack:${pack.userId}:${pack.key}`,
           note: 'Opening balance carried over from the WordPress job pack',
           ...(organisation === undefined ? {} : { organisation }),
@@ -478,13 +520,26 @@ export const commerceImporters = (
     read: async function* (reader) {
       reset('credits')
       await usersPlanFor(reader)
+      const active = new Map<number, Set<string>>()
+      for await (const row of reader.rows<Record<string, unknown>>('usermeta', { key: 'umeta_id', params: [ACTIVE_PACKS_META], where: 'meta_key = ?' })) {
+        active.set(Number(row.user_id), activePackIds(String(row.meta_value ?? '')))
+      }
       for await (const row of reader.rows<Record<string, unknown>>('usermeta', {
         key: 'umeta_id',
         params: [`${PACK_META_PREFIX.replaceAll('_', '\\_')}%`],
         where: 'meta_key LIKE ?',
       })) {
         const value = String(row.meta_value ?? '')
-        yield { key: String(row.meta_key), remaining: remainingPackCredits(value), umetaId: Number(row.umeta_id), userId: Number(row.user_id), value }
+        const key = String(row.meta_key)
+        const userId = Number(row.user_id)
+        yield {
+          active: active.get(userId)?.has(key.slice(PACK_META_PREFIX.length)) ?? false,
+          key,
+          pack: parseLegacyPack(value),
+          umetaId: Number(row.umeta_id),
+          userId,
+          value,
+        }
       }
     },
     report: () => sorted(tallies.credits),

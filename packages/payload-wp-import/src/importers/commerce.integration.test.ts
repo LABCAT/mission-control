@@ -60,13 +60,19 @@ describe('commerce import against Payload @S-202', () => {
       })).id as number
     }
     // The seed (PJ-87).
-    for (const [legacyId, key, price, jobCredits] of [[26, 'regular-listing', 3900, 1], [28, 'job-pack', 17500, 5], [36084, 'enhanced-listing', 5900, 1]] as const) {
+    for (const [legacyId, key, price, jobCredits] of [[26, 'regular-listing', 3900, 1], [28, 'job-pack', 17500, 5], [36082, 'job-pack-10', 30000, 10], [36084, 'enhanced-listing', 5900, 1]] as const) {
       ids[`plan${legacyId}`] = (await payload.create({
         collection: 'plans',
         data: { durationDays: 30, jobCredits, key, legacyId, name: key, price, tenant: tenantA.id } as never,
         ...system,
       })).id as number
     }
+    // The free Volunteer plan takes no credits.
+    ids.plan31 = (await payload.create({
+      collection: 'plans',
+      data: { acceptsCredits: false, durationDays: 30, isVolunteer: true, jobCredits: 1, key: 'volunteer-listing', legacyId: 31, name: 'Volunteer listing', price: 0, tenant: tenantA.id } as never,
+      ...system,
+    })).id as number
   }, 120_000)
 
   afterAll(async () => {
@@ -90,14 +96,14 @@ describe('commerce import against Payload @S-202', () => {
 
   it('writes valid coupons, orders and opening credits, and a second run changes nothing', async () => {
     const dry = await doImport(true)
-    // Only the unreadable pack and the order that charged tax fail; nothing was written.
-    expect(dry.errors.map((e) => e.importer).toSorted()).toEqual(['credits', 'orders'])
+    // Only the unreadable and the unlimited pack, and the order that charged tax, fail; nothing was written.
+    expect(dry.errors.map((e) => e.importer).toSorted()).toEqual(['credits', 'credits', 'orders'])
     expect(await find('orders')).toHaveLength(0)
 
     const first = await doImport(false)
     expect(first.importers.coupons).toMatchObject({ created: 2, failed: 0 })
     expect(first.importers.orders).toMatchObject({ created: 5, failed: 1 })
-    expect(first.importers.credits).toMatchObject({ created: 2, failed: 1 })
+    expect(first.importers.credits).toMatchObject({ created: 2, failed: 2 })
 
     // The real collection kept the use count (its guard resets anything not written under the import's context).
     const coupons = await find('coupons')
@@ -116,7 +122,7 @@ describe('commerce import against Payload @S-202', () => {
 
     // The balance is the sum of the opening rows, per organisation.
     expect(await balanceFor({ organisation: ids.org7, payload: harness.payload } as never)).toBe(3)
-    expect(await balanceFor({ organisation: ids.org8, payload: harness.payload } as never)).toBe(6)
+    expect(await balanceFor({ organisation: ids.org8, payload: harness.payload } as never)).toBe(8)
     const ledger = await find('credit-ledger')
     expect(ledger).toHaveLength(2)
     expect(ledger.every((row) => row.reason === 'opening' && row.actor === 'system' && String(row.idempotencyKey).startsWith('opening:'))).toBe(true)

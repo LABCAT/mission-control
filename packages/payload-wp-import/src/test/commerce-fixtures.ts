@@ -17,6 +17,23 @@ const post = (ID: number, post_type: string, post_status: string, extra: Record<
   post_type,
   ...extra,
 })
+/** A pack as `jr_give_pack_to_user` stores it: a serialized PHP array, `jobs_limit` and `jobs_count` as strings. */
+const phpPack = (planId: number, fields: { count: number; endDate?: number; limit: number; offers?: number }) => {
+  const entries: [string, string][] = [
+    ['order_id', `i:1;`],
+    ['plan_id', `i:${planId};`],
+    ['start_date', 'i:1700000000;'],
+    ['end_date', `i:${fields.endDate ?? 0};`],
+    ['jobs_count', `s:${String(fields.count).length}:"${fields.count}";`],
+    ['jobs_limit', `s:${String(fields.limit).length}:"${fields.limit}";`],
+    ['jobs_duration', 'i:0;'],
+    ...(fields.offers === undefined ? [] : ([['jobs_offers_limit', `s:${String(fields.offers).length}:"${fields.offers}";`]] as [string, string][])),
+  ]
+  return `a:${entries.length}:{${entries.map(([k, v]) => `s:${k.length}:"${k}";${v}`).join('')}}`
+}
+/** `_jr_user_packs_active`: `[ "<plan>-<umeta>" => plan id ]`. */
+const phpActive = (ids: [number, number][]) =>
+  `a:${ids.length}:{${ids.map(([plan, umeta]) => `s:${`${plan}-${umeta}`.length}:"${plan}-${umeta}";i:${plan};`).join('')}}`
 const p2p = (id: number, from: number, to: number) => ({ p2p_from: from, p2p_id: id, p2p_to: to, p2p_type: 'order-connection' })
 
 export const commerceTables = {
@@ -60,12 +77,22 @@ export const commerceTables = {
     post(5010, 'transaction', 'tr_pending', { post_author: 99, post_date: '2026-11-02 09:00:00', post_date_gmt: '2026-11-01 22:00:00' }),
   ],
   wp_usermeta: [
-    um(7, '_jr_user_pack-28-5008', '3'),
-    um(8, '_jr_user_pack-36082-4000', 'a:2:{s:10:"jobs_limit";i:10;s:10:"jobs_count";i:4;}'),
-    um(8, '_jr_user_pack-28-4001', '0'),
+    // User 7: 5 bought, 2 used; one pack that left the active list; one unlimited pack.
+    um(7, '_jr_user_pack-28-5008', phpPack(28, { count: 2, limit: 5 })),
+    um(7, '_jr_user_pack-28-4010', phpPack(28, { count: 0, limit: 5 })),
+    um(7, '_jr_user_pack-28-4013', phpPack(28, { count: 3, limit: 0 })),
+    um(7, '_jr_user_packs_active', phpActive([[28, 5008], [28, 4013]])),
+    // User 8: 10 bought, 4 used and 2 job offers (8 left); a used-up pack; an expired pack that is
+    // still on the active list; the free Volunteer pack (unused and active).
+    um(8, '_jr_user_pack-36082-4000', phpPack(36082, { count: 4, limit: 10, offers: 2 })),
+    um(8, '_jr_user_pack-28-4001', phpPack(28, { count: 5, limit: 5 })),
+    um(8, '_jr_user_pack-28-4011', phpPack(28, { count: 0, endDate: 1700000000, limit: 5 })),
+    um(8, '_jr_user_pack-31-4012', phpPack(31, { count: 0, limit: 1 })),
+    um(8, '_jr_user_packs_active', phpActive([[36082, 4000], [28, 4001], [28, 4011], [31, 4012]])),
     um(9, '_jr_user_pack-28-4002', 'a:1:{s:3:"foo";i:1;}'),
-    um(99, '_jr_user_pack-28-4003', '2'),
-    um(7, '_jr_user_packs_active', 'a:1:{i:0;s:21:"_jr_user_pack-28-5008";}'),
+    um(9, '_jr_user_packs_active', phpActive([[28, 4002]])),
+    um(99, '_jr_user_pack-28-4003', phpPack(28, { count: 0, limit: 2 })),
+    um(99, '_jr_user_packs_active', phpActive([[28, 4003]])),
     um(7, 'nickname', 'Example Resort Ltd'),
   ],
 }

@@ -2,11 +2,13 @@ import { experimental_AstroContainer as AstroContainer } from 'astro/container'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import BaseLayout from './BaseLayout.astro'
+import ConsentLine from './ConsentLine.astro'
 import FilterBar from './FilterBar.astro'
 import JobCard from './JobCard.astro'
 import JobsPage from './JobsPage.astro'
 import OrgCard from './OrgCard.astro'
 import Pagination from './Pagination.astro'
+import SiteFooter from './SiteFooter.astro'
 import Turnstile from './Turnstile.astro'
 import { jobFilterDefinitions, jobListingView, type ListingFacets } from '../jobs/listing'
 import type { FilterDefinition } from '../tenant/filters'
@@ -472,5 +474,84 @@ describe('Turnstile', () => {
     // A noscript element, so a visitor with JavaScript never sees the warning.
     expect(html).toContain('<noscript>')
     expect(html).toMatch(/<noscript>[\s\S]*needs JavaScript[\s\S]*<\/noscript>/)
+  })
+})
+
+describe('SiteFooter', () => {
+  it('links the privacy policy and terms from every page @S-310', async () => {
+    const html = await container.renderToString(SiteFooter, {
+      props: { name: 'Vanuatu Wok' },
+    })
+
+    expect(html).toContain('href="/privacy"')
+    expect(html).toContain('href="/terms"')
+    expect(html).toContain('Privacy policy')
+    expect(html).toContain('Terms of use')
+    expect(html).toContain('Vanuatu Wok')
+  })
+
+  it('renders the site footer menu and does not repeat the legal links @S-310', async () => {
+    const html = await container.renderToString(SiteFooter, {
+      props: {
+        items: [
+          { label: 'About us', url: '/about' },
+          { label: 'Privacy', url: '/privacy' },
+        ],
+        name: 'Vanuatu Wok',
+      },
+      slots: { default: '<a href="/about">About us</a><a href="/privacy">Privacy</a>' },
+    })
+
+    expect(html).toContain('href="/about"')
+    // The menu's own privacy item supplies the label, so the default one is not added twice.
+    expect(html).toContain('Privacy')
+    expect(html).not.toContain('Privacy policy')
+    expect(html.match(/href="\/privacy"/g)).toHaveLength(1)
+    expect(html).toContain('href="/terms"')
+  })
+
+  it('takes the legal labels from the tenant language @S-310', async () => {
+    const html = await container.renderToString(SiteFooter, {
+      props: { labels: { privacy: 'Politik blong praevat', terms: 'Tem blong yus' }, name: 'VW' },
+    })
+
+    expect(html).toContain('Politik blong praevat')
+    expect(html).toContain('Tem blong yus')
+  })
+})
+
+describe('ConsentLine', () => {
+  it('names what each form collects and links the policy and terms @S-312', async () => {
+    const html = await container.renderToString(ConsentLine, { props: { kind: 'apply' } })
+
+    expect(html).toContain('CV')
+    expect(html).toContain('href="/privacy"')
+    expect(html).toContain('href="/terms"')
+    // Plain markup: a public form page still ships no client JavaScript for this line.
+    expect(html).not.toContain('<script')
+  })
+
+  it('says what an alert subscriber agrees to @S-312', async () => {
+    const html = await container.renderToString(ConsentLine, { props: { kind: 'alert' } })
+
+    expect(html).toContain('email you matching jobs')
+    expect(html).toContain('href="/privacy"')
+  })
+
+  it('follows a site that moved the pages, and uses its own labels @S-312', async () => {
+    const html = await container.renderToString(ConsentLine, {
+      props: {
+        kind: 'signup',
+        privacyLabel: 'Politik blong praevat',
+        privacyPath: '/legal/privacy',
+        termsLabel: 'Tem blong yus',
+        termsPath: '/legal/terms',
+      },
+    })
+
+    expect(html).toContain('href="/legal/privacy"')
+    expect(html).toContain('Politik blong praevat')
+    expect(html).toContain('href="/legal/terms"')
+    expect(html).toContain('creating an account')
   })
 })

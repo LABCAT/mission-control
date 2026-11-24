@@ -369,3 +369,104 @@ export const jobTables: Record<string, Row[]> = (() => {
     wp_usermeta: userTables.wp_usermeta ?? [],
   }
 })()
+
+/**
+ * Pages, menus and site chrome as a JobRoller site keeps them (PJ-67). The published pages are
+ * the ones the site linked; the rest are WordPress machinery the new site serves from routes.
+ */
+export const pageTables: Record<string, Row[]> = {
+  wp_options: [
+    { option_id: 1, option_name: 'blogname', option_value: 'Vanuatu Wok' },
+    { option_id: 2, option_name: 'blogdescription', option_value: 'Jobs in Vanuatu' },
+    { option_id: 3, option_name: 'WPLANG', option_value: 'en_VU' },
+    { option_id: 4, option_name: 'jr_enable_header_banner', option_value: '1' },
+    {
+      option_id: 5,
+      option_name: 'jr_header_banner',
+      option_value:
+        '<a href="https://ycv.vu"><img alt="Powered by YCV" src="https://vanuatuwok.vu/app/uploads/2021/11/header.png"></a>',
+    },
+    {
+      option_id: 6,
+      option_name: 'jr_listing_banner',
+      option_value:
+        '<a href="https://ycv.vu"><img src="https://vanuatuwok.vu/app/uploads/2021/11/header-320x50.png"></a>',
+    },
+    {
+      option_id: 7,
+      option_name: 'jr_logo_url',
+      option_value: 'https://vanuatuwok.vu/app/uploads/2020/05/cropped-logo.png',
+    },
+  ],
+  wp_terms: [
+    { term_id: 71, name: 'Main menu', slug: 'main-menu' },
+    { term_id: 72, name: 'Top menu', slug: 'top-menu' },
+    { term_id: 73, name: 'Bottom menu', slug: 'bottom-menu' },
+  ],
+  wp_term_taxonomy: [
+    { term_taxonomy_id: 701, term_id: 71, taxonomy: 'nav_menu', parent: 0, count: 5 },
+    { term_taxonomy_id: 702, term_id: 72, taxonomy: 'nav_menu', parent: 0, count: 1 },
+    { term_taxonomy_id: 703, term_id: 73, taxonomy: 'nav_menu', parent: 0, count: 3 },
+  ],
+  wp_term_relationships: [
+    // Main: Jobs (custom /jobs), Volunteering, For Employers, Organisations, About us.
+    { object_id: 801, term_taxonomy_id: 701 },
+    { object_id: 802, term_taxonomy_id: 701 },
+    { object_id: 803, term_taxonomy_id: 701 },
+    { object_id: 804, term_taxonomy_id: 701 },
+    { object_id: 805, term_taxonomy_id: 701 },
+    // Top: Contact us.
+    { object_id: 806, term_taxonomy_id: 702 },
+    // Bottom: YCV link, Password Reset (a WP-only page), Submit Job.
+    { object_id: 807, term_taxonomy_id: 703 },
+    { object_id: 808, term_taxonomy_id: 703 },
+    { object_id: 809, term_taxonomy_id: 703 },
+  ],
+  wp_posts: [
+    { ID: 61, post_type: 'page', post_status: 'publish', post_name: 'volunteer-jobs', post_title: 'Volunteering', post_content: '<p>Volunteer with us.</p>' },
+    { ID: 38, post_type: 'page', post_status: 'publish', post_name: 'employers', post_title: 'For Employers', post_content: '<p>Post a job.</p>' },
+    { ID: 23445, post_type: 'page', post_status: 'publish', post_name: 'organisations', post_title: 'Organisations', post_content: '<p>Our members.</p>' },
+    { ID: 3983, post_type: 'page', post_status: 'publish', post_name: 'about-us', post_title: 'About us', post_content: '<p>About YCV.</p>' },
+    { ID: 655, post_type: 'page', post_status: 'publish', post_name: 'contact', post_title: 'Contact us', post_content: '<p>Contact us.</p>' },
+    { ID: 29301, post_type: 'page', post_status: 'publish', post_name: 'contact-2', post_title: 'Contact', post_content: '<p>Get in touch.</p>[contact-form][/contact-form]' },
+    { ID: 1366, post_type: 'page', post_status: 'publish', post_name: 'home', post_title: 'Home', post_content: '<p>Welcome to Vanuatu Wok.</p>' },
+    { ID: 33579, post_type: 'page', post_status: 'publish', post_name: 'land-law-reforms', post_title: 'LAND LAW REFORMS', post_content: '<p>Land law.</p>' },
+    { ID: 29143, post_type: 'page', post_status: 'publish', post_name: 'organisation-competition', post_title: 'Organisation Competition', post_content: '<p>Competition.</p>' },
+    { ID: 10, post_type: 'page', post_status: 'publish', post_name: 'terms-conditions', post_title: 'Terms &amp; Conditions', post_content: '<p>Terms.</p>' },
+    // Machinery: dropped, not imported.
+    { ID: 4, post_type: 'page', post_status: 'publish', post_name: 'jobs', post_title: 'Jobs', post_content: '' },
+    { ID: 13, post_type: 'page', post_status: 'publish', post_name: 'submit', post_title: 'Submit Job', post_content: '' },
+    { ID: 19, post_type: 'page', post_status: 'publish', post_name: 'password-reset', post_title: 'Password Reset', post_content: '' },
+    { ID: 36658, post_type: 'page', post_status: 'publish', post_name: 'ycv', post_title: 'Powered by Youth Challenge Vanuatu', post_content: '' },
+    // Menu item posts.
+    { ID: 801, post_type: 'nav_menu_item', post_status: 'publish', post_title: 'Jobs', menu_order: 1 },
+    { ID: 802, post_type: 'nav_menu_item', post_status: 'publish', post_title: '', menu_order: 2 },
+    { ID: 803, post_type: 'nav_menu_item', post_status: 'publish', post_title: '', menu_order: 3 },
+    { ID: 804, post_type: 'nav_menu_item', post_status: 'publish', post_title: '', menu_order: 4 },
+    { ID: 805, post_type: 'nav_menu_item', post_status: 'publish', post_title: 'About us', menu_order: 5 },
+    { ID: 806, post_type: 'nav_menu_item', post_status: 'publish', post_title: 'Contact us', menu_order: 1 },
+    { ID: 807, post_type: 'nav_menu_item', post_status: 'publish', post_title: 'Powered by Youth Challenge Vanuatu', menu_order: 1 },
+    { ID: 808, post_type: 'nav_menu_item', post_status: 'publish', post_title: 'Password Reset', menu_order: 2 },
+    { ID: 809, post_type: 'nav_menu_item', post_status: 'publish', post_title: 'Submit Job', menu_order: 3 },
+  ],
+  wp_postmeta: [
+    { meta_id: 901, post_id: 801, meta_key: '_menu_item_type', meta_value: 'custom' },
+    { meta_id: 902, post_id: 801, meta_key: '_menu_item_url', meta_value: '/jobs' },
+    { meta_id: 903, post_id: 802, meta_key: '_menu_item_type', meta_value: 'post_type' },
+    { meta_id: 904, post_id: 802, meta_key: '_menu_item_object_id', meta_value: '61' },
+    { meta_id: 905, post_id: 803, meta_key: '_menu_item_type', meta_value: 'post_type' },
+    { meta_id: 906, post_id: 803, meta_key: '_menu_item_object_id', meta_value: '38' },
+    { meta_id: 907, post_id: 804, meta_key: '_menu_item_type', meta_value: 'post_type' },
+    { meta_id: 908, post_id: 804, meta_key: '_menu_item_object_id', meta_value: '23445' },
+    { meta_id: 909, post_id: 805, meta_key: '_menu_item_type', meta_value: 'post_type' },
+    { meta_id: 910, post_id: 805, meta_key: '_menu_item_object_id', meta_value: '3983' },
+    { meta_id: 911, post_id: 806, meta_key: '_menu_item_type', meta_value: 'post_type' },
+    { meta_id: 912, post_id: 806, meta_key: '_menu_item_object_id', meta_value: '29301' },
+    { meta_id: 913, post_id: 807, meta_key: '_menu_item_type', meta_value: 'custom' },
+    { meta_id: 914, post_id: 807, meta_key: '_menu_item_url', meta_value: 'https://www.ycv.vu' },
+    { meta_id: 915, post_id: 808, meta_key: '_menu_item_type', meta_value: 'post_type' },
+    { meta_id: 916, post_id: 808, meta_key: '_menu_item_object_id', meta_value: '19' },
+    { meta_id: 917, post_id: 809, meta_key: '_menu_item_type', meta_value: 'post_type' },
+    { meta_id: 918, post_id: 809, meta_key: '_menu_item_object_id', meta_value: '13' },
+  ],
+}

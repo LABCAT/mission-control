@@ -179,7 +179,8 @@ const importRow = async (
         and: [{ [matchField]: { equals: matchValue } }, { [scope.path]: { equals: ctx.tenant } }],
       },
     })
-    const found = existing.docs[0]
+    const found =
+      existing.docs[0] ?? (importer.findExisting ? await importer.findExisting({ ctx, data: mapped.data, legacyId }) : undefined)
     // Runner-owned fields win over whatever the mapper returned.
     const data = {
       ...mapped.data,

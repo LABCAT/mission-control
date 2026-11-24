@@ -1,6 +1,11 @@
 import type { Field, GlobalConfig } from 'payload'
 
 import { authenticatedAccess, superAdminAccess } from './access'
+import {
+  DEFAULT_FORM_RETENTION_DAYS,
+  FORM_RETENTION_FIELD,
+  MAX_FORM_RETENTION_DAYS,
+} from './forms'
 import { tenantLocationFields } from './location-settings'
 import { tenantTaxField } from './tax-settings'
 
@@ -225,6 +230,28 @@ export const jobBoardTenantFields: Field[] = [
     },
     validate: (value: null | string | undefined, options: ValidationOptions) =>
       requiredUnlessAggregate(value, options, 'Admin email is required'),
+  },
+  // Contact and other public forms (PJ-102). 0 means "email only": the notification is sent
+  // and no submission is stored.
+  {
+    name: FORM_RETENTION_FIELD,
+    type: 'number',
+    defaultValue: DEFAULT_FORM_RETENTION_DAYS,
+    min: 0,
+    max: MAX_FORM_RETENTION_DAYS,
+    admin: {
+      condition: showForSiteTenant,
+      description:
+        'How many days a form submission is kept before it is deleted. 0 sends the email and stores nothing.',
+      step: 1,
+    },
+    validate: (value: null | number | undefined) => {
+      if (value === null || value === undefined) return true
+      if (!Number.isInteger(value) || value < 0 || value > MAX_FORM_RETENTION_DAYS) {
+        return `Form retention must be a whole number of days between 0 and ${MAX_FORM_RETENTION_DAYS}`
+      }
+      return true
+    },
   },
 ]
 

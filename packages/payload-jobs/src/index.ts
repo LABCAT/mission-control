@@ -5,9 +5,16 @@ import type {
   GlobalConfig,
   GlobalSlug,
   Plugin,
+  TaskSlug,
 } from 'payload'
 
 import { accountAuthEndpoints, type AccountAuthOptions } from './account-auth'
+import {
+  formEndpoints,
+  purgeFormSubmissionsTask,
+  PURGE_FORM_SUBMISSIONS_TASK,
+  type FormsOptions,
+} from './forms'
 import { withViewAs } from './view-as'
 import { DASHBOARD_COMPONENT_PATH, type SiteManagerAdminOptions } from './admin'
 import { accountCheckoutEndpoints, type PurchaseRightsCheck } from './checkout'
@@ -35,6 +42,11 @@ import { jobsCollection } from './collections/jobs'
 import { menusCollection, removeTenantMenus } from './collections/menus'
 import { pagesCollection } from './collections/pages'
 import {
+  removeTenantSiteSettings,
+  seedTenantSiteSettings,
+  siteSettingsCollection,
+} from './collections/site-settings'
+import {
   isOrganisationOwnerByRole,
   orderCollection,
   refuseDeleteWhileOrdered,
@@ -42,6 +54,8 @@ import {
 } from './orders'
 import { resolvePaymentProviders, type PaymentProviderDefinition } from './payment-providers'
 import { expireJobPlacementsTask, PLACEMENTS_FIELD } from './placements'
+import { withPersonalDataRemoval } from './anonymise-user'
+import { seedTenantLegalPages } from './legal-pages'
 import { planCollection, withPlanRestrictionGuards } from './plans'
 import {
   DEFAULT_PAYLOAD_JOBS_SLUGS,
@@ -61,16 +75,20 @@ import { withSiteManagerNav } from './admin/nav'
 export * from './access'
 export * from './admin'
 export * from './account-auth'
+export * from './anonymise-user'
 export * from './audit-log'
 export * from './checkout'
+export * from './contact-page'
 export * from './view-as'
 export * from './collections/locations'
 export * from './collections/menus'
 export * from './collections/organisations'
 export * from './collections/pages'
+export * from './collections/site-settings'
 export * from './coupons'
 export * from './credits'
 export * from './email'
+export * from './forms'
 export * from './legacy-password'
 export * from './location-settings'
 export * from './money'
@@ -82,6 +100,7 @@ export * from './add-ons'
 export * from './collections/jobs'
 export * from './collections/applications'
 export * from './job-status'
+export * from './legal-pages'
 export * from './add-ons-seed'
 export * from './catalog'
 export * from './placements'
@@ -140,6 +159,7 @@ export const payloadJobsTenantCollections = (
   APPLICATIONS_SLUG,
   slugs.orders,
   slugs.creditLedger,
+  slugs.siteSettings,
 ]
 
 /**
@@ -221,6 +241,11 @@ export type PayloadJobsOptions = {
   enabled?: boolean
   /** Which job-board collections to enable. All default to true. */
   features?: PayloadJobsFeatures
+  /**
+   * Public form submissions (PJ-102): the site-key endpoint and the retention task. Defaults to
+   * on; pass `false` for a host whose forms are only written from the admin.
+   */
+  forms?: FormsOptions | false
   /** Orders: organisation owners and payment providers (PJ-23). */
   orders?: PayloadJobsOrdersOptions
   /** Slug of the host's upload collection for PDF job descriptions. Defaults to `documents`. */
@@ -229,6 +254,11 @@ export type PayloadJobsOptions = {
   mediaSlug?: null | string
   /** Slug of the auth collection that gets legacy WordPress password support. Defaults to `users`. */
   usersSlug?: string
+  /**
+   * Slug of the job alerts collection, when that add-on is installed. Personal data removal
+   * (PJ-89) deletes the removed person's alert subscriptions. Defaults to `alert-subscriptions`.
+   */
+  alertSubscriptionsSlug?: string
   /** Slug of the tenant settings global in single-tenant mode. */
   settingsSlug?: string
   /** `multi` requires a tenants collection; `single` uses a job-board settings global. */
@@ -350,6 +380,13 @@ const jobBoardCollections = (
           slug: slugs.menus,
           tenantScoped: tenancy === 'multi',
         }),
+        siteSettingsCollection({
+          access: collections.siteSettings?.access,
+          bannerBlockSlugs: blockSlugs.includes('banner') ? ['banner'] : [],
+          mediaSlug,
+          slug: slugs.siteSettings,
+          tenantScoped: tenancy === 'multi',
+        }),
       ]
     : []),
 ]
@@ -392,10 +429,18 @@ const jobBoardPlugin =
       ...config,
       collections: config.collections?.map((collection) =>
         collection.slug === usersSlug
-          ? withOrganisationField(
-              withLegacyPasswords(collection),
-              tenancy === 'multi',
-              slugs.organisations,
+          ? withPersonalDataRemoval(
+              withOrganisationField(
+                withLegacyPasswords(collection),
+                tenancy === 'multi',
+                slugs.organisations,
+              ),
+              {
+                alertSubscriptionsSlug: options.alertSubscriptionsSlug ?? 'alert-subscriptions',
+                applicationsSlug: APPLICATIONS_SLUG,
+                filesSlug: APPLICATION_FILES_SLUG,
+                usersSlug,
+              },
             )
           : collection,
       ),
@@ -466,6 +511,12 @@ const jobBoardPlugin =
 
     config = { ...config, collections: [...(config.collections ?? []), ...added] }
 
+    // Public form submissions (PJ-102). The host's form-builder collections are detected by
+    // slug: without them there is nothing to submit to or purge, so both stay off.
+    const formsOptions = options.forms === false ? null : options.forms ?? {}
+    const formsSlug = formsOptions?.formsSlug ?? 'forms'
+    const formSubmissionsSlug = formsOptions?.submissionsSlug ?? 'form-submissions'
+
     if (tenancy === 'multi') {
       const tenants = config.collections?.find((collection) => collection.slug === tenantsSlug)
 
@@ -475,6 +526,13 @@ const jobBoardPlugin =
             'Create it first or use tenancy: "single".',
         )
       }
+
+      // Public form submissions (PJ-102) do not depend on account auth: a contact form works
+      // on a site with no accounts at all.
+      const formSubmissionEndpoints =
+        formsOptions && hostSlugs.has(formsSlug) && hostSlugs.has(formSubmissionsSlug)
+          ? formEndpoints({ ...formsOptions, tenantScoped: true, tenantsSlug })
+          : []
 
       const accountEndpoints = (() => {
         if (options.accountAuth === false) return []
@@ -522,6 +580,7 @@ const jobBoardPlugin =
               endpoints: [
                 ...(Array.isArray(collection.endpoints) ? collection.endpoints : []),
                 ...accountEndpoints,
+                ...formSubmissionEndpoints,
               ],
               fields: [...collection.fields, ...jobBoardTenantFields, addOnsField],
               hooks: {
@@ -532,6 +591,17 @@ const jobBoardPlugin =
                       afterChange: [
                         ...(collection.hooks?.afterChange ?? []),
                         seedTenantSystemPages({
+                          collectionSlug: slugs.pages,
+                          tenantScoped: tenancy === 'multi',
+                        }),
+                        // And its settings document (PJ-67).
+                        seedTenantSiteSettings({
+                          collectionSlug: slugs.siteSettings,
+                          tenantScoped: tenancy === 'multi',
+                        }),
+                        // And its privacy policy and terms as drafts (PJ-89).
+                        seedTenantLegalPages({
+                          blockSlugs: registeredBlockSlugs(config),
                           collectionSlug: slugs.pages,
                           tenantScoped: tenancy === 'multi',
                         }),
@@ -555,6 +625,7 @@ const jobBoardPlugin =
                     ? [
                         removeTenantPages({ collectionSlug: slugs.pages }),
                         removeTenantMenus({ collectionSlug: slugs.menus }),
+                        removeTenantSiteSettings({ collectionSlug: slugs.siteSettings }),
                       ]
                     : []),
                   ...(features.coupons
@@ -703,6 +774,25 @@ const jobBoardPlugin =
           tasks: [...(config.jobs?.tasks ?? []), expireJobPlacementsTask({ jobsSlug: slugs.jobs })],
         }
       : config.jobs
+    // Delete form submissions past each tenant's retention (PJ-102). The task is registered
+    // only when the host actually has the form-builder collections.
+    const jobsWithForms =
+      formsOptions && hostSlugs.has(formsSlug) && hostSlugs.has(formSubmissionsSlug)
+        ? {
+            ...jobsConfig,
+            tasks: [
+              ...(jobsConfig?.tasks ?? []).filter(
+                (task) => task.slug !== (PURGE_FORM_SUBMISSIONS_TASK as TaskSlug),
+              ),
+              purgeFormSubmissionsTask({
+                settingsSlug,
+                submissionsSlug: formSubmissionsSlug,
+                tenantScoped: tenancy === 'multi',
+                tenantsSlug,
+              }),
+            ],
+          }
+        : jobsConfig
 
     const jobBoardConfig: Config = {
       ...config,
@@ -748,7 +838,7 @@ const jobBoardPlugin =
         // The credit ledger after orders (PJ-24), for the same reason.
         ...creditLedger,
       ],
-      jobs: jobsConfig,
+      jobs: jobsWithForms,
       custom: {
         ...config.custom,
         payloadJobs: {

@@ -1,6 +1,9 @@
 import { commerceImporters } from './importers/commerce'
 import { jobsImporters } from './importers/jobs'
 import { locationsImporter } from './importers/locations'
+import { menusImporter } from './importers/menus'
+import { pagesImporter } from './importers/pages'
+import { siteSettingsImporter } from './importers/site-settings'
 import { taxonomyImporters } from './importers/taxonomies'
 import { createPlanProvider, usersImporters } from './importers/users'
 import type { Importer } from './types'
@@ -14,6 +17,8 @@ import type { Importer } from './types'
  * `job-organisations` and `jobs` (PJ-64) import the published and expired jobs.
  * `plans` (checks the seed), `coupons`, `orders` (last 24 months) and `credits` (opening balances)
  * are PJ-65.
+ * `site-settings`, `pages` and `menus` (PJ-67) import the site chrome, the content pages and the
+ * three menus; `pages` adopts the system pages the tenant seed created.
  */
 const planProvider = createPlanProvider()
 export const registry: Record<string, Importer> = Object.fromEntries(
@@ -23,6 +28,9 @@ export const registry: Record<string, Importer> = Object.fromEntries(
     ...Object.values(usersImporters({ planProvider })),
     ...Object.values(jobsImporters({ planProvider })),
     ...Object.values(commerceImporters({ planProvider })),
+    siteSettingsImporter(),
+    pagesImporter(),
+    menusImporter(),
   ].map((importer) => [importer.name, importer]),
 )
 

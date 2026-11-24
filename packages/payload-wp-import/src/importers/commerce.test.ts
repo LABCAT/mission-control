@@ -11,6 +11,8 @@ import {
   couponExpired,
   orderCutoff,
   parseCouponDate,
+  activePackIds,
+  parseLegacyPack,
   remainingPackCredits,
   toMinorUnits,
 } from './commerce'
@@ -31,6 +33,8 @@ const seedStore = () => ({
   plans: [
     { id: 11, durationDays: 30, jobCredits: 1, key: 'regular-listing', legacyId: 26, price: 3900, tenant: TENANT },
     { id: 12, durationDays: 30, jobCredits: 5, key: 'job-pack', legacyId: 28, price: 17500, tenant: TENANT },
+    { acceptsCredits: true, id: 14, durationDays: 30, jobCredits: 10, key: 'job-pack-10', legacyId: 36082, price: 30000, tenant: TENANT },
+    { acceptsCredits: false, id: 15, durationDays: 30, jobCredits: 1, key: 'volunteer-listing', legacyId: 31, price: 0, tenant: TENANT },
     { id: 13, durationDays: 30, jobCredits: 1, key: 'enhanced-listing', legacyId: 36084, price: 5900, tenant: TENANT },
   ],
   tenants: [{ currency: 'VUV', id: TENANT }],
@@ -84,12 +88,26 @@ describe('legacy money and dates', () => {
     expect(orderCutoff(NOW, 24).toISOString()).toBe('2024-11-20T00:00:00.000Z')
   })
 
-  it('reads a pack balance as a number or as limit minus used, and refuses anything else', () => {
-    expect(remainingPackCredits('3')).toBe(3)
-    expect(remainingPackCredits('a:2:{s:10:"jobs_limit";i:10;s:10:"jobs_count";i:4;}')).toBe(6)
-    expect(remainingPackCredits('a:2:{s:10:"jobs_limit";i:5;s:10:"jobs_count";i:9;}')).toBe(0)
-    expect(remainingPackCredits('a:1:{s:3:"foo";i:1;}')).toBeNull()
-    expect(remainingPackCredits('')).toBeNull()
+  it('reads a legacy pack as limit, used, end date and job offers, and refuses anything else @S-203', () => {
+    const real = 'a:7:{s:8:"order_id";i:1;s:7:"plan_id";i:36082;s:10:"start_date";i:1700000000;s:8:"end_date";i:0;s:10:"jobs_count";s:1:"4";s:10:"jobs_limit";s:2:"10";s:13:"jobs_duration";i:0;}'
+    expect(parseLegacyPack(real)).toEqual({ count: 4, endDate: 0, limit: 10, offers: 0 })
+    expect(parseLegacyPack('a:3:{s:10:"jobs_limit";i:5;s:10:"jobs_count";i:1;s:8:"end_date";i:99;}')).toMatchObject({ endDate: 99, limit: 5 })
+    expect(parseLegacyPack(real.replace('s:13:"jobs_duration"', 's:16:"jobs_offers_limit";s:1:"2";s:13:"jobs_duration"'))?.offers).toBe(2)
+    expect(parseLegacyPack('3')).toBeNull() // a bare number is not a legacy pack
+    expect(parseLegacyPack('a:1:{s:3:"foo";i:1;}')).toBeNull()
+    expect(parseLegacyPack('a:2:{s:10:"jobs_limit";i:10;s:10:"jobs_count";i:4;}')).toBeNull() // no end date
+    expect(parseLegacyPack('')).toBeNull()
+  })
+
+  it('counts what was bought, job offers included, minus what was used @S-204', () => {
+    expect(remainingPackCredits({ count: 4, endDate: 0, limit: 10, offers: 0 })).toBe(6)
+    expect(remainingPackCredits({ count: 4, endDate: 0, limit: 10, offers: 2 })).toBe(8)
+    expect(remainingPackCredits({ count: 9, endDate: 0, limit: 5, offers: 0 })).toBe(0)
+  })
+
+  it('reads the active list as the real "<plan>-<umeta>" keys, not the plan ids @S-203', () => {
+    expect([...activePackIds('a:2:{s:7:"28-5008";i:28;s:8:"31-40012";i:31;}')]).toEqual(['28-5008', '31-40012'])
+    expect(activePackIds('').size).toBe(0)
   })
 })
 
@@ -103,7 +121,7 @@ describe('plans: the seed is checked against the live plans @S-200', () => {
       skipReasons: { 'matches-seed': 3, 'not-published-pending': 1 },
       updated: 0,
     })
-    expect(store.plans).toHaveLength(3)
+    expect(store.plans).toHaveLength(5)
   })
 
   it('fails a plan that drifted, naming what differs, and never writes', async () => {
@@ -277,12 +295,12 @@ describe('orders @S-202', () => {
 describe('credits: opening balances @S-203', () => {
   const ledger = (store: ReturnType<typeof setup>['store']) => store['credit-ledger'] ?? []
 
-  it('writes one opening row per pack with its legacy reference, attached to the organisation', async () => {
+  it('writes one opening row per active pack with its legacy reference, attached to the organisation', async () => {
     const { run, store } = setup()
     const summary = await run(['credits'])
     expect(ledger(store)).toEqual([
       expect.objectContaining({ delta: 3, legacyRef: 'wp-user-pack:7:_jr_user_pack-28-5008', organisation: 71, reason: 'opening', tenant: TENANT }),
-      expect.objectContaining({ delta: 6, legacyRef: 'wp-user-pack:8:_jr_user_pack-36082-4000', organisation: 81, reason: 'opening', tenant: TENANT }),
+      expect.objectContaining({ delta: 8, legacyRef: 'wp-user-pack:8:_jr_user_pack-36082-4000', organisation: 81, reason: 'opening', tenant: TENANT }),
     ])
     expect(ledger(store).every((row) => row.legacyId === undefined)).toBe(true)
     expect(summary.importers.credits).toMatchObject({ created: 2 })
@@ -292,22 +310,49 @@ describe('credits: opening balances @S-203', () => {
     const { run, store } = setup()
     const summary = await run(['credits'])
     const sum = (organisation: number) => ledger(store).filter((row) => row.organisation === organisation).reduce((n, row) => n + row.delta, 0)
-    expect(sum(71)).toBe(3) // user 7: a pack with 3 left
-    expect(sum(81)).toBe(6) // user 8: 10 bought, 4 used
+    expect(sum(71)).toBe(3) // user 7: 5 bought, 2 used
+    expect(sum(81)).toBe(8) // user 8: 10 bought, 2 job offers, 4 used
     expect(summary.importers.credits!.report).toMatchObject({
-      'opening credits (sum)': 9,
+      'opening credits (sum)': 11,
       'opening credits of legacy organisation 7': 3,
-      'opening credits of legacy organisation 8': 6,
+      'opening credits of legacy organisation 8': 8,
       'opening rows': 2,
     })
     expect(ledger(store).reduce((n, row) => n + row.delta, 0)).toBe(summary.importers.credits!.report!['opening credits (sum)'])
   })
 
+  it('leaves out a pack that is not in the active list, and one past its end date @S-204', async () => {
+    const { run, store } = setup()
+    const summary = await run(['credits'])
+    expect(summary.importers.credits!.skipReasons).toMatchObject({ 'expired-pack': 1, 'inactive-pack': 1 })
+    expect(summary.importers.credits!.report).toMatchObject({ 'packs not in the active list, no row': 1, 'packs past their end date, no row': 1 })
+    const refs = ledger(store).map((row) => String(row.legacyRef))
+    expect(refs.some((ref) => ref.endsWith('28-4010'))).toBe(false) // active list does not name it
+    expect(refs.some((ref) => ref.endsWith('28-4011'))).toBe(false) // active, but expired in 2023
+  })
+
+  it('skips the free Volunteer pack instead of turning it into paid credits @S-204', async () => {
+    const { run, store } = setup()
+    const summary = await run(['credits'])
+    expect(summary.importers.credits!.skipReasons).toMatchObject({ 'free-plan-pack': 1 })
+    expect(summary.importers.credits!.report).toMatchObject({ 'packs of plans that take no credits, no row (plan 31)': 1 })
+    expect(ledger(store).some((row) => String(row.legacyRef).includes('31-4012'))).toBe(false)
+  })
+
+  it('fails an unlimited pack (jobs_limit 0) by name, and never counts it as used up @S-204', async () => {
+    const summary = await setup().run(['credits'])
+    expect(summary.errors).toContainEqual(
+      expect.objectContaining({ importer: 'credits', message: expect.stringMatching(/_jr_user_pack-28-4013.*user 7.*unlimited/) }),
+    )
+    expect(summary.importers.credits!.report).not.toHaveProperty('packs used up, no row', 2)
+  })
+
   it('skips a used-up pack and a user that was not imported, and fails a balance it cannot read', async () => {
     const summary = await setup().run(['credits'])
-    expect(summary.importers.credits!.skipReasons).toEqual({ 'empty-pack': 1, 'user-not-imported': 1 })
+    expect(summary.importers.credits!.skipReasons).toMatchObject({ 'empty-pack': 1, 'user-not-imported': 1 })
     expect(summary.importers.credits!.report).toMatchObject({ 'credits of users not imported (sum)': 2 })
-    expect(summary.errors).toEqual([expect.objectContaining({ importer: 'credits', message: expect.stringMatching(/cannot read the remaining credits/) })])
+    expect(summary.errors).toContainEqual(expect.objectContaining({ importer: 'credits', message: expect.stringMatching(/_jr_user_pack-28-4002.*cannot read the remaining credits/) }))
+    expect(summary.errors).toHaveLength(2)
   })
 
   it('is idempotent: a second run adds no row and updates none', async () => {
