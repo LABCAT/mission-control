@@ -499,6 +499,8 @@ export const usersImporters = (
         // the site managers have since changed them.
         data: names,
         legacyId: facts.user.ID,
+        // Sync only: follow a changed WordPress password until the user signs in.
+        ...(hash ? { refreshWhileSet: { legacyPasswordHash: hash } } : {}),
         // Created through the adapter: no hooks, and no Payload password. The account signs in
         // with its WordPress password (PJ-34), which is then rehashed and the hash cleared.
         rawCreate: true,

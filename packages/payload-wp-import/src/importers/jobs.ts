@@ -492,11 +492,13 @@ export const jobsImporters = (
     map: async (job, ctx): Promise<MappedDoc | SkippedRow> => {
       const status = importableStatus(job.status)
       if (!status) {
-        return { skip: `status-${job.status || 'none'}` }
+        // Left the site (draft, trash, ...): a sync may delete the job an earlier run imported.
+        return { legacyId: job.id, skip: `status-${job.status || 'none'}` }
       }
-      if (!job.title) return { skip: 'no-title' }
+      // A data problem, not a removal: an earlier import of the job stays.
+      if (!job.title) return { keep: true, legacyId: job.id, skip: 'no-title' }
       const publishedAt = parseLegacyDate(job.postDateGmt) ?? parseLegacyDate(job.postDate, offset)
-      if (!publishedAt) return { skip: 'no-date' }
+      if (!publishedAt) return { keep: true, legacyId: job.id, skip: 'no-date' }
 
       const look = await lookupsFor(ctx)
       const current = plan!
@@ -505,7 +507,7 @@ export const jobsImporters = (
       const authorOrg = current.authorOrganisation.get(job.authorId)
       const organisationLegacyId =
         (job.companyKey ? current.companyOrganisation.get(job.companyKey) : undefined) ?? authorOrg
-      if (organisationLegacyId === undefined) return { skip: 'no-organisation' }
+      if (organisationLegacyId === undefined) return { keep: true, legacyId: job.id, skip: 'no-organisation' }
       const organisation = look.organisations.get(organisationLegacyId)
       if (organisation === undefined && !ctx.dryRun) {
         throw new Error(`Organisation ${organisationLegacyId} was not found: run the organisations first`)
@@ -645,6 +647,8 @@ export const jobsImporters = (
       }
     },
     name: 'jobs',
+    // Sync: a job that left the legacy site (trashed, unpublished) goes from here too.
+    prune: true,
     read: async function* (reader) {
       yield* (await planFor(reader)).jobs
     },

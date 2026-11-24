@@ -6,7 +6,7 @@ type Doc = Record<string, any> & { id: number }
 /** In-memory stand-in for the Payload local API, supporting the `and`/`equals` queries the runner uses. */
 export const createFakePayload = (seed: Record<string, Doc[]> = {}) => {
   const store: Record<string, Doc[]> = structuredClone(seed)
-  const writes: { op: 'create' | 'update'; collection: string }[] = []
+  const writes: { op: 'create' | 'delete' | 'update'; collection: string }[] = []
   let nextId = 1000
 
   // `tenants.tenant` looks inside an array of objects, as Payload's where paths do.
@@ -20,9 +20,11 @@ export const createFakePayload = (seed: Record<string, Doc[]> = {}) => {
           : valuesAt(value[path[0]!], path.slice(1))
 
   const matches = (doc: Doc, where: any): boolean =>
-    ((where.and ?? [where]) as Record<string, { equals?: unknown; in?: unknown[] }>[]).every((clause) =>
+    ((where.and ?? [where]) as Record<string, { equals?: unknown; exists?: boolean; in?: unknown[] }>[]).every((clause) =>
       Object.entries(clause).every(([field, condition]) =>
-        'in' in condition
+        'exists' in condition
+          ? valuesAt(doc, field.split('.')).some((value) => value !== null && value !== undefined) === condition.exists
+          : 'in' in condition
           ? valuesAt(doc, field.split('.')).some((value) => condition.in!.includes(value))
           : valuesAt(doc, field.split('.')).includes(condition.equals),
       ),
@@ -45,6 +47,12 @@ export const createFakePayload = (seed: Record<string, Doc[]> = {}) => {
       const doc = { ...data, id: nextId++ }
       ;(store[collection] ??= []).push(doc)
       return doc
+    },
+    async delete({ collection, id }) {
+      writes.push({ op: 'delete', collection })
+      const docs = store[collection]!
+      docs.splice(docs.findIndex((candidate) => candidate.id === id), 1)
+      return {}
     },
     async update({ collection, data, id }) {
       writes.push({ op: 'update', collection })

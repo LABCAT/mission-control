@@ -182,13 +182,14 @@ describe('buildImportPlan @S-130', () => {
   })
 })
 
-const run = async (dryRun: boolean, payload = createFakePayload(), opts = {}) => {
+const run = async (dryRun: boolean, payload = createFakePayload(), opts = {}, refreshCredentials = false) => {
   const importers = usersImporters({ now: () => NOW, ...opts })
   const summary = await runImport({
     dryRun,
     importers: Object.values(importers),
     payload: payload.payload,
     reader: readerFor(),
+    refreshCredentials,
     tenant: 7,
   })
   return { ...payload, summary }
@@ -307,6 +308,23 @@ describe('the users and organisations importers @S-130', () => {
       legacyPasswordHash: null, // a consumed hash is not resurrected
       tenants: [{ role: 'tenant-admin', tenant: 7 }],
     })
+  })
+
+  it('a sync follows a changed WordPress password only while the hash is unclaimed @S-331', async () => {
+    const first = await run(false)
+    const pat = first.store.users!.find((doc) => doc.legacyId === 2)!
+    const lisa = first.store.users!.find((doc) => doc.legacyId === 3)!
+    pat.legacyPasswordHash = '$P$Bold' // not signed in yet; the WordPress password has changed since
+    lisa.legacyPasswordHash = null // signed in since: hash consumed
+
+    const plain = await run(false, first as never)
+    expect(pat.legacyPasswordHash).toBe('$P$Bold') // a normal re-run leaves credentials alone
+    expect(plain.summary.importers.users!.refreshed).toBeUndefined()
+
+    const sync = await run(false, first as never, {}, true)
+    expect(pat.legacyPasswordHash).toBe('$P$Bpat')
+    expect(lisa.legacyPasswordHash).toBeNull()
+    expect(sync.summary.importers.users!.refreshed).toBe(1)
   })
 
   it('keeps users of another tenant apart even when the legacy id is the same', async () => {

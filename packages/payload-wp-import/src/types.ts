@@ -30,6 +30,8 @@ export type ImportPayload = {
     pagination?: boolean
     where?: any
   }) => Promise<{ docs: ({ id: number | string } & Record<string, any>)[] }>
+  /** Needed only by a sync run with `prune`. Real `payload.delete` satisfies it. */
+  delete?: (args: { collection: any; id: number | string; overrideAccess?: boolean }) => Promise<unknown>
   update: (args: {
     collection: any
     /** Request context for the collection's hooks (see `MappedDoc.updateContext`). */
@@ -42,6 +44,8 @@ export type ImportPayload = {
 
 export type ImportContext = {
   dryRun: boolean
+  /** Sync run: `refreshWhileSet` fields are applied. */
+  refreshCredentials?: boolean
   payload: ImportPayload
   /** Tenant id every imported document is scoped to. */
   tenant: number | string
@@ -70,6 +74,13 @@ export type MappedDoc = {
    * import must set, such as the job view counter.
    */
   updateContext?: Record<string, unknown>
+  /**
+   * Sync only (`refreshCredentials`). Fields rewritten on a re-run while the document still holds
+   * a value for them, and only when the new value is set and different. For a legacy password
+   * hash: it follows the WordPress password until the user signs in, which clears it, and is
+   * never brought back after that.
+   */
+  refreshWhileSet?: Record<string, unknown>
   /** Fields for the collection. `legacyId` and the tenant are set by the runner. */
   data: Record<string, unknown>
   /** The WordPress primary key of the source row. */
@@ -77,7 +88,19 @@ export type MappedDoc = {
 }
 
 /** A row the importer chose not to import. The reason is counted in the summary. */
-export type SkippedRow = { skip: string }
+export type SkippedRow = {
+  /**
+   * The row's `legacyId`, so a sync knows it was seen. Without it a skipped row blocks pruning
+   * for the importer: the run cannot tell whether the row is the one an earlier run imported.
+   */
+  legacyId?: number
+  /**
+   * With `legacyId`: the row is skipped for a data problem, not because it left the site, so a
+   * document an earlier run imported for it must stay. Without it, that document may be pruned.
+   */
+  keep?: boolean
+  skip: string
+}
 
 export type Importer<Row = any> = {
   /** Slug of the Payload collection that receives the mapped documents. */
@@ -93,6 +116,12 @@ export type Importer<Row = any> = {
   ) => Promise<{ id: number | string } | undefined>
   /** Names of importers that must run first. */
   dependsOn: string[]
+  /**
+   * Sync only. Documents of this importer that carry a `legacyId` in the run's tenant, but whose
+   * row is no longer in the source, may be deleted (`prune`). Off by default; never for an
+   * importer that adopts existing documents (`findExisting`) or has no `legacyId` (`matchBy`).
+   */
+  prune?: boolean
   /**
    * Map one row. Return `null` to skip it, or `{ skip: reason }` to skip it and count the reason.
    * Throwing records a failure for this row only.
@@ -134,16 +163,33 @@ export type ImportFailure = {
   message: string
 }
 
+export type ImportDeletion = {
+  /** False in a dry run, or when the delete failed. */
+  applied: boolean
+  collection: string
+  id: number | string
+  importer: string
+  legacyId: number
+}
+
 export type ImporterResult = ImportCounts & {
+  /** Why nothing was deleted although pruning was on. */
+  pruneRefused?: string
+  /** Documents whose `refreshWhileSet` fields changed (counted in a dry run too). */
+  refreshed?: number
   /** Extra counts the importer reports about its source data. */
   report?: Record<string, number>
   /** Why rows were skipped, by reason. */
   skipReasons?: Record<string, number>
+  /** Skipped rows that gave no `legacyId` (blocks pruning). */
+  skippedUnidentified?: number
   /** Set when the importer did not complete (read error or failed dependency). */
   aborted?: string
 }
 
 export type ImportSummary = {
+  /** Documents deleted by a sync with `prune` (or, in a dry run, that would be). */
+  deletions: ImportDeletion[]
   dryRun: boolean
   errors: ImportFailure[]
   /** Importers in the order they ran (or were attempted). */

@@ -3294,3 +3294,51 @@ stories:
     tests:
       - packages/payload-jobs/src/checkout.integration.test.ts
       - packages/payload-jobs/src/admin/ApproveJobButton.test.ts
+
+  # ---------------------------------------------------------------------------
+  # Import sync mode (PJ-121)
+  # ---------------------------------------------------------------------------
+  - id: S-330
+    area: Import and cutover
+    role: super admin
+    story: "A sync run deletes imported documents that have left the legacy site, but only in the run's tenant, only documents the importer created, and only when asked."
+    steps:
+      - "Run `pnpm wp-import sync --tenant vwok --prune` and read the list of documents it would delete."
+      - "Run it again with `--apply --prune`."
+    expected: "The first run is a dry run: it lists the deletions and writes nothing. The second deletes exactly those documents and logs each one. Documents of another tenant, documents made in the CMS (no legacy id) and importers that did not opt in are never touched. Nothing is deleted when the source returned no rows, a row failed, a skipped row gave no id, or a read aborted."
+    settings: []
+    mvp: false
+    status: built
+    tests:
+      - packages/payload-wp-import/src/sync.test.ts
+      - packages/payload-wp-import/src/importers/jobs.integration.test.ts
+
+  - id: S-331
+    area: Import and cutover
+    role: super admin
+    story: "A sync run follows a changed WordPress password for users who have not signed in yet, and never brings back a hash once the user has signed in."
+    steps:
+      - "Change a legacy user's password on the old site after the first import."
+      - "Run `pnpm wp-import sync --tenant vwok --apply`."
+    expected: "The user's stored legacy hash is replaced, so the new WordPress password signs them in. A user who already signed in keeps their Payload password, an empty legacy hash never blanks a stored one, and a normal import run leaves credentials alone."
+    settings: []
+    mvp: false
+    status: built
+    tests:
+      - packages/payload-wp-import/src/sync.test.ts
+      - packages/payload-wp-import/src/importers/users.test.ts
+      - apps/cms/src/wp-import-users.test.ts
+
+  - id: S-332
+    area: Import and cutover
+    role: super admin
+    story: "One command syncs everything from the legacy site, and is a dry run unless told to write."
+    steps:
+      - "Run `pnpm wp-import sync --tenant vwok`."
+      - "Run `pnpm wp-import sync --tenant vwok --apply [--prune]`."
+    expected: "Every importer runs in dependency order with credential refresh on. Without --apply nothing is written; --apply alone never deletes; --prune is needed for deletions. --limit, and --apply or --prune on any other entity, are refused."
+    settings: []
+    mvp: false
+    status: built
+    tests:
+      - packages/payload-wp-import/src/sync.test.ts

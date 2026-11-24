@@ -1,6 +1,7 @@
 import { MysqlReader } from './mysql-reader'
 import type {
   ImportContext,
+  ImportDeletion,
   ImportFailure,
   ImportPayload,
   ImporterResult,
@@ -11,7 +12,16 @@ import type {
 export type RunImportOptions = {
   dryRun?: boolean
   importers: Importer[]
+  /** One line per deletion, before and after it happens. Default: silent. */
+  log?: (line: string) => void
   payload: ImportPayload
+  /**
+   * Delete documents of opted-in importers (`Importer.prune`) that were imported into this
+   * tenant but are no longer in the source. In a dry run they are only listed.
+   */
+  prune?: boolean
+  /** Apply `MappedDoc.refreshWhileSet` on re-runs. */
+  refreshCredentials?: boolean
   /** Defaults to a reader configured from `WP_IMPORT_MYSQL_URL`. */
   reader?: MysqlReader
   tenant: number | string
@@ -66,8 +76,10 @@ export const runImport = async (options: RunImportOptions): Promise<ImportSummar
   const { payload, tenant, tenantField = 'tenant' } = options
   const dryRun = options.dryRun ?? false
   const ordered = sortImporters(options.importers)
-  const ctx: ImportContext = { dryRun, payload, tenant }
+  const ctx: ImportContext = { dryRun, payload, refreshCredentials: options.refreshCredentials ?? false, tenant }
+  const log = options.log ?? (() => {})
   const summary: ImportSummary = {
+    deletions: [],
     dryRun,
     errors: [],
     importers: {},
@@ -93,10 +105,14 @@ export const runImport = async (options: RunImportOptions): Promise<ImportSummar
       }
 
       try {
+        const seen = new Set<number>()
         for await (const row of importer.read(reader)) {
-          await importRow(importer, row, ctx, tenantField, result, summary.errors)
+          await importRow(importer, row, ctx, tenantField, result, summary.errors, seen)
         }
         if (importer.report) result.report = importer.report()
+        if (options.prune && importer.prune) {
+          await pruneImporter({ ctx, importer, log, result, seen, summary, tenantField })
+        }
       } catch (error) {
         result.aborted = `read failed: ${messageOf(error)}`
         summary.errors.push({ importer: importer.name, message: result.aborted })
@@ -107,6 +123,72 @@ export const runImport = async (options: RunImportOptions): Promise<ImportSummar
   }
 
   return summary
+}
+
+const pruneRefusal = (importer: Importer, result: ImporterResult, seen: Set<number>): string | undefined => {
+  if (importer.findExisting) return 'the importer adopts existing documents, so it cannot tell which it created'
+  if (importer.matchBy) return 'the importer has no legacyId'
+  if (importer.tenantScope && importer.tenantScope.path !== 'tenant') return 'the importer does not scope by a plain tenant field'
+  if (result.failed > 0) return `${result.failed} row(s) failed, so the source list is incomplete`
+  if (result.skippedUnidentified) return `${result.skippedUnidentified} skipped row(s) gave no legacyId, so the source list is incomplete`
+  if (seen.size === 0) return 'the source returned no rows, which would delete everything'
+  return undefined
+}
+
+/**
+ * Delete (or, in a dry run, list) documents of `importer` that were imported into the run's
+ * tenant but whose legacy row is gone. Scope: the importer's collection, the run's tenant, and
+ * documents with a `legacyId`, so nothing created in the CMS is touched. Refused unless the
+ * whole source was read cleanly.
+ */
+const pruneImporter = async (args: {
+  ctx: ImportContext
+  importer: Importer
+  log: (line: string) => void
+  result: ImporterResult
+  seen: Set<number>
+  summary: ImportSummary
+  tenantField: string
+}): Promise<void> => {
+  const { ctx, importer, log, result, seen, summary, tenantField } = args
+  const refusal = pruneRefusal(importer, result, seen)
+  if (refusal) {
+    result.pruneRefused = refusal
+    log(`prune ${importer.name}: refused, ${refusal}`)
+    return
+  }
+  if (!ctx.payload.delete) throw new Error('prune needs payload.delete')
+
+  const { collection } = importer
+  const tenantPath = importer.tenantScope?.path ?? tenantField
+  const found = await ctx.payload.find({
+    collection,
+    depth: 0,
+    overrideAccess: true,
+    pagination: false,
+    where: { and: [{ legacyId: { exists: true } }, { [tenantPath]: { equals: ctx.tenant } }] },
+  })
+  for (const doc of found.docs) {
+    const legacyId = doc.legacyId
+    if (!Number.isInteger(legacyId) || seen.has(legacyId)) continue
+    // Belt and braces: the query is already scoped, but a delete must never cross tenants.
+    const owner = doc[tenantPath]
+    if (String(owner?.id ?? owner) !== String(ctx.tenant)) continue
+
+    const deletion: ImportDeletion = { applied: false, collection, id: doc.id, importer: importer.name, legacyId }
+    summary.deletions.push(deletion)
+    if (ctx.dryRun) {
+      log(`would delete ${collection} legacyId ${legacyId} (id ${doc.id})`)
+      continue
+    }
+    try {
+      await ctx.payload.delete({ collection, id: doc.id, overrideAccess: true })
+      deletion.applied = true
+      log(`deleted ${collection} legacyId ${legacyId} (id ${doc.id})`)
+    } catch (error) {
+      summary.errors.push({ importer: importer.name, legacyId, message: `delete failed: ${messageOf(error)}` })
+    }
+  }
 }
 
 /** Field names under layout-only containers (tabs without a name, rows, collapsibles). */
@@ -140,6 +222,14 @@ export const wrapLocalizedFields = (
   return out
 }
 
+/** The `refreshWhileSet` fields that still hold a value on the document and now differ. */
+const refreshedFields = (found: Record<string, any>, wanted: Record<string, unknown> | undefined) =>
+  Object.fromEntries(
+    Object.entries(wanted ?? {}).filter(
+      ([field, value]) => value !== undefined && value !== null && value !== '' && found[field] && found[field] !== value,
+    ),
+  )
+
 const importRow = async (
   importer: Importer,
   row: unknown,
@@ -147,6 +237,7 @@ const importRow = async (
   tenantField: string,
   counts: ImporterResult,
   errors: ImportFailure[],
+  seen: Set<number>,
 ): Promise<void> => {
   let legacyId: number | undefined
   try {
@@ -156,11 +247,14 @@ const importRow = async (
       if (mapped) {
         const reasons = (counts.skipReasons ??= {})
         reasons[mapped.skip] = (reasons[mapped.skip] ?? 0) + 1
-      }
+        if (mapped.legacyId === undefined) counts.skippedUnidentified = (counts.skippedUnidentified ?? 0) + 1
+        else if (mapped.keep) seen.add(mapped.legacyId)
+      } else counts.skippedUnidentified = (counts.skippedUnidentified ?? 0) + 1
       return
     }
     legacyId = mapped.legacyId
     if (!Number.isInteger(legacyId)) throw new Error(`legacyId must be an integer, got ${legacyId}`)
+    seen.add(legacyId)
 
     const { collection } = importer
     const scope = importer.tenantScope ?? { path: tenantField, set: true }
@@ -193,11 +287,13 @@ const importRow = async (
       const reasons = (counts.skipReasons ??= {})
       reasons['already-imported'] = (reasons['already-imported'] ?? 0) + 1
     } else if (found) {
+      const refresh = ctx.refreshCredentials ? refreshedFields(found, mapped.refreshWhileSet) : {}
+      if (Object.keys(refresh).length) counts.refreshed = (counts.refreshed ?? 0) + 1
       if (!ctx.dryRun) {
         await ctx.payload.update({
           collection,
           ...(mapped.updateContext ? { context: mapped.updateContext } : {}),
-          data,
+          data: { ...data, ...refresh },
           id: found.id,
           overrideAccess: true,
         })

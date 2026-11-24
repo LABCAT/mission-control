@@ -257,3 +257,20 @@ it links `jobDescriptionPdf` to jobs that now exist.
 The legacy meta key names are in one place (`LEGACY_ORDER_META`, `PACK_META_PREFIX`) and follow AppThemes
 Payments and JobRoller. Confirm them with a dry run against the live copy: a row whose total or pack balance
 cannot be read is counted and named, never guessed.
+
+## Sync mode (PJ-121)
+
+`pnpm wp-import sync --tenant <slug>` runs every importer in order and is a **dry run unless
+`--apply` is given**. It is for re-syncing a tenant while the legacy site is still live.
+
+- **Credential refresh.** A user's WordPress password hash follows the legacy site until the user
+  signs in (which clears it). It is never brought back afterwards, and an empty hash never blanks
+  a stored one. Normal (non-sync) runs leave credentials alone.
+- **Deletions need `--prune`** (and `--apply` to take effect; without `--apply` they are only
+  listed). They are limited to the run's tenant, to documents with a `legacyId` (so nothing made
+  in the CMS), and to importers that opt in with `prune: true` (today: `jobs`). Each deletion is
+  logged. Nothing is deleted for an importer whose read was incomplete: no rows, a failed row, a
+  skipped row without a `legacyId`, or an aborted read. `--limit` is refused with `sync`.
+- A skipped row can return `{ skip, legacyId }` (its document is then pruned like a removed row) or
+  `{ skip, legacyId, keep: true }` (data problem: an earlier import stays).
+- Media is a separate command (`wp-import-media`, needs the uploads directory) and is not part of `sync`.
