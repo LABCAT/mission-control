@@ -35,6 +35,11 @@ import { jobsCollection } from './collections/jobs'
 import { menusCollection, removeTenantMenus } from './collections/menus'
 import { pagesCollection } from './collections/pages'
 import {
+  removeTenantSiteSettings,
+  seedTenantSiteSettings,
+  siteSettingsCollection,
+} from './collections/site-settings'
+import {
   isOrganisationOwnerByRole,
   orderCollection,
   refuseDeleteWhileOrdered,
@@ -71,6 +76,7 @@ export * from './collections/locations'
 export * from './collections/menus'
 export * from './collections/organisations'
 export * from './collections/pages'
+export * from './collections/site-settings'
 export * from './coupons'
 export * from './credits'
 export * from './email'
@@ -144,6 +150,7 @@ export const payloadJobsTenantCollections = (
   APPLICATIONS_SLUG,
   slugs.orders,
   slugs.creditLedger,
+  slugs.siteSettings,
 ]
 
 /**
@@ -359,6 +366,13 @@ const jobBoardCollections = (
           slug: slugs.menus,
           tenantScoped: tenancy === 'multi',
         }),
+        siteSettingsCollection({
+          access: collections.siteSettings?.access,
+          bannerBlockSlugs: blockSlugs.includes('banner') ? ['banner'] : [],
+          mediaSlug,
+          slug: slugs.siteSettings,
+          tenantScoped: tenancy === 'multi',
+        }),
       ]
     : []),
 ]
@@ -552,6 +566,11 @@ const jobBoardPlugin =
                           collectionSlug: slugs.pages,
                           tenantScoped: tenancy === 'multi',
                         }),
+                        // And its settings document (PJ-67).
+                        seedTenantSiteSettings({
+                          collectionSlug: slugs.siteSettings,
+                          tenantScoped: tenancy === 'multi',
+                        }),
                         // And its privacy policy and terms as drafts (PJ-89).
                         seedTenantLegalPages({
                           blockSlugs: registeredBlockSlugs(config),
@@ -578,6 +597,7 @@ const jobBoardPlugin =
                     ? [
                         removeTenantPages({ collectionSlug: slugs.pages }),
                         removeTenantMenus({ collectionSlug: slugs.menus }),
+                        removeTenantSiteSettings({ collectionSlug: slugs.siteSettings }),
                       ]
                     : []),
                   ...(features.coupons

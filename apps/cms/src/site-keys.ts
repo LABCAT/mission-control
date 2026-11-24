@@ -24,6 +24,8 @@ export const siteKeyAllowedCollections = (slugs: PayloadJobsCollectionSlugs) =>
     // mission-control: pages and menus, read published only (PJ-103).
     slugs.pages,
     slugs.menus,
+    // mission-control: the site's name, logo, footer, language and header banner (PJ-67).
+    slugs.siteSettings,
   ] as const
 
 export const siteKeyAccessOverrideFor = (slugs: PayloadJobsCollectionSlugs) =>

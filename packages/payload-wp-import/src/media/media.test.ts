@@ -391,6 +391,108 @@ describe('runMediaImport @S-148', () => {
   })
 })
 
+describe('site chrome media @S-263', () => {
+  // The legacy header banner and logo live in wp_options, not in a post.
+  const chromeTables = {
+    ...mediaTables,
+    wp_options: [
+      { option_id: 1, option_name: 'jr_enable_header_banner', option_value: '1' },
+      {
+        option_id: 2,
+        option_name: 'jr_header_banner',
+        option_value:
+          '<a href="https://ycv.vu"><img alt="Powered by YCV" src="https://vanuatuwok.vu/app/uploads/2021/11/header.png"></a>',
+      },
+      {
+        option_id: 3,
+        option_name: 'jr_listing_banner',
+        option_value: '<img src="https://vanuatuwok.vu/app/uploads/2021/11/header-mobile.png">',
+      },
+      {
+        option_id: 4,
+        option_name: 'jr_logo_url',
+        option_value: 'https://vanuatuwok.vu/app/uploads/2020/05/cropped-logo.png',
+      },
+    ],
+  }
+  const chromeFiles = {
+    ...mediaFiles,
+    '2021/11/header.png': 'PNG-header',
+    '2021/11/header-mobile.png': 'PNG-header-mobile',
+    '2020/05/cropped-logo.png': 'PNG-logo',
+  }
+
+  const runChrome = (payload: ReturnType<typeof createFakePayload>, bucket = fakeBucket()) =>
+    runMediaImport({
+      payload: payload.payload,
+      reader: new MysqlReader({ connect: async () => createFixtureConnection(chromeTables), pageSize: 3 }),
+      source: fakeSource(chromeFiles).source,
+      target: bucket.target,
+      tenant: TENANT,
+    })
+
+  it('copies the header banner and logo and links them to the site settings', async () => {
+    const payload = createFakePayload({
+      'site-settings': [{ id: 1, lang: 'en', legacyId: 1, tenant: TENANT }],
+    })
+    const report = await runChrome(payload)
+
+    expect(report.files.copied).toBe(3)
+    const settings = payload.store['site-settings']![0]!
+    const mediaDoc = (id: unknown) => payload.store.media!.find((doc) => doc.id === id)!
+
+    // One Banner block, with both images and the legacy link and alt text.
+    expect(settings.headerBanner).toEqual([
+      {
+        alt: 'Powered by YCV',
+        blockType: 'banner',
+        desktopImage: expect.any(Number),
+        href: 'https://ycv.vu',
+        mobileImage: expect.any(Number),
+      },
+    ])
+    expect(mediaDoc((settings.headerBanner as { desktopImage: unknown }[])[0]!.desktopImage).filename).toBe(
+      objectName(TENANT, '2021/11/header.png'),
+    )
+    expect(mediaDoc((settings.headerBanner as { mobileImage: unknown }[])[0]!.mobileImage).filename).toBe(
+      objectName(TENANT, '2021/11/header-mobile.png'),
+    )
+    expect(mediaDoc(settings.logo).filename).toBe(objectName(TENANT, '2020/05/cropped-logo.png'))
+  })
+
+  it('leaves a banner image a person has already set alone', async () => {
+    const payload = createFakePayload({
+      'site-settings': [
+        {
+          headerBanner: [{ blockType: 'banner', desktopImage: 999 }],
+          id: 1,
+          lang: 'en',
+          legacyId: 1,
+          tenant: TENANT,
+        },
+      ],
+    })
+    const report = await runChrome(payload)
+
+    expect(report.relations.kept).toBe(1)
+    expect((payload.store['site-settings']![0]!.headerBanner as { desktopImage: unknown }[])[0]!.desktopImage).toBe(999)
+  })
+
+  it('is idempotent for the chrome files', async () => {
+    const payload = createFakePayload({
+      'site-settings': [{ id: 1, lang: 'en', legacyId: 1, tenant: TENANT }],
+    })
+    const bucket = fakeBucket()
+    await runChrome(payload, bucket)
+    const writes = payload.writes.length
+    const second = await runChrome(payload, bucket)
+
+    expect(second.files.copied).toBe(0)
+    expect(second.relations.set).toBe(0)
+    expect(payload.writes.length).toBe(writes)
+  })
+})
+
 describe('stores @S-148', () => {
   it('copies through a real directory target and verifies it', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'wpmedia-'))

@@ -62,18 +62,18 @@ export type SupportedTimezones =
   | 'Pacific/Fiji';
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "LexicalNodes_AAA45A19".
+ * via the `definition` "LexicalNodes_D823B46D".
  */
-export type LexicalNodes_AAA45A19 =
+export type LexicalNodes_D823B46D =
   | SerializedTextNode
   | SerializedTabNode
   | SerializedLineBreakNode
-  | SerializedParagraphNode<LexicalNodes_AAA45A19>
+  | SerializedParagraphNode<LexicalNodes_D823B46D>
   | SerializedHorizontalRuleNode
   | SerializedUploadNode<'media'>
   | SerializedUploadNode<'documents'>
   | SerializedUploadNode<'application-files'>
-  | SerializedQuoteNode<LexicalNodes_AAA45A19>
+  | SerializedQuoteNode<LexicalNodes_D823B46D>
   | SerializedRelationshipNode<
       | 'users'
       | 'folders'
@@ -84,6 +84,7 @@ export type LexicalNodes_AAA45A19 =
       | 'organisations'
       | 'pages'
       | 'menus'
+      | 'site-settings'
       | 'job-categories'
       | 'job-types'
       | 'salary-bands'
@@ -104,11 +105,11 @@ export type LexicalNodes_AAA45A19 =
       | 'payload-preferences'
       | 'payload-migrations'
     >
-  | SerializedAutoLinkNode<LexicalNodes_AAA45A19, LexicalLinkFields>
-  | SerializedLinkNode<LexicalNodes_AAA45A19, LexicalLinkFields>
-  | SerializedListNode<LexicalNodes_AAA45A19>
-  | SerializedListItemNode<LexicalNodes_AAA45A19>
-  | SerializedHeadingNode<LexicalNodes_AAA45A19>;
+  | SerializedAutoLinkNode<LexicalNodes_D823B46D, LexicalLinkFields>
+  | SerializedLinkNode<LexicalNodes_D823B46D, LexicalLinkFields>
+  | SerializedListNode<LexicalNodes_D823B46D>
+  | SerializedListItemNode<LexicalNodes_D823B46D>
+  | SerializedHeadingNode<LexicalNodes_D823B46D>;
 /**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "LexicalNodes_3DE324E4".
@@ -147,6 +148,7 @@ export interface Config {
     organisations: Organisation;
     pages: Page;
     menus: Menu;
+    'site-settings': SiteSetting;
     'job-categories': JobCategory;
     'job-types': JobType;
     'salary-bands': SalaryBand;
@@ -182,6 +184,7 @@ export interface Config {
     organisations: OrganisationsSelect<false> | OrganisationsSelect<true>;
     pages: PagesSelect<false> | PagesSelect<true>;
     menus: MenusSelect<false> | MenusSelect<true>;
+    'site-settings': SiteSettingsSelect<false> | SiteSettingsSelect<true>;
     'job-categories': JobCategoriesSelect<false> | JobCategoriesSelect<true>;
     'job-types': JobTypesSelect<false> | JobTypesSelect<true>;
     'salary-bands': SalaryBandsSelect<false> | SalaryBandsSelect<true>;
@@ -776,7 +779,7 @@ export interface FeatureBoxesBlock {
  */
 export interface RichTextBlock {
   heading?: string | null;
-  content: LexicalRichText<LexicalNodes_AAA45A19>;
+  content: LexicalRichText<LexicalNodes_D823B46D>;
   id?: string | null;
   blockName?: string | null;
   blockType: 'rich-text';
@@ -831,7 +834,7 @@ export interface FaqBlock {
   heading?: string | null;
   items: {
     question: string;
-    answer: LexicalRichText<LexicalNodes_AAA45A19>;
+    answer: LexicalRichText<LexicalNodes_D823B46D>;
     id?: string | null;
   }[];
   id?: string | null;
@@ -1045,6 +1048,54 @@ export interface Menu {
     | null;
   /**
    * WordPress menu term ID, so the importer can match an existing menu.
+   */
+  legacyId?: number | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * Site name, logo, footer, language and the header banner. One document per site.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "site-settings".
+ */
+export interface SiteSetting {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  /**
+   * The site name, used in the browser title and email footers.
+   */
+  siteName?: string | null;
+  /**
+   * Shown in the site header and used for share images.
+   */
+  logo?: (number | null) | Media;
+  /**
+   * One line under the site name, for example in the footer.
+   */
+  tagline?: string | null;
+  /**
+   * Shown at the bottom of every page.
+   */
+  footerText?: string | null;
+  /**
+   * The `lang` attribute of every page, for example en or en-VU.
+   */
+  lang?: string | null;
+  /**
+   * Rendered above the content on every page of the site.
+   */
+  headerBanner?: BannerBlock[] | null;
+  /**
+   * WordPress option row id, so the importer can match existing settings.
    */
   legacyId?: number | null;
   createdBy?: {
@@ -1330,7 +1381,7 @@ export interface Job {
   publishedAt?: string | null;
   expiresAt?: string | null;
   organisation: number | Organisation;
-  description?: LexicalRichText<LexicalNodes_AAA45A19> | null;
+  description?: LexicalRichText<LexicalNodes_D823B46D> | null;
   jobType?: (number | null) | JobType;
   categories?: (number | JobCategory)[] | null;
   salaryBand?: (number | null) | SalaryBand;
@@ -2104,6 +2155,10 @@ export interface PayloadLockedDocument {
         value: number | Menu;
       } | null)
     | ({
+        relationTo: 'site-settings';
+        value: number | SiteSetting;
+      } | null)
+    | ({
         relationTo: 'job-categories';
         value: number | JobCategory;
       } | null)
@@ -2655,6 +2710,24 @@ export interface MenusSelect<T extends boolean = true> {
         newTab?: T;
         id?: T;
       };
+  legacyId?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "site-settings_select".
+ */
+export interface SiteSettingsSelect<T extends boolean = true> {
+  tenant?: T;
+  siteName?: T;
+  logo?: T;
+  tagline?: T;
+  footerText?: T;
+  lang?: T;
+  headerBanner?: T | {};
   legacyId?: T;
   createdBy?: T;
   updatedBy?: T;
@@ -3286,6 +3359,7 @@ export interface CollectionQueryWidget {
       | 'organisations'
       | 'pages'
       | 'menus'
+      | 'site-settings'
       | 'job-categories'
       | 'job-types'
       | 'salary-bands'
@@ -3335,6 +3409,7 @@ export interface ActivityWidget {
           | 'organisations'
           | 'pages'
           | 'menus'
+          | 'site-settings'
           | 'job-categories'
           | 'job-types'
           | 'salary-bands'
