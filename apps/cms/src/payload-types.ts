@@ -527,6 +527,7 @@ export interface Tenant {
      */
     applicationsMonths?: number | null;
   };
+  /**
    * What a visitor sees on a job that has closed.
    */
   expiredJobMode?: ('notice' | 'gone') | null;
