@@ -721,6 +721,7 @@ const me: Handler = async ({ options, req, tenant }) => {
   const renewed =
     bearer && !viewAs
       ? await renewRollingSession({
+          maxSeconds: sessionSeconds(tenant as never, true),
           payload: req.payload,
           token: bearer,
           userID: user.id,

@@ -201,12 +201,15 @@ const RENEW_AFTER_SECONDS = DAY_SECONDS
  * extended, and null when the token does not roll or was renewed recently.
  */
 export const renewRollingSession = async ({
+  maxSeconds = MAX_SESSION_DAYS * DAY_SECONDS,
   now = Date.now(),
   payload,
   token,
   userID,
   usersSlug,
 }: {
+  /** The tenant's current ticked length. An older, longer token is cut to it. */
+  maxSeconds?: number
   now?: number
   payload: Payload
   token: string
@@ -225,11 +228,14 @@ export const renewRollingSession = async ({
   const nowSeconds = Math.floor(now / 1000)
   if (nowSeconds - iat < RENEW_AFTER_SECONDS) return null
 
+  // The tenant may have shortened the setting since this session began: the setting wins.
+  const seconds = Math.min(length, maxSeconds, MAX_SESSION_DAYS * DAY_SECONDS)
+
   const user = await readUser(payload, usersSlug, userID)
   const session = user?.sessions?.find(({ id }) => id === sid)
   if (!user || !session) return null
 
-  session.expiresAt = new Date(now + length * 1000)
+  session.expiresAt = new Date(now + seconds * 1000)
 
   await payload.db.updateOne({
     id: user.id,
@@ -244,15 +250,15 @@ export const renewRollingSession = async ({
   })
 
   const { exp, token: renewed } = await sign({
-    extra: { [ROLLING_CLAIM]: length },
+    extra: { [ROLLING_CLAIM]: seconds },
     payload,
-    seconds: length,
+    seconds,
     sid,
     user,
     usersSlug,
   })
 
-  return { exp, expiresIn: length, keepSignedIn: true, token: renewed }
+  return { exp, expiresIn: seconds, keepSignedIn: true, token: renewed }
 }
 
 /** Remove one session from the user, so its token stops working. */

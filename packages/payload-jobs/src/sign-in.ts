@@ -307,6 +307,9 @@ const verifyCode: Handler = async ({ options, req, tenant }) => {
   const record = key ? await req.payload.kv.get<CodeRecord>(key) : null
   if (!key || !record) throw invalidCode
 
+  // The index must belong to this record: a stale one (left by a concurrent re-request) is refused.
+  if (token && !sameText(record.tokenHash, await sha256Hex(`token:${token}`))) throw invalidCode
+
   // A link token from another tenant is refused without being spent.
   if (key !== (await recordKey(tenant.id, record.email))) throw invalidCode
 

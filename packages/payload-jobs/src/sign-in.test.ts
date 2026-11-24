@@ -531,6 +531,21 @@ describe('email sign-in (PJ-109)', () => {
       expect((await verify(tenantA, { code, email })).status).toBe(200)
     })
 
+    it('refuses a token index that points at a record whose own token is different', async () => {
+      const email = await createUser({ tenant: tenantA })
+      await request(tenantA, email)
+
+      // A stale index, as a concurrent re-request could leave behind.
+      const stale = 'a'.repeat(64)
+      await payload.kv.set(`mc:sign-in-token:${await sha256Hex(`token:${stale}`)}`, {
+        key: await recordKeyOf(tenantA, email),
+      })
+
+      expect((await verify(tenantA, { token: stale })).body.error.code).toBe('invalid_code')
+      // The real record is untouched, and still works.
+      expect((await verify(tenantA, { token: lastLinkToken() })).status).toBe(200)
+    })
+
     it('rejects malformed input without a lookup', async () => {
       const email = await createUser({ tenant: tenantA })
 
@@ -650,6 +665,26 @@ describe('email sign-in (PJ-109)', () => {
       })) as unknown as { sessions: { expiresAt: string }[] }
       const furthest = Math.max(...stored.sessions.map(({ expiresAt }) => new Date(expiresAt).getTime()))
       expect(furthest).toBeGreaterThan(later + 29 * 86_400_000)
+    })
+
+    it('never renews longer than the tenant allows now @S-080', async () => {
+      const email = await createUser({ tenant: tenantA })
+      const { body } = await password(tenantA, email, { keepSignedIn: true })
+      const user = (await payload.db.findOne({
+        collection: 'users',
+        where: { email: { equals: email } },
+      })) as { id: number }
+
+      const renewed = await renewRollingSession({
+        maxSeconds: 7 * 86_400,
+        now: Date.now() + 2 * 86_400_000,
+        payload,
+        token: body.token,
+        userID: user.id,
+        usersSlug: 'users',
+      })
+
+      expect(renewed?.expiresIn).toBe(7 * 86_400)
     })
 
     it('does not roll an unticked session @S-080', async () => {
