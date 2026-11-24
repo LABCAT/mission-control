@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { planSeedProblems } from '@mission-control/payload-jobs'
 
-import { vwokPlans } from './vwok-plans'
+import { VWOK_MAX_DURATION_DAYS, vwokPlans } from './vwok-plans'
 
 describe('vwok plan seed', () => {
   it('seeds exactly the plans that are still sold', () => {
@@ -34,6 +34,11 @@ describe('vwok plan seed', () => {
     expect(vwokPlans.filter((plan) => plan.isVolunteer).map((plan) => plan.key)).toEqual([
       'volunteer-listing',
     ])
+  })
+
+  it('never lets a listing run past 45 days @S-190', () => {
+    expect(VWOK_MAX_DURATION_DAYS).toBe(45)
+    for (const plan of vwokPlans) expect(plan.durationDays ?? 0).toBeLessThanOrEqual(VWOK_MAX_DURATION_DAYS)
   })
 
   it('is complete: every price, duration and pack size is confirmed', () => {

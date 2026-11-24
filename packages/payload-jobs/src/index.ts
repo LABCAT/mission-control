@@ -17,6 +17,7 @@ import {
 } from './forms'
 import { withViewAs } from './view-as'
 import { DASHBOARD_COMPONENT_PATH, type SiteManagerAdminOptions } from './admin'
+import { approveJobEndpoint, releaseJobsOnSettle } from './approval'
 import { accountCheckoutEndpoints, type PurchaseRightsCheck } from './checkout'
 import type { LocationsOptions } from './collections/locations'
 import { locationsCollection, locationsTenantSlugIndex } from './collections/locations'
@@ -24,6 +25,7 @@ import { ORGANISATION_DIRECTORY_BLOCK, organisationDirectoryBlock } from './bloc
 import { organisationsCollection, withOrganisationField } from './collections/organisations'
 import {
   creditLedgerCollection,
+  grantPackCreditsOnPaid,
   organisationHistoryEndpoint,
   refundCreditOnCancel,
   refuseDeleteWhileInCreditLedger,
@@ -57,6 +59,7 @@ import { resolvePaymentProviders, type PaymentProviderDefinition } from './payme
 import { expireJobPlacementsTask, PLACEMENTS_FIELD } from './placements'
 import { withPersonalDataRemoval } from './anonymise-user'
 import { seedTenantLegalPages } from './legal-pages'
+import { deleteExpiredApplicationsTask, withApplicationDataAction } from './retention'
 import { planCollection, withPlanRestrictionGuards } from './plans'
 import {
   DEFAULT_PAYLOAD_JOBS_SLUGS,
@@ -95,6 +98,7 @@ export * from './blocks/organisation-directory'
 export * from './collections/pages'
 export * from './collections/site-settings'
 export * from './coupons'
+export * from './credit-settings'
 export * from './credits'
 export * from './email'
 export * from './forms'
@@ -108,7 +112,12 @@ export * from './slug-rules'
 export * from './add-ons'
 export * from './collections/jobs'
 export * from './collections/applications'
+export * from './approval'
+export * from './job-log'
 export * from './job-status'
+export { addLocalDays, endOfLocalDayAfter, validTimeZone } from './local-time'
+export * from './publication'
+export * from './publication-settings'
 export * from './legal-pages'
 export * from './add-ons-seed'
 export * from './catalog'
@@ -117,6 +126,7 @@ export * from './plans'
 export * from './plans-seed'
 export * from './pricing'
 export * from './rate-limit'
+export * from './retention'
 export * from './seed/vanuatu'
 export * from './seo-fields'
 export * from './slugs'
@@ -785,6 +795,11 @@ const jobBoardPlugin =
         ...baseJobs.hooks,
         afterChange: [...(baseJobs.hooks?.afterChange ?? []), jobLifecycleHook(registry, slugs.jobs)],
       },
+      // The site manager's Approve action (PJ-32): POST /api/<jobs>/:id/approve.
+      endpoints: [
+        ...(Array.isArray(baseJobs.endpoints) ? baseJobs.endpoints : []),
+        approveJobEndpoint({ slugs, tenantScoped: tenancy === 'multi' }),
+      ],
     }
     // Credits (PJ-24): a job cancelled before publishing gets its credit back, and documents the
     // ledger points at are kept.
@@ -807,10 +822,28 @@ const jobBoardPlugin =
       ...baseOrders,
       hooks: {
         ...baseOrders.hooks,
-        afterChange: [...(baseOrders.hooks?.afterChange ?? []), orderEventHook(registry)],
+        afterChange: [
+          ...(baseOrders.hooks?.afterChange ?? []),
+          orderEventHook(registry),
+          // Release the jobs an order pays for once it is invoiced or paid (PJ-32).
+          releaseJobsOnSettle(slugs),
+        ],
       },
     }
     const orders = features.credits ? withCreditLedger(eventOrders, 'order', 'order', slugs.creditLedger) : eventOrders
+    // A paid order grants its pack's credits when the site grants them on payment (PJ-120).
+    const grantingOrders: CollectionConfig = features.credits
+      ? {
+          ...orders,
+          hooks: {
+            ...orders.hooks,
+            afterChange: [
+              ...(orders.hooks?.afterChange ?? []),
+              grantPackCreditsOnPaid({ slug: slugs.creditLedger, tenantScoped: tenancy === 'multi' }),
+            ],
+          },
+        }
+      : orders
     const creditLedger = features.credits
       ? [creditLedgerCollection({ access: collectionOptions.creditLedger?.access, slugs, tenantScoped: tenancy === 'multi', usersSlug })]
       : []
@@ -846,6 +879,25 @@ const jobBoardPlugin =
             ],
           }
         : jobsConfig
+
+    // Retention (PJ-88): a daily task deletes applications and CV files once the job has been
+    // closed for the tenant's retention period.
+    const tasksWithRetention: Config['jobs'] = features.applications
+      ? {
+          ...jobsWithForms,
+          tasks: [
+            ...(jobsWithForms?.tasks ?? []),
+            deleteExpiredApplicationsTask({
+              applicationsSlug: APPLICATIONS_SLUG,
+              filesSlug: APPLICATION_FILES_SLUG,
+              jobsSlug: slugs.jobs,
+              settingsSlug,
+              tenancy,
+              tenantsSlug,
+            }),
+          ],
+        }
+      : jobsWithForms
 
     const jobBoardConfig: Config = {
       ...config,
@@ -884,20 +936,23 @@ const jobBoardPlugin =
                 organisationsSlug: slugs.organisations,
                 tenantScoped: tenancy === 'multi',
               }),
-              applicationsCollection({
-                applicantsSlug: usersSlug,
-                jobsSlug: slugs.jobs,
-                organisationsSlug: slugs.organisations,
-                tenantScoped: tenancy === 'multi',
-              }),
+              withApplicationDataAction(
+                applicationsCollection({
+                  applicantsSlug: usersSlug,
+                  jobsSlug: slugs.jobs,
+                  organisationsSlug: slugs.organisations,
+                  tenantScoped: tenancy === 'multi',
+                }),
+                { applicationsSlug: APPLICATIONS_SLUG, filesSlug: APPLICATION_FILES_SLUG },
+              ),
             ]
           : []),
         // Orders go last (PJ-23), so no existing compound index name shifts.
-        orders,
+        grantingOrders,
         // The credit ledger after orders (PJ-24), for the same reason.
         ...creditLedger,
       ],
-      jobs: jobsWithForms,
+      jobs: tasksWithRetention,
       custom: {
         ...config.custom,
         payloadJobs: {

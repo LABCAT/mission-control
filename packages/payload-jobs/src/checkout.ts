@@ -21,6 +21,12 @@ import {
 import { idsOf, tenantIDOf } from './catalog'
 import { normalizeCouponCode, COUPON_USE_COUNT_CONTEXT } from './coupons'
 import {
+  packCreditGrantProblem,
+  tenantPackCreditMode,
+  type PackCreditMode,
+  type TenantPackCreditSource,
+} from './credit-settings'
+import {
   balanceFor,
   consumeCredit,
   CreditLedgerError,
@@ -52,6 +58,10 @@ import {
   type QuoteSnapshot,
 } from './pricing'
 import { DEFAULT_PAYLOAD_JOBS_SLUGS, type PayloadJobsCollectionSlugs } from './slugs'
+import { withContextKeys } from './approval'
+import { DAY_MS, endOfLocalDay, localDateOf, validTimeZone } from './local-time'
+import { JOB_LOG_NOTE_CONTEXT } from './job-log'
+import { JOB_SYSTEM_CONTEXT } from './job-status'
 import { tenantTaxSettings, type TenantTaxSource } from './tax-settings'
 import { assertNotViewingAs } from './view-as'
 
@@ -211,53 +221,7 @@ export const parseCheckoutInput = (body: unknown): CheckoutInput => {
 // ---------------------------------------------------------------------------------------------
 // Close date (pure)
 
-const DAY_MS = 24 * 60 * 60 * 1000
-
-const validTimeZone = (timeZone: unknown): string => {
-  if (typeof timeZone !== 'string' || !timeZone) return 'UTC'
-  try {
-    return Intl.DateTimeFormat('en-US', { timeZone }).resolvedOptions().timeZone
-  } catch {
-    return 'UTC'
-  }
-}
-
-/** The calendar date (`YYYY-MM-DD`) of `instant` in `timeZone`. */
-export const localDateOf = (instant: number, timeZone: string): string =>
-  new Intl.DateTimeFormat('en-CA', { day: '2-digit', month: '2-digit', timeZone, year: 'numeric' }).format(
-    new Date(instant),
-  )
-
-/** How far `timeZone` is ahead of UTC at `instant`, in ms (whole seconds). */
-const offsetAt = (instant: number, timeZone: string): number => {
-  const parts = Object.fromEntries(
-    new Intl.DateTimeFormat('en-US', {
-      day: 'numeric',
-      hour: 'numeric',
-      hourCycle: 'h23',
-      minute: 'numeric',
-      month: 'numeric',
-      second: 'numeric',
-      timeZone,
-      year: 'numeric',
-    })
-      .formatToParts(new Date(instant))
-      .map((part) => [part.type, Number(part.value)]),
-  ) as Record<string, number>
-  const asUTC = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second)
-  return asUTC - Math.floor(instant / 1000) * 1000
-}
-
-/** The last millisecond of `date` (`YYYY-MM-DD`) in `timeZone`, as an ISO instant. */
-export const endOfLocalDay = (date: string, timeZone: string): string => {
-  const [year, month, day] = date.split('-').map(Number)
-  const guess = Date.UTC(year, month - 1, day, 23, 59, 59, 999)
-  let result = guess - offsetAt(guess, timeZone)
-  // Across a DST change the offset at the answer can differ from the offset at the guess.
-  const second = guess - offsetAt(result, timeZone)
-  if (second !== result) result = second
-  return new Date(result).toISOString()
-}
+export { endOfLocalDay, localDateOf }
 
 /**
  * Why `closeDate` can't be used for a plan running `durationDays`, or null. The date must be a
@@ -421,7 +385,7 @@ const lockCoupon = async (req: PayloadRequest, couponID: ID): Promise<void> => {
   await db.execute({ db: session, raw: `SELECT pg_advisory_xact_lock(${COUPON_LOCK_NAMESPACE}, ${hash | 0})` })
 }
 
-type TenantDoc = TenantTaxSource & { addOns?: unknown; currency?: unknown; id?: ID; timezone?: unknown }
+type TenantDoc = TenantTaxSource & TenantPackCreditSource & { addOns?: unknown; currency?: unknown; id?: ID; timezone?: unknown }
 
 const loadTenant = async (req: PayloadRequest, options: Resolved, tenantID: ID | null): Promise<TenantDoc> => {
   if (options.tenantScoped) {
@@ -695,6 +659,14 @@ const runSteps = async (registry: PayloadJobsRegistry, context: CheckoutContext,
   return current
 }
 
+/**
+ * A pack whose credits only become usable once its order is paid is not "sold" yet: the job bought
+ * with it then follows its own payment rule, as the old site did (PJ-120). Only a site that grants
+ * on invoice gets the pack's credits, and one of them for the job, in the same breath.
+ */
+export const packCreditsApplyAtCheckout = (mode: PackCreditMode, status: OrderStatus): boolean =>
+  packCreditGrantProblem({ mode, status }) === null
+
 /** How a quote is settled: a credit paid it all, it costs nothing, or it is invoiced. */
 export const paymentMethodFor = (quoted: Pick<Quote, 'credits' | 'total'>): OrderPaymentMethod =>
   quoted.total > 0 ? 'invoice' : quoted.credits.used > 0 ? 'credit' : 'free'
@@ -861,20 +833,25 @@ export const checkoutJob = async (args: CheckoutJobArgs): Promise<CheckoutResult
       }),
     )) as unknown as Doc
 
-    const updatedJob = (await req.payload.update({
-      collection: options.slugs.jobs as CollectionSlug,
-      data: {
-        order: order.id,
-        plan: input.planId,
-        ...(job.status === 'draft' ? { status: 'pending' } : {}),
-        // Null clears an earlier choice, so the plan's full duration applies.
-        expiresAt,
-      } as never,
-      depth: 0,
-      id: job.id,
-      overrideAccess: true,
-      req,
-    })) as unknown as Doc
+    // Submitting is the system's move, whoever's request it is: the rule decides what follows.
+    const updatedJob = (await withContextKeys(req, { [JOB_SYSTEM_CONTEXT]: true }, () =>
+      req.payload.update({
+        collection: options.slugs.jobs as CollectionSlug,
+        data: {
+          order: order.id,
+          plan: input.planId,
+          ...(job.status === 'draft' || (waiting && job.status === 'pending')
+            ? { status: waiting ? 'waiting_for_purchase' : 'pending' }
+            : {}),
+          // Null clears an earlier choice, so the plan's full duration applies.
+          expiresAt,
+        } as never,
+        depth: 0,
+        id: job.id,
+        overrideAccess: true,
+        req,
+      }),
+    )) as unknown as Doc
 
     if (waiting) {
       return {
@@ -887,10 +864,12 @@ export const checkoutJob = async (args: CheckoutJobArgs): Promise<CheckoutResult
     }
 
     const settled = await settleOrder(req, options, prepared, order, snapshot)
+    // Settling the order may have published the job (PJ-32): report it as it stands now.
+    const liveJob = (await findOne(req, options.slugs.jobs, updatedJob.id)) ?? updatedJob
     return {
       created: true,
       credits: settled.credits,
-      job: jobSummary(updatedJob),
+      job: jobSummary(liveJob),
       order: summary(settled.order, settled.reference),
       waitingForPurchase: false,
     }
@@ -989,9 +968,22 @@ const settleOrder = async (
     }),
   )) as unknown as Doc
 
-  // 4. A pack: its credits go into the ledger, and one pays for this job.
-  if (snapshot.plan.jobCredits > 1 && snapshot.entitlements.jobCreditsGranted > 0 && options.creditsEnabled) {
-    const grant = await grantCredits({ order: order.id, payload: req.payload, req, slug: options.slugs.creditLedger })
+  // 4. A pack: its credits go into the ledger, and one pays for this job (PJ-120). A site that
+  //    grants on payment waits for the order to be paid; the orders hook grants them then.
+  const packMode = tenantPackCreditMode(prepared.tenant)
+  if (
+    snapshot.plan.jobCredits > 1 &&
+    snapshot.entitlements.jobCreditsGranted > 0 &&
+    options.creditsEnabled &&
+    packCreditsApplyAtCheckout(packMode, status)
+  ) {
+    const grant = await grantCredits({
+      order: order.id,
+      packCreditMode: packMode,
+      payload: req.payload,
+      req,
+      slug: options.slugs.creditLedger,
+    })
     granted = grant.entry.delta
     if (jobID !== null) {
       await consumeCredit({ job: jobID, order: order.id, payload: req.payload, req, slug: options.slugs.creditLedger }).catch(
@@ -1106,11 +1098,26 @@ export const approvePurchase = async (args: PurchaseDecisionArgs): Promise<Check
       }),
     )) as unknown as Doc
 
+    // The purchase is approved: the job is submitted for real and waits on the rule (PJ-32).
+    if (job.status === 'waiting_for_purchase') {
+      await withContextKeys(req, { [JOB_LOG_NOTE_CONTEXT]: 'Purchase approved', [JOB_SYSTEM_CONTEXT]: true }, () =>
+        req.payload.update({
+          collection: options.slugs.jobs as CollectionSlug,
+          data: { status: 'pending' } as never,
+          depth: 0,
+          id: job.id,
+          overrideAccess: true,
+          req,
+        }),
+      )
+    }
+
     const settled = await settleOrder(req, options, prepared, pending, pending.quote as QuoteSnapshot)
+    const liveJob = (await findOne(req, options.slugs.jobs, job.id)) ?? job
     return {
       created: true,
       credits: settled.credits,
-      job: jobSummary(job),
+      job: jobSummary(liveJob),
       order: summary(settled.order, settled.reference),
       waitingForPurchase: false,
     }
@@ -1142,6 +1149,21 @@ export const declinePurchase = async (args: PurchaseDecisionArgs): Promise<Check
         req,
       }),
     )) as unknown as Doc
+    // The job goes back to a draft, so the employer can check it out again (PJ-32).
+    for (const jobID of idsOf([order.jobs].flat())) {
+      const held = await findOne(req, options.slugs.jobs, jobID)
+      if (held?.status !== 'waiting_for_purchase' || !sameID(tenantIDOf(held.order), order.id)) continue
+      await withContextKeys(req, { [JOB_LOG_NOTE_CONTEXT]: 'Purchase declined', [JOB_SYSTEM_CONTEXT]: true }, () =>
+        req.payload.update({
+          collection: options.slugs.jobs as CollectionSlug,
+          data: { status: 'draft' } as never,
+          depth: 0,
+          id: jobID,
+          overrideAccess: true,
+          req,
+        }),
+      )
+    }
     return summary(cancelled)
   })
 }

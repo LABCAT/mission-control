@@ -110,8 +110,9 @@ stories:
     expected: "The response is 404 with links to home, jobs and the organisation directory; no stack trace is shown."
     settings: []
     mvp: true
-    status: planned
-    tests: []
+    status: built
+    tests:
+      - apps/vwok/src/components/NotFoundPage.test.ts
 
   - id: S-007
     area: Public site
@@ -2035,14 +2036,52 @@ stories:
     role: employer
     story: "Buying a job pack at checkout adds its credits to the ledger and uses one for the job."
     steps:
-      - "Check out a job with the 5 Job Pack plan."
-      - "Check out the next job with Use credits."
-    expected: "The ledger records 5 credits bought and 1 used against the pack's order, and the next job is paid with a credit."
+      - "Check out a job with the 5 Job Pack plan, on a site that grants pack credits when the order is paid."
+      - "Mark the order paid, then check out the next job with Use credits."
+    expected: "Once the pack's order is payable, the ledger records 5 credits bought and 1 used against that order, and the next job is paid with a credit."
     settings:
+      - billing.creditsExpire
+      - packCreditsUsableAt
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/checkout.integration.test.ts
+      - packages/payload-jobs/src/pack-credit-modes.integration.test.ts
+
+  - id: S-210
+    area: Commerce
+    role: site manager
+    story: "A site grants pack credits only when the pack's order is paid (the old site's rule, the default): until then the job bought with the pack follows its own payment rule, and a pack order cancelled or failed before payment grants nothing."
+    steps:
+      - "Leave the tenant's packCreditsUsableAt setting unset, and check out a job with the 5 Job Pack plan."
+      - "Mark the order paid; mark it paid again."
+      - "Check out another pack order and cancel it before it is paid."
+    expected: "An invoiced pack order grants no credits and the job waits on its own rules; paying the order grants the pack's 5 credits once and uses one for that job; a repeat payment grants nothing more; a cancelled order grants nothing."
+    settings:
+      - packCreditsUsableAt
       - billing.creditsExpire
     mvp: true
     status: built
     tests:
+      - packages/payload-jobs/src/pack-credit-modes.integration.test.ts
+      - packages/payload-jobs/src/checkout.integration.test.ts
+      - packages/payload-jobs/src/credit-settings.test.ts
+
+  - id: S-211
+    area: Commerce
+    role: site manager
+    story: "A site can choose to make pack credits usable as soon as the pack's order is invoiced, and each tenant keeps its own rule."
+    steps:
+      - "Set a tenant's packCreditsUsableAt to on_invoice and check out a job with a pack."
+      - "Check out the same way on another tenant that left it unset."
+    expected: "The invoiced pack order grants its 5 credits and uses one for the job straight away; paying it later adds nothing; a tenant that left the setting unset still grants nothing until payment, and neither tenant's ledger sees the other's rows."
+    settings:
+      - packCreditsUsableAt
+      - billing.creditsExpire
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/pack-credit-modes.integration.test.ts
       - packages/payload-jobs/src/checkout.integration.test.ts
 
   - id: S-118
@@ -2174,8 +2213,172 @@ stories:
     settings:
       - seo.legacyRedirects
     mvp: true
-    status: planned
-    tests: []
+    status: built
+    tests:
+      - apps/vwok/src/legacy-crawl.test.ts
+      - apps/vwok/src/legacy-routes.test.ts
+
+  - id: S-350
+    area: SEO and URLs
+    role: seeker
+    story: "The legacy URL rules read a path the same way however it is spelled, and the same way on every host."
+    steps:
+      - "Resolve `/jobs/page/2/`, `/jobs/page/2` and a percent-encoded legacy segment."
+      - "Resolve the same path with and without a trailing slash."
+    expected: "Trailing slashes, empty segments and the query string are dropped before a rule sees the path, a valid escape is decoded once, a malformed escape is kept as typed so the lookup simply misses, and the table answers both spellings of a path the same way."
+    settings:
+      - seo.legacyRedirects
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/redirects/legacy-map.test.ts
+      - packages/launchpad/src/redirects/table.test.ts
+      - apps/vwok/src/legacy-crawl.test.ts
+
+  - id: S-351
+    area: SEO and URLs
+    role: seeker
+    story: "A legacy job taxonomy URL lands on the clean filter page for that term."
+    steps:
+      - "Open `/job-category/{slug}/`, `/job-type/{slug}/` and `/job-type/voluntary/{slug}/`."
+      - "Open a salary band and a taxonomy feed."
+    expected: "A category, type or nested type 301s to `/jobs/{slug}` on one level, a salary band to `/jobs?salary={slug}`, and a feed to the same filter page, never to the feed. A path with no slug falls back to the listing."
+    settings:
+      - seo.legacyRedirects
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/redirects/legacy-map.test.ts
+      - apps/vwok/src/legacy-crawl.test.ts
+
+  - id: S-352
+    area: SEO and URLs
+    role: seeker
+    story: "A legacy organisation nickname lands on that organisation's page, and an author archive on the organisation it belongs to."
+    steps:
+      - "Open `/organisation/{nickname}/` and its feed, including a nickname the new site slugged differently."
+      - "Open `/author/{nickname}/` and a bare `/organisation/`."
+    expected: "The profile and its feed 301 to `/organisations/{slug}`; an author archive goes to the same page; a bare directory path goes to `/organisations`; no organisation URL is answered by the directory rule when it names a profile."
+    settings:
+      - seo.legacyRedirects
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/redirects/legacy-map.test.ts
+      - apps/vwok/src/legacy-crawl.test.ts
+
+  - id: S-353
+    area: SEO and URLs
+    role: seeker
+    story: "A retired legacy section answers 410 rather than redirecting to a page that has nothing to do with it."
+    steps:
+      - "Open the CV module at every level, the two retired promo pages and their attachments."
+      - "Open `/wp/xmlrpc.php`."
+    expected: "Each answers 410 with the site's own gone page, which keeps the navigation and a search box; none of them appears in the redirect table, so a crawler stops asking."
+    settings:
+      - seo.legacyRedirects
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/redirects/legacy-map.test.ts
+      - apps/vwok/src/legacy-crawl.test.ts
+
+  - id: S-354
+    area: SEO and URLs
+    role: seeker
+    story: "A legacy page, account URL or WordPress feed lands on the page that replaced it."
+    steps:
+      - "Open `/about-us/`, `/contact-2/`, `/employer/`, `/home-2/`, `/blog/` and `/?feed=`."
+      - "Open `/login/?redirect_to=…&role=…`, `/register/`, `/sign-up/`, `/my-profile/` and `/submit/`."
+    expected: "A renamed page 301s to its new address and keeps its children with it; the account pages go to `/account` or `/account/login`; the feeds go to the site feed route; a page that kept its address (`/contact/`, `/organisations/`) is left to its own route rather than being redirected to itself."
+    settings:
+      - seo.legacyRedirects
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/redirects/legacy-map.test.ts
+      - apps/vwok/src/legacy-crawl.test.ts
+
+  - id: S-355
+    area: SEO and URLs
+    role: seeker
+    story: "A legacy job archive page, job attachment or uploaded file lands on the job, the file or the listing."
+    steps:
+      - "Open `/jobs/page/2/`, `/jobs/{slug}/attachment/{id}/` and `/app/uploads/YYYY/MM/{file}.pdf`."
+      - "Open `/jobs/{slug}/feed/` and `/jobs/{slug}/{image}/`."
+    expected: "A later page 301s to `/jobs?page=N` and page 1 to `/jobs`; a job attachment and an uploaded file 301 to their file on R2 when the media import carried it, and 410 when it did not; a job feed or any other child of a job 301s to the job page; the job page and the listing themselves are left to their own routes."
+    settings:
+      - seo.legacyRedirects
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/redirects/legacy-map.test.ts
+      - apps/vwok/src/legacy-crawl.test.ts
+
+  - id: S-356
+    area: SEO and URLs
+    role: seeker
+    story: "A legacy job search or date-archive URL lands on the new listing with the filters it asked for."
+    steps:
+      - "Open `/jobs/?s=chef&location=Port+Vila`, a `{job-type}=show` checkbox and `/job-date-archive/?time=week`."
+      - "Open `/jobs/?utm_source=…` and `/jobs/` with no query."
+    expected: "The keyword becomes `q` and the typed location a slugged `location`; each type checkbox becomes the listing's single `type`; the date window, `radius` and unknown parameters are dropped rather than carried; a modern filter or a tracking tag is not mistaken for a legacy search, and the listing itself is left to its own route."
+    settings:
+      - seo.legacyRedirects
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/redirects/legacy-map.test.ts
+      - apps/vwok/src/legacy-crawl.test.ts
+
+  - id: S-357
+    area: SEO and URLs
+    role: seeker
+    story: "A WordPress `?p={id}` shortlink lands on the post it named."
+    steps:
+      - "Open `/?p={id}` for a post the importer carried over."
+      - "Open `/?p={id}` for an id it did not, and `/?p=abc`."
+    expected: "A known id 301s to the post's new path on any path, as WordPress did; an id nobody carried over and a non-numeric id answer 410; no shortlink target is itself a redirect."
+    settings:
+      - seo.legacyRedirects
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/redirects/legacy-map.test.ts
+      - apps/vwok/src/legacy-routes.test.ts
+
+  - id: S-358
+    area: SEO and URLs
+    role: site manager
+    story: "A site can override one legacy path without changing the shared rules."
+    steps:
+      - "Give a site a table entry that sends `/about-us` somewhere else, and another that turns `/employer` into a 410."
+      - "Send a POST to a legacy path."
+    expected: "An exact path in the site's table wins over every rule, may be a redirect or a 410, and is not consulted for a path it does not name; a method other than GET or HEAD is never redirected, because it is a form target rather than a page a crawler asks for."
+    settings:
+      - seo.legacyRedirects
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/redirects/legacy-map.test.ts
+      - packages/launchpad/src/redirects/answer.test.ts
+
+  - id: S-359
+    area: SEO and URLs
+    role: seeker
+    story: "A legacy URL answers with one permanent redirect, never a chain and never a temporary one."
+    steps:
+      - "Follow every redirect target back through the table."
+      - "Request a legacy path with GET and with HEAD."
+    expected: "Every answer is 301 with a Location header and a cacheable response; feeding a target back through the table yields no further redirect, because a target is a final URL, so a crawler pays for the hop once."
+    settings:
+      - seo.legacyRedirects
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/redirects/legacy-map.test.ts
+      - packages/launchpad/src/redirects/answer.test.ts
+      - apps/vwok/src/legacy-crawl.test.ts
 
   - id: S-127
     area: SEO and URLs
@@ -3237,3 +3440,167 @@ stories:
       - packages/launchpad/src/organisations/organisations.test.ts
       - packages/launchpad/src/cms/tenant-settings.test.ts
       - packages/launchpad/src/components/components.test.ts
+
+  - id: S-300
+    area: Applications
+    role: site manager
+    story: "Applications and their CV files are deleted a set time after the job closes, so personal data is not kept longer than needed."
+    steps:
+      - "Set the tenant's application retention (default 12 months)."
+      - "Let the daily retention task run after a job has been closed for longer than that."
+    expected: "The task deletes the applications of jobs closed past the tenant's retention and their CV and cover-letter files, leaves newer and live jobs alone, and a second run deletes nothing."
+    settings:
+      - tenant.retention.applicationsMonths
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/retention.test.ts
+      - packages/payload-jobs/src/retention.storage.test.ts
+
+  - id: S-301
+    area: Applications
+    role: site manager
+    story: "The retention period starts when the job ended, not when its record was last touched."
+    steps:
+      - "Close a job early, then edit it later."
+      - "Cancel a job."
+    expected: "An expired job's clock starts at its expiry date, a cancelled job's at its cancellation, a live, draft or pending job never starts it, and a job is due exactly at the cutoff."
+    settings:
+      - tenant.retention.applicationsMonths
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/retention.test.ts
+
+  - id: S-302
+    area: Applications
+    role: site manager
+    story: "One tenant's retention setting and close dates never affect another tenant's applications."
+    steps:
+      - "Give two tenants different retention periods and jobs that closed on the same day."
+      - "Run the retention task."
+    expected: "Each tenant's applications are deleted by its own period only."
+    settings:
+      - tenant.retention.applicationsMonths
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/retention.test.ts
+
+  - id: S-303
+    area: Applications
+    role: site manager
+    story: "A tenant admin can delete one applicant's data on request."
+    steps:
+      - "Open an application in the admin and choose 'Delete applicant data'."
+    expected: "The application and the CV and cover-letter files no other application uses are deleted. Only super admins and the tenant's own admins may do it; employers and editors, and admins of other tenants, are refused and nothing is deleted."
+    settings: []
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/retention.test.ts
+      - packages/payload-jobs/src/retention.storage.test.ts
+      - packages/payload-jobs/src/admin/DeleteApplicantData.test.ts
+
+  # Publishing and moderation (PJ-32)
+  - id: S-190
+    area: Publishing and moderation
+    role: employer
+    story: "A published job stays live until the end of a day in the site's own timezone, for at most the plan's duration."
+    steps:
+      - "Publish a job on a plan, with and without a chosen close date."
+      - "Publish a job on a site in a timezone with daylight saving."
+    expected: "The job expires at the end of the local day that many calendar days later (a chosen close date is kept when it is earlier), so daylight saving never shifts the count. no plan runs longer than 45 days (vwok's live plans are 30)."
+    settings:
+      - tenant.timezone
+      - plan.durationDays
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/job-status.test.ts
+      - packages/payload-jobs/src/checkout.integration.test.ts
+      - apps/cms/src/seed/vwok-plans.test.ts
+
+  - id: S-191
+    area: Publishing and moderation
+    role: site manager
+    story: "A job moves draft, waiting for purchase or pending, published, then expired or cancelled, and every move is logged."
+    steps:
+      - "Submit a job as a member who cannot buy, then have the owner approve or decline the purchase."
+      - "Open the job's log."
+    expected: "Only the allowed moves happen. Each one is recorded with who did it (employer, staff or system), when, from and to, and nobody can edit the log. Declining a purchase returns the job to a draft. The organisation History tab shows each move."
+    settings: []
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/job-status.test.ts
+      - packages/payload-jobs/src/checkout.integration.test.ts
+
+  - id: S-192
+    area: Publishing and moderation
+    role: site manager
+    story: "The site decides whether a job goes live on submit, after approval, or after its invoice is paid, and whether a review stops it."
+    steps:
+      - "Set moderation to never, new employers only, or always."
+      - "Set the go-live rule for trusted and for new employers."
+      - "Check out a job as each kind of employer, then pay its invoice."
+    expected: "The job publishes only when neither the review nor the go-live rule holds it. A paid-later rule releases it when the order is paid. A member's purchase request waits for the owner first."
+    settings:
+      - jobPublication.moderation
+      - jobPublication.trustedGoLive
+      - jobPublication.newEmployerGoLive
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/publication.test.ts
+      - packages/payload-jobs/src/checkout.integration.test.ts
+      - packages/payload-jobs/src/index.test.ts
+
+  - id: S-193
+    area: Publishing and moderation
+    role: site manager
+    story: "Each site has its own publish and moderation settings, with Vanuatu Wok's legacy behaviour as the default."
+    steps:
+      - "Leave the settings empty on one site and set moderation to always on another."
+      - "Check out a job from a trusted employer on each."
+    expected: "Each site follows its own settings. With nothing set, a trusted employer's job is live on submit and a new employer's waits for approval."
+    settings:
+      - jobPublication
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/publication.test.ts
+      - packages/payload-jobs/src/checkout.integration.test.ts
+      - apps/cms/src/seed/vwok-publication.test.ts
+
+  - id: S-194
+    area: Publishing and moderation
+    role: site manager
+    story: "A site manager approves a pending job from the admin, which publishes it. Only when the site turns it on (off by default) does a tenant admin's approval also trust the employer."
+    steps:
+      - "Open a pending job in the admin and press Approve and publish."
+      - "Approve it again."
+    expected: "The job is published with its dates and a log entry naming the site manager. The organisation stays untrusted unless the site's setting is on and a tenant admin approved (an editor never trusts). Repeating the action changes nothing."
+    settings:
+      - jobPublication.trustOnApproval
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/checkout.integration.test.ts
+      - packages/payload-jobs/src/admin/ApproveJobButton.test.ts
+      - packages/payload-jobs/src/index.test.ts
+
+  - id: S-195
+    area: Publishing and moderation
+    role: site manager
+    story: "Only a site manager of the job's own site can approve it, and nobody learns which jobs exist on other sites."
+    steps:
+      - "Try to approve a job as its employer, a seeker, a signed-out visitor and another site's manager."
+      - "Try to approve a draft, a job waiting for purchase, or a pending job that never went through checkout."
+    expected: "Everyone but the job's site managers (and super admins) gets Not found and nothing changes. A job that is not pending, or has no plan and live order, is refused."
+    settings: []
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/checkout.integration.test.ts
+      - packages/payload-jobs/src/admin/ApproveJobButton.test.ts

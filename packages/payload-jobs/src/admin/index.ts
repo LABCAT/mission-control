@@ -16,5 +16,8 @@ export const PACKAGE_NAME = '@mission-control/payload-jobs'
 /** Import-map path for the site manager dashboard (PJ-30). */
 export const DASHBOARD_COMPONENT_PATH = `${PACKAGE_NAME}/rsc#SiteManagerDashboard`
 
+/** Import-map path for the site manager's Approve button on the job screen (PJ-32). */
+export const APPROVE_JOB_BUTTON_COMPONENT_PATH = `${PACKAGE_NAME}/client#ApproveJobButton`
+
 /** Import-map path for the "View as this user" button on the user screen (PJ-119). */
 export const VIEW_AS_BUTTON_COMPONENT_PATH = `${PACKAGE_NAME}/client#ViewAsUserButton`

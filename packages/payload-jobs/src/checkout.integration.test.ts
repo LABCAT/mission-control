@@ -12,6 +12,7 @@ import {
   previewCheckout,
   type CheckoutInput,
 } from './checkout'
+import { ApprovalError, approveJob, approveJobEndpoint, releaseJobsOnSettle } from './approval'
 import { jobsCollection } from './collections/jobs'
 import { locationsCollection } from './collections/locations'
 import { organisationField, organisationRoleField, organisationsCollection } from './collections/organisations'
@@ -20,10 +21,16 @@ import {
   balanceFor,
   creditLedgerCollection,
   grantCredits,
+  grantPackCreditsOnPaid,
+  organisationHistory,
   refundCreditOnCancel,
   refuseDeleteWhileInCreditLedger,
 } from './credits'
+import { tenantPackCreditsField } from './credit-settings'
+import { endOfLocalDayAfter } from './local-time'
 import { orderCollection, refuseDeleteWhileOrdered } from './orders'
+import { DEFAULT_PUBLICATION_SETTINGS, tenantPublicationSettings } from './publication'
+import { tenantPublicationField } from './publication-settings'
 import { orderEventHook } from './plug-points/gate'
 import type { PaymentProviderRegistration } from './plug-points/definitions'
 import { createPayloadJobsRegistry, type PayloadJobsRegistry } from './plug-points/payload-jobs-registry'
@@ -86,7 +93,7 @@ const Outbox: CollectionConfig = { slug: 'outbox', fields: [{ name: 'orderID', t
 /** The ledger and orders first: the harness deletes in this order, and the guards keep referenced rows. */
 const collections = (): CollectionConfig[] => [
   creditLedgerCollection(),
-  withHooks(orderCollection(), { afterChange: [orderEventHook(registry)] }),
+  withHooks(orderCollection(), { afterChange: [orderEventHook(registry), releaseJobsOnSettle(), grantPackCreditsOnPaid()] }),
   withHooks(jobsCollection({ richTextDescription: false, withOrder: true }), {
     afterChange: [refundCreditOnCancel()],
     beforeDelete: [refuseDeleteWhileInCreditLedger({ field: 'job', noun: 'job' }), refuseDeleteWhileOrdered({ field: 'jobs', noun: 'job' })],
@@ -113,6 +120,8 @@ const SiteKeys: CollectionConfig = {
 const tenantFields: Field[] = [
   { name: 'currency', type: 'text' },
   { name: 'timezone', type: 'text' },
+  tenantPublicationField(),
+  tenantPackCreditsField(),
 ]
 
 /** PJ-29's per-member switches, as the default purchase rights read them. */
@@ -230,7 +239,11 @@ describe('checkout integration', () => {
     harness = await bootTestPayload({
       collections: collections(),
       globalCollections: [SiteKeys, Outbox],
-      tenantData: (which) => (which === 'A' ? { currency: 'VUV', timezone: 'Pacific/Efate' } : { currency: 'NZD', timezone: 'Pacific/Auckland' }),
+      tenantData: (which) =>
+        which === 'A'
+          ? { currency: 'VUV', timezone: 'Pacific/Efate' }
+          // Tenant B grants a pack's credits on invoice instead of on payment (PJ-120).
+          : { currency: 'NZD', packCreditsUsableAt: 'on_invoice', timezone: 'Pacific/Auckland' },
       tenantFields,
       tenantHooks: {
         beforeDelete: [
@@ -271,6 +284,7 @@ describe('checkout integration', () => {
     plans.finance = await plan(tenantA.id, { allowedJobCategories: [otherCategory.id], key: 'finance-only', name: 'Finance only', price: 1000 })
     plans.archived = await plan(tenantA.id, { key: 'old', name: 'Old', price: 100, status: 'archived' })
     plans.b = await plan(tenantB.id, { key: 'regular-listing', name: 'Regular', price: 5000 })
+    plans.packB = await plan(tenantB.id, { jobCredits: 5, key: 'job-pack-5', name: '5 Job Pack', price: 17500 })
 
     enhanced = (await payload.create({
       collection: 'add-ons',
@@ -433,7 +447,8 @@ describe('checkout integration', () => {
       const result = await checkout(users.owner, { jobId: listing.id })
       expect(result.job.expiresAt).toBeNull()
       const published = (await payload.update({ collection: 'jobs', data: { status: 'published' }, id: listing.id, ...system })) as Doc
-      expect(Date.parse(published.expiresAt) - Date.parse(published.publishedAt)).toBe(45 * DAY)
+      // The end of the local day (Vanuatu) 45 days after publishing, not 45 x 24 hours (PJ-32).
+      expect(published.expiresAt).toBe(endOfLocalDayAfter(Date.parse(published.publishedAt), 45, 'Pacific/Efate'))
     })
   })
 
@@ -483,7 +498,7 @@ describe('checkout integration', () => {
       await expect(checkout(users.noCredits, { jobId: (await job(orgs.brew)).id, useCredit: true })).rejects.toSatisfy(refused('forbidden'))
     })
 
-    it('grants a pack’s credits through the ledger and uses one for the job @S-154', async () => {
+    it('waits for payment for a pack’s credits, then grants them and uses one for the job @S-154 @S-210', async () => {
       const organisation = await org(harness.tenantA.id, 'Packco')
       const owner = await makeUser('pack-owner', [{ role: 'employer', tenant: harness.tenantA.id }], {
         organisation: organisation.id,
@@ -492,17 +507,70 @@ describe('checkout integration', () => {
       const listing = await job(organisation)
       const result = await checkout(owner, { jobId: listing.id, planId: plans.pack.id })
 
+      // Tenant A never set the option: the old site's rule applies, so the invoice grants nothing.
       expect(result.order).toMatchObject({ paymentMethod: 'invoice', status: 'invoiced', total: 17500 })
-      expect(result.credits).toEqual({ balance: 4, granted: 5, used: 1 })
+      expect(result.credits).toEqual({ balance: 0, granted: 0, used: 0 })
+      expect(await ledger(organisation)).toEqual([])
+      // Only the job waits on its own rule; that says nothing about the pack.
+      expect((await read('jobs', listing.id)).status).toBe('pending')
+
+      // Marking the order paid (staff, a provider or the Xero sync, PJ-118) grants and spends.
+      await payload.update({ collection: 'orders', data: { status: 'paid' }, id: result.order.id, ...system })
       expect((await ledger(organisation)).map((row) => [row.reason, row.delta, row.order])).toEqual([
         ['bought', 5, result.order.id],
         ['used', -1, result.order.id],
       ])
+      expect(await balanceFor({ organisation: organisation.id, payload })).toBe(4)
+
+      // Marking it paid again grants nothing more.
+      await payload.update({ collection: 'orders', data: { status: 'paid' }, id: result.order.id, ...system })
+      expect(await balanceFor({ organisation: organisation.id, payload })).toBe(4)
 
       // The next job is paid from the pack.
       const next = await checkout(owner, { jobId: (await job(organisation)).id, useCredit: true })
       expect(next.order.paymentMethod).toBe('credit')
       expect(next.credits.balance).toBe(3)
+    })
+
+    it('grants nothing for a pack order cancelled before it is paid @S-210', async () => {
+      const organisation = await org(harness.tenantA.id, 'Packcancel')
+      const owner = await makeUser('pack-cancel-owner', [{ role: 'employer', tenant: harness.tenantA.id }], {
+        organisation: organisation.id,
+        organisationRole: 'owner',
+      })
+      const result = await checkout(owner, { jobId: (await job(organisation)).id, planId: plans.pack.id })
+      await payload.update({ collection: 'orders', data: { status: 'cancelled' }, id: result.order.id, ...system })
+
+      expect(await ledger(organisation)).toEqual([])
+      expect(await balanceFor({ organisation: organisation.id, payload })).toBe(0)
+    })
+
+    it('grants a pack’s credits at invoicing on a site that chooses that @S-211', async () => {
+      const listing = await job(orgs.shop, { categories: [] })
+      const tenantALedgerBefore = (await ledger(orgs.brew)).length
+      const result = await checkout(
+        users.ownerB,
+        { jobId: listing.id, planId: plans.packB.id },
+        harness.tenantB.id,
+      )
+
+      expect(result.order).toMatchObject({ paymentMethod: 'invoice', status: 'invoiced', total: 17500 })
+      expect(result.credits).toEqual({ balance: 4, granted: 5, used: 1 })
+      expect((await ledger(orgs.shop)).map((row) => [row.reason, row.delta, row.order])).toEqual([
+        ['bought', 5, result.order.id],
+        ['used', -1, result.order.id],
+      ])
+
+      // The next job is paid from the pack, and tenant A's ledger is untouched by tenant B.
+      const next = await checkout(
+        users.ownerB,
+        { jobId: (await job(orgs.shop, { categories: [] })).id, planId: plans.b.id, useCredit: true },
+        harness.tenantB.id,
+      )
+      expect(next.order.paymentMethod).toBe('credit')
+      expect(next.credits.balance).toBe(3)
+      // Tenant B's pack touched only its own organisation's ledger.
+      expect((await ledger(orgs.brew)).length).toBe(tenantALedgerBefore)
     })
   })
 
@@ -516,7 +584,7 @@ describe('checkout integration', () => {
       const listing = await job(orgs.brew)
       const result = await checkout(users.member, { couponCode: 'LINKPS', jobId: listing.id })
       expect(result).toMatchObject({ order: { status: 'waiting_for_purchase', total: 2000 }, waitingForPurchase: true })
-      expect((await read('jobs', listing.id)).status).toBe('pending')
+      expect((await read('jobs', listing.id)).status).toBe('waiting_for_purchase')
 
       const args = { orderId: result.order.id, payload, tenantID: harness.tenantA.id }
       await expect(approvePurchase({ options, ...args, req: await reqFor(users.member), user: users.member })).rejects.toSatisfy(refused('forbidden'))
@@ -527,6 +595,8 @@ describe('checkout integration', () => {
       const approved = await approvePurchase({ options, ...args, req: await reqFor(users.owner), user: users.owner })
       expect(approved).toMatchObject({ created: true, order: { status: 'invoiced', total: 2000 } })
       expect(await coupon()).toBe(usesBefore + 1)
+      // The default rule holds a new employer's job for a site manager (PJ-32).
+      expect(approved.job.status).toBe('pending')
 
       const again = await approvePurchase({ options, ...args, req: await reqFor(users.owner), user: users.owner })
       expect(again.created).toBe(false)
@@ -548,6 +618,15 @@ describe('checkout integration', () => {
       await expect(
         approvePurchase({ options, orderId: held.order.id, payload, req: await reqFor(users.owner), tenantID: harness.tenantA.id, user: users.owner }),
       ).rejects.toSatisfy(refused('order_not_waiting'))
+
+      // The declined job is a draft again, with the move in its log.
+      const back = await read('jobs', listing.id)
+      expect(back.status).toBe('draft')
+      expect(back.log.map((entry: Doc) => [entry.from, entry.to, entry.actor])).toEqual([
+        [null, 'draft', 'system'],
+        ['draft', 'waiting_for_purchase', 'system'],
+        ['waiting_for_purchase', 'draft', 'system'],
+      ])
 
       const bought = await checkout(users.owner, { jobId: listing.id })
       expect(bought.order.status).toBe('invoiced')
@@ -750,6 +829,190 @@ describe('checkout integration', () => {
       expect(byMember.status).toBe(403)
       const approved = await call('orders/:id/approve', {}, { routeParams: { id: String(held.body.order.id) } })
       expect(approved).toMatchObject({ body: { order: { status: 'invoiced' } }, status: 200 })
+    })
+  })
+  describe('publication and approval (PJ-32)', () => {
+    type Publication = Partial<{ moderation: string; newEmployerGoLive: string; trustOnApproval: boolean; trustedGoLive: string }>
+    const setPublication = async (tenantID: number, jobPublication: Publication) => {
+      // A group update keeps the fields it leaves out, so always send them all.
+      const group = { ...DEFAULT_PUBLICATION_SETTINGS, ...jobPublication }
+      await payload.update({ collection: 'tenants', data: { jobPublication: group } as never, id: tenantID, ...system })
+    }
+    const setTrusted = async (organisation: Doc, trusted: boolean) => {
+      await payload.update({ collection: 'organisations', data: { trusted } as never, id: organisation.id, ...system })
+    }
+    const logOf = async (id: number) =>
+      ((await read('jobs', id)).log as Doc[]).map((entry) => [entry.from, entry.to, entry.actor])
+    const refusedApproval = (code: string) => (error: unknown) => error instanceof ApprovalError && error.code === code
+
+    let admin: User
+    let adminB: User
+    beforeAll(async () => {
+      admin = await makeUser('admin', [{ role: 'tenant-admin', tenant: harness.tenantA.id }])
+      adminB = await makeUser('admin-b', [{ role: 'tenant-admin', tenant: harness.tenantB.id }])
+    })
+
+    const approve = async (user: null | User, jobId: number, tenantID: null | number = harness.tenantA.id) =>
+      approveJob({ jobId, payload, req: await reqFor(user), slugs: DEFAULT_PAYLOAD_JOBS_SLUGS, tenantID, user })
+
+    it('holds a new employer’s job for a site manager by default, and publishes a trusted one at once @S-192 @S-193', async () => {
+      await setPublication(harness.tenantA.id, {})
+      await setTrusted(orgs.brew, false)
+      const held = await job(orgs.brew)
+      const result = await checkout(users.owner, { jobId: held.id })
+      expect(result.job.status).toBe('pending')
+      expect(await logOf(held.id)).toEqual([[null, 'draft', 'system'], ['draft', 'pending', 'system']])
+
+      await setTrusted(orgs.brew, true)
+      const live = await job(orgs.brew)
+      const liveResult = await checkout(users.owner, { jobId: live.id })
+      // Invoiced, trusted, live on submit: published when the invoice was raised.
+      expect(liveResult.order.status).toBe('invoiced')
+      expect(liveResult.job.status).toBe('published')
+      const stored = await read('jobs', live.id)
+      expect(stored.publishedAt).toBeTruthy()
+      // 45 days of the tenant's own days, ending at the end of a Vanuatu day.
+      expect(stored.expiresAt).toBe(endOfLocalDayAfter(Date.parse(stored.publishedAt), 45, 'Pacific/Efate'))
+      expect(await logOf(live.id)).toEqual([[null, 'draft', 'system'], ['draft', 'pending', 'system'], ['pending', 'published', 'system']])
+      await setTrusted(orgs.brew, false)
+    })
+
+    it('follows another tenant’s settings, not this one’s @S-193', async () => {
+      await setPublication(harness.tenantA.id, { moderation: 'always' })
+      await setTrusted(orgs.brew, true)
+      const stays = await job(orgs.brew)
+      expect((await checkout(users.owner, { jobId: stays.id })).job.status).toBe('pending')
+
+      // Tenant B (no settings, generic defaults) is untouched by A's moderation.
+      await setTrusted(orgs.shop, true)
+      const categoryB = (await payload.create({ collection: 'job-categories', data: { name: 'Retail', slug: 'retail', tenant: harness.tenantB.id }, ...system })) as Doc
+      const other = await job(orgs.shop, { categories: [categoryB.id], tenant: harness.tenantB.id })
+      const bought = await checkout(users.ownerB, { jobId: other.id, planId: plans.b.id }, harness.tenantB.id)
+      expect(bought.job.status).toBe('published')
+      await setPublication(harness.tenantA.id, {})
+      await setTrusted(orgs.brew, false)
+      await setTrusted(orgs.shop, false)
+    })
+
+    it('waits for the invoice to be paid when the tenant says so, then publishes @S-192', async () => {
+      await setPublication(harness.tenantA.id, { trustedGoLive: 'after-payment' })
+      await setTrusted(orgs.brew, true)
+      const listing = await job(orgs.brew)
+      const result = await checkout(users.owner, { jobId: listing.id })
+      expect(result.job.status).toBe('pending')
+
+      await payload.update({ collection: 'orders', context: { orderSystem: true }, data: { status: 'paid' } as never, id: result.order.id as number, ...system })
+      expect((await read('jobs', listing.id)).status).toBe('published')
+      await setPublication(harness.tenantA.id, {})
+      await setTrusted(orgs.brew, false)
+    })
+
+    it('publishes on approval, trusts the organisation when the tenant turns that on, and logs the site manager @S-194', async () => {
+      await setPublication(harness.tenantA.id, { trustOnApproval: true })
+      const listing = await job(orgs.brew)
+      await checkout(users.owner, { jobId: listing.id })
+      expect((await read('jobs', listing.id)).status).toBe('pending')
+
+      const result = await approve(admin, listing.id)
+      expect(result).toMatchObject({ changed: true, organisationTrusted: true, status: 'published' })
+      expect((await read('organisations', orgs.brew.id)).trusted).toBe(true)
+
+      const stored = await read('jobs', listing.id)
+      expect(stored.log.at(-1)).toMatchObject({ actor: 'staff', by: admin.id, from: 'pending', to: 'published' })
+      expect(stored.log.at(-1).note).toMatch(/Approved/)
+      expect(stored.expiresAt).toBe(endOfLocalDayAfter(Date.parse(stored.publishedAt), 45, 'Pacific/Efate'))
+
+      // Repeating does nothing and logs nothing.
+      expect(await approve(admin, listing.id)).toMatchObject({ changed: false, status: 'published' })
+      expect((await read('jobs', listing.id)).log).toHaveLength(stored.log.length)
+      await setTrusted(orgs.brew, false)
+      await setPublication(harness.tenantA.id, {})
+    })
+
+    it('does not trust the organisation on approval unless the tenant turns that on @S-194', async () => {
+      expect(DEFAULT_PUBLICATION_SETTINGS.trustOnApproval).toBe(false)
+      const stored = (await read('tenants', harness.tenantA.id)) as Doc
+      expect(tenantPublicationSettings(stored as never).trustOnApproval).toBe(false)
+      await setPublication(harness.tenantA.id, {})
+      const listing = await job(orgs.brew)
+      await checkout(users.owner, { jobId: listing.id })
+      expect(await approve(admin, listing.id)).toMatchObject({ changed: true, organisationTrusted: false, status: 'published' })
+      expect((await read('organisations', orgs.brew.id)).trusted).toBe(false)
+    })
+
+    it('lets an editor approve but never trust, even with trust-on-approval on @S-194', async () => {
+      await setPublication(harness.tenantA.id, { trustOnApproval: true })
+      const editor = await makeUser('editor', [{ role: 'editor', tenant: harness.tenantA.id }])
+      const listing = await job(orgs.brew)
+      await checkout(users.owner, { jobId: listing.id })
+      expect(await approve(editor, listing.id)).toMatchObject({ changed: true, organisationTrusted: false })
+      expect((await read('organisations', orgs.brew.id)).trusted).toBe(false)
+      await setPublication(harness.tenantA.id, {})
+    })
+
+    it('refuses to approve a pending job that never went through checkout @S-195', async () => {
+      // An employer may create a job as pending; nothing was bought, so Approve must not publish it.
+      const skipped = await job(orgs.brew, { status: 'pending' })
+      await expect(approve(admin, skipped.id)).rejects.toSatisfy(refusedApproval('not_checked_out'))
+      const stored = await read('jobs', skipped.id)
+      expect(stored.status).toBe('pending')
+      expect(stored.publishedAt).toBeFalsy()
+
+    })
+
+    it('shows approvals and other moves in the organisation History @S-191', async () => {
+      const listing = await job(orgs.brew)
+      await checkout(users.owner, { jobId: listing.id })
+      await approve(admin, listing.id)
+      const history = await organisationHistory({ organisation: orgs.brew.id, payload })
+      const events = history.entries.filter((entry) => entry.kind === 'job' && String(entry.job?.id) === String(listing.id))
+      expect(events.map((entry) => entry.event)).toEqual(['posted', 'pending', 'published'])
+      expect(events.at(-1)?.by).toMatchObject({ id: admin.id })
+    })
+
+    it('refuses everyone but the job’s own site managers, and never says which ids exist @S-195', async () => {
+      const listing = await job(orgs.brew)
+      await checkout(users.owner, { jobId: listing.id })
+
+      // Another tenant's site manager, the employer, a seeker and a signed-out caller.
+      await expect(approve(adminB, listing.id, harness.tenantB.id)).rejects.toSatisfy(refusedApproval('not_found'))
+      await expect(approve(adminB, listing.id)).rejects.toSatisfy(refusedApproval('not_found'))
+      await expect(approve(users.owner, listing.id)).rejects.toSatisfy(refusedApproval('not_found'))
+      await expect(approve(users.seeker, listing.id)).rejects.toSatisfy(refusedApproval('not_found'))
+      await expect(approve(null, listing.id)).rejects.toSatisfy(refusedApproval('not_found'))
+      // A site manager through the wrong tenant's site.
+      await expect(approve(admin, listing.id, harness.tenantB.id)).rejects.toSatisfy(refusedApproval('not_found'))
+      await expect(approve(admin, 999_999)).rejects.toSatisfy(refusedApproval('not_found'))
+
+      const stored = await read('jobs', listing.id)
+      expect(stored.status).toBe('pending')
+      expect((await read('organisations', orgs.brew.id)).trusted).toBe(false)
+    })
+
+    it('only approves a job that is waiting for approval @S-195', async () => {
+      const draft = await job(orgs.brew)
+      await expect(approve(admin, draft.id)).rejects.toSatisfy(refusedApproval('not_awaiting_approval'))
+
+      const waiting = await job(orgs.brew)
+      await checkout(users.member, { jobId: waiting.id })
+      expect((await read('jobs', waiting.id)).status).toBe('waiting_for_purchase')
+      await expect(approve(admin, waiting.id)).rejects.toSatisfy(refusedApproval('not_awaiting_approval'))
+    })
+
+    it('approves through the endpoint @S-194 @S-195', async () => {
+      const listing = await job(orgs.brew)
+      await checkout(users.owner, { jobId: listing.id })
+      const endpoint = approveJobEndpoint({ slugs: DEFAULT_PAYLOAD_JOBS_SLUGS })
+      const call = async (user: null | User, id: string) => {
+        const req = await createPayloadRequest({ payload, req: { headers: new Headers(), routeParams: { id } } as never, user: user as never })
+        const response = (await endpoint.handler(req)) as Response
+        return { body: (await response.json()) as Record<string, any>, status: response.status }
+      }
+      expect(endpoint).toMatchObject({ method: 'post', path: '/:id/approve' })
+      expect((await call(users.owner, String(listing.id))).status).toBe(404)
+      expect((await call(adminB, String(listing.id))).status).toBe(404)
+      expect(await call(admin, String(listing.id))).toMatchObject({ body: { changed: true, status: 'published' }, status: 200 })
+      await setTrusted(orgs.brew, false)
     })
   })
 })

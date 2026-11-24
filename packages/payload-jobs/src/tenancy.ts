@@ -1,12 +1,15 @@
 import type { Field, GlobalConfig } from 'payload'
 
 import { authenticatedAccess, superAdminAccess } from './access'
+import { tenantPackCreditsField } from './credit-settings'
 import {
   DEFAULT_FORM_RETENTION_DAYS,
   FORM_RETENTION_FIELD,
   MAX_FORM_RETENTION_DAYS,
 } from './forms'
 import { tenantLocationFields } from './location-settings'
+import { tenantPublicationField } from './publication-settings'
+import { tenantRetentionField } from './retention'
 import { tenantTaxField } from './tax-settings'
 
 // Current ISO 4217 list one from SIX (the maintenance agency), fetched 2026-11-06.
@@ -178,6 +181,11 @@ export const jobBoardTenantFields: Field[] = [
   ...tenantLocationFields(showForSiteTenant),
   // Rates, inclusive/exclusive prices, rounding and Xero tax types (PJ-91). Off by default.
   tenantTaxField(showForSiteTenant),
+  // When a job goes live and whether it needs review (PJ-32). The rule itself is in
+  // `publication.ts`; these are the per-tenant switches it reads.
+  tenantPublicationField(showForSiteTenant),
+  // When a pack's credits become usable: on payment (old site's rule) or on invoice (PJ-120).
+  tenantPackCreditsField(showForSiteTenant),
   // What happens to a job after checkout (PJ-32 applies it with `decidePublication`).
   {
     name: 'jobModeration',
@@ -193,6 +201,8 @@ export const jobBoardTenantFields: Field[] = [
       description: 'Whether new jobs need an admin’s approval before they go live.',
     },
   },
+  // How long personal data is kept after a job closes (PJ-88). Default: 12 months, as vwok did.
+  tenantRetentionField(showForSiteTenant),
   // Expired jobs (PJ-37, decision 17). Default: the URL keeps resolving with a notice and
   // similar jobs, then answers 410 after `expiredJobGoneAfterMonths`. `gone` matches the legacy
   // site, which hid an expired job the moment it closed.

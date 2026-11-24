@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { addOnCollection } from '../add-ons'
 import { liveJobsWhere } from '../job-status'
+import { endOfLocalDayAfter } from '../local-time'
 import { expireJobPlacementsTask } from '../placements'
 import { planCollection, withPlanRestrictionGuards } from '../plans'
 import { hashSiteKey } from '../site-keys'
@@ -309,7 +310,7 @@ describe('jobs', () => {
   })
 
   describe('staff and the state machine', () => {
-    it('publish for the plan’s duration, end early, and relist with a new publish date', async () => {
+    it('publish for the plan’s duration, end early, and relist with a new publish date @S-190', async () => {
       const id = await job({ organisation: ids.orgA, plan: ids.regularA, status: 'pending', tenant: harness.tenantA.id })
       const update = (data: Record<string, unknown>) =>
         harness.payload.update({ collection: JOBS_SLUG, data, id, ...as(users.editorA) })
@@ -317,7 +318,8 @@ describe('jobs', () => {
       await update({ status: 'published' })
       const published = await stored(id)
       const publishedAt = Date.parse(published.publishedAt as string)
-      expect(Date.parse(published.expiresAt as string) - publishedAt).toBe(30 * DAY)
+      // This tenant has no timezone, so the listing ends at the end of a UTC day, 30 days on.
+      expect(published.expiresAt).toBe(endOfLocalDayAfter(publishedAt, 30, 'UTC'))
 
       await update({ status: 'expired' })
       expect(Date.parse((await stored(id)).expiresAt as string)).toBeLessThanOrEqual(Date.now())
