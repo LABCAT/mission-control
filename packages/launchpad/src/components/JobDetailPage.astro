@@ -1,0 +1,82 @@
+---
+/**
+ * The whole `/jobs/{slug}` page (PJ-37): the document head (canonical, robots, share tags,
+ * `JobPosting` JSON-LD) and the body from `JobDetail`.
+ *
+ * A live job is indexable; a closed job is `noindex` and carries no structured data. The share
+ * image URL is passed in by the site (PJ-105 generates the image); this page only emits the tag.
+ */
+import BaseLayout from './BaseLayout.astro'
+import JobDetail, { type Labels } from './JobDetail.astro'
+import type { JobDetailView } from '../jobs/detail'
+import type { SiteTenant } from '../tenant/types'
+
+type Props = {
+  view: JobDetailView
+  /** The site's tenant; the job's own document (from the view) wins where it has a value. */
+  tenant?: SiteTenant
+  /** Tenant locale, for the document language and dates. */
+  locale?: string
+  /** Absolute origin for this deployment. */
+  siteUrl?: string
+  /** Absolute URL of the share image (PJ-105); omitted until that route exists. */
+  image?: string
+  applyHref?: string
+  /** URL the view beacon posts to. Live jobs always count; the number shows only if the tenant allows. */
+  viewEndpoint?: string
+  labels?: Partial<Labels>
+}
+
+const {
+  view,
+  tenant: passedTenant,
+  locale,
+  siteUrl,
+  image,
+  applyHref,
+  viewEndpoint,
+  labels,
+} = Astro.props as Props
+
+// The job's own tenant wins: its settings and branding are what the page applies.
+const tenant = passedTenant ?? view.tenant
+
+const description = view.detail.descriptionHtml
+  ?.replace(/<[^>]*>/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim()
+  .slice(0, 200)
+---
+
+<BaseLayout
+  description={description || `${view.detail.title} at ${view.detail.organisation.name}.`}
+  image={image}
+  jsonLd={view.jsonLd}
+  noindex={view.expired}
+  path={view.detail.url}
+  siteUrl={siteUrl}
+  tenant={tenant}
+  title={view.title}
+>
+  <JobDetail
+    applyHref={applyHref}
+    labels={labels}
+    locale={locale}
+    tenant={tenant}
+    view={view}
+    viewEndpoint={viewEndpoint}
+  />
+</BaseLayout>
+
+<script>
+  /**
+   * The view beacon (PJ-37): one POST per page load, the counts filled into space the page has
+   * already reserved. `fetch` with `keepalive` is the same mechanism `sendBeacon` uses, but it
+   * returns the body, which `sendBeacon` cannot; when `fetch` is missing the beacon still fires.
+   */
+  import { sendView } from '../jobs/view-beacon'
+
+  for (const element of document.querySelectorAll<HTMLElement>('[data-job-views]')) {
+    void sendView(element)
+  }
+</script>

@@ -140,6 +140,15 @@ payloadJobs({
 System code acting for a signed-in user under `overrideAccess` sets
 `req.context[ORDER_SYSTEM_CONTEXT] = true`; a request with no user is system code already.
 
+### When a pack's credits become usable
+
+A tenant setting, `packCreditsUsableAt`, decides when the credits a pack plan grants reach the
+ledger: `on_payment` (the default: only once the pack's order is paid) or `on_invoice` (as soon as
+it is invoiced, at checkout). Under `on_payment` the job bought with the pack follows its own
+payment rule until the order is paid; an order cancelled before payment grants nothing. The
+`grantCredits` helper enforces the same rule, so a payment sync or a script can't grant early.
+See `docs/MODULES.md` for the details.
+
 ## Access overrides
 
 Each collection also accepts an `access` object. It is merged over that collection's defaults,

@@ -12,6 +12,7 @@ import type { BlockComponentMap } from '@mission-control/rocketship-payload/rend
 
 import BaseLayout from './BaseLayout.astro'
 import LatestJobs from './LatestJobs.astro'
+import OrganisationDirectory from './OrganisationDirectory.astro'
 import SiteNav from './SiteNav.astro'
 import { menuFor, type MenuView } from '../pages/menus'
 import type { PageView } from '../pages/view'
@@ -79,7 +80,17 @@ const text = (value: unknown): string | undefined =>
           rssLabel={text(segment.block.rssLabel)}
           timezone={tenant.timezone ?? undefined}
         />
-      ) : (
+      ) : segment.kind === 'organisation-directory' && view.directory ? (
+        <OrganisationDirectory
+          action={view.path}
+          directory={view.directory}
+          emptyLabel={text(segment.block.emptyLabel)}
+          heading={text(segment.block.heading)}
+          intro={text(segment.block.intro)}
+          showSizeFilter={segment.block.showSizeFilter !== false}
+          showTypeFilter={segment.block.showTypeFilter !== false}
+        />
+      ) : segment.kind === 'organisation-directory' ? null : (
         <RenderBlocks blocks={segment.blocks} components={components} />
       ),
     )

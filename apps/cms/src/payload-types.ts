@@ -137,6 +137,7 @@ export interface Config {
     banner: BannerBlock;
     form: FormBlock;
     map: MapBlock;
+    'organisation-directory': OrganisationDirectoryBlock;
   };
   collections: {
     users: User;
@@ -510,6 +511,10 @@ export interface Tenant {
     exemptXeroTaxType?: string | null;
   };
   /**
+   * When a job pack’s credits become usable: once the order is paid (the old site’s rule), or as soon as it is invoiced.
+   */
+  packCreditsUsableAt?: ('on_payment' | 'on_invoice') | null;
+  /**
    * Whether new jobs need an admin’s approval before they go live.
    */
   jobModeration?: ('legacy' | 'review' | 'auto') | null;
@@ -522,10 +527,25 @@ export interface Tenant {
      */
     applicationsMonths?: number | null;
   };
+   * What a visitor sees on a job that has closed.
+   */
+  expiredJobMode?: ('notice' | 'gone') | null;
+  /**
+   * Months after an expiry before the page turns into 410 Gone. 0 keeps the notice page for ever.
+   */
+  expiredJobGoneAfterMonths?: number | null;
+  /**
+   * Show “N views” on a job page. The count comes from the view beacon after the page loads.
+   */
+  publicJobViews?: boolean | null;
   /**
    * When on, only signed-in accounts can apply to a job. Off: guests can apply with an email address.
    */
   accountRequiredToApply?: boolean | null;
+  /**
+   * When on, an organisation page only goes public once an admin approves it. Off: the owner switching the page on is enough.
+   */
+  organisationPagesNeedApproval?: boolean | null;
   emailFromName?: string | null;
   emailFromAddress?: string | null;
   /**
@@ -664,9 +684,13 @@ export interface Organisation {
    */
   approved?: boolean | null;
   /**
-   * Set by a tenant admin. The public page and directory entry go live.
+   * Private by default. Switch on to put the public page and directory entry live (needs approval where the tenant requires it).
    */
   pageEnabled?: boolean | null;
+  /**
+   * Flagged as a possible duplicate of another organisation. Its page cannot be public, and its jobs stay off any official page, until a site manager merges or clears it.
+   */
+  possibleDuplicate?: boolean | null;
   /**
    * Known customers pay by invoice instead of at checkout.
    */
@@ -1095,6 +1119,23 @@ export interface MapBlock {
   blockType: 'map';
 }
 /**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "OrganisationDirectoryBlock".
+ */
+export interface OrganisationDirectoryBlock {
+  heading?: string | null;
+  intro?: string | null;
+  showTypeFilter?: boolean | null;
+  showSizeFilter?: boolean | null;
+  /**
+   * Shown when no organisation matches.
+   */
+  emptyLabel?: string | null;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'organisation-directory';
+}
+/**
  * Keys public sites use to read their own tenant. The raw key is shown once.
  *
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1203,6 +1244,7 @@ export interface Page {
         | BannerBlock
         | FormBlock
         | MapBlock
+        | OrganisationDirectoryBlock
       )[]
     | null;
   /**
@@ -1672,6 +1714,16 @@ export interface Job {
       }[]
     | null;
   views?: number | null;
+  /**
+   * Views per day, newest first. Written by the view beacon.
+   */
+  viewDays?:
+    | {
+        day: string;
+        count: number;
+        id?: string | null;
+      }[]
+    | null;
   /**
    * WordPress post id, for the import.
    */
@@ -2828,13 +2880,18 @@ export interface TenantsSelect<T extends boolean = true> {
         defaultRateKey?: T;
         exemptXeroTaxType?: T;
       };
+  packCreditsUsableAt?: T;
   jobModeration?: T;
   retention?:
     | T
     | {
         applicationsMonths?: T;
       };
+  expiredJobMode?: T;
+  expiredJobGoneAfterMonths?: T;
+  publicJobViews?: T;
   accountRequiredToApply?: T;
+  organisationPagesNeedApproval?: T;
   emailFromName?: T;
   emailFromAddress?: T;
   adminEmail?: T;
@@ -2939,6 +2996,7 @@ export interface OrganisationsSelect<T extends boolean = true> {
   listingRequested?: T;
   approved?: T;
   pageEnabled?: T;
+  possibleDuplicate?: T;
   canPayByInvoice?: T;
   billingEmail?: T;
   xeroContactCode?: T;
@@ -3163,6 +3221,13 @@ export interface JobsSelect<T extends boolean = true> {
         id?: T;
       };
   views?: T;
+  viewDays?:
+    | T
+    | {
+        day?: T;
+        count?: T;
+        id?: T;
+      };
   legacyId?: T;
   updatedBy?: T;
   updatedAt?: T;

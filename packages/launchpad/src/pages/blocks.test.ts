@@ -56,3 +56,15 @@ describe('latest-jobs slug', () => {
     expect(segments).toEqual([{ blocks: [{ blockType: 'latest-jobs' }], kind: 'blocks' }])
   })
 })
+
+describe('organisation directory segment (PJ-38)', () => {
+  it('splits the directory out of the generic run, keeping the editor order @S-223', () => {
+    const segments = pageSegments([
+      { blockType: 'hero' },
+      { blockType: 'organisation-directory', heading: 'Employers' },
+      { blockType: 'rich-text' },
+    ])
+
+    expect(segments.map((segment) => segment.kind)).toEqual(['blocks', 'organisation-directory', 'blocks'])
+  })
+})

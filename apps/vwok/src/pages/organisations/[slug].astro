@@ -1,0 +1,47 @@
+---
+/**
+ * `/organisations/{slug}` (PJ-38): an organisation's profile and its current live jobs. Public,
+ * indexed, zero client JS. A private, unapproved or duplicate-flagged organisation is a real 404.
+ */
+import OrganisationProfile from '@mission-control/launchpad/components/OrganisationProfile'
+import SiteNav from '@mission-control/launchpad/components/SiteNav'
+import { menuFor } from '@mission-control/launchpad/pages'
+import { resolveLocale } from '@mission-control/launchpad/tenant/locale'
+
+import NotFoundPage from '../../components/NotFoundPage.astro'
+import SiteLayout from '../../layouts/SiteLayout.astro'
+import { siteTenant } from '../../brand'
+import { siteEnv } from '../../env'
+import { organisationRoute } from '../../organisation-route'
+import { cmsFromEnv } from '../../site'
+
+const pathname = Astro.url.pathname
+const route = await organisationRoute({
+  cms: cmsFromEnv(await siteEnv()),
+  slug: decodeURIComponent(Astro.params.slug ?? ''),
+})
+
+if (route.kind === 'not-found') Astro.response.status = 404
+const primary = menuFor(route.menus, 'primary')
+const footer = menuFor(route.menus, 'footer')
+---
+
+{
+  route.kind === 'found' ? (
+    <SiteLayout path={pathname} title={`${route.profile.name} | ${siteTenant.name}`}>
+      <Fragment slot="nav">
+        <SiteNav currentPath={pathname} label="Main" links={primary} />
+      </Fragment>
+      <Fragment slot="footer-nav">
+        <SiteNav currentPath={pathname} label="Footer" links={footer} />
+      </Fragment>
+      <OrganisationProfile
+        locale={resolveLocale(siteTenant)}
+        profile={route.profile}
+        timezone={siteTenant.timezone ?? undefined}
+      />
+    </SiteLayout>
+  ) : (
+    <NotFoundPage menus={route.menus} path={pathname} />
+  )
+}

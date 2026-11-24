@@ -21,6 +21,12 @@ import {
 import { idsOf, tenantIDOf } from './catalog'
 import { normalizeCouponCode, COUPON_USE_COUNT_CONTEXT } from './coupons'
 import {
+  packCreditGrantProblem,
+  tenantPackCreditMode,
+  type PackCreditMode,
+  type TenantPackCreditSource,
+} from './credit-settings'
+import {
   balanceFor,
   consumeCredit,
   CreditLedgerError,
@@ -421,7 +427,7 @@ const lockCoupon = async (req: PayloadRequest, couponID: ID): Promise<void> => {
   await db.execute({ db: session, raw: `SELECT pg_advisory_xact_lock(${COUPON_LOCK_NAMESPACE}, ${hash | 0})` })
 }
 
-type TenantDoc = TenantTaxSource & { addOns?: unknown; currency?: unknown; id?: ID; timezone?: unknown }
+type TenantDoc = TenantTaxSource & TenantPackCreditSource & { addOns?: unknown; currency?: unknown; id?: ID; timezone?: unknown }
 
 const loadTenant = async (req: PayloadRequest, options: Resolved, tenantID: ID | null): Promise<TenantDoc> => {
   if (options.tenantScoped) {
@@ -694,6 +700,14 @@ const runSteps = async (registry: PayloadJobsRegistry, context: CheckoutContext,
   }
   return current
 }
+
+/**
+ * A pack whose credits only become usable once its order is paid is not "sold" yet: the job bought
+ * with it then follows its own payment rule, as the old site did (PJ-120). Only a site that grants
+ * on invoice gets the pack's credits, and one of them for the job, in the same breath.
+ */
+export const packCreditsApplyAtCheckout = (mode: PackCreditMode, status: OrderStatus): boolean =>
+  packCreditGrantProblem({ mode, status }) === null
 
 /** How a quote is settled: a credit paid it all, it costs nothing, or it is invoiced. */
 export const paymentMethodFor = (quoted: Pick<Quote, 'credits' | 'total'>): OrderPaymentMethod =>
@@ -989,9 +1003,22 @@ const settleOrder = async (
     }),
   )) as unknown as Doc
 
-  // 4. A pack: its credits go into the ledger, and one pays for this job.
-  if (snapshot.plan.jobCredits > 1 && snapshot.entitlements.jobCreditsGranted > 0 && options.creditsEnabled) {
-    const grant = await grantCredits({ order: order.id, payload: req.payload, req, slug: options.slugs.creditLedger })
+  // 4. A pack: its credits go into the ledger, and one pays for this job (PJ-120). A site that
+  //    grants on payment waits for the order to be paid; the orders hook grants them then.
+  const packMode = tenantPackCreditMode(prepared.tenant)
+  if (
+    snapshot.plan.jobCredits > 1 &&
+    snapshot.entitlements.jobCreditsGranted > 0 &&
+    options.creditsEnabled &&
+    packCreditsApplyAtCheckout(packMode, status)
+  ) {
+    const grant = await grantCredits({
+      order: order.id,
+      packCreditMode: packMode,
+      payload: req.payload,
+      req,
+      slug: options.slugs.creditLedger,
+    })
     granted = grant.entry.delta
     if (jobID !== null) {
       await consumeCredit({ job: jobID, order: order.id, payload: req.payload, req, slug: options.slugs.creditLedger }).catch(

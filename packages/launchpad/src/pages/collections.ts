@@ -6,6 +6,7 @@
 export type SiteCollections = {
   jobs: string
   menus: string
+  organisations: string
   pages: string
 }
 
@@ -13,6 +14,7 @@ export type SiteCollections = {
 export const DEFAULT_SITE_COLLECTIONS: SiteCollections = {
   jobs: 'jobs',
   menus: 'menus',
+  organisations: 'organisations',
   pages: 'pages',
 }
 

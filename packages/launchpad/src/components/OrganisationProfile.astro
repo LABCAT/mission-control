@@ -1,0 +1,133 @@
+---
+/**
+ * An organisation's page body (PJ-38): the profile and its current live jobs. Plain Astro, zero
+ * client JavaScript. The logo is lazy with its intrinsic size; with no logo the initials stand in.
+ */
+import Container from '@labcat2020/rocketship/components/Container'
+import Grid from '@labcat2020/rocketship/components/Grid'
+import Stack from '@labcat2020/rocketship/components/Stack'
+import Typography from '@labcat2020/rocketship/components/Typography'
+
+import JobCardBody from './JobCardBody.astro'
+import type { OrganisationProfile } from '../organisations/profile'
+
+type Props = {
+  jobsHeading?: string
+  locale?: string
+  noJobsLabel?: string
+  profile: OrganisationProfile
+  timezone?: string
+}
+
+const {
+  jobsHeading = 'Current jobs',
+  locale = 'en',
+  noJobsLabel = 'No current jobs.',
+  profile,
+  timezone,
+} = Astro.props as Props
+
+const facts = [profile.typeLabel, profile.sizeLabel, profile.location].filter(Boolean) as string[]
+---
+
+<article class="lp-orgpage">
+  <Container size="wide">
+    <Stack gap="large">
+      <header class="lp-orgpage__head">
+        {
+          profile.logo?.url ? (
+            <img
+              class="lp-orgpage__logo"
+              src={profile.logo.url}
+              alt=""
+              loading="lazy"
+              decoding="async"
+              width={profile.logo.width ?? undefined}
+              height={profile.logo.height ?? undefined}
+            />
+          ) : (
+            <span class="lp-orgpage__initials" aria-hidden="true">
+              {profile.initials}
+            </span>
+          )
+        }
+        <Typography>
+          <h1>{profile.name}</h1>
+          {facts.length > 0 && <p class="lp-orgpage__facts">{facts.join(' · ')}</p>}
+          {
+            profile.website && (
+              <p>
+                <a href={profile.website} rel="noopener nofollow">
+                  Website
+                </a>
+              </p>
+            )
+          }
+        </Typography>
+      </header>
+
+      {
+        profile.about && (
+          <Typography>
+            <p>{profile.about}</p>
+          </Typography>
+        )
+      }
+
+      <section aria-labelledby="org-jobs">
+        <Stack gap="medium">
+          <Typography>
+            <h2 id="org-jobs">{jobsHeading}</h2>
+          </Typography>
+          {
+            profile.jobs.length > 0 ? (
+              <Grid as="ul" columns={3}>
+                {profile.jobs.map((job) => (
+                  <li>
+                    <JobCardBody job={job} locale={locale} timezone={timezone} />
+                  </li>
+                ))}
+              </Grid>
+            ) : (
+              <Typography>
+                <p>{noJobsLabel}</p>
+              </Typography>
+            )
+          }
+        </Stack>
+      </section>
+    </Stack>
+  </Container>
+</article>
+
+<style>
+  .lp-orgpage__head {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--rs-space-5);
+  }
+
+  .lp-orgpage__logo {
+    height: auto;
+    max-height: 8rem;
+    max-width: 12rem;
+    object-fit: contain;
+  }
+
+  .lp-orgpage__initials {
+    align-items: center;
+    background: var(--rs-color-surface-muted, var(--rs-color-surface));
+    color: var(--rs-color-muted);
+    display: flex;
+    font-size: var(--rs-font-size-xl, 1.5rem);
+    font-weight: 600;
+    height: 6rem;
+    justify-content: center;
+    width: 6rem;
+  }
+
+  .lp-orgpage__facts {
+    color: var(--rs-color-muted);
+  }
+</style>
