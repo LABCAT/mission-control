@@ -27,6 +27,9 @@ import * as migration_20261121_061136_tenant_add_ons from './20261121_061136_ten
 import * as migration_20261121_153213_credit_ledger from './20261121_153213_credit_ledger';
 import * as migration_20261121_163345_xero_invoices from './20261121_163345_xero_invoices';
 import * as migration_20261123_001810_view_as_audit_log from './20261123_001810_view_as_audit_log';
+import * as migration_20261123_080818_pages_site_settings from './20261123_080818_pages_site_settings';
+import * as migration_20261124_044341_form_map_blocks from './20261124_044341_form_map_blocks';
+import * as migration_20261124_051310_job_detail_views from './20261124_051310_job_detail_views';
 
 export const migrations = [
   {
@@ -172,6 +175,21 @@ export const migrations = [
   {
     up: migration_20261123_001810_view_as_audit_log.up,
     down: migration_20261123_001810_view_as_audit_log.down,
-    name: '20261123_001810_view_as_audit_log'
+    name: '20261123_001810_view_as_audit_log',
+  },
+  {
+    up: migration_20261123_080818_pages_site_settings.up,
+    down: migration_20261123_080818_pages_site_settings.down,
+    name: '20261123_080818_pages_site_settings',
+  },
+  {
+    up: migration_20261124_044341_form_map_blocks.up,
+    down: migration_20261124_044341_form_map_blocks.down,
+    name: '20261124_044341_form_map_blocks',
+  },
+  {
+    up: migration_20261124_051310_job_detail_views.up,
+    down: migration_20261124_051310_job_detail_views.down,
+    name: '20261124_051310_job_detail_views'
   },
 ];

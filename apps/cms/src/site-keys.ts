@@ -27,6 +27,11 @@ export const siteKeyAllowedCollections = (slugs: PayloadJobsCollectionSlugs) =>
     // mission-control: the organisation directory and profile pages (PJ-38). Only organisations
     // the collection's own rule calls public are returned (see `ownAccessCollections` below).
     slugs.organisations,
+    // mission-control: form definitions, so the Form block renders a site's own form (PJ-102).
+    // Submissions are personal data and are deliberately absent.
+    'forms',
+    // mission-control: the site's name, logo, footer, language and header banner (PJ-67).
+    slugs.siteSettings,
   ] as const
 
 export const siteKeyAccessOverrideFor = (slugs: PayloadJobsCollectionSlugs) =>

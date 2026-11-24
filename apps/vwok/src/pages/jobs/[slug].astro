@@ -1,0 +1,39 @@
+---
+/**
+ * `/jobs/{slug}` (PJ-37). The job page is built from `jobRoute`: a live job renders in full, an
+ * expired one answers 200 with the closed notice and `noindex`, one past the tenant's window
+ * answers 410, and an unknown slug answers 404. The view count loads from the proxy at
+ * `/api/jobs/{id}/view`, which keeps the site key on the server.
+ */
+import JobDetailPage from '@mission-control/launchpad/components/JobDetailPage'
+
+import NotFoundPage from '../../components/NotFoundPage.astro'
+import { siteEnv } from '../../env'
+import { jobRoute } from '../../job-route'
+import { cmsFromEnv } from '../../site'
+
+const slug = Astro.params.slug ?? ''
+const origin = Astro.site?.origin ?? Astro.url.origin
+const route = await jobRoute({
+  cms: cmsFromEnv(await siteEnv()),
+  siteUrl: origin,
+  slug,
+})
+
+if (route.kind === 'gone') Astro.response.status = 410
+if (route.kind === 'not-found') Astro.response.status = 404
+---
+
+{
+  route.kind === 'job' ? (
+    <JobDetailPage
+      applyHref={`/jobs/${encodeURIComponent(slug)}/apply`}
+      image={`${origin}/og/jobs/${encodeURIComponent(slug)}.png`}
+      siteUrl={origin}
+      view={route.view}
+      viewEndpoint={`/api/jobs/${encodeURIComponent(String(route.view.detail.id))}/view`}
+    />
+  ) : (
+    <NotFoundPage gone={route.kind === 'gone'} path={Astro.url.pathname} />
+  )
+}

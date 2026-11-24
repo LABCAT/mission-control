@@ -5,9 +5,10 @@
  * (`locked`) and render the view.
  */
 import type { CmsClient } from '../../src/cms/client'
+import { loadJobDetail, type JobDetailResult } from '../../src/jobs/detail'
 import { loadJobListing, type JobListingView } from '../../src/jobs/listing'
 import { createDemoCms } from './cms'
-import { facets, listingJobs, tenant } from './data'
+import { detailJobs, facets, tenant } from './data'
 import type { FilterValues } from '../../src/tenant/filters'
 
 const taxonomyRows = (facet: { id: number; name: string; slug: string }) => facet
@@ -15,11 +16,8 @@ const taxonomyRows = (facet: { id: number; name: string; slug: string }) => face
 const cms = createDemoCms({
   'job-categories': facets.categories.map(taxonomyRows),
   'job-types': facets.types.map((type) => ({ isVolunteer: type.isVolunteer, ...taxonomyRows(type) })),
-  jobs: listingJobs.map((job) => ({
-    ...job,
-    publishedAt: '2026-05-01T00:00:00.000Z',
-    status: 'published',
-  })),
+  // One set of rows for both pages: the detail rows carry everything the listing reads.
+  jobs: [...detailJobs],
   locations: facets.locations.map((location) => ({
     ...taxonomyRows(location),
     parent: location.parentID,
@@ -29,9 +27,9 @@ const cms = createDemoCms({
 // The demo CMS holds sample rows, not the generated Payload documents, so it is narrowed to the
 // two read methods `loadJobListing` uses.
 const readOnlyCms = cms as unknown as Pick<CmsClient, 'find' | 'findAll'>
-
+const readOnlyDetailCms = cms as unknown as Pick<CmsClient, 'find' | 'findBySlug'>
 // Fixed, so the demo build does not start showing an empty listing once the sample jobs expire.
-const DEMO_NOW = new Date('2026-11-01T00:00:00.000Z')
+export const DEMO_NOW = new Date('2026-11-01T00:00:00.000Z')
 
 /**
  * The view for `basePath`, with the route's own filter applied and the path's query string
@@ -57,3 +55,10 @@ export const demoListing = async (input: {
 }
 
 export { facets, tenant }
+
+/**
+ * The view for one job page, loaded by the same function the site app calls. `null` is a slug the
+ * demo does not have; `{ status: 'gone' }` is a job the demo clock has closed for good.
+ */
+export const demoJobDetail = async (slug: string): Promise<JobDetailResult> =>
+  loadJobDetail({ cms: readOnlyDetailCms, now: DEMO_NOW, slug, tenant })

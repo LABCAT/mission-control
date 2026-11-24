@@ -1,6 +1,11 @@
 import type { Field, GlobalConfig } from 'payload'
 
 import { authenticatedAccess, superAdminAccess } from './access'
+import {
+  DEFAULT_FORM_RETENTION_DAYS,
+  FORM_RETENTION_FIELD,
+  MAX_FORM_RETENTION_DAYS,
+} from './forms'
 import { tenantLocationFields } from './location-settings'
 import { tenantTaxField } from './tax-settings'
 
@@ -188,6 +193,44 @@ export const jobBoardTenantFields: Field[] = [
       description: 'Whether new jobs need an admin’s approval before they go live.',
     },
   },
+  // Expired jobs (PJ-37, decision 17). Default: the URL keeps resolving with a notice and
+  // similar jobs, then answers 410 after `expiredJobGoneAfterMonths`. `gone` matches the legacy
+  // site, which hid an expired job the moment it closed.
+  {
+    name: 'expiredJobMode',
+    type: 'select',
+    defaultValue: 'notice',
+    options: [
+      { label: 'Keep the page: notice, noindex, similar jobs, then 410', value: 'notice' },
+      { label: 'Gone as soon as it expires (legacy behaviour)', value: 'gone' },
+    ],
+    admin: {
+      condition: showForSiteTenant,
+      description: 'What a visitor sees on a job that has closed.',
+    },
+  },
+  {
+    name: 'expiredJobGoneAfterMonths',
+    type: 'number',
+    defaultValue: 12,
+    min: 0,
+    admin: {
+      condition: showForSiteTenant,
+      description:
+        'Months after an expiry before the page turns into 410 Gone. 0 keeps the notice page for ever.',
+    },
+  },
+  // Public view counter (PJ-37, decision 20 Nov). Generic default off; vwok turns it on.
+  {
+    name: 'publicJobViews',
+    type: 'checkbox',
+    defaultValue: false,
+    admin: {
+      condition: showForSiteTenant,
+      description:
+        'Show “N views” on a job page. The count comes from the view beacon after the page loads.',
+    },
+  },
   // Applying (PJ-25, decided 20 Nov). Generic default: guests may apply. vwok turns it on.
   {
     name: 'accountRequiredToApply',
@@ -237,6 +280,28 @@ export const jobBoardTenantFields: Field[] = [
     },
     validate: (value: null | string | undefined, options: ValidationOptions) =>
       requiredUnlessAggregate(value, options, 'Admin email is required'),
+  },
+  // Contact and other public forms (PJ-102). 0 means "email only": the notification is sent
+  // and no submission is stored.
+  {
+    name: FORM_RETENTION_FIELD,
+    type: 'number',
+    defaultValue: DEFAULT_FORM_RETENTION_DAYS,
+    min: 0,
+    max: MAX_FORM_RETENTION_DAYS,
+    admin: {
+      condition: showForSiteTenant,
+      description:
+        'How many days a form submission is kept before it is deleted. 0 sends the email and stores nothing.',
+      step: 1,
+    },
+    validate: (value: null | number | undefined) => {
+      if (value === null || value === undefined) return true
+      if (!Number.isInteger(value) || value < 0 || value > MAX_FORM_RETENTION_DAYS) {
+        return `Form retention must be a whole number of days between 0 and ${MAX_FORM_RETENTION_DAYS}`
+      }
+      return true
+    },
   },
 ]
 

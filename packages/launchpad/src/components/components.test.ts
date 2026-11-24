@@ -2,12 +2,17 @@ import { experimental_AstroContainer as AstroContainer } from 'astro/container'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import BaseLayout from './BaseLayout.astro'
+import ConsentLine from './ConsentLine.astro'
 import FilterBar from './FilterBar.astro'
 import JobCard from './JobCard.astro'
+import JobDetailPage from './JobDetailPage.astro'
 import JobsPage from './JobsPage.astro'
 import OrgCard from './OrgCard.astro'
 import Pagination from './Pagination.astro'
+import SiteFooter from './SiteFooter.astro'
 import Turnstile from './Turnstile.astro'
+import { jobDetailView, toJobDetail, type DetailJob } from '../jobs/detail'
+import { tenantJobPageSettings } from '../tenant/job-page-settings'
 import { jobFilterDefinitions, jobListingView, type ListingFacets } from '../jobs/listing'
 import type { FilterDefinition } from '../tenant/filters'
 import type { SiteTenant } from '../tenant/types'
@@ -472,5 +477,146 @@ describe('Turnstile', () => {
     // A noscript element, so a visitor with JavaScript never sees the warning.
     expect(html).toContain('<noscript>')
     expect(html).toMatch(/<noscript>[\s\S]*needs JavaScript[\s\S]*<\/noscript>/)
+  })
+})
+
+describe('JobDetailPage @S-280 @S-282 @S-285', () => {
+  const doc: DetailJob = {
+    description: { root: { children: [] } },
+    expiresAt: '2026-12-01T00:00:00.000Z',
+    howToApply: 'Email us.',
+    id: 7,
+    organisation: { approved: true, id: 3, name: 'Santo Bakery', pageEnabled: false, slug: 'santo-bakery' },
+    slug: 'head-chef',
+    status: 'published',
+    title: 'Head Chef',
+  }
+
+  const render = (status: 'expired' | 'live', source: Parameters<typeof tenantJobPageSettings>[0] = {}) => {
+    const detail = toJobDetail(doc, {})!
+    const view = jobDetailView({
+      detail,
+      settings: tenantJobPageSettings(source),
+      status,
+      tenant,
+    })
+
+    return container.renderToString(JobDetailPage, {
+      props: {
+        applyHref: '/jobs/head-chef/apply',
+        image: 'https://vanuatuwok.vu/og/jobs/head-chef.png',
+        siteUrl: 'https://vanuatuwok.vu',
+        view,
+        viewEndpoint: '/api/jobs/7/view',
+      },
+    })
+  }
+
+  it('is indexable, carries JobPosting and the share tags, and has an apply button when live', async () => {
+    const html = await render('live')
+
+    expect(html).not.toContain('noindex')
+    expect(html).toContain('"@type":"JobPosting"')
+    expect(html).toContain('<meta property="og:image" content="https://vanuatuwok.vu/og/jobs/head-chef.png">')
+    expect(html).toContain('<meta name="twitter:card" content="summary_large_image">')
+    expect(html).toContain('href="/jobs/head-chef/apply"')
+  })
+
+  it('counts a live view even when the tenant does not show the number, and shows no number then', async () => {
+    const hidden = await render('live', { publicJobViews: false })
+    expect(hidden).toMatch(/<p[^>]*data-job-views[^>]*data-view-endpoint="\/api\/jobs\/7\/view"[^>]*hidden/)
+    expect(hidden).not.toContain('data-job-views-count')
+
+    const shown = await render('live', { publicJobViews: true })
+    expect(shown).toContain('data-job-views-count')
+  })
+
+  it('shows the closed notice, noindex, no JobPosting, no apply button and no beacon when expired', async () => {
+    const html = await render('expired')
+
+    expect(html).toContain('No longer accepting applications')
+    expect(html).toContain('noindex')
+    expect(html).not.toContain('JobPosting')
+    expect(html).not.toContain('/jobs/head-chef/apply')
+    expect(html).not.toMatch(/<p[^>]*data-job-views/)
+  })
+})
+
+describe('SiteFooter', () => {
+  it('links the privacy policy and terms from every page @S-310', async () => {
+    const html = await container.renderToString(SiteFooter, {
+      props: { name: 'Vanuatu Wok' },
+    })
+
+    expect(html).toContain('href="/privacy"')
+    expect(html).toContain('href="/terms"')
+    expect(html).toContain('Privacy policy')
+    expect(html).toContain('Terms of use')
+    expect(html).toContain('Vanuatu Wok')
+  })
+
+  it('renders the site footer menu and does not repeat the legal links @S-310', async () => {
+    const html = await container.renderToString(SiteFooter, {
+      props: {
+        items: [
+          { label: 'About us', url: '/about' },
+          { label: 'Privacy', url: '/privacy' },
+        ],
+        name: 'Vanuatu Wok',
+      },
+      slots: { default: '<a href="/about">About us</a><a href="/privacy">Privacy</a>' },
+    })
+
+    expect(html).toContain('href="/about"')
+    // The menu's own privacy item supplies the label, so the default one is not added twice.
+    expect(html).toContain('Privacy')
+    expect(html).not.toContain('Privacy policy')
+    expect(html.match(/href="\/privacy"/g)).toHaveLength(1)
+    expect(html).toContain('href="/terms"')
+  })
+
+  it('takes the legal labels from the tenant language @S-310', async () => {
+    const html = await container.renderToString(SiteFooter, {
+      props: { labels: { privacy: 'Politik blong praevat', terms: 'Tem blong yus' }, name: 'VW' },
+    })
+
+    expect(html).toContain('Politik blong praevat')
+    expect(html).toContain('Tem blong yus')
+  })
+})
+
+describe('ConsentLine', () => {
+  it('names what each form collects and links the policy and terms @S-312', async () => {
+    const html = await container.renderToString(ConsentLine, { props: { kind: 'apply' } })
+
+    expect(html).toContain('CV')
+    expect(html).toContain('href="/privacy"')
+    expect(html).toContain('href="/terms"')
+    // Plain markup: a public form page still ships no client JavaScript for this line.
+    expect(html).not.toContain('<script')
+  })
+
+  it('says what an alert subscriber agrees to @S-312', async () => {
+    const html = await container.renderToString(ConsentLine, { props: { kind: 'alert' } })
+
+    expect(html).toContain('email you matching jobs')
+    expect(html).toContain('href="/privacy"')
+  })
+
+  it('follows a site that moved the pages, and uses its own labels @S-312', async () => {
+    const html = await container.renderToString(ConsentLine, {
+      props: {
+        kind: 'signup',
+        privacyLabel: 'Politik blong praevat',
+        privacyPath: '/legal/privacy',
+        termsLabel: 'Tem blong yus',
+        termsPath: '/legal/terms',
+      },
+    })
+
+    expect(html).toContain('href="/legal/privacy"')
+    expect(html).toContain('Politik blong praevat')
+    expect(html).toContain('href="/legal/terms"')
+    expect(html).toContain('creating an account')
   })
 })

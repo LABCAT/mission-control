@@ -1,0 +1,268 @@
+---
+/**
+ * The body of `/jobs/{slug}` (PJ-37): title, organisation card, facts, description, PDF, the
+ * apply placeholder and, for a closed job, the notice and similar live jobs.
+ *
+ * The apply form belongs to PJ-45, so the apply section is a marked placeholder. Share images
+ * belong to PJ-105: the page passes `image` through to `BaseLayout` and generates nothing.
+ */
+import Alert from '@labcat2020/rocketship/components/Alert'
+import Button from '@labcat2020/rocketship/components/Button'
+import Card from '@labcat2020/rocketship/components/Card'
+import Container from '@labcat2020/rocketship/components/Container'
+import Grid from '@labcat2020/rocketship/components/Grid'
+import Stack from '@labcat2020/rocketship/components/Stack'
+import Typography from '@labcat2020/rocketship/components/Typography'
+
+import { formatDate } from '../tenant/date'
+import type { JobDetailView } from '../jobs/detail'
+import type { SiteTenant } from '../tenant/types'
+import JobCard from './JobCard.astro'
+
+type Props = {
+  view: JobDetailView
+  tenant: SiteTenant
+  /** Tenant locale for dates. Defaults to the tenant's default locale. */
+  locale?: string
+  /** Where the apply form posts, once PJ-45 builds it. Only rendered as a placeholder today. */
+  applyHref?: string
+  /** URL the view beacon posts to. Rendered only when the tenant counts public views. */
+  viewEndpoint?: string
+  /** Template for the count, e.g. `{total} views, {today} today`. */
+  viewsTemplate?: string
+  /** Labels in the tenant's language. */
+  labels?: Partial<Labels>
+}
+
+export type Labels = {
+  apply: string
+  applySoon: string
+  categories: string
+  closes: string
+  expired: string
+  expiredBody: string
+  howToApply: string
+  jobPdf: string
+  location: string
+  salary: string
+  salaryBand: string
+  similar: string
+  type: string
+  views: string
+}
+
+const {
+  view,
+  tenant,
+  applyHref,
+  viewEndpoint,
+  labels: overrides,
+  locale: requestedLocale,
+  viewsTemplate = '{total} views, {today} today',
+} = Astro.props as Props
+const { detail } = view
+
+const labels: Labels = {
+  apply: 'Apply for this job',
+  applySoon: 'The application form arrives in a later release.',
+  categories: 'Categories',
+  closes: 'Closes',
+  expired: 'No longer accepting applications',
+  expiredBody: 'This job closed on {date}. The employer is not taking applications for it any more.',
+  howToApply: 'How to apply',
+  jobPdf: 'Download the job description (PDF)',
+  location: 'Location',
+  salary: 'Salary',
+  salaryBand: 'Salary band',
+  similar: 'Similar live jobs',
+  type: 'Job type',
+  views: 'views',
+  ...overrides,
+}
+
+const locale = requestedLocale ?? tenant.defaultLocale ?? 'en'
+const timezone = tenant.timezone ?? undefined
+
+const salary = detail.salaryBand
+const closes = detail.closes ? formatDate(detail.closes, { locale, timezone }) : undefined
+
+const facts = [
+  detail.jobType && { label: labels.type, value: detail.jobType },
+  detail.location && { label: labels.location, value: detail.location },
+  detail.locationDetails && { label: labels.location, value: detail.locationDetails },
+  closes && { label: labels.closes, value: closes },
+].filter((fact): fact is { label: string; value: string } => Boolean(fact))
+---
+
+<Container size="content">
+  <Stack gap="large">
+    {
+      view.expired && (
+        <Alert role="status" variant="warning">
+          <h2 class="rs-alert__title">{labels.expired}</h2>
+          <p class="rs-alert__description">
+            {closes
+              ? labels.expiredBody.replace('{date}', closes)
+              : 'The employer is not taking applications for this job any more.'}
+          </p>
+        </Alert>
+      )
+    }
+
+    <Typography>
+      <h1>{detail.title}</h1>
+      {
+        detail.categories.length > 0 && (
+          <p class="lp-detail__categories">
+            {detail.categories.map((category, index) => (
+              <>
+                {index > 0 && ', '}
+                {category}
+              </>
+            ))}
+          </p>
+        )
+      }
+    </Typography>
+
+    <Card as="section">
+      <h2 class="rs-card__title">
+        {
+          detail.organisation.url ? (
+            <a class="rs-card__link" href={detail.organisation.url}>
+              {detail.organisation.name}
+            </a>
+          ) : (
+            detail.organisation.name
+          )
+        }
+      </h2>
+      <p class="rs-card__description lp-detail__org-note">
+        {detail.organisation.url
+          ? 'Read more about this employer.'
+          : 'This employer has no public organisation page.'}
+      </p>
+    </Card>
+
+    {facts.length > 0 && (
+      <dl class="lp-detail__facts">
+        {facts.map((fact) => (
+          <>
+            <dt>{fact.label}</dt>
+            <dd>{fact.value}</dd>
+          </>
+        ))}
+      </dl>
+    )}
+
+    {
+      (detail.displayedSalary || salary) && (
+        <p class="lp-detail__salary">
+          {detail.displayedSalary ?? salary}
+        </p>
+      )
+    }
+
+    {
+      detail.descriptionHtml && (
+        <section class="lp-detail__description">
+          <h2>About this job</h2>
+          <div set:html={detail.descriptionHtml} />
+        </section>
+      )
+    }
+
+    {
+      detail.howToApply && (
+        <section>
+          <h2>{labels.howToApply}</h2>
+          <p>{detail.howToApply}</p>
+        </section>
+      )
+    }
+
+    {
+      detail.pdf && (
+        <p>
+          <a class="lp-detail__pdf" href={detail.pdf.url}>
+            {labels.jobPdf}
+          </a>
+        </p>
+      )
+    }
+
+    {
+      /* PJ-45 owns the apply form; until it lands this is the marked placeholder. */
+      !view.expired && (
+        <section class="lp-detail__apply" data-apply-placeholder>
+          <h2>{labels.apply}</h2>
+          <p>{labels.applySoon}</p>
+          {applyHref && (
+            <Button href={applyHref} size="large">
+              {labels.apply}
+            </Button>
+          )}
+        </section>
+      )
+    }
+
+    {
+      /* Every live view is counted (it feeds the job views report); the number is only shown when
+         the tenant turns the public counter on, in space reserved so nothing shifts. */
+      !view.expired && viewEndpoint && (
+        <p class="lp-detail__views" data-job-views data-view-endpoint={viewEndpoint} hidden={!view.showViews}>
+          {view.showViews && <span data-job-views-count data-views-template={viewsTemplate} hidden />}
+        </p>
+      )
+    }
+
+    {
+      view.expired && view.similar.length > 0 && (
+        <section class="lp-detail__similar">
+          <h2>{labels.similar}</h2>
+          <Grid columns={3}>
+            {view.similar.map((job) => (
+              <JobCard job={job} locale={locale} timezone={timezone} />
+            ))}
+          </Grid>
+        </section>
+      )
+    }
+  </Stack>
+</Container>
+
+<style>
+  .lp-detail__categories,
+  .lp-detail__org-note,
+  .lp-detail__salary {
+    color: var(--rs-color-muted);
+    margin: 0;
+  }
+
+  .lp-detail__facts {
+    display: grid;
+    gap: var(--rs-space-2) var(--rs-space-4);
+    grid-template-columns: max-content 1fr;
+    margin: 0;
+  }
+
+  .lp-detail__facts dt {
+    color: var(--rs-color-muted);
+    font-weight: var(--rs-font-weight-semibold);
+  }
+
+  .lp-detail__facts dd {
+    margin: 0;
+  }
+
+  .lp-detail__pdf {
+    font-weight: var(--rs-font-weight-semibold);
+  }
+
+  /* The count fills reserved space after load, so revealing it never moves the page. */
+  .lp-detail__views {
+    color: var(--rs-color-muted);
+    margin: 0;
+    min-block-size: 1.5em;
+  }
+</style>
