@@ -12,6 +12,8 @@
     "./organisations": "./src/organisations/index.ts",
     "./jobs/*": "./src/jobs/*.ts",
     "./pages": "./src/pages/index.ts",
+    "./redirects": "./src/redirects/index.ts",
+    "./redirects/*": "./src/redirects/*.ts",
     "./seo": "./src/seo/index.ts",
     "./seo/*": "./src/seo/*.ts",
     "./tenant/*": "./src/tenant/*.ts",
