@@ -30,6 +30,7 @@ import * as migration_20261123_001810_view_as_audit_log from './20261123_001810_
 import * as migration_20261123_080818_pages_site_settings from './20261123_080818_pages_site_settings';
 import * as migration_20261124_044341_form_map_blocks from './20261124_044341_form_map_blocks';
 import * as migration_20261124_051310_job_detail_views from './20261124_051310_job_detail_views';
+import * as migration_20261124_081812_org_directory from './20261124_081812_org_directory';
 
 export const migrations = [
   {
@@ -190,6 +191,11 @@ export const migrations = [
   {
     up: migration_20261124_051310_job_detail_views.up,
     down: migration_20261124_051310_job_detail_views.down,
-    name: '20261124_051310_job_detail_views'
+    name: '20261124_051310_job_detail_views',
+  },
+  {
+    up: migration_20261124_081812_org_directory.up,
+    down: migration_20261124_081812_org_directory.down,
+    name: '20261124_081812_org_directory'
   },
 ];
