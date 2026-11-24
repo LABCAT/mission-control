@@ -15,6 +15,12 @@ import type { PlanSeed } from '@mission-control/payload-jobs'
  * credits never expire (no `creditExpiryDays`). `seedPlans` still refuses a `null`, so a guessed
  * value can never reach a database.
  */
+/**
+ * A listing runs for at most 45 days on Vanuatu Wok (founder, PJ-32): the employer's close date
+ * is capped by the plan's duration, and the job expires at the end of that local day.
+ */
+export const VWOK_MAX_DURATION_DAYS = 45
+
 export const vwokPlans: PlanSeed[] = [
   {
     durationDays: 30,

@@ -3191,3 +3191,106 @@ stories:
       - packages/payload-jobs/src/retention.test.ts
       - packages/payload-jobs/src/retention.storage.test.ts
       - packages/payload-jobs/src/admin/DeleteApplicantData.test.ts
+
+  # Publishing and moderation (PJ-32)
+  - id: S-190
+    area: Publishing and moderation
+    role: employer
+    story: "A published job stays live until the end of a day in the site's own timezone, for at most the plan's duration."
+    steps:
+      - "Publish a job on a plan, with and without a chosen close date."
+      - "Publish a job on a site in a timezone with daylight saving."
+    expected: "The job expires at the end of the local day that many calendar days later (a chosen close date is kept when it is earlier), so daylight saving never shifts the count. no plan runs longer than 45 days (vwok's live plans are 30)."
+    settings:
+      - tenant.timezone
+      - plan.durationDays
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/job-status.test.ts
+      - packages/payload-jobs/src/checkout.integration.test.ts
+      - apps/cms/src/seed/vwok-plans.test.ts
+
+  - id: S-191
+    area: Publishing and moderation
+    role: site manager
+    story: "A job moves draft, waiting for purchase or pending, published, then expired or cancelled, and every move is logged."
+    steps:
+      - "Submit a job as a member who cannot buy, then have the owner approve or decline the purchase."
+      - "Open the job's log."
+    expected: "Only the allowed moves happen. Each one is recorded with who did it (employer, staff or system), when, from and to, and nobody can edit the log. Declining a purchase returns the job to a draft. The organisation History tab shows each move."
+    settings: []
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/job-status.test.ts
+      - packages/payload-jobs/src/checkout.integration.test.ts
+
+  - id: S-192
+    area: Publishing and moderation
+    role: site manager
+    story: "The site decides whether a job goes live on submit, after approval, or after its invoice is paid, and whether a review stops it."
+    steps:
+      - "Set moderation to never, new employers only, or always."
+      - "Set the go-live rule for trusted and for new employers."
+      - "Check out a job as each kind of employer, then pay its invoice."
+    expected: "The job publishes only when neither the review nor the go-live rule holds it. A paid-later rule releases it when the order is paid. A member's purchase request waits for the owner first."
+    settings:
+      - jobPublication.moderation
+      - jobPublication.trustedGoLive
+      - jobPublication.newEmployerGoLive
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/publication.test.ts
+      - packages/payload-jobs/src/checkout.integration.test.ts
+      - packages/payload-jobs/src/index.test.ts
+
+  - id: S-193
+    area: Publishing and moderation
+    role: site manager
+    story: "Each site has its own publish and moderation settings, with Vanuatu Wok's legacy behaviour as the default."
+    steps:
+      - "Leave the settings empty on one site and set moderation to always on another."
+      - "Check out a job from a trusted employer on each."
+    expected: "Each site follows its own settings. With nothing set, a trusted employer's job is live on submit and a new employer's waits for approval."
+    settings:
+      - jobPublication
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/publication.test.ts
+      - packages/payload-jobs/src/checkout.integration.test.ts
+      - apps/cms/src/seed/vwok-publication.test.ts
+
+  - id: S-194
+    area: Publishing and moderation
+    role: site manager
+    story: "A site manager approves a pending job from the admin, which publishes it. Only when the site turns it on (off by default) does a tenant admin's approval also trust the employer."
+    steps:
+      - "Open a pending job in the admin and press Approve and publish."
+      - "Approve it again."
+    expected: "The job is published with its dates and a log entry naming the site manager. The organisation stays untrusted unless the site's setting is on and a tenant admin approved (an editor never trusts). Repeating the action changes nothing."
+    settings:
+      - jobPublication.trustOnApproval
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/checkout.integration.test.ts
+      - packages/payload-jobs/src/admin/ApproveJobButton.test.ts
+      - packages/payload-jobs/src/index.test.ts
+
+  - id: S-195
+    area: Publishing and moderation
+    role: site manager
+    story: "Only a site manager of the job's own site can approve it, and nobody learns which jobs exist on other sites."
+    steps:
+      - "Try to approve a job as its employer, a seeker, a signed-out visitor and another site's manager."
+      - "Try to approve a draft, a job waiting for purchase, or a pending job that never went through checkout."
+    expected: "Everyone but the job's site managers (and super admins) gets Not found and nothing changes. A job that is not pending, or has no plan and live order, is refused."
+    settings: []
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/checkout.integration.test.ts
+      - packages/payload-jobs/src/admin/ApproveJobButton.test.ts

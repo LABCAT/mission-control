@@ -656,6 +656,16 @@ const profileFields = (
         },
       },
       {
+        name: 'trusted',
+        type: 'checkbox',
+        defaultValue: false,
+        access: adminOnly,
+        admin: {
+          description:
+            'Set by a site manager. A trusted organisation’s jobs follow the site’s “trusted” go-live rule (usually live at once, invoice paid later); others wait for approval. Approving a job can set this (site setting).',
+        },
+      },
+      {
         name: 'pageEnabled',
         type: 'checkbox',
         defaultValue: false,

@@ -23,13 +23,16 @@ import {
   type MissionControlUser,
   type TenantRole,
 } from '../access'
+import { APPROVE_JOB_BUTTON_COMPONENT_PATH } from '../admin'
 import { idsOf, resultingTenantID, submitsTenant, tenantIDOf } from '../catalog'
+import { jobLogField, jobStatusLog } from '../job-log'
 import {
   datesForTransition,
   EMPLOYER_EDITABLE_STATUSES,
   isJobStatus,
   JOB_STATUS_LABELS,
   JOB_STATUSES,
+  JOB_SYSTEM_CONTEXT,
   jobTransitionProblem,
   PUBLIC_JOB_FILTER,
   type JobActor,
@@ -37,6 +40,7 @@ import {
 } from '../job-status'
 import { jobPlacementsField } from '../placements'
 import { assertPlanAllowsJob, PricingError, type QuoteJob } from '../pricing'
+import { loadTenantDoc } from '../tenant-doc'
 import { getSiteKeyHeader, resolveSiteKey } from '../site-keys'
 import { TAXONOMY_SLUG_PATTERN, uniqueSlugPerTenant } from '../taxonomies'
 import {
@@ -392,7 +396,10 @@ export const jobStatusRules =
     const from: JobStatus | null =
       operation === 'create' ? null : isJobStatus(originalDoc?.status) ? originalDoc.status : 'draft'
     const to = (data && 'status' in data ? data.status : (originalDoc?.status ?? 'draft')) as JobStatus
-    const actor = jobActorFor(userOf(req), resultingTenantID(data, originalDoc), tenantScoped)
+    const actor: JobActor =
+      req.context?.[JOB_SYSTEM_CONTEXT] === true
+        ? 'system'
+        : jobActorFor(userOf(req), resultingTenantID(data, originalDoc), tenantScoped)
 
     const problem = jobTransitionProblem(from, to, actor)
     if (problem) {
@@ -415,8 +422,11 @@ export const jobStatusRules =
       durationDays = plan?.durationDays ?? null
     }
 
+    // The listing ends at the end of a day in the tenant's own timezone (PJ-32).
+    const tenant = to === 'published' ? await loadTenantDoc(req, resultingTenantID(data, originalDoc)) : null
     const dates = datesForTransition({
       durationDays,
+      timeZone: (tenant?.timezone as null | string | undefined) ?? null,
       expiresAt: (valueAfterSave(data, originalDoc, 'expiresAt') as null | string | undefined) ?? null,
       from,
       now: new Date(),
@@ -593,6 +603,8 @@ export type JobsCollectionOptions = {
   /** Resolved collection slugs, so relationships and queries never use a literal. */
   slugs?: PayloadJobsCollectionSlugs
   tenantScoped?: boolean
+  /** The auth collection the status log's `by` relation points at. Defaults to `users`. */
+  usersSlug?: string
   /**
    * Add the `order` relationship (PJ-23). The plugin always does, since it registers orders; a
    * config that uses this collection without the orders collection leaves it off.
@@ -606,6 +618,7 @@ export const jobsCollection = ({
   richTextDescription = true,
   slugs = DEFAULT_PAYLOAD_JOBS_SLUGS,
   tenantScoped = true,
+  usersSlug = 'users',
   withOrder = false,
 }: JobsCollectionOptions = {}): CollectionConfig => {
   const staffOnly = jobStaffFieldAccess(tenantScoped)
@@ -789,6 +802,7 @@ export const jobsCollection = ({
       min: 0,
       admin: { position: 'sidebar', readOnly: true },
     },
+    { ...jobLogField(usersSlug), access: { create: () => false, read: privateRead, update: () => false } } as Field,
     // Per-day visits, newest first (PJ-37). Only today's row is shown publicly; the report and
     // /account stats read the rest. The view beacon keeps the list at a week.
     {
@@ -826,6 +840,9 @@ export const jobsCollection = ({
       access,
     ),
     admin: {
+      // The site manager's Approve button (PJ-32). It shows itself only for a pending job and
+      // a site manager of its tenant; the endpoint checks again.
+      components: { edit: { beforeDocumentControls: [{ path: APPROVE_JOB_BUTTON_COMPONENT_PATH }] } },
       defaultColumns: ['title', 'organisation', 'status', 'publishedAt', 'expiresAt'],
       group: 'Job board',
       useAsTitle: 'title',
@@ -840,6 +857,9 @@ export const jobsCollection = ({
         jobPlanAllowsJobWith(slugs),
         jobOrderMatchesOrganisation(slugs),
         protectJobViews,
+        jobStatusLog(({ data, originalDoc, req }) =>
+          jobActorFor(userOf(req), resultingTenantID(data, originalDoc), tenantScoped),
+        ),
       ],
       beforeValidate: [
         autoJobSlug(tenantScoped, slugs.jobs),

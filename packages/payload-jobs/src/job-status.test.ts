@@ -4,7 +4,6 @@ import { describe, expect, it } from 'vitest'
 import {
   canTransition,
   datesForTransition,
-  decidePublication,
   isLiveJob,
   JOB_STATUSES,
   JOB_TRANSITIONS,
@@ -22,14 +21,15 @@ describe('job status machine @S-033', () => {
   it('allows exactly the listed moves', () => {
     expect(JOB_TRANSITIONS).toEqual({
       cancelled: [],
-      draft: ['pending', 'published', 'cancelled'],
+      draft: ['waiting_for_purchase', 'pending', 'published', 'cancelled'],
       expired: ['published'],
-      pending: ['draft', 'published', 'cancelled'],
+      pending: ['draft', 'published', 'cancelled', 'waiting_for_purchase'],
       published: ['expired', 'cancelled'],
+      waiting_for_purchase: ['cancelled', 'draft', 'pending', 'published'],
     })
   })
 
-  it('lets staff and system make every allowed move, and only those (property)', () => {
+  it('lets staff and system make every allowed move, and only those (property) @S-191', () => {
     fc.assert(
       fc.property(status, status, fc.constantFrom<JobActor>('staff', 'system'), (from, to, who) => {
         const problem = jobTransitionProblem(from, to, who)
@@ -39,7 +39,13 @@ describe('job status machine @S-033', () => {
   })
 
   it('lets employers only shuffle their own drafts and pending jobs, or cancel them', () => {
-    const allowed = new Set(['draft>pending', 'pending>draft', 'draft>cancelled', 'pending>cancelled'])
+    const allowed = new Set([
+      'draft>pending',
+      'pending>draft',
+      'draft>cancelled',
+      'pending>cancelled',
+      'waiting_for_purchase>cancelled',
+    ])
     for (const from of JOB_STATUSES) {
       for (const to of JOB_STATUSES) {
         const ok = jobTransitionProblem(from, to, 'employer') === null
@@ -48,12 +54,14 @@ describe('job status machine @S-033', () => {
     }
   })
 
-  it('starts jobs as draft, pending or (not for employers) published; never expired or cancelled', () => {
+  it('starts jobs as draft or pending, and for staff and the system also published or waiting for purchase; never expired or cancelled @S-191', () => {
     fc.assert(
       fc.property(status, actor, (to, who) => {
         const ok = jobTransitionProblem(null, to, who) === null
         const expected =
-          who === 'employer' ? to === 'draft' || to === 'pending' : to === 'draft' || to === 'pending' || to === 'published'
+          who === 'employer'
+            ? to === 'draft' || to === 'pending'
+            : to === 'draft' || to === 'pending' || to === 'published' || to === 'waiting_for_purchase'
         expect(ok).toBe(expected)
       }),
     )
@@ -81,26 +89,49 @@ describe('job status machine @S-033', () => {
 })
 
 describe('datesForTransition', () => {
-  it('publishes now for the plan’s duration', () => {
-    expect(datesForTransition({ durationDays: 30, from: 'pending', now: NOW, to: 'published' })).toEqual({
-      expiresAt: new Date(NOW.getTime() + 30 * DAY).toISOString(),
+  // NOW is 23:00 on 18 Nov in Pacific/Efate (UTC+11, no daylight saving).
+  const EFATE = 'Pacific/Efate'
+
+  it('publishes now and ends at the end of the local day the plan’s duration later @S-190', () => {
+    expect(
+      datesForTransition({ durationDays: 45, from: 'pending', now: NOW, timeZone: EFATE, to: 'published' }),
+    ).toEqual({ expiresAt: '2027-01-02T12:59:59.999Z', publishedAt: NOW.toISOString() })
+    // No timezone known: UTC days, never a guessed tenant.
+    expect(datesForTransition({ durationDays: 45, from: 'pending', now: NOW, to: 'published' })).toEqual({
+      expiresAt: '2027-01-02T23:59:59.999Z',
       publishedAt: NOW.toISOString(),
     })
   })
 
-  it('keeps a close date chosen at checkout, clamped to the plan’s duration @S-031', () => {
+  it('counts calendar days across a daylight saving change @S-190', () => {
+    // Sydney moves to daylight saving on 4 Oct 2026: 10 days from 1 Oct still ends on 11 Oct.
+    const before = new Date('2026-10-01T02:00:00.000Z')
+    expect(
+      datesForTransition({ durationDays: 10, from: 'draft', now: before, timeZone: 'Australia/Sydney', to: 'published' })
+        .expiresAt,
+    ).toBe('2026-10-11T12:59:59.999Z')
+  })
+
+  it('falls back to UTC for an unknown timezone @S-190', () => {
+    expect(
+      datesForTransition({ durationDays: 1, from: 'draft', now: NOW, timeZone: 'Not/AZone', to: 'published' }).expiresAt,
+    ).toBe('2026-11-19T23:59:59.999Z')
+  })
+
+  it('keeps a close date chosen at checkout, clamped to the plan’s duration @S-031 @S-190', () => {
     const inTen = new Date(NOW.getTime() + 10 * DAY).toISOString()
     const inSixty = new Date(NOW.getTime() + 60 * DAY).toISOString()
     const past = new Date(NOW.getTime() - DAY).toISOString()
+    const latest = '2027-01-02T12:59:59.999Z'
     const publish = (expiresAt: string, from: 'draft' | 'expired' | 'pending' = 'pending') =>
-      datesForTransition({ durationDays: 30, expiresAt, from, now: NOW, to: 'published' }).expiresAt
+      datesForTransition({ durationDays: 45, expiresAt, from, now: NOW, timeZone: EFATE, to: 'published' }).expiresAt
 
     expect(publish(inTen)).toBe(inTen)
     expect(publish(inTen, 'draft')).toBe(inTen)
-    expect(publish(inSixty)).toBe(new Date(NOW.getTime() + 30 * DAY).toISOString())
-    expect(publish(past)).toBe(new Date(NOW.getTime() + 30 * DAY).toISOString())
+    expect(publish(inSixty)).toBe(latest)
+    expect(publish(past)).toBe(latest)
     // A relist starts afresh, whatever the old expiry was.
-    expect(publish(inTen, 'expired')).toBe(new Date(NOW.getTime() + 30 * DAY).toISOString())
+    expect(publish(inTen, 'expired')).toBe(latest)
   })
 
   it('resets publishedAt on relist, and keeps the expiry for staff to set when there is no plan', () => {
@@ -127,33 +158,6 @@ describe('live jobs', () => {
       fc.property(status, fc.option(fc.integer({ min: -10, max: 10 }), { nil: null }), (s, offset) => {
         const expiresAt = offset === null ? null : new Date(NOW.getTime() + offset * DAY).toISOString()
         expect(isLiveJob({ expiresAt, status: s }, NOW)).toBe(s === 'published' && (offset === null || offset > 0))
-      }),
-    )
-  })
-})
-
-const org = (approved: boolean, canPayByInvoice: boolean) => ({ approved, canPayByInvoice })
-
-describe('decidePublication (moderation hook point, PJ-32)', () => {
-  it('follows the old site’s rule by default: approved, paid or on invoice publishes', () => {
-    const cases: [boolean, boolean, number, 'pending' | 'published'][] = [
-      [false, false, 0, 'pending'],
-      [true, false, 0, 'published'],
-      [false, true, 0, 'published'],
-      [false, false, 1, 'published'],
-    ]
-    for (const [approved, invoice, total, expected] of cases) {
-      expect(decidePublication({ mode: 'legacy', orderTotal: total, organisation: org(approved, invoice) })).toBe(expected)
-    }
-  })
-
-  it('reviews everything, publishes everything, or holds on an unknown mode', () => {
-    fc.assert(
-      fc.property(fc.boolean(), fc.boolean(), fc.nat(), (approved, invoice, total) => {
-        const organisation = org(approved, invoice)
-        expect(decidePublication({ mode: 'review', orderTotal: total, organisation })).toBe('pending')
-        expect(decidePublication({ mode: 'auto', orderTotal: total, organisation })).toBe('published')
-        expect(decidePublication({ mode: 'weekly' as never, orderTotal: total, organisation })).toBe('pending')
       }),
     )
   })
