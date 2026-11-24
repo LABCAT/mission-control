@@ -11,6 +11,7 @@ import { resolveLocale } from '@mission-control/launchpad/tenant/locale'
 import NotFoundPage from '../../components/NotFoundPage.astro'
 import SiteLayout from '../../layouts/SiteLayout.astro'
 import { siteTenant } from '../../brand'
+import { ogImagePath } from '../../og-route'
 import { siteEnv } from '../../env'
 import { organisationRoute } from '../../organisation-route'
 import { cmsFromEnv } from '../../site'
@@ -22,13 +23,21 @@ const route = await organisationRoute({
 })
 
 if (route.kind === 'not-found') Astro.response.status = 404
+const image =
+  route.kind === 'found'
+    ? `${Astro.site?.origin ?? Astro.url.origin}${ogImagePath({ kind: 'organisation', slug: route.profile.slug })}`
+    : undefined
 const primary = menuFor(route.menus, 'primary')
 const footer = menuFor(route.menus, 'footer')
 ---
 
 {
   route.kind === 'found' ? (
-    <SiteLayout path={pathname} title={`${route.profile.name} | ${siteTenant.name}`}>
+    <SiteLayout
+      image={image}
+      path={pathname}
+      title={`${route.profile.name} | ${siteTenant.name}`}
+    >
       <Fragment slot="nav">
         <SiteNav currentPath={pathname} label="Main" links={primary} />
       </Fragment>

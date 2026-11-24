@@ -11,14 +11,17 @@ type Props = {
   path?: string
   /** Error pages and previews stay out of the index. */
   noindex?: boolean
+  /** Absolute share-image URL: the generated card (PJ-105). */
+  image?: string
 }
 
-const { title, description, path, noindex } = Astro.props as Props
+const { title, description, path, noindex, image } = Astro.props as Props
 const siteUrl = Astro.site ? Astro.site.origin : undefined
 ---
 
 <BaseLayout
   description={description}
+  image={image}
   noindex={noindex}
   path={path}
   siteUrl={siteUrl}

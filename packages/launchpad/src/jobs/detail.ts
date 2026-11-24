@@ -20,7 +20,7 @@ import {
 import { resolveLocale } from '../tenant/locale'
 import { jobPostingStructuredData, type JobPostingStructuredData } from '../tenant/seo'
 import type { SiteTenant } from '../tenant/types'
-import type { JobSummary } from '../types'
+import type { JobSummary, MediaImage } from '../types'
 import { liveJobsWhere, toJobSummary, type ListingJob } from './listing'
 
 /** Where a job page lives. The slug is unique per tenant (PJ-19). */
@@ -101,6 +101,8 @@ export type DetailJobRef = { id?: number | string; name?: null | string; slug?: 
 export type DetailJobOrganisation = DetailJobRef & {
   /** `pageEnabled` and `approved` decide whether the organisation has a public page. */
   approved?: null | boolean
+  /** The organisation's logo, populated at the detail query's depth. Used by the share image. */
+  logo?: MediaImage | null | number
   pageEnabled?: null | boolean
   type?: null | string
 }
@@ -144,7 +146,8 @@ export type JobDetail = {
   location?: string
   /** Free-text address line, e.g. a street or "Multiple locations". */
   locationDetails?: string
-  organisation: { name: string; url?: string }
+  /** `logo` is the organisation's, for the share image (PJ-105); nothing on the page draws it. */
+  organisation: { logo?: MediaImage; name: string; url?: string }
   pdf?: { filename?: string; url: string }
   postedAt?: string
   salaryBand?: string
@@ -210,6 +213,8 @@ export const toJobDetail = (
 
   const pdf = populated(job.jobDescriptionPdf)
   const pdfUrl = pdf?.url?.trim()
+  const logo = populated(organisation?.logo)
+  const logoUrl = logo?.url?.trim()
 
   return {
     categories: (job.categories ?? [])
@@ -226,7 +231,20 @@ export const toJobDetail = (
     ...(nameOf(job.jobType) ? { jobType: nameOf(job.jobType)! } : {}),
     ...(locations.length > 0 ? { location: locations.join(', ') } : {}),
     ...(textOf(job.locationDetails) ? { locationDetails: job.locationDetails!.trim() } : {}),
-    organisation: { name: organisationName, ...(organisationUrl ? { url: organisationUrl } : {}) },
+    organisation: {
+      ...(logoUrl
+        ? {
+            logo: {
+              url: logoUrl,
+              ...(logo?.alt ? { alt: logo.alt } : {}),
+              ...(logo?.width ? { width: logo.width } : {}),
+              ...(logo?.height ? { height: logo.height } : {}),
+            },
+          }
+        : {}),
+      name: organisationName,
+      ...(organisationUrl ? { url: organisationUrl } : {}),
+    },
     ...(pdfUrl ? { pdf: { ...(pdf?.filename ? { filename: pdf.filename } : {}), url: pdfUrl } } : {}),
     ...(job.publishedAt ? { postedAt: job.publishedAt } : {}),
     ...(nameOf(job.salaryBand) ? { salaryBand: nameOf(job.salaryBand)! } : {}),

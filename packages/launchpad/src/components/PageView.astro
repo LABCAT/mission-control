@@ -29,9 +29,12 @@ type Props = {
   /** Link under the latest-jobs block, e.g. the full listing. */
   allJobsHref?: string
   allJobsLabel?: string
+  /** Absolute share-image URL. Overrides the page's own `seo.image` when the site generates one. */
+  image?: string
 }
 
-const { allJobsHref, allJobsLabel, components, menus, siteUrl, tenant, view } = Astro.props as Props
+const { allJobsHref, allJobsLabel, components, image, menus, siteUrl, tenant, view } =
+  Astro.props as Props
 
 const top = menuFor(menus, 'top')
 const primary = menuFor(menus, 'primary')
@@ -46,7 +49,7 @@ const text = (value: unknown): string | undefined =>
 
 <BaseLayout
   description={view.metadata.description}
-  image={view.metadata.image}
+  image={image ?? view.metadata.image}
   noindex={view.metadata.noindex}
   path={view.path}
   siteUrl={siteUrl}

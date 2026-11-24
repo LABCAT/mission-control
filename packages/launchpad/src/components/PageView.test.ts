@@ -116,6 +116,34 @@ describe('PageView', () => {
     expect(scripts[0]).not.toContain('src=')
   })
 
+  it('uses a generated share image when the site passes one, over the page image from the CMS @S-254', async () => {
+    const props = {
+      components,
+      menus,
+      tenant,
+      view: { ...view, metadata: { ...view.metadata, image: 'https://cms/editor-chosen.png' } },
+    }
+
+    const own = await container.renderToString(PageView, { props })
+    expect(own).toContain('<meta property="og:image" content="https://cms/editor-chosen.png">')
+
+    const generated = await container.renderToString(PageView, {
+      props: { ...props, image: 'https://vanuatuwok.vu/og/home.png' },
+    })
+    expect(generated).toContain('<meta property="og:image" content="https://vanuatuwok.vu/og/home.png">')
+    expect(generated).not.toContain('editor-chosen')
+    expect(generated).toContain('<meta name="twitter:card" content="summary_large_image">')
+  })
+
+  it('takes the image from the CMS when the site generates none for a page @S-254', async () => {
+    const html = await container.renderToString(PageView, {
+      props: { components, menus, tenant, view },
+    })
+
+    expect(html).not.toContain('og:image')
+    expect(html).toContain('<meta name="twitter:card" content="summary">')
+  })
+
   it('keeps the page out of the index when its SEO says so @S-292', async () => {
     const html = await container.renderToString(PageView, {
       props: { components, menus, tenant, view: { ...view, metadata: { ...view.metadata, noindex: true } } },
