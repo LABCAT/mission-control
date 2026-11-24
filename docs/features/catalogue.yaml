@@ -2607,6 +2607,163 @@ stories:
       - packages/payload-jobs/src/plug-points/plug-points.test.ts
 
   # ---------------------------------------------------------------------------
+  # Job detail page (PJ-37)
+  # ---------------------------------------------------------------------------
+  - id: S-280
+    area: Public site
+    role: seeker
+    story: "A visitor opens a live job from anywhere on the site and reads the whole posting on one page."
+    steps:
+      - "Open /jobs/{slug} for a live job."
+      - "Read the title, categories, organisation card, job type, location, salary, description and how to apply."
+    expected: "Every field the job has is shown, the PDF job description links from the page, the organisation card carries the organisation's name, and the apply section is a marked placeholder until the form (PJ-45) lands."
+    settings:
+      - jobs.jobPage
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/jobs/detail.test.ts
+      - packages/launchpad/src/components/components.test.ts
+
+  - id: S-281
+    area: Public site
+    role: seeker
+    story: "The organisation card on a job page links to the organisation's page only when that page is public."
+    steps:
+      - "Open a job whose organisation is approved with its page on."
+      - "Open a job whose organisation is not public."
+    expected: "A public organisation's name links to /organisations/{slug}; a private organisation's name is shown without a link."
+    settings:
+      - organisations.pageEnabled
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/jobs/detail.test.ts
+
+  - id: S-282
+    area: Public site
+    role: seeker
+    story: "An expired job's page still resolves, explains that it is closed, and offers live jobs instead."
+    steps:
+      - "Open a job that expired last month."
+    expected: "The page answers 200 with a clear 'No longer accepting applications' banner, no apply button, a list of similar live jobs, and it is not indexed."
+    settings:
+      - jobs.expiredJobMode
+      - jobs.expiredJobGoneAfterMonths
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/jobs/detail.test.ts
+
+  - id: S-283
+    area: Public site
+    role: seeker
+    story: "An old job URL answers 410 Gone once the tenant's window has passed, or immediately on the hide mode."
+    steps:
+      - "Open a job that expired more than twelve months ago."
+      - "Switch the tenant to the hide mode and open a job that expired yesterday."
+    expected: "Both answer 410 Gone rather than a job page; the window is a per-tenant setting, and 0 months keeps the notice for ever."
+    settings:
+      - jobs.expiredJobMode
+      - jobs.expiredJobGoneAfterMonths
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/jobs/detail.test.ts
+
+  - id: S-284
+    area: Public site
+    role: seeker
+    story: "A live job page carries JobPosting structured data a search engine can read."
+    steps:
+      - "Fetch the HTML of a live job page."
+      - "Read the application/ld+json block."
+    expected: "The JSON-LD is a schema.org JobPosting with the title, organisation, dates, employment type and location; an expired job page carries none."
+    settings:
+      - jobs.jobPage
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/jobs/detail.test.ts
+
+  - id: S-285
+    area: Public site
+    role: super admin
+    story: "The job page's share and search tags point at the share-image route the platform generates."
+    steps:
+      - "Fetch a live job page and read its og:image and twitter:card tags."
+    expected: "The page emits an absolute og:image URL for the job when the site supplies one, keeps the canonical URL, and adds no index for an expired job. The image itself is PJ-105."
+    settings:
+      - jobs.jobPage
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/components/components.test.ts
+
+  - id: S-286
+    area: Public site
+    role: super admin
+    story: "Each view of a live job is counted once, from a beacon, and bots are ignored."
+    steps:
+      - "Open a live job page as a visitor."
+      - "Open the same page with a crawler's user agent, and open an expired job's page."
+    expected: "The beacon answers {total,today} and increments the job once per visitor per minute; bot and other callers get the counts back and change nothing; an expired or unpublished job answers 404; a request without a valid site key answers 401."
+    settings:
+      - jobs.publicJobViews
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/views.integration.test.ts
+      - packages/payload-jobs/src/views.test.ts
+
+  - id: S-287
+    area: Public site
+    role: seeker
+    story: "The view count fills into the job page after it loads, without moving anything on the page."
+    steps:
+      - "Open a job page with the public view counter on."
+      - "Watch the count appear."
+    expected: "The count is written into space the page already reserved, in one request, from a beacon that sends only the page load; when the request fails the count stays hidden and no error is shown."
+    settings:
+      - jobs.publicJobViews
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/jobs/view-beacon.test.ts
+      - packages/payload-jobs/src/views.test.ts
+
+  - id: S-288
+    area: Public site
+    role: super admin
+    story: "The job page's expired behaviour and public view counter are per-tenant settings with the documented defaults."
+    steps:
+      - "Leave a tenant's job-page settings empty and open an expired job."
+      - "Read the settings the page applies."
+    expected: "Empty means the notice page, 410 after twelve months and no public view count; an unknown mode falls back to the notice, and a nonsense month count falls back to twelve."
+    settings:
+      - jobs.expiredJobMode
+      - jobs.expiredJobGoneAfterMonths
+      - jobs.publicJobViews
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/jobs/detail.test.ts
+
+  - id: S-289
+    area: Public site
+    role: seeker
+    story: "The job page ships no client JavaScript beyond the view beacon."
+    steps:
+      - "Build the demo site and count the scripts on a job page."
+    expected: "The page's only script is the view-count beacon, and it is served as one small module; the page HTML renders with JavaScript turned off."
+    settings:
+      - jobs.publicJobViews
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/demo/build.test.ts
+
+  # ---------------------------------------------------------------------------
   # Site pages (PJ-39): the home page, system pages and normal CMS pages, rendered from
   # blocks with the site's menus. Stories S-290 to S-299 belong to this task.
   # ---------------------------------------------------------------------------

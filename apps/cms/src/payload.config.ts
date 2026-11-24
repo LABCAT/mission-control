@@ -58,6 +58,7 @@ const workerEnv =
     ? ((await import('cloudflare:workers')).env as {
         ACCOUNT_RATE_LIMIT?: RateLimiter // mission-control: account auth rate limit (PJ-81)
         HYPERDRIVE?: { connectionString: string }
+        JOB_VIEW_RATE_LIMIT?: RateLimiter // mission-control: job page view beacon (PJ-37)
         // mission-control: email safety (PJ-94). Redirect is ON unless ENVIRONMENT is 'production'.
         ENVIRONMENT?: string
         EMAIL_REDIRECT_TO?: string
@@ -145,6 +146,8 @@ export default buildConfig({
     // binding in Workers, and fall back to an in-memory limiter in dev.
     payloadJobs({
       accountAuth: { rateLimiter: () => workerEnv?.ACCOUNT_RATE_LIMIT },
+      // mission-control: job page views (PJ-37) limit per visitor in Workers, per isolate in dev.
+      jobViews: { rateLimiter: () => workerEnv?.JOB_VIEW_RATE_LIMIT },
       // mission-control: public form submissions (PJ-102). Turnstile is verified server-side;
       // the secret is a Worker secret, never a tenant field.
       forms: {

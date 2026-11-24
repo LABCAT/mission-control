@@ -33,6 +33,8 @@
   // mission-control: rate limit for the account auth endpoints (PJ-81): 10 requests per minute
   // per key. namespace_id only has to be unique within the Cloudflare account.
   "ratelimits": [
-    { "name": "ACCOUNT_RATE_LIMIT", "namespace_id": "8100", "simple": { "limit": 10, "period": 60 } }
+    { "name": "ACCOUNT_RATE_LIMIT", "namespace_id": "8100", "simple": { "limit": 10, "period": 60 } },
+    // mission-control: job page view beacon (PJ-37), 30 views a minute per visitor.
+    { "name": "JOB_VIEW_RATE_LIMIT", "namespace_id": "8110", "simple": { "limit": 30, "period": 60 } }
   ]
 }
