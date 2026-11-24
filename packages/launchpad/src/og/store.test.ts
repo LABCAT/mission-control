@@ -151,11 +151,35 @@ describe('share image store', () => {
     expect(new Uint8Array(await second.arrayBuffer())).toEqual(png(5))
   })
 
-  it('sets an immutable cache-control and the version as its ETag @S-258', async () => {
+  it('sets a revalidating cache-control and the version as its ETag @S-258', async () => {
     const res = await servedPng('jobs/a', 'abc123', async () => png(1), {})
 
-    expect(res.headers.get('cache-control')).toContain('immutable')
+    // The URL is fixed per page, so it must expire: an immutable image would show a stale card
+    // for a job that has been edited since it was cached.
+    expect(res.headers.get('cache-control')).not.toContain('immutable')
+    expect(res.headers.get('cache-control')).toContain('max-age=300')
     expect(res.headers.get('etag')).toBe('"abc123"')
     expect(res.headers.get('x-og-version')).toBe('abc123')
+  })
+
+  it('answers a matching If-None-Match with a 304 and no render @S-257', async () => {
+    const render = vi.fn<() => Promise<Uint8Array>>().mockResolvedValue(png(1))
+
+    const fresh = await servedPng('jobs/a', 'abc123', render, {})
+    const revalidated = await servedPng('jobs/a', 'abc123', render, {
+      ifNoneMatch: fresh.headers.get('etag')!,
+    })
+
+    expect(revalidated.status).toBe(304)
+    expect(revalidated.headers.get('etag')).toBe('"abc123"')
+    expect(render).toHaveBeenCalledTimes(1)
+  })
+
+  it('renders when the If-None-Match names another version @S-257', async () => {
+    const render = vi.fn<() => Promise<Uint8Array>>().mockResolvedValue(png(1))
+    const res = await servedPng('jobs/a', 'abc123', render, { ifNoneMatch: '"old000"' })
+
+    expect(res.status).toBe(200)
+    expect(render).toHaveBeenCalledTimes(1)
   })
 })

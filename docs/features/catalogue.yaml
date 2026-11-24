@@ -3588,12 +3588,13 @@ stories:
     steps:
       - "Request an image twice, then request it after the edge cache is cleared."
       - "Change the job and request it again."
-    expected: "The second request is served the same bytes; after a lost edge entry the PNG comes back from R2; a changed version misses both stores and re-renders, leaving the old entry unreachable. A failed render is not stored, storage failures still serve the image, and the response is immutable with the version as its ETag."
+    expected: "The second request is served the same bytes; after a lost edge entry the PNG comes back from R2; a changed version misses both stores and re-renders, leaving the old entry unreachable. A failed render is not stored, and storage failures still serve the image. The response carries the version as its ETag and a short max-age rather than immutable, so a cached copy is revalidated and an edited job is not previewed from a stale image; a client that revalidates an unchanged card gets a 304 and costs no render."
     settings: []
     mvp: true
     status: built
     tests:
       - packages/launchpad/src/og/store.test.ts
+      - apps/vwok/src/og-handler.test.ts
 
   - id: S-259
     area: Share images

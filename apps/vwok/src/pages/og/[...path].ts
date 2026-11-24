@@ -20,7 +20,7 @@ import { cmsFromEnv } from '../../site'
 const notFound = (): Response =>
   new Response('Not found', { headers: { 'content-type': 'text/plain' }, status: 404 })
 
-export const GET: APIRoute = async ({ params, site, url }) => {
+export const GET: APIRoute = async ({ params, request, site, url }) => {
   // `path` is the catch-all without its prefix, so put `/og` back before matching.
   const route = ogRoute(`/og/${params.path ?? ''}`)
   if (!route) return notFound()
@@ -35,6 +35,8 @@ export const GET: APIRoute = async ({ params, site, url }) => {
 
   return servedPng(key, version, () => ogRenderer().png(result.card), {
     ...(env.OG_IMAGES ? { bucket: env.OG_IMAGES } : {}),
+    // An unchanged card is a 304: the client keeps its copy and we skip the render.
+    ifNoneMatch: request.headers.get('if-none-match'),
     namespace: `og:${origin}`,
   })
 }

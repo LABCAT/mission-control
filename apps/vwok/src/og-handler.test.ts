@@ -60,9 +60,10 @@ const { GET } = await import('./pages/og/[...path]')
 // depend on the network. The fallback here is a site logo path, so the fetch fails fast.
 const ORIGIN = 'http://127.0.0.1:9'
 
-const request = (path: string) =>
+const request = (path: string, headers: Record<string, string> = {}) =>
   ({
     params: { path },
+    request: new Request(`${ORIGIN}/og/${path}`, { headers }),
     site: new URL(ORIGIN),
     url: new URL(`${ORIGIN}/og/${path}`),
   }) as unknown as Parameters<typeof GET>[0]
@@ -108,6 +109,16 @@ describe('share image route handler @S-250', () => {
     expect(afterBytes).not.toEqual(beforeBytes)
     // The version changed, the key did not: one object per page, overwritten.
     expect([...bucket.objects.keys()].at(-1)).toBe(key)
+  })
+
+  it('answers a revalidation of an unchanged job with a 304 @S-257', async () => {
+    const first = await GET(request('jobs/head-chef.png'))
+    const etag = first.headers.get('etag')!
+
+    const revalidated = await GET(request('jobs/head-chef.png', { 'if-none-match': etag }))
+
+    expect(revalidated.status).toBe(304)
+    expect(await revalidated.arrayBuffer()).toHaveProperty('byteLength', 0)
   })
 
   it('answers the home page PNG @S-254', async () => {

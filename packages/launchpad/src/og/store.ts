@@ -29,6 +29,8 @@ export type PngBucket = {
 
 export type OgStoreOptions = {
   bucket?: PngBucket
+  /** The request's `If-None-Match`, so an unchanged card is a 304 rather than a re-send. */
+  ifNoneMatch?: null | string
   cache?: CacheLike
   /** Cache and tag namespace. Default `og`. */
   namespace?: string
@@ -37,9 +39,18 @@ export type OgStoreOptions = {
 }
 
 const ORIGIN = 'https://og.mission-control.invalid'
-/** A share image is immutable for its version, so it may be held for a long time. */
+/**
+ * How long the edge keeps an entry. Safe to be long: the entry is keyed by the card's version, so
+ * a changed card never reads it. This is our own cache, not a browser's.
+ */
 const DEFAULT_TTL_SECONDS = 60 * 60 * 24 * 7
-const CACHE_CONTROL = `public, max-age=${DEFAULT_TTL_SECONDS}, immutable`
+/**
+ * What a browser or a CDN in front of us may do. The URL is fixed per page, so it must not be
+ * immutable: a scraper that held it for a week would keep the card of a job that has since been
+ * edited. Five minutes of staleness is fine for a preview, and after that the revalidation is a
+ * 304 against the version, which costs no render.
+ */
+const CACHE_CONTROL = 'public, max-age=300, stale-while-revalidate=86400'
 
 export const PNG_CONTENT_TYPE = 'image/png'
 
@@ -92,8 +103,21 @@ export const servedPng = async (
   key: string,
   version: string,
   render: () => Promise<Uint8Array>,
-  { bucket, cache = defaultCache(), namespace = 'og', ttlSeconds = DEFAULT_TTL_SECONDS }: OgStoreOptions = {},
+  {
+    bucket,
+    cache = defaultCache(),
+    ifNoneMatch,
+    namespace = 'og',
+    ttlSeconds = DEFAULT_TTL_SECONDS,
+  }: OgStoreOptions = {},
 ): Promise<Response> => {
+  if (ifNoneMatch && matchesVersion(ifNoneMatch, version)) {
+    return new Response(null, {
+      headers: { 'cache-control': CACHE_CONTROL, etag: `"${version}"`, 'x-og-version': version },
+      status: 304,
+    })
+  }
+
   const request = edgeRequest(namespace, key, version)
 
   if (cache && ttlSeconds > 0) {
@@ -127,6 +151,10 @@ export const servedPng = async (
 
   return response(body, version)
 }
+
+/** `If-None-Match` may list several tags, weakly or strongly quoted. */
+const matchesVersion = (header: string, version: string): boolean =>
+  header.split(',').some((tag) => tag.trim().replace(/^W\//, '').replace(/"/g, '') === version)
 
 /** The R2 key for a card: one object per page, overwritten as the page changes. */
 export const ogKey = (kind: string, site: string, slug?: string): string =>
