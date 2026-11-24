@@ -17,6 +17,11 @@ type Props = {
   volunteerLabel?: string
   /** Whether the viewed-jobs pill reserves a slot. Off for a page that ships no script. */
   viewedSlot?: boolean
+  /**
+   * The level of the title. It is `h3` by default (a card under a section heading); a page whose
+   * cards sit directly under its `h1` passes `2`, so the outline has no gap.
+   */
+  headingLevel?: 2 | 3
 }
 
 const {
@@ -27,7 +32,10 @@ const {
   featuredLabel = 'Featured',
   volunteerLabel = 'Voluntary',
   viewedSlot = false,
+  headingLevel = 3,
 } = Astro.props as Props
+
+const Heading = `h${headingLevel}` as 'h2' | 'h3'
 
 const jobId = job.id != null ? String(job.id) : job.url
 
@@ -44,9 +52,9 @@ const closes = job.closes ? formatDate(job.closes, { locale, timezone }) : undef
 ---
 
 <Card as="article" data-job-id={jobId}>
-  <h3 class="rs-card__title">
+  <Heading class="rs-card__title">
     <a class="rs-card__link" href={job.url}>{job.title}</a>
-  </h3>
+  </Heading>
   <p class="lp-job__org">
     {job.organisation.url ? (
       <a class="lp-job__org-link" href={job.organisation.url}>{job.organisation.name}</a>
