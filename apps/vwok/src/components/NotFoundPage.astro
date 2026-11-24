@@ -1,5 +1,9 @@
 ---
+import Button from '@labcat2020/rocketship/components/Button'
 import Container from '@labcat2020/rocketship/components/Container'
+import Field from '@labcat2020/rocketship/components/Field'
+import Input from '@labcat2020/rocketship/components/Input'
+import Label from '@labcat2020/rocketship/components/Label'
 import Stack from '@labcat2020/rocketship/components/Stack'
 import Typography from '@labcat2020/rocketship/components/Typography'
 
@@ -19,6 +23,18 @@ type Props = {
 const { gone = false, menus = [], path } = Astro.props as Props
 const primary = menuFor(menus, 'primary')
 const footer = menuFor(menus, 'footer')
+
+const title = gone ? 'This page has been removed' : 'Page not found'
+const lead = gone
+  ? 'The job or page that used to be here has been taken down for good. Search for a current job instead.'
+  : 'That page has moved or never existed. Search for a job instead, or start from one of these:'
+
+/** The three places a lost visitor is most likely to want; the search form covers the rest. */
+const LINKS = [
+  { href: '/', label: 'Home' },
+  { href: '/jobs', label: 'All jobs' },
+  { href: '/organisations', label: 'Organisations' },
+] as const
 ---
 
 <SiteLayout noindex path={path} title={`${gone ? "Page removed" : "Page not found"} | Vanuatu Wok`}>
@@ -31,10 +47,34 @@ const footer = menuFor(menus, 'footer')
   <Container size="wide">
     <Stack gap="large">
       <Typography>
-        <h1>{gone ? 'This page has been removed' : 'Page not found'}</h1>
-        <p>{gone ? 'This job closed some time ago and is no longer available.' : 'That page has moved or never existed.'}</p>
-        <p><a href="/">Go to the home page</a></p>
+        <h1>{title}</h1>
+        <p>{lead}</p>
       </Typography>
+
+      {/* A plain GET form: it works with JavaScript off, and the listing is server-rendered. */}
+      <form action="/jobs" method="get" role="search">
+        <Stack gap="small">
+          <Field>
+            <Label for="not-found-q">Search jobs</Label>
+            <Input id="not-found-q" name="q" placeholder="Job title, skill or employer" type="search" />
+          </Field>
+          <div>
+            <Button type="submit">Search</Button>
+          </div>
+        </Stack>
+      </form>
+
+      <nav aria-label="Suggested pages">
+        <ul class="lp-not-found__links">
+          {
+            LINKS.map((link) => (
+              <li>
+                <a href={link.href}>{link.label}</a>
+              </li>
+            ))
+          }
+        </ul>
+      </nav>
     </Stack>
   </Container>
 </SiteLayout>
@@ -43,4 +83,14 @@ const footer = menuFor(menus, 'footer')
   .lp-footer__nav {
     margin-block-end: var(--rs-space-3);
   }
+
+  .lp-not-found__links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--rs-space-3);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
 </style>
+
