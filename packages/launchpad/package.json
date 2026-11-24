@@ -9,6 +9,7 @@
     "./components/*": "./src/components/*.astro",
     "./cms": "./src/cms/index.ts",
     "./jobs": "./src/jobs/listing.ts",
+    "./jobs/*": "./src/jobs/*.ts",
     "./pages": "./src/pages/index.ts",
     "./seo": "./src/seo/index.ts",
     "./seo/*": "./src/seo/*.ts",

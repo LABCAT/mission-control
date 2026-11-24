@@ -513,6 +513,18 @@ export interface Tenant {
    */
   jobModeration?: ('legacy' | 'review' | 'auto') | null;
   /**
+   * What a visitor sees on a job that has closed.
+   */
+  expiredJobMode?: ('notice' | 'gone') | null;
+  /**
+   * Months after an expiry before the page turns into 410 Gone. 0 keeps the notice page for ever.
+   */
+  expiredJobGoneAfterMonths?: number | null;
+  /**
+   * Show “N views” on a job page. The count comes from the view beacon after the page loads.
+   */
+  publicJobViews?: boolean | null;
+  /**
    * When on, only signed-in accounts can apply to a job. Off: guests can apply with an email address.
    */
   accountRequiredToApply?: boolean | null;
@@ -1662,6 +1674,16 @@ export interface Job {
       }[]
     | null;
   views?: number | null;
+  /**
+   * Views per day, newest first. Written by the view beacon.
+   */
+  viewDays?:
+    | {
+        day: string;
+        count: number;
+        id?: string | null;
+      }[]
+    | null;
   /**
    * WordPress post id, for the import.
    */
@@ -2815,6 +2837,9 @@ export interface TenantsSelect<T extends boolean = true> {
         exemptXeroTaxType?: T;
       };
   jobModeration?: T;
+  expiredJobMode?: T;
+  expiredJobGoneAfterMonths?: T;
+  publicJobViews?: T;
   accountRequiredToApply?: T;
   emailFromName?: T;
   emailFromAddress?: T;
@@ -3144,6 +3169,13 @@ export interface JobsSelect<T extends boolean = true> {
         id?: T;
       };
   views?: T;
+  viewDays?:
+    | T
+    | {
+        day?: T;
+        count?: T;
+        id?: T;
+      };
   legacyId?: T;
   updatedBy?: T;
   updatedAt?: T;
