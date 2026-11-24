@@ -8,6 +8,9 @@ export default defineConfig({
   site: 'https://vanuatuwok.vu',
   // Image variants come from R2 (PJ-10), so the Worker never transforms images. This also keeps
   // the "IMAGES" binding, which is billed per transformation, off the Worker.
+  // Critical CSS (PJ-44): the whole stylesheet is a few KB, so it is inlined in every page and no
+  // CSS file blocks the first paint. Pages are cached at the edge, so the bytes are paid once.
+  build: { inlineStylesheets: 'always' },
   adapter: cloudflare({ imageService: 'passthrough' }),
   // The site has no server-side session: accounts live in an httpOnly cookie the astro
   // endpoints set (docs/ACCOUNT-AUTH.md), not in Astro's session store.

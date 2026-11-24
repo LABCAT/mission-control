@@ -8,6 +8,7 @@
     "build": "astro build",
     "dev": "astro dev",
     "lighthouse": "astro build && lhci autorun",
+    "lighthouse:listing": "pnpm --filter @mission-control/launchpad build && lhci autorun --config=lighthouserc.listing.json",
     "preview": "astro preview",
     "test": "vitest run",
     "typecheck": "astro check"

@@ -7,6 +7,7 @@
  */
 import JobDetailPage from '@mission-control/launchpad/components/JobDetailPage'
 
+import BrandHead from '../../components/BrandHead.astro'
 import NotFoundPage from '../../components/NotFoundPage.astro'
 import { siteEnv } from '../../env'
 import { jobRoute } from '../../job-route'
@@ -32,7 +33,9 @@ if (route.kind === 'not-found') Astro.response.status = 404
       siteUrl={origin}
       view={route.view}
       viewEndpoint={`/api/jobs/${encodeURIComponent(String(route.view.detail.id))}/view`}
-    />
+    >
+      <BrandHead slot="head" />
+    </JobDetailPage>
   ) : (
     <NotFoundPage gone={route.kind === 'gone'} path={Astro.url.pathname} />
   )
