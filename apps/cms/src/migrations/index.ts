@@ -32,6 +32,7 @@ import * as migration_20261124_044341_form_map_blocks from './20261124_044341_fo
 import * as migration_20261124_051310_job_detail_views from './20261124_051310_job_detail_views';
 import * as migration_20261124_081812_org_directory from './20261124_081812_org_directory';
 import * as migration_20261124_084533_pack_credit_timing from './20261124_084533_pack_credit_timing';
+import * as migration_20261124_091222_application_retention from './20261124_091222_application_retention';
 
 export const migrations = [
   {
@@ -202,6 +203,11 @@ export const migrations = [
   {
     up: migration_20261124_084533_pack_credit_timing.up,
     down: migration_20261124_084533_pack_credit_timing.down,
-    name: '20261124_084533_pack_credit_timing'
+    name: '20261124_084533_pack_credit_timing',
+  },
+  {
+    up: migration_20261124_091222_application_retention.up,
+    down: migration_20261124_091222_application_retention.down,
+    name: '20261124_091222_application_retention'
   },
 ];
