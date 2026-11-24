@@ -164,7 +164,15 @@ export default buildConfig({
       tenancy: 'multi',
     }),
     // mission-control: add-ons (PJ-115), after payloadJobs(). Tenants switch them with `addOns`.
-    payloadJobsAlerts({ slug: ALERT_SUBSCRIPTIONS_SLUG }),
+    // mission-control: alert subscribe/confirm/manage/unsubscribe endpoints (PJ-47). Turnstile
+    // and the account rate limit are the same ones the forms and account endpoints use. The
+    // email seam (`sendEmail`) is PJ-50's `sendTemplate`: until that is merged no alert email
+    // can leave, and the endpoints answer 503 `email_not_configured` instead of dropping it.
+    payloadJobsAlerts({
+      rateLimiter: () => workerEnv?.ACCOUNT_RATE_LIMIT,
+      slug: ALERT_SUBSCRIPTIONS_SLUG,
+      turnstile: { secret: () => workerEnv?.TURNSTILE_SECRET_KEY ?? process.env.TURNSTILE_SECRET_KEY },
+    }),
     payloadJobsReports(),
     // mission-control: Xero add-on (PJ-57): settings, OAuth, order invoices and their retry task.
     // Secrets are read per request in Workers; the Node CLI falls back to the XERO_* env vars.

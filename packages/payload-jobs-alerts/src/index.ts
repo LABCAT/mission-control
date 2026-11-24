@@ -8,6 +8,10 @@ import {
   type CollectionAccess,
 } from '@mission-control/payload-jobs'
 
+import { alertEndpoints, type AlertEndpointsOptions } from './endpoints'
+import { ALERT_EMAIL_EVENT_DEFINITIONS } from './email'
+import { alertSettingsFields } from './settings'
+import { ALERTS_ADD_ON_KEY } from './service'
 import {
   ALERT_SUBSCRIPTIONS_SLUG,
   alertSubscriptionCollection,
@@ -16,11 +20,14 @@ import {
 } from './subscriptions'
 
 export * from './subscriptions'
+export * from './email'
+export * from './endpoints'
+export * from './filters'
+export * from './service'
+export * from './settings'
+export * from './tokens'
 
-/** The key tenants list in their `addOns` setting. */
-export const ALERTS_ADD_ON_KEY = 'alerts'
-
-export type PayloadJobsAlertsOptions = {
+export type PayloadJobsAlertsOptions = Omit<AlertEndpointsOptions, 'alertsSlug' | 'slugs' | 'tenantsSlug'> & {
   /** Overrides the collection's access, operation by operation (before the add-on gate). */
   access?: CollectionAccess
   /** Turn the add-on off without removing it from the config. Defaults to true. */
@@ -62,6 +69,16 @@ export const payloadJobsAlerts =
       label: 'Job alerts',
     })
 
+    // The events and variables PJ-50/PJ-51 build templates for.
+    for (const event of ALERT_EMAIL_EVENT_DEFINITIONS) {
+      registry.emailEvents.register({
+        ...event,
+        blocks: [],
+        recipients: [...event.recipients],
+        variables: [...event.variables],
+      })
+    }
+
     const gate = { key: ALERTS_ADD_ON_KEY, registry }
     const base = alertSubscriptionCollection({ access: options.access, slug, slugs, tenantScoped })
     const access = base.access ?? {}
@@ -91,6 +108,15 @@ export const payloadJobsAlerts =
         : removeTenantAlertSubscriptionsFor(slug),
     )
 
+    // The public endpoints live on the tenants collection, like the account and form ones, and
+    // the per-tenant settings are fields on it (or on the settings global of a single site).
+    const endpoints = alertEndpoints({
+      ...options,
+      alertsSlug: slug,
+      slugs,
+      tenantsSlug,
+    })
+
     return {
       ...incoming,
       collections: [
@@ -98,6 +124,8 @@ export const payloadJobsAlerts =
           tenantScoped && existing.slug === tenantsSlug
             ? {
                 ...existing,
+                endpoints: [...(Array.isArray(existing.endpoints) ? existing.endpoints : []), ...endpoints],
+                fields: [...existing.fields, ...alertSettingsFields()],
                 hooks: {
                   ...existing.hooks,
                   beforeDelete: [...(existing.hooks?.beforeDelete ?? []), removeSubscribers],
@@ -107,5 +135,14 @@ export const payloadJobsAlerts =
         ),
         collection,
       ],
+      ...(tenantScoped
+        ? {}
+        : {
+            globals: (incoming.globals ?? []).map((global) =>
+              global.slug === registry.context.settingsSlug
+                ? { ...global, fields: [...global.fields, ...alertSettingsFields()] }
+                : global,
+            ),
+          }),
     }
   }

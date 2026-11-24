@@ -22,7 +22,7 @@ PAYLOAD_SECRET=change-me-to-a-long-random-string
 # EMAIL_REDIRECT_TO=
 # ENVIRONMENT=production
 
-# Turnstile for public form submissions (PJ-102). Optional locally: without it
-# POST /api/tenants/:slug/forms/submit answers form_not_configured. In production set it as a
+# Turnstile for public form submissions (PJ-102) and job alert sign-ups (PJ-47). Optional locally:
+# without it POST /api/tenants/:slug/forms/submit and /alerts/subscribe answer an error. In production set it as a
 # Worker secret (`wrangler secret put TURNSTILE_SECRET_KEY`), never committed.
 # TURNSTILE_SECRET_KEY=
