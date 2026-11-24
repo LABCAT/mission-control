@@ -121,6 +121,34 @@ describe('view as: /api/me for the banner @S-160', () => {
 
       expect(response.status).toBe(401)
       expect(setCookies(response)[0]).toMatch(/^impersonating=; Max-Age=0/)
+      // The signed-in hint goes too, so the header goes back to "Sign in" (S-082).
+      expect(setCookies(response)).toContainEqual(expect.stringMatching(/^signed_in=; Max-Age=0/))
     }
+  })
+
+  it('clears the dead session cookie as well, but only when there was one', async () => {
+    mockCMS({ body: {}, status: 401 })
+
+    expect(setCookies(await handleMe(me('mc_session=expired'), env))).toContainEqual(
+      expect.stringMatching(/^mc_session=; HttpOnly; Max-Age=0/),
+    )
+    expect(setCookies(await handleMe(me(), env)).join()).not.toContain('mc_session')
+  })
+
+  it('serves a signed-in visitor and replaces the cookies when the CMS rolled the session @S-080', async () => {
+    mockCMS({
+      body: {
+        session: { exp: 1, expiresIn: 2_592_000, token: 'jwt.new' },
+        user: { email: 'a@b.co', firstName: 'Ada', id: 5, lastName: null, role: 'seeker' },
+      },
+    })
+    const response = await handleMe(me('mc_session=jwt.old; signed_in=1'), env)
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ user: { firstName: 'Ada', lastName: null }, viewAs: false })
+    expect(setCookies(response)).toEqual([
+      'mc_session=jwt.new; HttpOnly; Max-Age=2592000; Path=/; SameSite=Lax; Secure',
+      'signed_in=1; Max-Age=2592000; Path=/; SameSite=Lax; Secure',
+    ])
   })
 })

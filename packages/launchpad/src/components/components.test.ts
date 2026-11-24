@@ -89,6 +89,18 @@ describe('BaseLayout', () => {
     }
   })
 
+  it('swaps "Sign in" from the hint cookie without changing the cached markup @S-082', async () => {
+    const html = await container.renderToString(BaseLayout, {
+      props: { path: '/', tenant, title: 'Any' },
+      slots: { default: '' },
+    })
+
+    // The same HTML for everyone: the script reads the hint cookie, the markup holds no user.
+    expect(html).toContain('signed_in=1')
+    expect(html).toContain('/api/me')
+    expect(html.indexOf('signed_in=1')).toBeGreaterThan(html.indexOf('</footer>'))
+  })
+
   it('writes a canonical link, the language, and the title', async () => {
     const html = await container.renderToString(BaseLayout, {
       props: {

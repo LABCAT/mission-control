@@ -1,0 +1,64 @@
+---
+/**
+ * `/account/sign-in` (PJ-109): "send me a code". A plain form that posts to
+ * `/account/sign-in/request`, so it works with JavaScript off (Turnstile is the one exception:
+ * it needs its widget, and says so). Never cached and never indexed.
+ */
+import Button from '@labcat2020/rocketship/components/Button'
+import Checkbox from '@labcat2020/rocketship/components/Checkbox'
+import Container from '@labcat2020/rocketship/components/Container'
+import Field from '@labcat2020/rocketship/components/Field'
+import Input from '@labcat2020/rocketship/components/Input'
+import Label from '@labcat2020/rocketship/components/Label'
+import Turnstile from '@mission-control/launchpad/components/Turnstile'
+import { safeReturnPath } from '@mission-control/launchpad/sign-in'
+
+import SiteLayout from '../../../layouts/SiteLayout.astro'
+import { siteTenant } from '../../../brand'
+
+export const prerender = false
+
+Astro.response.headers.set('cache-control', 'private, no-store')
+
+const returnTo = safeReturnPath(Astro.url.searchParams.get('returnTo'))
+const error = Astro.url.searchParams.get('error')
+const messages: Record<string, string> = {
+  invalid_request: 'Enter a valid email address.',
+  link: 'That sign-in link has expired or was already used. Ask for a new one.',
+  rate_limited: 'Too many attempts. Wait a minute and try again.',
+  turnstile_failed: 'Complete the verification and try again.',
+  unavailable: 'Sign-in is not available right now. Try again in a few minutes.',
+}
+const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY as string | undefined
+---
+
+<SiteLayout noindex path="/account/sign-in" title={`Sign in | ${siteTenant.name}`}>
+  <Container>
+    <h1>Sign in</h1>
+    <p>
+      Enter your email address and we will send you a code and a sign-in link. There is no password
+      to remember.
+    </p>
+    {error && messages[error] && <p role="alert">{messages[error]}</p>}
+    <form action="/account/sign-in/request" method="post">
+      {returnTo && <input type="hidden" name="returnTo" value={returnTo} />}
+      <Field>
+        <Label for="sign-in-email">Email address</Label>
+        <Input
+          autocomplete="email"
+          id="sign-in-email"
+          inputmode="email"
+          name="email"
+          required
+          type="email"
+        />
+      </Field>
+      <Field inline>
+        <Checkbox id="sign-in-keep" name="keepSignedIn" />
+        <Label for="sign-in-keep">Keep me signed in</Label>
+      </Field>
+      {siteKey && <Turnstile action="sign-in" siteKey={siteKey} />}
+      <Button type="submit">Send me a code</Button>
+    </form>
+  </Container>
+</SiteLayout>

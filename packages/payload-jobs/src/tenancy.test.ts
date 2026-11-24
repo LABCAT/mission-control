@@ -93,6 +93,9 @@ describe('payloadJobs tenancy modes', () => {
       'post /:slug/account/verify-email',
       'post /:slug/account/view-as/redeem',
       'post /:slug/account/view-as/exit',
+      // Email sign-in: magic link + code (PJ-109).
+      'post /:slug/account/sign-in/request',
+      'post /:slug/account/sign-in/verify',
       // Checkout for the /account dashboard (PJ-31).
       'post /:slug/account/checkout/quote',
       'post /:slug/account/checkout',

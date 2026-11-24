@@ -112,8 +112,9 @@ describe('PageView', () => {
     // The only script is the view-as banner's inline snippet (PJ-119), which renders nothing
     // unless the hint cookie is set, so the cached HTML stays the same for every visitor.
     const scripts = html.match(/<script[^>]*>/g) ?? []
-    expect(scripts).toHaveLength(1)
-    expect(scripts[0]).not.toContain('src=')
+    // Two inline snippets, no file: the view-as banner (PJ-119) and the signed-in link swap (PJ-109).
+    expect(scripts).toHaveLength(2)
+    expect(scripts.some((script) => script.includes('src='))).toBe(false)
   })
 
   it('keeps the page out of the index when its SEO says so @S-292', async () => {
@@ -206,8 +207,9 @@ describe('organisation directory block (PJ-38)', () => {
     expect(html).not.toContain('astro-island')
     expect(html).not.toContain('type="module"')
     const scripts = html.match(/<script[^>]*>/g) ?? []
-    expect(scripts).toHaveLength(1)
-    expect(scripts[0]).not.toContain('src=')
+    // Two inline snippets, no file: the view-as banner (PJ-119) and the signed-in link swap (PJ-109).
+    expect(scripts).toHaveLength(2)
+    expect(scripts.some((script) => script.includes('src='))).toBe(false)
   })
 
   it('hides a filter the block turns off and shows an empty state @S-223', async () => {

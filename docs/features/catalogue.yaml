@@ -1371,8 +1371,9 @@ stories:
       - sessions.defaultDays
       - sessions.keepSignedInDays
     mvp: true
-    status: planned
-    tests: []
+    status: built
+    tests:
+      - packages/payload-jobs/src/sign-in.test.ts
 
   - id: S-081
     area: Accounts
@@ -1384,8 +1385,10 @@ stories:
     settings:
       - accounts.returnUrl
     mvp: true
-    status: planned
-    tests: []
+    status: built
+    tests:
+      - packages/launchpad/src/sign-in/index.test.ts
+      - apps/vwok/src/sign-in-handlers.test.ts
 
   - id: S-082
     area: Accounts
@@ -1397,8 +1400,12 @@ stories:
     settings:
       - accounts.signedInHint
     mvp: true
-    status: planned
-    tests: []
+    status: built
+    tests:
+      - packages/launchpad/src/sign-in/index.test.ts
+      - packages/launchpad/src/components/components.test.ts
+      - apps/vwok/src/sign-in-handlers.test.ts
+      - apps/vwok/src/view-as-handlers.test.ts
 
   - id: S-083
     area: Accounts
@@ -3459,3 +3466,37 @@ stories:
     tests:
       - packages/payload-jobs/src/checkout.integration.test.ts
       - packages/payload-jobs/src/admin/ApproveJobButton.test.ts
+
+  - id: S-196
+    area: Accounts
+    role: seeker
+    story: "A seeker signs in with their email: one message carries a sign-in link for this device and a 6-digit code for another."
+    steps:
+      - "Ask for a code, then open the link on the same device, or type the code on another."
+      - "Ask again straight away, wait 30 seconds and ask again, then use the old code."
+      - "Type wrong codes, wait 15 minutes, or reuse a code that already worked."
+      - "Try the same address on another site."
+    expected: "The code and the link work once and expire after 15 minutes. Five wrong codes spend it. A second request within 30 seconds sends nothing new. Requests are limited per visitor and per address and need Turnstile. The answer is the same for an unknown address, a member of another site, and a real account, and a code from one site never works on another."
+    settings:
+      - security.rateLimits
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/sign-in.test.ts
+      - apps/vwok/src/sign-in-handlers.test.ts
+
+  - id: S-197
+    area: Accounts
+    role: seeker
+    story: "Passwords stay optional: a person can still sign in with a password, and an old WordPress password keeps working and is upgraded."
+    steps:
+      - "Sign in with a password, with and without Keep me signed in."
+      - "Sign in with a password imported from the old site."
+    expected: "Password sign-in uses the same session lengths as email sign-in. The old hash is replaced on first use. A person with no password can sign in by email."
+    settings:
+      - sessions.defaultDays
+      - sessions.keepSignedInDays
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/sign-in.test.ts

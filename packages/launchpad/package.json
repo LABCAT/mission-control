@@ -15,6 +15,7 @@
     "./redirects": "./src/redirects/index.ts",
     "./redirects/*": "./src/redirects/*.ts",
     "./seo": "./src/seo/index.ts",
+    "./sign-in": "./src/sign-in/index.ts",
     "./seo/*": "./src/seo/*.ts",
     "./tenant/*": "./src/tenant/*.ts",
     "./view-as": "./src/view-as/index.ts"
