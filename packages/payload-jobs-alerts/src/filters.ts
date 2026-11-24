@@ -62,7 +62,7 @@ type IDLike = number | string | { id?: number | string }
 const idOf = (value: IDLike): string => String(typeof value === 'object' ? (value.id ?? '') : value)
 
 const idsKey = (values: IDLike[] | null | undefined): string =>
-  [...new Set((values ?? []).map(idOf).filter(Boolean))].toSorted().join(',')
+  [...new Set((values ?? []).map(idOf).filter(Boolean))].sort().join(',')
 
 /**
  * The identity of a search: the same filters give the same key however they were typed, so two
