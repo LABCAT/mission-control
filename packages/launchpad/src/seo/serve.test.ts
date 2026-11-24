@@ -109,9 +109,8 @@ describe('loadSitemap @S-123', () => {
 
     expect(JSON.stringify(queryFor('jobs'))).toContain('"status":{"equals":"published"}')
     expect(JSON.stringify(queryFor('jobs'))).toContain(NOW.toISOString())
-    expect(queryFor('organisations')).toEqual({
-      where: { and: [{ approved: { equals: true } }, { pageEnabled: { equals: true } }] },
-    })
+    // No where: the CMS only returns organisations it calls public to a site key (PJ-38).
+    expect(queryFor('organisations')).toEqual({})
     expect(queryFor('pages')).toEqual({ draft: false })
   })
 

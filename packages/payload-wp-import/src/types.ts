@@ -17,6 +17,8 @@ export type ImportPayload = {
   db?: { create: (args: { collection: any; data: any }) => Promise<{ id: number | string }> }
   create: (args: {
     collection: any
+    /** Request context for the collection's hooks (see `MappedDoc.createContext`). */
+    context?: Record<string, unknown>
     data: any
     overrideAccess?: boolean
   }) => Promise<{ id: number | string }>
@@ -59,6 +61,11 @@ export type MappedDoc = {
    */
   rawCreate?: boolean
   /**
+   * Hook context passed to `payload.create`. For a hook that guards a field the import must
+   * set once, such as a coupon's use count.
+   */
+  createContext?: Record<string, unknown>
+  /**
    * Hook context passed to `payload.update` on a re-run. For a hook that guards a field the
    * import must set, such as the job view counter.
    */
@@ -75,6 +82,15 @@ export type SkippedRow = { skip: string }
 export type Importer<Row = any> = {
   /** Slug of the Payload collection that receives the mapped documents. */
   collection: string
+  /**
+   * Find a document that already exists under another key than `legacyId`. Tried after the
+   * `legacyId` lookup misses, so it runs once per document: the page importer adopts the
+   * system page a site was seeded with (home, about, contact, organisations) instead of
+   * creating a second one, and writes `legacyId` onto it for the next run.
+   */
+  findExisting?: (
+    args: { ctx: ImportContext; data: Record<string, unknown>; legacyId: number },
+  ) => Promise<{ id: number | string } | undefined>
   /** Names of importers that must run first. */
   dependsOn: string[]
   /**
@@ -89,6 +105,13 @@ export type Importer<Row = any> = {
   read: (reader: MysqlReader) => AsyncIterable<Row> | Iterable<Row>
   /** Extra counts for the summary (rows read, merged, ...), called once the importer has run. */
   report?: () => Record<string, number>
+  /**
+   * For an append-only collection with no `legacyId` field (the credit ledger). Existing rows
+   * are matched on `field` (value from the mapped data) plus the tenant instead of `legacyId`;
+   * the runner does not write `legacyId`; and a row that exists is left alone (counted as
+   * skipped, reason `already-imported`) because the collection refuses updates.
+   */
+  matchBy?: { field: string }
   /**
    * Where the tenant lives on the collection. Default: the runner's `tenantField`, a plain
    * field the runner sets. Users keep it in a `tenants` array, so they use

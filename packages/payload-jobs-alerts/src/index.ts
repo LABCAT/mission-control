@@ -1,9 +1,10 @@
-import type { CollectionBeforeDeleteHook, CollectionConfig, Config, Plugin } from 'payload'
+import type { CollectionConfig, Config, Plugin } from 'payload'
 
 import {
   addOnWriteGuard,
   gateCollectionAccess,
   getPayloadJobsRegistry,
+  tenantCleanup,
   type CollectionAccess,
 } from '@mission-control/payload-jobs'
 
@@ -80,11 +81,15 @@ export const payloadJobsAlerts =
     }
 
     // Deleting a tenant must take its subscribers with it, not detach them. This runs whether
-    // or not the tenant has the add-on on.
-    const removeSubscribers: CollectionBeforeDeleteHook =
+    // or not the tenant has the add-on on. The cleanup marker tells the tenant data guard
+    // (PJ-93) that these rows never outlive the tenant, so they never block its deletion; the
+    // marker matters because this plugin appends after the guard.
+    const removeSubscribers = tenantCleanup(
+      [slug],
       slug === ALERT_SUBSCRIPTIONS_SLUG
         ? removeTenantAlertSubscriptions
-        : removeTenantAlertSubscriptionsFor(slug)
+        : removeTenantAlertSubscriptionsFor(slug),
+    )
 
     return {
       ...incoming,

@@ -17,7 +17,11 @@ describe('payload-jobs-reports plugin @S-147 @S-104 @S-105', () => {
     expect(registry.addOns.has(REPORTS_ADD_ON_KEY)).toBe(true)
     expect(registry.reports.list().map((report) => report.key)).toEqual(['jobs-orders-by-month', 'job-views'])
     expect(registry.reports.list().every((report) => report.addOn === REPORTS_ADD_ON_KEY)).toBe(true)
-    expect(result.endpoints?.map((endpoint) => endpoint.path)).toEqual(['/reports', '/reports/:key/csv'])
+    expect(
+      result.endpoints
+        ?.map((endpoint) => endpoint.path)
+        .filter((path) => path.startsWith('/reports')),
+    ).toEqual(['/reports', '/reports/:key/csv'])
     expect(result.admin?.components?.views?.reports).toMatchObject({ path: '/reports' })
   })
 
