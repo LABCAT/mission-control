@@ -8,6 +8,7 @@ import {
   type PayloadRequest,
 } from 'payload'
 
+import { anonymiseUser } from './anonymise-user'
 import { hasAuditLog, writeAuditLog } from './audit-log'
 import { APPLICATION_FILES_SLUG, APPLICATIONS_SLUG } from './collections/applications'
 import { DEFAULT_PAYLOAD_JOBS_SLUGS, type PayloadJobsCollectionSlugs } from './slugs'
@@ -22,9 +23,12 @@ import { SYSTEM_PAGE_CLEANUP_CONTEXT } from './system-pages'
  * (S-146, S-149), so a tenant that has them cannot be offboarded or deleted at all; the result
  * names them instead.
  *
- * User accounts survive too. Only their memberships of the tenant go, in the host's tenant
- * `beforeDelete` hook (`removeTenantMemberships` in the CMS), so the ledger's `createdBy`
- * cascade never loses its users (PJ-24 review follow-up).
+ * User accounts survive too, and are never hard-deleted. A member of several sites only loses
+ * their membership of this one (the host's tenant `beforeDelete` hook, `removeTenantMemberships`
+ * in the CMS). A member of this site alone would be left with a live account and all their
+ * personal data on no site, so the offboarding run anonymises them with PJ-89's
+ * `anonymiseUser`, scoped to the tenant (decision 19). The row stays, so the ledger's
+ * `createdBy` references survive (PJ-24 review follow-up).
  */
 
 /**
@@ -133,6 +137,47 @@ export const tenantDataCounts = async ({
   }
 
   return counts
+}
+
+const idString = (value: unknown): string =>
+  typeof value === 'object' && value !== null
+    ? String((value as { id?: unknown }).id)
+    : String(value)
+
+/**
+ * Users whose only membership is this tenant: nobody else can manage them once it is gone.
+ * Super admins, and the person running the offboarding, are never included.
+ */
+export const tenantOnlyMembers = async ({
+  actor,
+  payload,
+  req,
+  tenant,
+  usersSlug = 'users',
+}: {
+  actor?: number | string
+  payload: Payload
+  req?: Partial<PayloadRequest>
+  tenant: number | string
+  usersSlug?: string
+}): Promise<(number | string)[]> => {
+  const { docs } = await payload.find({
+    collection: usersSlug as CollectionSlug,
+    depth: 0,
+    overrideAccess: true,
+    pagination: false,
+    ...(req ? { req } : {}),
+    where: { 'tenants.tenant': { in: [tenant] } },
+  })
+
+  return (docs as unknown as { id: number | string; role?: string; tenants?: { tenant?: unknown }[] }[])
+    .filter((user) => user.role !== 'super-admin')
+    .filter((user) => actor === undefined || String(user.id) !== String(actor))
+    .filter((user) => {
+      const sites = new Set((user.tenants ?? []).map((entry) => idString(entry.tenant)))
+      return sites.size === 1 && sites.has(String(tenant))
+    })
+    .map((user) => user.id)
 }
 
 const listed = (entries: TenantDataCount[]): string =>
@@ -279,6 +324,9 @@ const preferredOrder = (slugs: PayloadJobsCollectionSlugs): string[] => [
   slugs.jobTypes,
   slugs.salaryBands,
   slugs.locations,
+  // Submissions point at their form (PJ-102), so they go first.
+  'form-submissions',
+  'forms',
   slugs.pages,
   slugs.menus,
   slugs.coupons,
@@ -311,9 +359,13 @@ export type TenantOffboardingOptions = {
   tenant: number | string
   tenantField?: string
   tenantsSlug?: string
+  /** Slug of the auth collection whose tenant-only members are anonymised. @default 'users' */
+  usersSlug?: string
 }
 
 export type TenantOffboardingResult = {
+  /** Users who belonged to this tenant alone and were anonymised (or, in a dry run, would be). */
+  anonymisedUsers: (number | string)[]
   /** What the run removed, or (in a dry run) what it would remove. */
   removed: TenantDataCount[]
   /** Why a collection was left alone, or why nothing was removed at all. */
@@ -344,6 +396,7 @@ export const offboardTenant = async ({
   tenant,
   tenantField = DEFAULT_TENANT_FIELD,
   tenantsSlug = 'tenants',
+  usersSlug = 'users',
 }: TenantOffboardingOptions): Promise<TenantOffboardingResult> => {
   const accounting = new Set(accountingCollections(slugs))
   const keptSlugs = new Set([...accounting, ...keep])
@@ -361,6 +414,7 @@ export const offboardTenant = async ({
   const blocking = kept.filter(({ slug }) => accounting.has(slug))
   if (blocking.length > 0) {
     return {
+      anonymisedUsers: [],
       errors: blocking.map(({ docs, slug }) => ({
         message: `This tenant has ${docs} ${slug} record${docs === 1 ? '' : 's'}, which are kept for accounting, so it can’t be offboarded`,
         slug,
@@ -375,6 +429,13 @@ export const offboardTenant = async ({
     const bySlug = new Map(counts.map((count) => [count.slug, count.docs]))
 
     return {
+      anonymisedUsers: await tenantOnlyMembers({
+        ...(actor === undefined ? {} : { actor }),
+        payload,
+        req,
+        tenant,
+        usersSlug,
+      }),
       errors: [],
       kept,
       removed: removable.map((slug) => ({ docs: bySlug.get(slug) ?? 0, slug })),
@@ -411,16 +472,53 @@ export const offboardTenant = async ({
     }
   }
 
+  // Members of this site alone are anonymised, never deleted. Only when everything else went:
+  // a refused collection may still hold their data, and a rerun finds them again.
+  const anonymisedUsers: (number | string)[] = []
+  const operator = actor ?? actorID(req)
+
+  if (errors.length === 0 && operator !== undefined) {
+    const members = await tenantOnlyMembers({
+      ...(operator === undefined ? {} : { actor: operator }),
+      payload,
+      req,
+      tenant,
+      usersSlug,
+    })
+
+    for (const userID of members) {
+      try {
+        await anonymiseUser({
+          actorID: operator,
+          auditTenantID: tenant,
+          payload,
+          reason: 'tenant offboarding',
+          ...(req ? { req: req as PayloadRequest } : {}),
+          scopeTenantIDs: [tenant],
+          userID,
+          usersSlug,
+        })
+        anonymisedUsers.push(userID)
+      } catch (error) {
+        errors.push({
+          message: `Could not anonymise user ${userID}: ${error instanceof Error ? error.message : String(error)}`,
+          slug: usersSlug,
+        })
+      }
+    }
+  }
+
   await writeTenantAuditEntry({
     action: 'tenant.offboard',
-    actor: actor ?? actorID(req),
-    detail: { errors, kept, removed },
+    actor: operator,
+    // Counts and ids only: never the personal data that was removed.
+    detail: { anonymisedUsers, errors, kept, removed },
     payload,
     req,
     tenant,
   })
 
-  return { errors, kept, removed, tenant }
+  return { anonymisedUsers, errors, kept, removed, tenant }
 }
 
 /**

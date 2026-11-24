@@ -1,6 +1,10 @@
 import { buildImportPlan, type UserImportOptions } from '../importers/users'
 import type { MysqlReader } from '../mysql-reader'
+import { readLegacySiteChrome, SITE_SETTINGS_LEGACY_ID } from '../site-chrome'
+import { uploadsPathOf } from '../uploads-path'
 import type { MediaKind, MediaRef } from './types'
+
+export { uploadsPathOf }
 
 /**
  * Which legacy files the imported records point at (PJ-63). Nothing here touches a file: it
@@ -43,26 +47,6 @@ type Attachment = { id: number; mime: string; parent: number; path?: string; tit
 /** `2022/03/a-300x200.jpg` → `2022/03/a.jpg`. Only the WordPress generated size suffix. */
 export const originalOfThumbnail = (relative: string): string =>
   relative.replace(/-\d{2,5}x\d{2,5}(\.[A-Za-z0-9]+)$/, '$1')
-
-/**
- * A path inside uploads from what a meta value holds: a URL (`https://x/app/uploads/2020/a.png`)
- * or a relative path. Returns `null` for anything that is not under an `uploads` folder, so a
- * file hosted elsewhere is not guessed at.
- */
-export const uploadsPathOf = (value: string): null | string => {
-  const text = value.trim()
-  if (!text) return null
-  const marker = /\/uploads\/(.+)$/i.exec(text.split(/[?#]/)[0]!)
-  const relative = marker ? marker[1]! : /^[a-z][a-z0-9+.-]*:/i.test(text) ? null : text
-  if (!relative) return null
-  const parts = relative.replaceAll('\\', '/').split('/').filter(Boolean)
-  if (parts.length === 0 || parts.some((part) => part === '..' || part === '.')) return null
-  try {
-    return parts.map((part) => decodeURIComponent(part)).join('/')
-  } catch {
-    return null
-  }
-}
 
 export const isExcluded = (relative: string, excluded: readonly string[]): boolean =>
   excluded.some((folder) => relative === folder || relative.startsWith(`${folder.replace(/\/$/, '')}/`))
@@ -203,6 +187,18 @@ export const buildMediaPlan = async (reader: MysqlReader, options: MediaPlanOpti
     const key = pageKeys.find((candidate) => meta[candidate]?.trim() && resolveValue(meta[candidate]!))
     if (key) add('page-image', { collection: 'pages', legacyId: pageId }, resolveValue(meta[key]!), 'page-image-unresolved')
     else skip('page-image-unresolved')
+  }
+
+  // Site chrome (PJ-67): the header banner images and the logo the site settings hold.
+  const chrome = await readLegacySiteChrome(reader)
+  const settingsOwner = { collection: 'site-settings' as const, legacyId: SITE_SETTINGS_LEGACY_ID }
+  const chromeFiles = [
+    ['banner-desktop', chrome.banner.desktopPath],
+    ['banner-mobile', chrome.banner.mobilePath],
+    ['logo', chrome.logoPath],
+  ] as const
+  for (const [kind, path] of chromeFiles) {
+    if (path) add(kind, settingsOwner, resolveValue(path), `${kind}-unresolved`)
   }
 
   return { refs, skipped }

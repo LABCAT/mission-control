@@ -89,6 +89,11 @@ export const formatOffboardingReport = (result: TenantOffboardingResult): string
       ? `  removed (or would remove): ${listed(result.removed)}`
       : '  removed (or would remove): nothing',
   )
+  if (result.anonymisedUsers.length > 0) {
+    lines.push(
+      `  users anonymised (or would be), members of this site only: ${result.anonymisedUsers.length}`,
+    )
+  }
   lines.push(result.kept.length > 0 ? `  kept: ${listed(result.kept)}` : '  kept: nothing')
 
   for (const error of result.errors) lines.push(`  refused: ${error.slug}: ${error.message}`)

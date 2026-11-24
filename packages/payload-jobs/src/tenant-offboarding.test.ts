@@ -282,13 +282,18 @@ describe('plugin wiring', () => {
     const { tenants } = await build()
     const hooks = tenants?.hooks?.beforeDelete ?? []
 
-    // Orders, credits, this guard, the delete audit entry, then the pages, menus and coupon
-    // cleanups.
-    expect(hooks).toHaveLength(7)
+    // Orders, credits, this guard, the delete audit entry, then the pages, menus, site settings
+    // and coupon cleanups.
+    expect(hooks).toHaveLength(8)
     expect(hooks[2]).toBeTypeOf('function')
     expect(selfCleanedCollections(tenants)).not.toContain('jobs')
-    // The pages, menus and coupons cleanups are marked, so the guard leaves them out.
-    expect(selfCleanedCollections(tenants).sort()).toEqual(['coupons', 'menus', 'pages'])
+    // The pages, menus, site settings and coupons cleanups are marked, so the guard leaves them out.
+    expect(selfCleanedCollections(tenants).sort()).toEqual([
+      'coupons',
+      'menus',
+      'pages',
+      'site-settings',
+    ])
   })
 
   it('honours renamed slugs, including the accounting exclusions @S-270', async () => {
@@ -374,6 +379,7 @@ describe('offboarding audit entries @S-122', () => {
         action: 'tenant.offboard',
         actorID: 'ops@example.com',
         detail: {
+          anonymisedUsers: [],
           errors: [],
           kept: [],
           removed: [{ docs: 1, slug: 'jobs' }],

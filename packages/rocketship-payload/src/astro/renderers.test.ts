@@ -5,7 +5,9 @@ import Banner from './banner.astro'
 import CardGrid from './card-grid.astro'
 import Cta from './cta.astro'
 import FeatureBoxes from './feature-boxes.astro'
+import Form from './form.astro'
 import Hero from './hero.astro'
+import Map from './map.astro'
 
 let container: Awaited<ReturnType<typeof AstroContainer.create>>
 
@@ -93,5 +95,72 @@ describe('renderer href guard', () => {
     })
 
     expect(html).toContain('href="/promo"')
+  })
+})
+
+describe('form renderer @S-320', () => {
+  const form = {
+    fields: [
+      { blockType: 'text', label: 'Your name', name: 'name', required: true },
+      { blockType: 'email', label: 'Email', name: 'email', required: true },
+      { blockType: 'textarea', label: 'Message', name: 'message', required: true },
+    ],
+    id: 7,
+    submitButtonLabel: 'Send message',
+    title: 'Contact',
+  }
+
+  const renderForm = (block: object) =>
+    container.renderToString(Form, { props: { action: '/api/forms', block } })
+
+  it('draws a plain HTML form that posts to the endpoint the site supplies', async () => {
+    const html = await renderForm({ blockType: 'form', form })
+
+    expect(html).toContain('<form')
+    expect(html).toContain('action="/api/forms"')
+    expect(html).toContain('method="POST"')
+    expect(html).toContain('name="name"')
+    expect(html).toContain('name="email"')
+    expect(html).toContain('name="message"')
+    expect(html).toContain('Send message')
+    // The form id travels with the post; the endpoint refuses a form it cannot find.
+    expect(html).toContain('value="7"')
+  })
+
+  it('ships the honeypot and the required markers', async () => {
+    const html = await renderForm({ blockType: 'form', form })
+
+    expect(html).toContain('name="rp-website"')
+    expect(html).toContain('required')
+  })
+
+  it('renders nothing but the heading when the form was not populated', async () => {
+    const html = await renderForm({ blockType: 'form', form: 7, heading: 'Contact us' })
+
+    expect(html).toContain('Contact us')
+    expect(html).not.toContain('<form')
+  })
+})
+
+describe('map renderer @S-321', () => {
+  it('embeds the map in a lazy iframe, so it loads when a visitor scrolls to it', async () => {
+    const html = await render(Map, {
+      blockType: 'map',
+      latitude: -17.7495,
+      longitude: 168.3149,
+      title: 'Our office',
+    })
+
+    expect(html).toContain('<iframe')
+    expect(html).toContain('loading="lazy"')
+    expect(html).toContain('openstreetmap.org/export/embed.html')
+    expect(html).toContain('title="Our office"')
+  })
+
+  it('draws nothing at all without a point or an address, not even the heading', async () => {
+    const html = await render(Map, { blockType: 'map', heading: 'Find us' })
+
+    expect(html).not.toContain('<iframe')
+    expect(html).not.toContain('Find us')
   })
 })

@@ -4,6 +4,8 @@ import { payloadJobs } from '@mission-control/payload-jobs'
 import { payloadJobsAlerts } from '@mission-control/payload-jobs-alerts'
 import { payloadJobsXero } from '@mission-control/payload-jobs-xero'
 import { postgresAdapter } from '@payloadcms/db-postgres'
+import { lexicalEditor } from '@payloadcms/richtext-lexical'
+import { formBuilderPlugin } from '@payloadcms/plugin-form-builder'
 import { multiTenantPlugin } from '@payloadcms/plugin-multi-tenant'
 import { r2Storage } from '@payloadcms/storage-r2'
 import { buildConfig, getPayload, type Payload } from 'payload'
@@ -11,6 +13,7 @@ import sharp from 'sharp'
 import { getPlatformProxy, type PlatformProxy } from 'wrangler'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
+import { formBuilderOptions } from './forms'
 import { Documents, DOCUMENT_MAX_BYTES } from './collections/Documents'
 import { Folders } from './collections/Folders'
 import { Media } from './collections/Media'
@@ -159,6 +162,7 @@ describe.skipIf(!databaseUrl)('media and documents (R2, tenant scoped)', () => {
         admin: { user: 'users' },
         auth: { passwordHashIterations: 100000 },
         collections: [Users, Media, Folders, Tags, Tenants, SiteKeys, Documents],
+        editor: lexicalEditor(), // the form builder's confirmation message is rich text
         // A private schema, so pushing these tables never races other suites on the shared database.
         db: postgresAdapter({
           pool: { connectionString: databaseUrl, max: 10 },
@@ -169,6 +173,7 @@ describe.skipIf(!databaseUrl)('media and documents (R2, tenant scoped)', () => {
           payloadJobs({ tenancy: 'multi' }),
           payloadJobsAlerts(), // mission-control: add-on (PJ-115); multiTenantOptions lists its collection
           payloadJobsXero(), // mission-control: add-on (PJ-57); multiTenantOptions lists its collections
+          formBuilderPlugin(formBuilderOptions()), // mission-control: multiTenantOptions scopes its collections (PJ-102)
           multiTenantPlugin(multiTenantOptions),
         ],
         secret: 'test-secret',
@@ -228,6 +233,9 @@ describe.skipIf(!databaseUrl)('media and documents (R2, tenant scoped)', () => {
       }
       await payload.delete({
         collection: 'users',
+        // mission-control: users are never hard-deleted in production (PJ-89); teardown is the
+        // escape hatch the plugin's guard allows.
+        context: { payloadJobsPurge: true },
         overrideAccess: true,
         where: { id: { in: [superAdmin, adminA, editorA, employerA, adminB].map((u) => u?.id) } },
       })

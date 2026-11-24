@@ -64,6 +64,7 @@ describe('parseOffboardingArgs @S-271', () => {
 describe('formatOffboardingReport @S-271', () => {
   it('names what goes, what is kept and what refused', () => {
     const lines = formatOffboardingReport({
+      anonymisedUsers: [],
       errors: [{ message: 'still referenced', slug: 'jobs' }],
       kept: [{ docs: 2, slug: 'orders' }],
       removed: [{ docs: 3, slug: 'jobs' }, { docs: 1, slug: 'plans' }],
@@ -78,9 +79,15 @@ describe('formatOffboardingReport @S-271', () => {
     ])
   })
 
+  it('counts the users who belonged to this site alone @S-271', () => {
+    expect(
+      formatOffboardingReport({ anonymisedUsers: [4, 5], errors: [], kept: [], removed: [], tenant: 7 }),
+    ).toContain('  users anonymised (or would be), members of this site only: 2')
+  })
+
   it('says nothing rather than an empty list', () => {
     expect(
-      formatOffboardingReport({ errors: [], kept: [], removed: [], tenant: 7 }),
+      formatOffboardingReport({ anonymisedUsers: [], errors: [], kept: [], removed: [], tenant: 7 }),
     ).toEqual(['Tenant 7:', '  removed (or would remove): nothing', '  kept: nothing'])
   })
 })
@@ -89,13 +96,14 @@ describe('offboardingStoppedMessage @S-271', () => {
   const refused = [{ message: 'nope', slug: 'jobs' }]
 
   it('says nothing was deleted only when nothing was', () => {
-    expect(offboardingStoppedMessage({ errors: refused, kept: [], removed: [], tenant: 7 })).toBe(
+    expect(offboardingStoppedMessage({ anonymisedUsers: [], errors: refused, kept: [], removed: [], tenant: 7 })).toBe(
       'Offboarding stopped. Nothing was deleted.',
     )
   })
 
   it('names what already went when a later collection was refused', () => {
     const message = offboardingStoppedMessage({
+      anonymisedUsers: [],
       errors: refused,
       kept: [],
       removed: [{ docs: 4, slug: 'pages' }],

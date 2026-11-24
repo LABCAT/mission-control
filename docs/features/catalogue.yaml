@@ -19,7 +19,7 @@
 meta:
   title: Mission Control features catalogue
   version: 1
-  updated: 2026-11-20
+  updated: 2026-11-23
   sources:
     - docs/migration/STATUS.md
     - docs/migration/PROPOSAL-ROLES.md
@@ -126,6 +126,91 @@ stories:
     mvp: true
     status: planned
     tests: []
+
+  # ---------------------------------------------------------------------------
+  # Contact form and map (PJ-102)
+  # ---------------------------------------------------------------------------
+  - id: S-320
+    area: Public site
+    role: site manager
+    story: "A site manager drops a Form block on a page, points it at one of the site's forms, and visitors see that form."
+    steps:
+      - "Create a form with text, email and textarea fields in the Forms collection."
+      - "Add a Form block to a page and choose the form."
+      - "Open the page."
+    expected: "The block draws the form's fields in the editor's order with labels, required markers and the submit label, as plain HTML with no client JavaScript; a field with no name, an unknown field type or a form that is not populated is never guessed at, and the honeypot is hidden from people."
+    settings:
+      - forms
+    mvp: true
+    status: built
+    tests:
+      - packages/rocketship-payload/src/form.test.ts
+      - packages/rocketship-payload/src/astro/renderers.test.ts
+
+  - id: S-321
+    area: Public site
+    role: site manager
+    story: "A site manager shows the office on a page with a map that needs no API key."
+    steps:
+      - "Add a Map block with coordinates, or an address for Google."
+      - "Open the page and scroll to the map."
+    expected: "The block embeds OpenStreetMap or Google Maps in a lazy iframe with an accessible title; a point wins over an address, an out-of-range coordinate or zoom falls back rather than reaching the provider, and a block with nothing to show draws no map."
+    settings:
+      - map
+    mvp: true
+    status: built
+    tests:
+      - packages/rocketship-payload/src/map.test.ts
+      - packages/rocketship-payload/src/astro/renderers.test.ts
+
+  - id: S-322
+    area: Platform
+    role: super admin
+    story: "A site manager decides how long form submissions are kept, and 0 means email only."
+    steps:
+      - "Set the form retention to 90 days, submit a form, then age a submission past the boundary and run the purge."
+      - "Set the retention to 0 and submit again."
+    expected: "A submission dated one day past the tenant's retention is deleted and one a day inside it is kept; the setting is read per tenant on every run; a second run changes nothing; and at 0 the email is sent and no row is stored."
+    settings:
+      - formRetentionDays
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/forms.test.ts
+      - packages/payload-jobs/src/forms.integration.test.ts
+
+  - id: S-323
+    area: Public site
+    role: site manager
+    story: "A site's contact page is seeded with a contact form and a map, and re-running the seed changes nothing."
+    steps:
+      - "Run the contact page seed for a tenant."
+      - "Run it again, then remove the map block and run it once more."
+    expected: "The seed creates the tenant's contact form and gives the contact system page the Form block then the Map block; a re-run creates no duplicate and adds no block; a missing block is added back without touching the blocks the editor arranged."
+    settings:
+      - pages.system
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/contact-page.integration.test.ts
+      - apps/cms/src/seed/vwok-contact.test.ts
+
+  - id: S-324
+    area: Security
+    role: seeker
+    story: "A form submission is checked for bots, validated against the form, stored for the site and emailed once."
+    steps:
+      - "Post a form submission with and without a Turnstile token, with a filled honeypot and with a missing required answer."
+      - "Post another site's form and another site's key."
+    expected: "Only the site named by the site key can submit, and only to its own form; Turnstile and the honeypot are checked before anything is written; a missing required or malformed answer is refused with a message; answers that are not fields of the form are dropped; the notification goes out once, from the tenant's address, to the tenant's admin when the form names no recipient."
+    settings:
+      - security.turnstile
+      - contact.recipient
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/forms.integration.test.ts
+      - packages/payload-jobs/src/forms.test.ts
 
   - id: S-008
     area: Public site
@@ -1135,6 +1220,52 @@ stories:
       - packages/launchpad/src/view-as/index.test.ts
       - packages/launchpad/src/components/components.test.ts
       - apps/vwok/src/view-as-handlers.test.ts
+
+  - id: S-161
+    area: Email
+    role: super admin
+    story: "Email from any environment other than production is redirected to one inbox, so previews never email the public."
+    steps:
+      - "Trigger an email (for example a password reset) on a preview with EMAIL_REDIRECT_TO set."
+      - "Trigger the same email on production (ENVIRONMENT=production)."
+    expected: "On a preview the message goes only to EMAIL_REDIRECT_TO; on production it is delivered to its real recipients."
+    settings:
+      - env.ENVIRONMENT
+      - env.EMAIL_REDIRECT_TO
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-email-cloudflare/src/redirect.test.ts
+      - apps/cms/src/email-redirect.test.ts
+
+  - id: S-162
+    area: Email
+    role: super admin
+    story: "A redirected email strips cc and bcc and shows who it was meant for."
+    steps:
+      - "Send an email with to, cc and bcc recipients on a preview."
+    expected: "Only the redirect inbox is addressed, and the subject starts with [<env> → original recipients], listing to, cc and bcc."
+    settings:
+      - env.EMAIL_REDIRECT_TO
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-email-cloudflare/src/redirect.test.ts
+
+  - id: S-163
+    area: Email
+    role: super admin
+    story: "If the redirect inbox is missing, nothing is delivered."
+    steps:
+      - "Unset EMAIL_REDIRECT_TO on a non-production environment and trigger an email."
+    expected: "Nothing is sent through the binding or Resend; the console logs that it was not sent, without recipients."
+    settings:
+      - env.EMAIL_REDIRECT_TO
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-email-cloudflare/src/redirect.test.ts
+      - apps/cms/src/email-redirect.test.ts
 
   # ---------------------------------------------------------------------------
   # Accounts and authentication
@@ -2184,6 +2315,70 @@ stories:
       - packages/payload-wp-import/src/importers/jobs.test.ts
       - packages/payload-wp-import/src/html-to-lexical.test.ts
 
+  - id: S-260
+    area: Import and cutover
+    role: super admin
+    story: "The importer brings the legacy content pages into a tenant as CMS pages, and fills the four system pages instead of adding a second set."
+    steps:
+      - "Run wp-import pages with --dry-run and read the imported, dropped and flagged pages."
+      - "Run it for real, then run it again."
+    expected: "About us, Contact, For Employers, Organisations, Volunteering, Land Law Reforms, Organisation Competition and the 2017 Terms page are imported; WordPress and JobRoller machinery (submit, dashboard, login, password reset, contact, home-2) is not; a body becomes a rich-text block with the allowlist applied; a page holding a form or shortcode keeps its text, the form is left out and named in the report; the home, about, contact and organisations pages are the seeded ones, keeping their role and URL; a second run creates nothing."
+    settings:
+      - import.pages
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-wp-import/src/importers/pages.test.ts
+
+  - id: S-261
+    area: Import and cutover
+    role: super admin
+    story: "The imported home page reproduces the legacy page from blocks: hero, search, three feature boxes, latest jobs and the page copy."
+    steps:
+      - "Run wp-import pages, then open the home page in the CMS."
+      - "Rearrange the blocks and save."
+    expected: "The home page is built from blocks rather than one rich-text body: a hero with the legacy headline and a browse link, three feature boxes, the job search and latest-jobs blocks where the host has them registered, and the legacy copy after them; every block can be reordered or removed by a site manager."
+    settings:
+      - import.pages
+      - home.blocks
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-wp-import/src/importers/pages.test.ts
+
+  - id: S-262
+    area: Import and cutover
+    role: super admin
+    story: "The importer rebuilds the three legacy menus with their links, remapping WordPress-only items to the new routes and listing the rest."
+    steps:
+      - "Run wp-import menus with --dry-run and read the remapped and dropped items."
+      - "Run it for real, then run it again."
+    expected: "The main, top and footer menus are created with their items in the legacy order; a page item links to the page the import created; an item pointing at a WordPress-only page becomes the new route (Submit Job, Login, Password Reset, dashboard) or is dropped and named in the report; an unsafe or empty URL is dropped; a second run creates nothing."
+    settings:
+      - import.menus
+      - site.menus
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-wp-import/src/importers/menus.test.ts
+
+  - id: S-263
+    area: Import and cutover
+    role: super admin
+    story: "The importer fills a site's settings with the legacy name, tagline, language, logo and header banner, and the media import attaches the images."
+    steps:
+      - "Run wp-import site-settings and wp-import media with --dry-run, then for real."
+      - "Open the site settings and the public site."
+    expected: "The site name, tagline and language come from the legacy options; the settings document is the one the tenant was seeded with, not a second one; the header banner is one Banner block carrying the desktop image, the mobile image, the alt text and the legacy link, and the logo is set; a banner switched off in JobRoller is not imported; a second run creates nothing and keeps an image a person has replaced."
+    settings:
+      - site.headerBanner
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/collections/site-settings.test.ts
+      - packages/payload-wp-import/src/importers/site-settings.test.ts
+      - packages/payload-wp-import/src/media/media.test.ts
+
   # ---------------------------------------------------------------------------
   # Security and spam
   # ---------------------------------------------------------------------------
@@ -2341,6 +2536,57 @@ stories:
     tests:
       - packages/payload-jobs/src/collections/pages.integration.test.ts
       - packages/payload-jobs/src/collections/pages-rules.test.ts
+
+  # ---------------------------------------------------------------------------
+  # Privacy, terms and personal data (PJ-89)
+  # ---------------------------------------------------------------------------
+  - id: S-310
+    area: Legal
+    role: site manager
+    story: "Every site has a privacy policy page and a terms page, both starting as drafts with placeholder text the founder replaces, and the footer links to both from every page."
+    steps:
+      - "Create a site, then open Pages in the admin."
+      - "Read the privacy and terms drafts, then open any public page and use the footer links."
+    expected: "Both pages exist at /privacy and /terms as drafts whose body is clearly marked placeholder text; the footer links to both on every page, using a footer menu item's label when the site manager added one, and the pages stay editable and publishable."
+    settings:
+      - site.menus
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/legal-pages.test.ts
+      - packages/launchpad/src/legal/links.test.ts
+      - packages/launchpad/src/components/components.test.ts
+
+  - id: S-311
+    area: Legal
+    role: super admin
+    story: "Staff remove a person's personal data from the admin: their profile, applications and files, and alert subscriptions go, while orders and invoices keep a stable anonymised reference to them."
+    steps:
+      - "Open a user who has applied for jobs and has an invoice order."
+      - "Run Remove personal data, then open the user and the order again."
+    expected: "The name, email, phone, applications, CVs and alert subscriptions are gone, the row keeps the same id with a non-personal address and cannot sign in, the order and invoice still point at that id, a second run removes nothing, and a hard delete of a user is refused. A site manager can do this only for members who belong to their own sites alone, it removes data on their sites only, and a failed removal changes nothing."
+    settings: []
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/anonymise-user.test.ts
+      - apps/cms/src/personal-data-removal.test.ts
+      - packages/payload-jobs/src/admin/RemovePersonalDataButton.test.ts
+
+  - id: S-312
+    area: Legal
+    role: seeker
+    story: "The apply, job alert and sign-up forms each show a consent line linking to the privacy policy and the terms."
+    steps:
+      - "Open the apply form, the alert form and the sign-up form."
+      - "Read the line above each submit button and follow both links."
+    expected: "Each form shows wording that fits it, with a working link to the privacy policy and one to the terms, and the pages ship no client JavaScript."
+    settings: []
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/legal/links.test.ts
+      - packages/launchpad/src/components/components.test.ts
 
   # ---------------------------------------------------------------------------
   # Platform

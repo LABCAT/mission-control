@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { addOnCollection } from './add-ons'
 import { AUDIT_LOG_SLUG, auditLogCollection } from './audit-log'
+import { applicationFilesCollection, applicationsCollection } from './collections/applications'
 import { jobsCollection } from './collections/jobs'
 import { locationsCollection } from './collections/locations'
 import { menusCollection, removeTenantMenus } from './collections/menus'
@@ -34,6 +35,9 @@ const collections = (): CollectionConfig[] => [
   menusCollection(),
   organisationsCollection({ mediaSlug: null }),
   jobsCollection({ richTextDescription: false }),
+  // The anonymiser deletes a person's applications and CVs with them.
+  applicationFilesCollection({ tenantScoped: true }),
+  applicationsCollection({ tenantScoped: true }),
   planCollection(),
   addOnCollection(),
   orderCollection({ couponsEnabled: false }),
@@ -227,6 +231,72 @@ describe('tenant offboarding against Postgres', () => {
     ])
 
     await harness.payload.delete({ collection: 'users', id: member.id, ...system })
+  })
+
+  it('anonymises a member of this site alone, keeping the row and anyone with another site @S-271', async () => {
+    const tenant = await makeTenant('Sole')
+    const makeUser = async (label: string, tenants: number[], role = 'user') =>
+      (await harness.payload.create({
+        collection: 'users',
+        data: {
+          email: `${label}-${Date.now()}@example.invalid`,
+          password: 'test-password',
+          role,
+          tenants: tenants.map((id) => ({ role: 'editor', tenant: id })),
+        },
+        ...system,
+      })) as unknown as { id: number }
+    const emailOf = async (id: number): Promise<string> =>
+      ((await harness.payload.findByID({ collection: 'users', depth: 0, id, ...system })) as unknown as {
+        email: string
+      }).email
+
+    const operator = await makeUser('operator', [], 'super-admin')
+    const sole = await makeUser('sole', [tenant.id])
+    const shared = await makeUser('shared', [tenant.id, harness.tenantA.id])
+    const admin = await makeUser('admin', [tenant.id], 'super-admin')
+    const sharedEmail = await emailOf(shared.id)
+    const adminEmail = await emailOf(admin.id)
+
+    const dryRun = await offboardTenant({
+      actor: operator.id,
+      dryRun: true,
+      payload: harness.payload,
+      tenant: tenant.id,
+    })
+    expect(dryRun.anonymisedUsers).toEqual([sole.id])
+    expect(await emailOf(sole.id)).not.toMatch(/removed\.invalid$/)
+
+    const result = await offboardTenant({ actor: operator.id, payload: harness.payload, tenant: tenant.id })
+    expect(result.errors).toEqual([])
+    expect(result.anonymisedUsers).toEqual([sole.id])
+
+    // The row survives (orders and the ledger point at it), but holds no personal data.
+    const soleRow = (await harness.payload.findByID({
+      collection: 'users',
+      depth: 0,
+      id: sole.id,
+      ...system,
+    })) as unknown as { email: string; tenants?: unknown[] }
+    expect(soleRow.email).toBe(`removed-user-${sole.id}@removed.invalid`)
+    expect(soleRow.tenants ?? []).toEqual([])
+
+    // A member of another site, and a super admin, are left alone.
+    expect(await emailOf(shared.id)).toBe(sharedEmail)
+    expect(await emailOf(admin.id)).toBe(adminEmail)
+
+    await harness.payload.delete({ collection: 'tenants', id: tenant.id, ...system })
+    expect(await tenantExists(tenant.id)).toBe(false)
+    expect(await emailOf(sole.id)).toBe(`removed-user-${sole.id}@removed.invalid`)
+
+    for (const id of [sole.id, shared.id, admin.id, operator.id]) {
+      await harness.payload.delete({
+        collection: 'users',
+        context: { payloadJobsPurge: true },
+        id,
+        ...system,
+      })
+    }
   })
 
   it('removes a site’s pages and menus with it, and reports only what the operator must clear @S-270', async () => {

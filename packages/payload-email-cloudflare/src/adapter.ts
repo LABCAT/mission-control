@@ -2,6 +2,7 @@ import type { PayloadEmailAdapter } from 'payload'
 
 import { mapToCloudflareMessage } from './cloudflare'
 import { EmailSendError } from './errors'
+import { applyRedirect, type RedirectOption } from './redirect'
 import { sendViaResend } from './resend'
 import type { EmailMessageInput, MessageAddress, SendEmailBinding } from './types'
 
@@ -28,6 +29,12 @@ export type CloudflareEmailOptions = {
   transport?: 'console'
   /** Fallback used when the binding is missing, or when `provider: 'resend'`. */
   resend?: ResendOptions
+  /**
+   * Redirect-all, for previews and staging. When it resolves to a config, every message's
+   * to/cc/bcc is replaced by `to` and the subject is prefixed with the original recipients.
+   * With no `to`, nothing is delivered (console). Resolve it per send, not at module scope.
+   */
+  redirect?: RedirectOption
 }
 
 const isWorkersRuntime = (): boolean =>
@@ -71,11 +78,23 @@ export const cloudflareEmail =
     defaultFromAddress: options.defaultFromAddress ?? '',
     defaultFromName: options.defaultFromName ?? '',
     async sendEmail(raw) {
-      const message = { ...(raw as EmailMessageInput) }
+      let message = { ...(raw as EmailMessageInput) }
       if (!message.from || (typeof message.from === 'string' && message.from === '')) {
         message.from = defaultFrom(options)
       }
 
+      // Redirect-all runs before any transport, so Cloudflare, Resend and every future path
+      // see only the safe inbox. A missing inbox never delivers.
+      const redirect = typeof options.redirect === 'function' ? await options.redirect() : options.redirect
+      if (redirect) {
+        const inbox = redirect.to?.trim()
+        if (!inbox) {
+          return payload.logger.info({
+            msg: 'Email not sent (redirect is on but no redirect inbox is configured).',
+          })
+        }
+        message = applyRedirect(message, inbox, redirect.label?.trim() || 'non-production')
+      }
 
       if (options.transport === 'console') return logNotSent(payload)
 
