@@ -32,6 +32,8 @@ export type LegacyTarget =
  */
 export type LegacyRoutePaths = {
   category: (slug: string) => string
+  /** A job page. The slug is unchanged (PJ-37), so the default is the flat legacy path. */
+  job: (slug: string) => string
   jobs: string
   salary: (slug: string) => string
   type: (slug: string) => string
@@ -39,6 +41,7 @@ export type LegacyRoutePaths = {
 
 export const defaultLegacyRoutePaths: LegacyRoutePaths = {
   category: (slug) => `/jobs/${encodeURIComponent(slug)}`,
+  job: (slug) => `/jobs/${encodeURIComponent(slug)}`,
   jobs: '/jobs',
   salary: (slug) => `/jobs?salary=${encodeURIComponent(slug)}`,
   type: (slug) => `/jobs/${encodeURIComponent(slug)}`,
@@ -53,6 +56,17 @@ export type LegacyRedirectOptions = {
   shortlinks?: ReadonlyMap<number, string>
   /** Exact-path answers a site needs beyond the rules; checked first. */
   table?: ReadonlyMap<string, LegacyTarget>
+  /**
+   * An attachment page's WordPress attachment id → its file on R2 (PJ-63). An id that is not in
+   * the table is a file that was not imported, which is gone (STATUS.md 20 Nov).
+   */
+  attachments?: ReadonlyMap<number, string>
+  /**
+   * A legacy upload path (`/app/uploads/2021/05/x.pdf`) → its file on R2. Keyed by the whole
+   * legacy path, so the table is the importer's output rather than a second naming scheme. A
+   * path that is not in the table is a file that was not imported, which is gone.
+   */
+  files?: ReadonlyMap<string, string>
   /** Defaults to the founder's clean filter URLs. */
   paths?: LegacyRoutePaths
 }
@@ -104,12 +118,32 @@ const ACCOUNT_BASES: Record<string, string> = {
   'sign-up': '/account/register',
 }
 
-/** Legacy content pages whose new address is not their old slug. `contact` is absent on purpose:
- *  the Contact system page is seeded at `/contact`, so that path is the live page, not an old one. */
+/**
+ * Legacy content pages whose new address is not their old slug. The rule applies to the page and
+ * to anything under it, because WordPress served a page's uploaded images as
+ * `/about-us/screen-shot-2018-…/`: the page is the nearest equivalent of that URL, and the file
+ * itself is covered by the site's file table when the importer carried it over.
+ *
+ * `contact` is absent on purpose: the Contact system page is seeded at `/contact`, so that path is
+ * the live page, not an old one.
+ */
 const RENAMED_BASES: Record<string, string> = {
   'about-us': '/about',
   'contact-2': '/contact',
   employer: '/employers',
+}
+
+/**
+ * Legacy pages that kept their new address but gained children in the old site: `/employers/` is a
+ * live page, and `/employers/list-job-vacancy-now/` was a subsection of it. A child goes to the
+ * page, which is where the content is now.
+ *
+ * `/organisations/` is absent on purpose: the legacy site's organisation URLs were
+ * `/organisation/{nick}/`, and the new site's `/organisations/{slug}` is a live profile route, so
+ * a rule here would redirect those profiles onto the directory.
+ */
+const KEPT_BASES_WITH_CHILDREN: Record<string, string> = {
+  employers: '/employers',
 }
 
 /** Decode one path segment; a malformed escape is kept as typed, so the lookup simply misses. */
@@ -199,7 +233,7 @@ const shortlinkTarget = (
  */
 export const legacyRedirect = (
   { pathname, search }: { pathname: string; search?: null | string | URLSearchParams },
-  { paths = defaultLegacyRoutePaths, shortlinks, table }: LegacyRedirectOptions = {},
+  { attachments, files, paths = defaultLegacyRoutePaths, shortlinks, table }: LegacyRedirectOptions = {},
 ): LegacyTarget | null => {
   const { path, segments } = normaliseLegacyPath(pathname)
   const query = searchParams(search)
@@ -210,11 +244,24 @@ export const legacyRedirect = (
   const shortlink = shortlinkTarget(query, shortlinks)
   if (shortlink) return shortlink
 
+  // A legacy file (an upload such as `/app/uploads/2021/05/x.pdf`, or an attachment page such as
+  // `/about-us/img_5612/`) is not a page: when the importer carried it over it redirects to its R2
+  // copy. `/app/uploads/` is the WordPress upload directory, so a path in it that is not in the
+  // table is a file that was not imported. A non-upload attachment page that is not in the table
+  // falls through to its parent's rule, which is a better answer than 410 for a page that moved.
+  const file = files?.get(path)
+  if (file) return redirect(file)
+  if (path.startsWith('/app/uploads/')) return gone()
+
   const [head, ...rest] = segments
   if (!head) {
     // `/` is the site's own home page; only an old archive query moves.
     return isLegacyListingQuery(query) ? redirect(listingTarget(query, paths)) : null
   }
+
+  // The feed routes are the redirect targets; a request for them is the site's own route, not a
+  // legacy URL. Without this the `/feed/*` rule would redirect a feed onto itself forever.
+  if (path === FEED_JOBS || path === FEED_VOLUNTARY_JOBS) return null
 
   if (head === 'wp') {
     // XML-RPC is an endpoint, not a page (it answered 405 to GET); it has no successor.
@@ -232,6 +279,11 @@ export const legacyRedirect = (
   const renamed = RENAMED_BASES[head]
   if (renamed) return redirect(renamed)
 
+  // A child of a page that is itself live (`/employers/list-job-vacancy-now/`) belongs to that
+  // page: the old site nested content under it, and the new one keeps it as one document.
+  const keptChild = rest.length > 0 ? KEPT_BASES_WITH_CHILDREN[head] : undefined
+  if (keptChild) return redirect(keptChild)
+
   if (head === 'organisation' || head === 'author') {
     const nickname = rest[0]
     if (!nickname) return redirect('/organisations')
@@ -239,20 +291,24 @@ export const legacyRedirect = (
     return redirect(`/organisations/${encodeURIComponent(organisationSlug(nickname))}`)
   }
 
+  // A taxonomy's own feed (`/job-category/x/feed/`) belongs to the taxonomy page, so the trailing
+  // `feed` is dropped before the slug is read. Without this the deepest segment would be `feed`.
+  const taxonomySegments = rest.at(-1) === 'feed' ? rest.slice(0, -1) : rest
+
   if (head === 'job-category') {
-    const slug = legacySlug(rest[0] ?? '')
+    const slug = legacySlug(taxonomySegments.at(-1) ?? '')
     return redirect(slug ? paths.category(slug) : paths.jobs)
   }
 
   if (head === 'job-type') {
     // Legacy job types nested, `/job-type/voluntary/board-position/`; type slugs are unique across
     // categories and locations (PJ-98), so the deepest segment names the page.
-    const slug = legacySlug(rest.at(-1) ?? '')
+    const slug = legacySlug(taxonomySegments.at(-1) ?? '')
     return redirect(slug ? paths.type(slug) : paths.jobs)
   }
 
   if (head === 'job-salary') {
-    const slug = legacySlug(rest.at(-1) ?? '')
+    const slug = legacySlug(taxonomySegments.at(-1) ?? '')
     return redirect(slug ? paths.salary(slug) : paths.jobs)
   }
 
@@ -273,12 +329,18 @@ export const legacyRedirect = (
       return redirect(Number.isInteger(page) && page > 1 ? `${paths.jobs}?page=${page}` : paths.jobs)
     }
 
-    // An attachment page (`/jobs/{slug}/attachment/{id}/`) is a file, not a page: the job page is
-    // its nearest equivalent, and the file itself comes from R2 (PJ-63).
-    if (rest[1] === 'attachment') return redirect(`/jobs/${encodeURIComponent(rest[0]!)}`)
-    if (rest[1] === 'feed') return redirect(`/jobs/${encodeURIComponent(rest[0]!)}`)
+    // An attachment page (`/jobs/{slug}/attachment/{id}/`) is a file, not a page: it redirects to
+    // the file on R2 when the importer carried it over, and is gone when it did not (20 Nov).
+    if (rest[1] === 'attachment') {
+      const file = attachments?.get(Number(rest[2] ?? ''))
+      return file ? redirect(file) : gone()
+    }
 
-    // `/jobs/{slug}/` is the job page and its slug is unchanged (PJ-37), so the job route answers.
+    // Anything else under a job (`/jobs/{slug}/feed/`, `/jobs/{slug}/iiss-logo/`) belongs to the
+    // job page, which keeps its slug (PJ-37). Left to the app these would be 404s.
+    if (rest.length > 1) return redirect(`${paths.job(rest[0]!)}`)
+
+    // `/jobs/{slug}/` is the job page itself, so the job route answers.
     return null
   }
 
