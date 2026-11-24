@@ -9,6 +9,7 @@ import type {
 } from 'payload'
 
 import { accountAuthEndpoints, type AccountAuthOptions } from './account-auth'
+import { applicationFileDownloadEndpoint, applyEndpoint, type ApplyOptions } from './apply'
 import {
   formEndpoints,
   purgeFormSubmissionsTask,
@@ -87,6 +88,7 @@ export * from './access'
 export * from './admin'
 export * from './account-auth'
 export * from './anonymise-user'
+export * from './apply'
 export * from './audit-log'
 export * from './checkout'
 export * from './contact-page'
@@ -280,6 +282,11 @@ export type PayloadJobsOptions = {
    * Cloudflare Rate Limiting binding so production limits per visitor, not per isolate.
    */
   jobViews?: JobViewOptions
+  /**
+   * The apply endpoint (PJ-45): Turnstile secret, rate limiter and the email seam. Only runs
+   * when applications are enabled.
+   */
+  apply?: Pick<ApplyOptions, 'fileLinkTtlSeconds' | 'rateLimiter' | 'sendEmail' | 'turnstile'>
   /** Slug of the auth collection that gets legacy WordPress password support. Defaults to `users`. */
   usersSlug?: string
   /**
@@ -814,6 +821,10 @@ const jobBoardPlugin =
       endpoints: [
         ...(Array.isArray(creditedJobs.endpoints) ? creditedJobs.endpoints : []),
         jobViewEndpoint({ rateLimiter: options.jobViews?.rateLimiter, slugs }),
+        // The apply form posts here (PJ-45): POST /api/<jobs>/:id/apply.
+        ...(features.applications
+          ? [applyEndpoint({ ...options.apply, slugs, tenantScoped: tenancy === 'multi', tenantsSlug, usersSlug })]
+          : []),
       ],
     }
     // Invoice-sync adapters hear about new orders and status changes (PJ-115, PJ-57).
@@ -930,11 +941,15 @@ const jobBoardPlugin =
         ...coupons,
         ...(features.applications
           ? [
-              applicationFilesCollection({
-                applicantsSlug: usersSlug,
-                organisationsSlug: slugs.organisations,
-                tenantScoped: tenancy === 'multi',
-              }),
+              {
+                ...applicationFilesCollection({
+                  applicantsSlug: usersSlug,
+                  organisationsSlug: slugs.organisations,
+                  tenantScoped: tenancy === 'multi',
+                }),
+                // The signed link in the employer's email (PJ-45).
+                endpoints: [applicationFileDownloadEndpoint()],
+              },
               withApplicationDataAction(
                 applicationsCollection({
                   applicantsSlug: usersSlug,

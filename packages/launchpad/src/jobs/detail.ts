@@ -21,6 +21,7 @@ import { resolveLocale } from '../tenant/locale'
 import { jobPostingStructuredData, type JobPostingStructuredData } from '../tenant/seo'
 import type { SiteTenant } from '../tenant/types'
 import type { JobSummary } from '../types'
+import { applyMode, type ApplyMode } from './apply'
 import { liveJobsWhere, toJobSummary, type ListingJob } from './listing'
 
 /** Where a job page lives. The slug is unique per tenant (PJ-19). */
@@ -108,6 +109,8 @@ export type DetailJobOrganisation = DetailJobRef & {
 export type DetailJobFile = { filename?: null | string; url?: null | string }
 
 export type DetailJob = {
+  /** Online applying switch. Missing means on, as the CMS default. */
+  applyOnline?: boolean | null
   categories?: (DetailJobRef | null | number)[] | null
   companyName?: null | string
   description?: unknown
@@ -290,6 +293,8 @@ export const jobPageJsonLd = ({
 }
 
 export type JobDetailView = {
+  /** What the apply section shows (PJ-45). */
+  applyMode: ApplyMode
   detail: JobDetail
   jsonLd?: JobPostingStructuredData
   /** The tenant's public view counter is on and the page is live. */
@@ -306,6 +311,7 @@ export type JobDetailView = {
 }
 
 export type JobDetailPageInput = {
+  applyOnline?: boolean
   detail: JobDetail
   settings: TenantJobPageSettings
   status: Exclude<JobPageStatus, 'unavailable'>
@@ -322,6 +328,7 @@ export type JobDetailPageInput = {
  * similar live jobs instead of the apply section.
  */
 export const jobDetailView = ({
+  applyOnline = true,
   detail,
   jobTypeSlug,
   settings,
@@ -333,6 +340,12 @@ export const jobDetailView = ({
   const live = status === 'live'
 
   return {
+    applyMode: applyMode({
+      accountRequired: settings.accountRequiredToApply,
+      applyOnline,
+      hasHowToApply: Boolean(detail.howToApply),
+      live,
+    }),
     detail,
     ...(live ? { jsonLd: jobPageJsonLd({ detail, jobTypeSlug, siteUrl }) ?? undefined } : {}),
     expired: !live,
@@ -426,6 +439,7 @@ export const loadJobDetail = async (options: LoadJobDetailOptions): Promise<JobD
     found: true,
     status,
     view: jobDetailView({
+      applyOnline: doc.applyOnline !== false,
       detail,
       jobTypeSlug: populated(doc.jobType)?.slug,
       settings,

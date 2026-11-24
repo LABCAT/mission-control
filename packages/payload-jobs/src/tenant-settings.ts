@@ -11,6 +11,7 @@ import { resolveSiteKey } from './site-keys'
  * out, so adding a field to the tenant never exposes it by accident.
  */
 export const PUBLIC_TENANT_SETTINGS_FIELDS = [
+  'accountRequiredToApply',
   'branding',
   'currency',
   'currencyMinorUnits',
@@ -25,6 +26,8 @@ export const PUBLIC_TENANT_SETTINGS_FIELDS = [
 ] as const
 
 export type PublicTenantSettings = {
+  /** Guests are sent to sign in before they can apply (PJ-45). Off by default. */
+  accountRequiredToApply?: boolean
   branding?: { colorAccent?: string; colorHover?: string; colorPrimary?: string; logo?: unknown }
   currency?: string
   currencyMinorUnits?: number
@@ -68,6 +71,7 @@ export const publicTenantSettings = (tenant: TenantDoc): PublicTenantSettings | 
     : undefined
 
   return {
+    ...(tenant.accountRequiredToApply === true ? { accountRequiredToApply: true } : {}),
     ...(branding && typeof branding === 'object' ? { branding } : {}),
     ...(text(tenant.currency) ? { currency: text(tenant.currency) } : {}),
     ...(number(tenant.currencyMinorUnits) !== undefined

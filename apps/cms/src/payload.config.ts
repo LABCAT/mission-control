@@ -148,6 +148,13 @@ export default buildConfig({
       accountAuth: { rateLimiter: () => workerEnv?.ACCOUNT_RATE_LIMIT },
       // mission-control: job page views (PJ-37) limit per visitor in Workers, per isolate in dev.
       jobViews: { rateLimiter: () => workerEnv?.JOB_VIEW_RATE_LIMIT },
+      // mission-control: the apply endpoint (PJ-45) verifies Turnstile with the same Worker secret
+      // and limits per IP and per email with the account limiter. Its emails go through the
+      // `sendEmail` seam, which PJ-50's sendTemplate fills in; until then nothing is emailed.
+      apply: {
+        rateLimiter: () => workerEnv?.ACCOUNT_RATE_LIMIT,
+        turnstile: { secret: () => workerEnv?.TURNSTILE_SECRET_KEY ?? process.env.TURNSTILE_SECRET_KEY },
+      },
       // mission-control: public form submissions (PJ-102). Turnstile is verified server-side;
       // the secret is a Worker secret, never a tenant field.
       forms: {

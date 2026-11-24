@@ -1,0 +1,140 @@
+---
+/**
+ * The apply form (PJ-45). A plain multipart form that works with JavaScript off: it posts to the
+ * site's own apply route, which forwards it to the CMS. The only script on the page is Turnstile.
+ * The employer's address is never here: the CMS decides who receives the application.
+ */
+import Alert from '@labcat2020/rocketship/components/Alert'
+import Button from '@labcat2020/rocketship/components/Button'
+import Checkbox from '@labcat2020/rocketship/components/Checkbox'
+import Field from '@labcat2020/rocketship/components/Field'
+import FileInput from '@labcat2020/rocketship/components/FileInput'
+import Input from '@labcat2020/rocketship/components/Input'
+import Label from '@labcat2020/rocketship/components/Label'
+import Stack from '@labcat2020/rocketship/components/Stack'
+import Textarea from '@labcat2020/rocketship/components/Textarea'
+
+import type { ApplyFieldError } from '../jobs/apply'
+import ConsentLine from './ConsentLine.astro'
+import Turnstile from './Turnstile.astro'
+
+type Props = {
+  /** Where the form posts. */
+  action: string
+  /** Problems from the last attempt; the visitor's text is kept, files cannot be. */
+  errors?: ApplyFieldError[]
+  message?: string
+  /** Public Turnstile site key; without one the widget is left out (local preview). */
+  turnstileSiteKey?: string
+  values?: { email?: string; message?: string; name?: string; phone?: string }
+  labels?: Partial<Labels>
+}
+
+type Labels = {
+  coverLetter: string
+  cv: string
+  cvHint: string
+  email: string
+  message: string
+  name: string
+  optional: string
+  phone: string
+  submit: string
+}
+
+const { action, errors = [], message, turnstileSiteKey, values = {}, labels: overrides } = Astro.props as Props
+
+const labels: Labels = {
+  coverLetter: 'Cover letter',
+  cv: 'CV',
+  cvHint: 'PDF, DOC or DOCX, up to 10 MB.',
+  email: 'Email',
+  message: 'Message',
+  name: 'Your name',
+  optional: '(optional)',
+  phone: 'Phone',
+  submit: 'Send application',
+  ...overrides,
+}
+
+const errorFor = (field: string) => errors.find((error) => error.field === field)?.message
+---
+
+<form class="lp-apply" method="post" action={action} enctype="multipart/form-data" novalidate>
+  {message && <Alert variant="error" role="alert">{message}</Alert>}
+
+  <Stack gap="medium">
+    <Field>
+      <Label for="apply-name">{labels.name}</Label>
+      <Input id="apply-name" name="name" autocomplete="name" required maxlength={200} value={values.name} aria-invalid={errorFor('name') ? 'true' : undefined} />
+      {errorFor('name') && <p class="lp-apply__error">{errorFor('name')}</p>}
+    </Field>
+
+    <Field>
+      <Label for="apply-email">{labels.email}</Label>
+      <Input id="apply-email" name="email" type="email" autocomplete="email" required maxlength={254} value={values.email} aria-invalid={errorFor('email') ? 'true' : undefined} />
+      {errorFor('email') && <p class="lp-apply__error">{errorFor('email')}</p>}
+    </Field>
+
+    <Field>
+      <Label for="apply-phone">{labels.phone} {labels.optional}</Label>
+      <Input id="apply-phone" name="phone" type="tel" autocomplete="tel" maxlength={40} value={values.phone} aria-invalid={errorFor('phone') ? 'true' : undefined} />
+      {errorFor('phone') && <p class="lp-apply__error">{errorFor('phone')}</p>}
+    </Field>
+
+    <Field>
+      <Label for="apply-message">{labels.message} {labels.optional}</Label>
+      <Textarea id="apply-message" name="message" rows={6} maxlength={5000} aria-invalid={errorFor('message') ? 'true' : undefined}>{values.message}</Textarea>
+      {errorFor('message') && <p class="lp-apply__error">{errorFor('message')}</p>}
+    </Field>
+
+    <Field>
+      <Label for="apply-cv">{labels.cv}</Label>
+      <FileInput id="apply-cv" name="cv" required accept=".pdf,.doc,.docx" aria-describedby="apply-cv-hint" aria-invalid={errorFor('cv') ? 'true' : undefined} />
+      <p class="lp-apply__hint" id="apply-cv-hint">{labels.cvHint}</p>
+      {errorFor('cv') && <p class="lp-apply__error">{errorFor('cv')}</p>}
+    </Field>
+
+    <Field>
+      <Label for="apply-cover-letter">{labels.coverLetter} {labels.optional}</Label>
+      <FileInput id="apply-cover-letter" name="coverLetter" accept=".pdf,.doc,.docx" aria-invalid={errorFor('coverLetter') ? 'true' : undefined} />
+      {errorFor('coverLetter') && <p class="lp-apply__error">{errorFor('coverLetter')}</p>}
+    </Field>
+
+    {/* The bot trap: a person never sees or tabs to it. */}
+    <div class="lp-apply__trap" aria-hidden="true">
+      <label>Website <input name="rp-website" tabindex="-1" autocomplete="off" /></label>
+    </div>
+
+    <Field inline>
+      <Checkbox id="apply-consent" name="consent" value="on" required aria-invalid={errorFor('consent') ? 'true' : undefined} />
+      <Label for="apply-consent"><ConsentLine kind="apply" /></Label>
+      {errorFor('consent') && <p class="lp-apply__error">{errorFor('consent')}</p>}
+    </Field>
+
+    {turnstileSiteKey && <Turnstile action="apply" siteKey={turnstileSiteKey} />}
+
+    <Button type="submit" size="large">{labels.submit}</Button>
+  </Stack>
+</form>
+
+<style>
+  .lp-apply__error {
+    color: var(--rs-color-danger, #b00020);
+    font-size: var(--rs-font-size-sm);
+    margin: 0;
+  }
+
+  .lp-apply__hint {
+    color: var(--rs-color-muted);
+    font-size: var(--rs-font-size-sm);
+    margin: 0;
+  }
+
+  .lp-apply__trap {
+    height: 0;
+    left: -9999px;
+    overflow: hidden;
+    position: absolute;
+  }
+</style>
