@@ -1085,10 +1085,23 @@ export const buildOrganisationHistory = ({
       if (at === null) return
       drafts.push({ ...base, at, event, job: jobRef(job.id), kind: 'job', seq: `job:${String(job.id)}:${event}:${at}`, ...extra })
     }
-    push('posted', job.createdAt, { by: byOf(job.createdBy) })
-    push('published', job.publishedAt)
-    if (job.status === 'expired') push('expired', job.expiresAt)
-    if (job.status === 'cancelled') push('cancelled', job.updatedAt)
+    // The job's own log is the record of each move (PJ-32). A job from before the log has only
+    // its dates, so those fill in whatever the log does not show.
+    const log = Array.isArray(job.log) ? job.log.filter(isRecord) : []
+    const seen = new Set<string>()
+    log.forEach((entry, index) => {
+      const event = entry.event === 'created' ? 'posted' : String(entry.to)
+      if (!(HISTORY_JOB_EVENTS as readonly string[]).includes(event)) return
+      seen.add(event)
+      const by = entry.by === undefined || entry.by === null ? (event === 'posted' ? byOf(job.createdBy) : null) : byOf(entry.by)
+      const at = iso(entry.at)
+      if (at === null) return
+      drafts.push({ ...base, at, by, event, job: jobRef(job.id), kind: 'job', seq: `job:${String(job.id)}:log:${index}` })
+    })
+    if (!seen.has('posted')) push('posted', job.createdAt, { by: byOf(job.createdBy) })
+    if (!seen.has('published')) push('published', job.publishedAt)
+    if (job.status === 'expired' && !seen.has('expired')) push('expired', job.expiresAt)
+    if (job.status === 'cancelled' && !seen.has('cancelled')) push('cancelled', job.updatedAt)
     for (const order of (ordersForJob.get(String(job.id)) ?? []).slice(1)) {
       push('relisted', order.createdAt, { order: orderRef(order.id) })
     }

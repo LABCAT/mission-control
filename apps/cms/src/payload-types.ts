@@ -525,7 +525,7 @@ export interface Tenant {
      */
     newEmployerGoLive?: ('after-approval' | 'after-payment' | 'on-submit') | null;
     /**
-     * When a site manager approves a job, also mark its organisation as trusted, so its later jobs go live as that organisation’s rule says.
+     * Off by default (no automatic trust). When on, a tenant admin approving a job also marks its organisation as trusted, so its later jobs go live before payment.
      */
     trustOnApproval?: boolean | null;
   };

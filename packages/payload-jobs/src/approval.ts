@@ -1,6 +1,6 @@
 import type { CollectionAfterChangeHook, CollectionSlug, Endpoint, Payload, PayloadRequest } from 'payload'
 
-import { hasTenantRole, isSeekerOnly, isSuperAdmin, type MissionControlUser } from './access'
+import { hasAnyTenantRole, hasTenantRole, isSeekerOnly, isSuperAdmin, type MissionControlUser } from './access'
 import { idsOf, tenantIDOf } from './catalog'
 import { JOB_LOG_NOTE_CONTEXT, type JobLogNote } from './job-log'
 import { JOB_STAFF_ROLES } from './collections/jobs'
@@ -23,7 +23,7 @@ import { DEFAULT_PAYLOAD_JOBS_SLUGS, type PayloadJobsCollectionSlugs } from './s
  */
 
 export class ApprovalError extends Error {
-  readonly code: 'not_found' | 'forbidden' | 'not_awaiting_approval'
+  readonly code: 'not_found' | 'forbidden' | 'not_awaiting_approval' | 'not_checked_out'
   readonly status: number
 
   constructor(code: ApprovalError['code'], message: string, status: number) {
@@ -195,8 +195,8 @@ export type ApproveJobResult = {
 }
 
 /**
- * A site manager approves a job: it publishes, and (when the tenant's `trustOnApproval` is on)
- * its organisation becomes trusted so its later jobs go live without review.
+ * A site manager approves a job: it publishes, and (when the tenant's `trustOnApproval` is on,
+ * which is off by default, and a tenant admin approves) its organisation becomes trusted.
  *
  * Staff of the job's own tenant only; anyone else gets `not_found`, so a stranger cannot learn
  * which ids exist. A job that is already published is left alone, so repeating is safe.
@@ -225,7 +225,11 @@ export const approveJob = async ({
   }
   if (!actor || isSeekerOnly(actor)) throw new ApprovalError('not_found', 'Job not found', 404)
 
-  const allowed = isSuperAdmin(actor) || (jobTenant !== null && hasTenantRole(actor, jobTenant, JOB_STAFF_ROLES))
+  const allowed =
+    isSuperAdmin(actor) ||
+    (jobTenant !== null
+      ? hasTenantRole(actor, jobTenant, JOB_STAFF_ROLES)
+      : hasAnyTenantRole(actor, JOB_STAFF_ROLES))
   if (!allowed) throw new ApprovalError('not_found', 'Job not found', 404)
 
   if (job.status === 'published') {
@@ -237,6 +241,31 @@ export const approveJob = async ({
       `A ${String(job.status)} job is not waiting for approval`,
       409,
     )
+  }
+
+  // Only a job that went through checkout may be approved: it has a plan and a live order in
+  // this tenant. Otherwise Approve would publish it with no order, no credit and no expiry.
+  const orderID = idsOf([job.order].flat())[0] ?? null
+  const order =
+    orderID === null
+      ? null
+      : ((await payload.findByID({
+          collection: slugs.orders as CollectionSlug,
+          depth: 0,
+          disableErrors: true,
+          id: orderID,
+          overrideAccess: true,
+          req,
+          select: { status: true, tenant: true },
+        })) as Doc | null)
+  const orderTenant = tenantIDOf(order?.tenant)
+  const checkedOut =
+    order !== null &&
+    tenantIDOf(job.plan) !== null &&
+    !['cancelled', 'failed', 'waiting_for_purchase'].includes(String(order.status)) &&
+    (jobTenant === null || orderTenant === null || String(orderTenant) === String(jobTenant))
+  if (!checkedOut) {
+    throw new ApprovalError('not_checked_out', 'This job has not been through checkout, so it cannot be approved', 409)
   }
 
   const { publication, trusted, organisation } = await settingsFor({
@@ -257,8 +286,11 @@ export const approveJob = async ({
     system: false,
   })
 
+  // Trusting an organisation lets its jobs publish before payment, so only a tenant admin (or
+  // a super admin) may do it, never an editor.
+  const canTrust = isSuperAdmin(actor) || (jobTenant !== null && hasTenantRole(actor, jobTenant, ['tenant-admin']))
   let organisationTrusted = false
-  if (publication.trustOnApproval && !trusted && organisation) {
+  if (publication.trustOnApproval && canTrust && !trusted && organisation) {
     await payload.update({
       collection: slugs.organisations as CollectionSlug,
       data: { trusted: true } as never,

@@ -128,7 +128,7 @@ describe('publication settings per tenant @S-193', () => {
   const vwok: PublicationSettings = {
     moderation: 'never',
     newEmployerGoLive: 'after-approval',
-    trustOnApproval: true,
+    trustOnApproval: false,
     trustedGoLive: 'on-submit',
   }
 
@@ -152,18 +152,18 @@ describe('publication settings per tenant @S-193', () => {
     expect(DEFAULT_PUBLICATION_SETTINGS).toEqual(vwok)
   })
 
-  it('reads stored values, and turns trust-on-approval off only when it is explicitly false', () => {
+  it('reads stored values, and turns trust-on-approval on only when it is explicitly true', () => {
     expect(
       tenantPublicationSettings({
-        jobPublication: { moderation: 'always', newEmployerGoLive: 'after-payment', trustOnApproval: false, trustedGoLive: 'after-approval' },
+        jobPublication: { moderation: 'always', newEmployerGoLive: 'after-payment', trustOnApproval: true, trustedGoLive: 'after-approval' },
       }),
     ).toEqual({
       moderation: 'always',
       newEmployerGoLive: 'after-payment',
-      trustOnApproval: false,
+      trustOnApproval: true,
       trustedGoLive: 'after-approval',
     })
-    expect(tenantPublicationSettings({ jobPublication: { trustOnApproval: null } }).trustOnApproval).toBe(true)
+    expect(tenantPublicationSettings({ jobPublication: { trustOnApproval: null } }).trustOnApproval).toBe(false)
   })
 
   it('passes a malformed stored value through, so the rule holds the job', () => {

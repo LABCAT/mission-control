@@ -21,12 +21,13 @@ import {
   balanceFor,
   creditLedgerCollection,
   grantCredits,
+  organisationHistory,
   refundCreditOnCancel,
   refuseDeleteWhileInCreditLedger,
 } from './credits'
 import { endOfLocalDayAfter } from './local-time'
 import { orderCollection, refuseDeleteWhileOrdered } from './orders'
-import { DEFAULT_PUBLICATION_SETTINGS } from './publication'
+import { DEFAULT_PUBLICATION_SETTINGS, tenantPublicationSettings } from './publication'
 import { tenantPublicationField } from './publication-settings'
 import { orderEventHook } from './plug-points/gate'
 import type { PaymentProviderRegistration } from './plug-points/definitions'
@@ -845,7 +846,8 @@ describe('checkout integration', () => {
       await setTrusted(orgs.brew, false)
     })
 
-    it('publishes on approval, trusts the organisation, and logs the site manager @S-194', async () => {
+    it('publishes on approval, trusts the organisation when the tenant turns that on, and logs the site manager @S-194', async () => {
+      await setPublication(harness.tenantA.id, { trustOnApproval: true })
       const listing = await job(orgs.brew)
       await checkout(users.owner, { jobId: listing.id })
       expect((await read('jobs', listing.id)).status).toBe('pending')
@@ -863,15 +865,48 @@ describe('checkout integration', () => {
       expect(await approve(admin, listing.id)).toMatchObject({ changed: false, status: 'published' })
       expect((await read('jobs', listing.id)).log).toHaveLength(stored.log.length)
       await setTrusted(orgs.brew, false)
+      await setPublication(harness.tenantA.id, {})
     })
 
-    it('leaves the organisation untrusted when the tenant turns that off @S-194', async () => {
-      await setPublication(harness.tenantA.id, { trustOnApproval: false })
+    it('does not trust the organisation on approval unless the tenant turns that on @S-194', async () => {
+      expect(DEFAULT_PUBLICATION_SETTINGS.trustOnApproval).toBe(false)
+      const stored = (await read('tenants', harness.tenantA.id)) as Doc
+      expect(tenantPublicationSettings(stored as never).trustOnApproval).toBe(false)
+      await setPublication(harness.tenantA.id, {})
       const listing = await job(orgs.brew)
       await checkout(users.owner, { jobId: listing.id })
-      expect(await approve(admin, listing.id)).toMatchObject({ changed: true, organisationTrusted: false })
+      expect(await approve(admin, listing.id)).toMatchObject({ changed: true, organisationTrusted: false, status: 'published' })
+      expect((await read('organisations', orgs.brew.id)).trusted).toBe(false)
+    })
+
+    it('lets an editor approve but never trust, even with trust-on-approval on @S-194', async () => {
+      await setPublication(harness.tenantA.id, { trustOnApproval: true })
+      const editor = await makeUser('editor', [{ role: 'editor', tenant: harness.tenantA.id }])
+      const listing = await job(orgs.brew)
+      await checkout(users.owner, { jobId: listing.id })
+      expect(await approve(editor, listing.id)).toMatchObject({ changed: true, organisationTrusted: false })
       expect((await read('organisations', orgs.brew.id)).trusted).toBe(false)
       await setPublication(harness.tenantA.id, {})
+    })
+
+    it('refuses to approve a pending job that never went through checkout @S-195', async () => {
+      // An employer may create a job as pending; nothing was bought, so Approve must not publish it.
+      const skipped = await job(orgs.brew, { status: 'pending' })
+      await expect(approve(admin, skipped.id)).rejects.toSatisfy(refusedApproval('not_checked_out'))
+      const stored = await read('jobs', skipped.id)
+      expect(stored.status).toBe('pending')
+      expect(stored.publishedAt).toBeFalsy()
+
+    })
+
+    it('shows approvals and other moves in the organisation History @S-191', async () => {
+      const listing = await job(orgs.brew)
+      await checkout(users.owner, { jobId: listing.id })
+      await approve(admin, listing.id)
+      const history = await organisationHistory({ organisation: orgs.brew.id, payload })
+      const events = history.entries.filter((entry) => entry.kind === 'job' && String(entry.job?.id) === String(listing.id))
+      expect(events.map((entry) => entry.event)).toEqual(['posted', 'pending', 'published'])
+      expect(events.at(-1)?.by).toMatchObject({ id: admin.id })
     })
 
     it('refuses everyone but the job’s own site managers, and never says which ids exist @S-195', async () => {

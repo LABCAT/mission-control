@@ -2755,7 +2755,7 @@ stories:
     steps:
       - "Submit a job as a member who cannot buy, then have the owner approve or decline the purchase."
       - "Open the job's log."
-    expected: "Only the allowed moves happen. Each one is recorded with who did it (employer, staff or system), when, from and to, and nobody can edit the log. Declining a purchase returns the job to a draft."
+    expected: "Only the allowed moves happen. Each one is recorded with who did it (employer, staff or system), when, from and to, and nobody can edit the log. Declining a purchase returns the job to a draft. The organisation History tab shows each move."
     settings: []
     mvp: true
     status: built
@@ -2803,11 +2803,11 @@ stories:
   - id: S-194
     area: Publishing and moderation
     role: site manager
-    story: "A site manager approves a pending job from the admin, which publishes it and, when the site says so, trusts the employer."
+    story: "A site manager approves a pending job from the admin, which publishes it. Only when the site turns it on (off by default) does a tenant admin's approval also trust the employer."
     steps:
       - "Open a pending job in the admin and press Approve and publish."
       - "Approve it again."
-    expected: "The job is published with its dates and a log entry naming the site manager. The organisation becomes trusted when the site's setting is on. Repeating the action changes nothing."
+    expected: "The job is published with its dates and a log entry naming the site manager. The organisation stays untrusted unless the site's setting is on and a tenant admin approved (an editor never trusts). Repeating the action changes nothing."
     settings:
       - jobPublication.trustOnApproval
     mvp: true
@@ -2823,8 +2823,8 @@ stories:
     story: "Only a site manager of the job's own site can approve it, and nobody learns which jobs exist on other sites."
     steps:
       - "Try to approve a job as its employer, a seeker, a signed-out visitor and another site's manager."
-      - "Try to approve a draft or a job waiting for purchase."
-    expected: "Everyone but the job's site managers (and super admins) gets Not found and nothing changes. A job that is not pending is refused."
+      - "Try to approve a draft, a job waiting for purchase, or a pending job that never went through checkout."
+    expected: "Everyone but the job's site managers (and super admins) gets Not found and nothing changes. A job that is not pending, or has no plan and live order, is refused."
     settings: []
     mvp: true
     status: built

@@ -54,7 +54,7 @@ export type PublicationSettings = {
 export const DEFAULT_PUBLICATION_SETTINGS: PublicationSettings = {
   moderation: 'never',
   newEmployerGoLive: 'after-approval',
-  trustOnApproval: true,
+  trustOnApproval: false,
   trustedGoLive: 'on-submit',
 }
 
@@ -169,7 +169,7 @@ export const tenantPublicationSettings = (
     moderation: (stored.moderation ?? DEFAULT_PUBLICATION_SETTINGS.moderation) as PublicationModeration,
     newEmployerGoLive: (stored.newEmployerGoLive ??
       DEFAULT_PUBLICATION_SETTINGS.newEmployerGoLive) as PublicationTrigger,
-    trustOnApproval: stored.trustOnApproval !== false,
+    trustOnApproval: stored.trustOnApproval === true,
     trustedGoLive: (stored.trustedGoLive ?? DEFAULT_PUBLICATION_SETTINGS.trustedGoLive) as PublicationTrigger,
   }
 }
