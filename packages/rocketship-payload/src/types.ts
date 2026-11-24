@@ -98,13 +98,63 @@ export type BannerBlock = BlockBase<'banner'> & {
   priority?: boolean | null
 }
 
+/** One field of a Payload form-builder form, as the renderer reads it. */
+export type FormFieldOption = {
+  label: string
+  value: string
+}
+
+export type FormFieldData = {
+  blockType: string
+  defaultValue?: boolean | null | string
+  label?: null | string
+  message?: RichTextData | null
+  name?: null | string
+  options?: FormFieldOption[] | null
+  required?: boolean | null
+  width?: null | number
+}
+
+/** A Payload form-builder form, populated, as a renderer receives it. */
+export type FormData = {
+  confirmationMessage?: null | RichTextData
+  confirmationType?: 'message' | 'redirect' | null
+  fields?: FormFieldData[] | null
+  id: number | string
+  submitButtonLabel?: null | string
+  title: string
+}
+
+export type FormBlock = BlockBase<'form'> & {
+  form: FormData | number | null | string
+  heading?: null | string
+  intro?: null | string
+}
+
+export type MapProvider = 'google' | 'openstreetmap'
+
+export type MapBlock = BlockBase<'map'> & {
+  /** Address or place to look up when no coordinates are set. */
+  address?: null | string
+  heading?: null | string
+  height?: 'large' | 'medium' | 'small' | null
+  latitude?: null | number
+  longitude?: null | number
+  provider?: MapProvider | null
+  /** Accessible name for the embedded map. */
+  title?: null | string
+  zoom?: null | number
+}
+
 export type BlockData =
   | BannerBlock
   | CardGridBlock
   | CtaBlock
   | FaqBlock
   | FeatureBoxesBlock
+  | FormBlock
   | HeroBlock
+  | MapBlock
   | RichTextBlock
 
 /** The minimum a value needs to be for the renderer map to look it up. */

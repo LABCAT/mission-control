@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 
 import type { MysqlReader } from '../mysql-reader'
+import { readLegacySiteChrome, type LegacyBanner } from '../site-chrome'
 import type { ImportPayload } from '../types'
 import { copyFile, SourceMissingError, type CopyResult } from './copy'
 import { buildMediaPlan, type MediaPlanOptions } from './plan'
@@ -13,6 +14,7 @@ export type MediaSlugs = {
   media: string
   organisations: string
   pages: string
+  siteSettings: string
 }
 
 export const DEFAULT_MEDIA_SLUGS: MediaSlugs = {
@@ -21,6 +23,7 @@ export const DEFAULT_MEDIA_SLUGS: MediaSlugs = {
   media: 'media',
   organisations: 'organisations',
   pages: 'pages',
+  siteSettings: 'site-settings',
 }
 
 /** The cap the `documents` collection enforces on uploads (10 MB). */
@@ -78,10 +81,18 @@ export const pathLegacyId = (relative: string): number => {
 }
 
 const FIELD_OF: Record<MediaKind, string> = {
+  'banner-desktop': 'headerBanner',
+  'banner-mobile': 'headerBanner',
   cover: 'cover',
   'job-pdf': 'jobDescriptionPdf',
   logo: 'logo',
   'page-image': 'seo.image',
+}
+
+/** The banner block field an image belongs to, inside the site-settings `headerBanner` array. */
+const BANNER_IMAGE_FIELD: Partial<Record<MediaKind, 'desktopImage' | 'mobileImage'>> = {
+  'banner-desktop': 'desktopImage',
+  'banner-mobile': 'mobileImage',
 }
 
 export type MediaImportOptions = {
@@ -163,7 +174,13 @@ export const runMediaImport = async (options: RunMediaImportOptions): Promise<Me
   report.planned = plan.refs.length
   for (const [reason, count] of Object.entries(plan.skipped)) report.skipped[reason] = count
 
-  const ownerSlugs = { jobs: slugs.jobs, organisations: slugs.organisations, pages: slugs.pages }
+  const ownerSlugs = {
+    jobs: slugs.jobs,
+    organisations: slugs.organisations,
+    pages: slugs.pages,
+    'site-settings': slugs.siteSettings,
+  }
+
   const find = async (collection: string, legacyId: number): Promise<Doc | undefined> =>
     (
       await payload.find({
@@ -204,6 +221,13 @@ export const runMediaImport = async (options: RunMediaImportOptions): Promise<Me
     }
     copies.set(ref.path, result)
     return result
+  }
+
+  // The banner block also carries the legacy link and alt text, which the settings row does not.
+  let chromeBanner: Promise<LegacyBanner> | undefined
+  const bannerOf = async (): Promise<LegacyBanner> => {
+    chromeBanner ??= readLegacySiteChrome(options.reader).then((chrome) => chrome.banner)
+    return chromeBanner
   }
 
   const legacyIds = new Map<number, string>()
@@ -278,7 +302,11 @@ export const runMediaImport = async (options: RunMediaImportOptions): Promise<Me
 
       // The owner's relation. Set only when empty: a different file there was chosen by a person.
       const field = FIELD_OF[ref.kind]
-      const current = idOf(valueAt(owner, field))
+      const bannerField = BANNER_IMAGE_FIELD[ref.kind]
+      const bannerRow = bannerField
+        ? ((valueAt(owner, 'headerBanner') as Record<string, unknown>[] | undefined)?.[0] ?? undefined)
+        : undefined
+      const current = idOf(bannerField ? bannerRow?.[bannerField] : valueAt(owner, field))
       if (current !== undefined && current !== String(file?.id)) {
         report.relations.kept++
         skip('relation-already-set')
@@ -288,10 +316,24 @@ export const runMediaImport = async (options: RunMediaImportOptions): Promise<Me
 
       report.relations.set++
       if (!dryRun && file) {
+        const legacyBanner = bannerField ? await bannerOf() : undefined
         const data =
           field === 'seo.image'
             ? { seo: { ...owner.seo, image: file.id } } // a group is replaced whole
-            : { [field]: file.id }
+            : bannerField
+              ? {
+                  // The banner block is one row: keep the other image, add the legacy link and alt.
+                  headerBanner: [
+                    {
+                      ...bannerRow,
+                      blockType: 'banner',
+                      ...(legacyBanner?.alt ? { alt: legacyBanner.alt } : {}),
+                      ...(legacyBanner?.href ? { href: legacyBanner.href } : {}),
+                      [bannerField]: file.id,
+                    },
+                  ],
+                }
+              : { [field]: file.id }
         await payload.update({ collection: ownerSlugs[ref.owner.collection], data, id: owner.id, overrideAccess: true })
       }
     } catch (error) {
