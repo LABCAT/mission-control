@@ -2318,6 +2318,81 @@ stories:
       - packages/payload-wp-import/src/importers/jobs.test.ts
       - packages/payload-wp-import/src/html-to-lexical.test.ts
 
+  - id: S-200
+    area: Import and cutover
+    role: super admin
+    story: "The plan seed is checked against the live plans before the commerce import, so a price that drifted is caught in the dry run."
+    steps:
+      - "Run wp-import plans --dry-run."
+    expected: "Each published legacy plan is matched to the seeded plan by its WordPress id and compared on price, relist price (equal to the price), duration and pack size; a difference or a missing plan is reported as a failure naming it; nothing is written, and an unpublished plan is skipped."
+    settings:
+      - import.plans
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-wp-import/src/importers/commerce.test.ts
+      - apps/cms/src/seed/vwok-plans.test.ts
+
+  - id: S-201
+    area: Import and cutover
+    role: super admin
+    story: "The importer brings over the coupons that are still valid, with their discount and how often they were used."
+    steps:
+      - "Run wp-import coupons --dry-run and read the coupons imported and expired."
+      - "Run it for real, then run it again."
+    expected: "LINKPS (flat, no end date, 501 uses) is kept; coupons past their end date are not imported unless the setting says so; flat amounts are minor units and percentages whole numbers; the use count is set once and a re-run never lowers what the live site has counted since."
+    settings:
+      - import.importExpiredCoupons
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-wp-import/src/importers/commerce.test.ts
+      - packages/payload-wp-import/src/importers/commerce.integration.test.ts
+
+  - id: S-202
+    area: Import and cutover
+    role: super admin
+    story: "The importer brings the last 24 months of orders into the organisation that owns them, linked to their jobs and Xero invoice."
+    steps:
+      - "Run wp-import orders --dry-run and read the orders by month, status and total."
+      - "Run it for real, then run it again."
+    expected: "Pending legacy orders import as invoiced (paid through Xero), activated and completed ones as paid with their paid date, failed ones as failed; money is whole minor units with no tax; the order belongs to the organisation of its job, else of the person who ordered; the Xero invoice id is kept as an external reference; an order with no readable total, no organisation or a tax charge is reported, never guessed; a second run creates nothing and does not touch what the order was sold for."
+    settings:
+      - import.orderMonths
+      - import.paymentProvider
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-wp-import/src/importers/commerce.test.ts
+      - packages/payload-wp-import/src/importers/commerce.integration.test.ts
+
+  - id: S-203
+    area: Import and cutover
+    role: super admin
+    story: "The importer carries each organisation's remaining job-pack credits over as opening balances."
+    steps:
+      - "Run wp-import credits --dry-run and read the credit totals per organisation."
+      - "Run it for real, then run it again."
+    expected: "Each pack with credits left becomes one opening row with its legacy reference, attached to the organisation, with no expiry; the rows sum to the legacy balances; used-up packs and users that were not imported are skipped and counted; a pack whose balance cannot be read fails and is named; a second run adds no row."
+    settings: []
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-wp-import/src/importers/commerce.test.ts
+      - packages/payload-wp-import/src/importers/commerce.integration.test.ts
+
+  - id: S-204
+    area: Import and cutover
+    role: super admin
+    story: "A dry run of the commerce import writes nothing and reports the totals the real run will produce."
+    steps:
+      - "Run wp-import all --tenant vwok --dry-run and read the plan, coupon, order and credit lines."
+    expected: "The report lists orders by month and status with their total, coupons imported and expired with each use count, and the opening credits per organisation and in total; the counts equal those of the real run."
+    settings: []
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-wp-import/src/importers/commerce.test.ts
   - id: S-260
     area: Import and cutover
     role: super admin

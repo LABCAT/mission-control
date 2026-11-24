@@ -1,3 +1,4 @@
+import { commerceImporters } from './importers/commerce'
 import { jobsImporters } from './importers/jobs'
 import { locationsImporter } from './importers/locations'
 import { menusImporter } from './importers/menus'
@@ -14,6 +15,8 @@ import type { Importer } from './types'
  * The taxonomies import into the five `payload-jobs` taxonomy collections. `organisations` and
  * `users` (PJ-62) import the active legacy users and the organisations derived from the employers.
  * `job-organisations` and `jobs` (PJ-64) import the published and expired jobs.
+ * `plans` (checks the seed), `coupons`, `orders` (last 24 months) and `credits` (opening balances)
+ * are PJ-65.
  * `site-settings`, `pages` and `menus` (PJ-67) import the site chrome, the content pages and the
  * three menus; `pages` adopts the system pages the tenant seed created.
  */
@@ -24,6 +27,7 @@ export const registry: Record<string, Importer> = Object.fromEntries(
     ...taxonomyImporters(),
     ...Object.values(usersImporters({ planProvider })),
     ...Object.values(jobsImporters({ planProvider })),
+    ...Object.values(commerceImporters({ planProvider })),
     siteSettingsImporter(),
     pagesImporter(),
     menusImporter(),
