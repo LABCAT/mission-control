@@ -28,6 +28,7 @@ import * as migration_20261121_153213_credit_ledger from './20261121_153213_cred
 import * as migration_20261121_163345_xero_invoices from './20261121_163345_xero_invoices';
 import * as migration_20261123_001810_view_as_audit_log from './20261123_001810_view_as_audit_log';
 import * as migration_20261123_080818_pages_site_settings from './20261123_080818_pages_site_settings';
+import * as migration_20261124_044341_form_map_blocks from './20261124_044341_form_map_blocks';
 
 export const migrations = [
   {
@@ -178,6 +179,11 @@ export const migrations = [
   {
     up: migration_20261123_080818_pages_site_settings.up,
     down: migration_20261123_080818_pages_site_settings.down,
-    name: '20261123_080818_pages_site_settings'
+    name: '20261123_080818_pages_site_settings',
+  },
+  {
+    up: migration_20261124_044341_form_map_blocks.up,
+    down: migration_20261124_044341_form_map_blocks.down,
+    name: '20261124_044341_form_map_blocks'
   },
 ];
