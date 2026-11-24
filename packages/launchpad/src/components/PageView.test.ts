@@ -133,6 +133,7 @@ describe('PageView', () => {
     expect(generated).toContain('<meta property="og:image" content="https://vanuatuwok.vu/og/home.png">')
     expect(generated).not.toContain('editor-chosen')
     expect(generated).toContain('<meta name="twitter:card" content="summary_large_image">')
+    expect(generated).toContain('<meta name="twitter:image" content="https://vanuatuwok.vu/og/home.png">')
   })
 
   it('takes the image from the CMS when the site generates none for a page @S-254', async () => {
@@ -142,6 +143,7 @@ describe('PageView', () => {
 
     expect(html).not.toContain('og:image')
     expect(html).toContain('<meta name="twitter:card" content="summary">')
+    expect(html).not.toContain('twitter:image')
   })
 
   it('keeps the page out of the index when its SEO says so @S-292', async () => {
