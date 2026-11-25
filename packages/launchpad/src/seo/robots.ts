@@ -3,10 +3,11 @@
  * may read the site.
  *
  * The rule comes from STATUS.md (19 Nov): robots allows public pages, blocks `/admin` and
- * `/account`, points at the sitemap, and carries a per-tenant AI-crawler switch. The switch
- * itself is built in PJ-104, so the default here is "allow" and a site app passes the tenant's
- * value once the setting exists.
+ * `/account`, points at the sitemap, and carries a per-tenant AI-crawler switch. The switch is
+ * the tenant's `allowAiCrawlers` setting (PJ-104); a tenant that never set it allows, which is
+ * vwok's legacy behaviour.
  */
+import type { SiteTenant } from '../tenant/types'
 
 /** Areas no crawler may enter: the CMS admin, the account dashboards and the private API. */
 export const PRIVATE_ROBOTS_PATHS: readonly string[] = ['/admin', '/account', '/api']
@@ -31,8 +32,15 @@ export const AI_CRAWLERS: readonly string[] = [
   'meta-externalagent',
 ]
 
+/**
+ * Whether a tenant's robots.txt lets AI crawlers in. Only an explicit `false` turns them away, so
+ * a tenant row that predates the setting, or one the CMS returned without it, still allows them.
+ */
+export const tenantAllowsAiCrawlers = (tenant: Pick<SiteTenant, 'allowAiCrawlers'>): boolean =>
+  tenant.allowAiCrawlers !== false
+
 export type RobotsOptions = {
-  /** Let AI crawlers read the site. Default `true`: vwok has no switch yet (PJ-104). */
+  /** Let AI crawlers read the site. Default `true`, the tenant setting's own default. */
   allowAiCrawlers?: boolean
   /** False on a preview or a developer host: the whole site is a duplicate of production. */
   crawlable?: boolean

@@ -2,7 +2,7 @@ import { brandingTokens } from '@mission-control/launchpad'
 import { describe, expect, it } from 'vitest'
 
 import { BRAND, LOGO, PRODUCTION_HOSTNAMES, siteTenant } from './brand'
-import { isCrawlableHost, isProductionHost, robotsTxt } from './robots'
+import { allowAiCrawlersFor, isCrawlableHost, isProductionHost, robotsTxt } from './robots'
 
 describe('Vanuatu Wok branding', () => {
   it('maps the legacy palette onto Rocketship tokens and nothing else', () => {
@@ -82,6 +82,20 @@ describe('robots.txt @S-124', () => {
     expect(aiGroup(allowed)).toContain('User-agent: GPTBot')
     expect(aiGroup(allowed).split('\n')).not.toContain('Disallow: /')
     expect(aiGroup(blocked).split('\n')).toContain('Disallow: /')
+  })
+
+  it('follows the tenant’s AI-crawler setting, not the deployment switch @S-124', () => {
+    const env = { AI_CRAWLERS_ALLOWED: 'true' }
+    // A tenant that turned crawlers off is the answer, even on a deployment that allows them.
+    expect(allowAiCrawlersFor({ env, settings: { allowAiCrawlers: false, name: 'Vanuatu Wok', slug: 'vwok' } })).toBe(false)
+    // An explicit allow, and a row that never set the field, both read as allow.
+    expect(allowAiCrawlersFor({ env: { AI_CRAWLERS_ALLOWED: 'false' }, settings: { allowAiCrawlers: true, name: 'Vanuatu Wok', slug: 'vwok' } })).toBe(true)
+    expect(allowAiCrawlersFor({ env: {}, settings: { name: 'Vanuatu Wok', slug: 'vwok' } })).toBe(true)
+  })
+
+  it('falls back to the deployment switch when there is no CMS, or its read failed @S-124', () => {
+    expect(allowAiCrawlersFor({ env: { AI_CRAWLERS_ALLOWED: 'false' }, settings: null })).toBe(false)
+    expect(allowAiCrawlersFor({ env: {}, settings: null })).toBe(true)
   })
 
   it('does not treat a lookalike domain as production', () => {

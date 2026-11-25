@@ -20,9 +20,10 @@ pnpm --filter @mission-control/vwok lighthouse # build, then Lighthouse CI again
 | `src/env.ts`           | the Worker's environment (`CMS_URL`, `SITE_KEY`, the AI switch) |
 | `src/robots.ts`        | `robots.txt` for one hostname; production allows, previews block |
 | `src/sitemap.ts`       | `/sitemap.xml` and its shards, read from the CMS               |
+| `src/llms.ts`          | `/llms.txt`, the agent summary read from the CMS (PJ-104)      |
 | `src/layouts/`         | page chrome around the launchpad `BaseLayout`                  |
 | `src/page-route.ts`    | one request path → the CMS page it names, a 404, or the shell   |
-| `src/pages/`           | the catch-all route, plus `robots.txt`                         |
+| `src/pages/`           | the catch-all route, plus `robots.txt` and `llms.txt`          |
 | `public/brand/`        | logo and favicons, taken from the legacy WordPress uploads     |
 | `lighthouserc.json`    | the performance budget                                         |
 
@@ -62,11 +63,14 @@ Both routes need two Worker variables (see `.dev.vars.example`):
 | `SITE_KEY` | the vwok tenant's site key; a secret, never sent to a page   |
 
 Without them `/sitemap.xml` answers 404 rather than an empty sitemap, because an empty one tells a
-crawler the site has no pages.
+crawler the site has no pages. `/llms.txt` (PJ-104) uses the same two values: it lists the site's
+key URLs, its live jobs, its public organisations and its indexable pages for AI agents.
 
 `robots.txt` blocks `/admin`, `/account` and `/api`, points at the canonical sitemap, and blocks
-the whole site on a preview host. AI crawlers are allowed by default — vwok's legacy behaviour —
-and `AI_CRAWLERS_ALLOWED=false` turns them away until the per-tenant setting (PJ-104) lands.
+the whole site on a preview host. Whether AI crawlers may read the site is the tenant's
+`allowAiCrawlers` setting (PJ-104), which defaults to allow — vwok's legacy behaviour. The
+`AI_CRAWLERS_ALLOWED` variable is read only when no CMS is configured, so a local checkout keeps
+answering.
 
 ## Deploy
 

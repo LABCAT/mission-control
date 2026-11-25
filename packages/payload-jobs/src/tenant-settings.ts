@@ -11,6 +11,7 @@ import { resolveSiteKey } from './site-keys'
  * out, so adding a field to the tenant never exposes it by accident.
  */
 export const PUBLIC_TENANT_SETTINGS_FIELDS = [
+  'allowAiCrawlers',
   'branding',
   'currency',
   'currencyMinorUnits',
@@ -25,6 +26,8 @@ export const PUBLIC_TENANT_SETTINGS_FIELDS = [
 ] as const
 
 export type PublicTenantSettings = {
+  /** The tenant's robots.txt switch for AI crawlers (PJ-104). Default allow. */
+  allowAiCrawlers?: boolean
   branding?: { colorAccent?: string; colorHover?: string; colorPrimary?: string; logo?: unknown }
   currency?: string
   currencyMinorUnits?: number
@@ -68,6 +71,8 @@ export const publicTenantSettings = (tenant: TenantDoc): PublicTenantSettings | 
     : undefined
 
   return {
+    // Explicit `false` only: a tenant that never saved the field reads as the documented default.
+    ...(tenant.allowAiCrawlers === false ? { allowAiCrawlers: false } : {}),
     ...(branding && typeof branding === 'object' ? { branding } : {}),
     ...(text(tenant.currency) ? { currency: text(tenant.currency) } : {}),
     ...(number(tenant.currencyMinorUnits) !== undefined
