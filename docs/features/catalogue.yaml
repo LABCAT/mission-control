@@ -1574,7 +1574,7 @@ stories:
     story: "A site manager decides whether alerts need an account, whether they need confirming, and how many one address may hold."
     steps:
       - "Turn off 'allow alerts without account', turn off double opt-in, lower the maximum per email."
-    expected: "Without the first, only a signed-in member subscribes, using their own address; without the second, a new alert starts at once with no email; past the maximum of confirmed alerts a new search is refused while a repeat of an existing one is not, and alerts nobody confirmed within the link's lifetime are deleted daily."
+    expected: "Without the first, only a signed-in member subscribes, using their own address; without the second, a new alert starts at once with no email; past the maximum of confirmed alerts a new search is not added but gets the same answer as any request, with a manage link emailed so the address can make room, and alerts nobody confirmed within the link's lifetime are deleted daily."
     settings:
       - alerts.allowWithoutAccount
       - alerts.doubleOptIn

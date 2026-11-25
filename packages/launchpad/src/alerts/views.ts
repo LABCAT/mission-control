@@ -32,7 +32,7 @@ export const subscribeNotice = (
     : {
         kind: 'success',
         message:
-          'We have sent you an email. Open the link in it to start your job alert. If it does not arrive in a few minutes, check your spam folder.',
+          'We have sent you an email. Open the link in it to start or manage your job alert. If it does not arrive in a few minutes, check your spam folder.',
         title: 'Check your email',
       }
 }

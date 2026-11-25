@@ -162,6 +162,15 @@ describe('alert page wording @S-373', () => {
     expect(subscribeNotice({ ok: true, status: 'subscribed' })).toMatchObject({ title: 'Job alert saved' })
   })
 
+  it('tells a pending subscriber to open the email to start or manage the alert, whichever it is', () => {
+    // The same page answers a new alert (confirm link) and a repeat of a live one (manage link),
+    // and must not say which, so it must be true of both.
+    const { message } = subscribeNotice({ ok: true, status: 'pending' })
+
+    expect(message).toMatch(/start or manage/)
+    expect(message).not.toMatch(/to start your job alert/)
+  })
+
   it('shows the CMS’s own message for a refusal, with a title that says what went wrong', () => {
     expect(subscribeNotice({ code: 'disposable_email', message: 'Use a permanent email address.', ok: false, status: 400 })).toEqual({
       kind: 'error',

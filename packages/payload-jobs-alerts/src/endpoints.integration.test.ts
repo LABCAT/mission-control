@@ -209,6 +209,25 @@ describe('alert endpoints @S-085 @S-086 @S-087 @S-372', () => {
     expect((await subscribe()).status).toBe(200)
   })
 
+  it('answers a capped address exactly like any other, so the form reveals nothing about it @S-372', async () => {
+    await harness.payload.update({
+      collection: 'tenants',
+      data: { alertsMaxPerEmail: 1 } as never,
+      id: harness.tenantA.id,
+      overrideAccess: true,
+    })
+    await subscribe({ email: 'full@example.com', filters: { q: 'one' } })
+    const confirmURL = sent[0]!.doc.variables.confirmUrl!
+    await call('confirm', { token: confirmURL.slice(confirmURL.lastIndexOf('/') + 1) })
+
+    const capped = await subscribe({ email: 'full@example.com', filters: { q: 'two' } })
+    const ordinary = await subscribe({ email: 'fresh@example.com', filters: { q: 'two' } })
+
+    expect(capped.status).toBe(ordinary.status)
+    expect(capped.body).toEqual(ordinary.body)
+    expect(capped.headers.get('retry-after')).toBe(ordinary.headers.get('retry-after'))
+  })
+
   it('requires an account when the tenant says so, taking the address from it', async () => {
     await harness.payload.update({
       collection: 'tenants',

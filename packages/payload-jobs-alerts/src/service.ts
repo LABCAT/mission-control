@@ -88,7 +88,6 @@ const ERRORS = {
     status: 500,
   },
   notFound: { code: 'alert_not_found', message: 'That alert does not exist.', status: 404 },
-  tooMany: { code: 'too_many_alerts', message: 'This address has reached the limit of job alerts.', status: 400 },
 } as const
 
 const scopeWhere = (context: AlertsContext): Where[] =>
@@ -387,7 +386,13 @@ export const subscribeToAlert = async (
   // someone's address, but never confirm one, so they must not be able to use up the owner's
   // room. Their unconfirmed ones are capped too, by replacing the oldest.
   const confirmed = existing.filter((alert) => alert.confirmed === true)
-  if (confirmed.length >= settings.maxPerEmail) throw new AccountAuthError(ERRORS.tooMany)
+  if (confirmed.length >= settings.maxPerEmail) {
+    // At the limit. Answer exactly as for any other request, so the form cannot be used to
+    // learn that an address has the maximum, and send the manage link: that is where the owner
+    // can delete one to make room.
+    await sendManageLink(context, email)
+    return { status }
+  }
 
   const pending = existing.filter((alert) => alert.confirmed !== true)
   for (const stale of pending.slice(0, Math.max(0, pending.length - settings.maxPerEmail + 1))) {

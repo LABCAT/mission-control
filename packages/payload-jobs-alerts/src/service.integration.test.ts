@@ -207,9 +207,15 @@ describe('alert subscribe, confirm, manage and unsubscribe @S-085 @S-086 @S-087 
       await subscribeToAlert(capped, { email: 'jo@example.com', filters: { q: 'two' } })
       for (const email of sent) await confirmAlert(capped, tokenOf(email.doc.variables.confirmUrl!))
 
+      // A capped address gets the answer anyone gets and no new alert: the response must not
+      // reveal that the address already has the maximum. The email is a manage link, so the
+      // owner can make room.
+      sent = []
       await expect(
         subscribeToAlert(capped, { email: 'jo@example.com', filters: { q: 'three' } }),
-      ).rejects.toMatchObject({ code: 'too_many_alerts', status: 400 })
+      ).resolves.toEqual({ status: 'pending' })
+      expect(await count({ email: { equals: 'jo@example.com' } })).toBe(2)
+      expect(sent.map((email) => email.event)).toEqual(['alert-manage-link'])
       // The same search is a duplicate, not a third alert, so it is still answered.
       await expect(
         subscribeToAlert(capped, { email: 'jo@example.com', filters: { q: 'two' } }),
