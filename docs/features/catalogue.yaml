@@ -110,8 +110,9 @@ stories:
     expected: "The response is 404 with links to home, jobs and the organisation directory; no stack trace is shown."
     settings: []
     mvp: true
-    status: planned
-    tests: []
+    status: built
+    tests:
+      - apps/vwok/src/components/NotFoundPage.test.ts
 
   - id: S-007
     area: Public site
@@ -2211,8 +2212,172 @@ stories:
     settings:
       - seo.legacyRedirects
     mvp: true
-    status: planned
-    tests: []
+    status: built
+    tests:
+      - apps/vwok/src/legacy-crawl.test.ts
+      - apps/vwok/src/legacy-routes.test.ts
+
+  - id: S-350
+    area: SEO and URLs
+    role: seeker
+    story: "The legacy URL rules read a path the same way however it is spelled, and the same way on every host."
+    steps:
+      - "Resolve `/jobs/page/2/`, `/jobs/page/2` and a percent-encoded legacy segment."
+      - "Resolve the same path with and without a trailing slash."
+    expected: "Trailing slashes, empty segments and the query string are dropped before a rule sees the path, a valid escape is decoded once, a malformed escape is kept as typed so the lookup simply misses, and the table answers both spellings of a path the same way."
+    settings:
+      - seo.legacyRedirects
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/redirects/legacy-map.test.ts
+      - packages/launchpad/src/redirects/table.test.ts
+      - apps/vwok/src/legacy-crawl.test.ts
+
+  - id: S-351
+    area: SEO and URLs
+    role: seeker
+    story: "A legacy job taxonomy URL lands on the clean filter page for that term."
+    steps:
+      - "Open `/job-category/{slug}/`, `/job-type/{slug}/` and `/job-type/voluntary/{slug}/`."
+      - "Open a salary band and a taxonomy feed."
+    expected: "A category, type or nested type 301s to `/jobs/{slug}` on one level, a salary band to `/jobs?salary={slug}`, and a feed to the same filter page, never to the feed. A path with no slug falls back to the listing."
+    settings:
+      - seo.legacyRedirects
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/redirects/legacy-map.test.ts
+      - apps/vwok/src/legacy-crawl.test.ts
+
+  - id: S-352
+    area: SEO and URLs
+    role: seeker
+    story: "A legacy organisation nickname lands on that organisation's page, and an author archive on the organisation it belongs to."
+    steps:
+      - "Open `/organisation/{nickname}/` and its feed, including a nickname the new site slugged differently."
+      - "Open `/author/{nickname}/` and a bare `/organisation/`."
+    expected: "The profile and its feed 301 to `/organisations/{slug}`; an author archive goes to the same page; a bare directory path goes to `/organisations`; no organisation URL is answered by the directory rule when it names a profile."
+    settings:
+      - seo.legacyRedirects
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/redirects/legacy-map.test.ts
+      - apps/vwok/src/legacy-crawl.test.ts
+
+  - id: S-353
+    area: SEO and URLs
+    role: seeker
+    story: "A retired legacy section answers 410 rather than redirecting to a page that has nothing to do with it."
+    steps:
+      - "Open the CV module at every level, the two retired promo pages and their attachments."
+      - "Open `/wp/xmlrpc.php`."
+    expected: "Each answers 410 with the site's own gone page, which keeps the navigation and a search box; none of them appears in the redirect table, so a crawler stops asking."
+    settings:
+      - seo.legacyRedirects
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/redirects/legacy-map.test.ts
+      - apps/vwok/src/legacy-crawl.test.ts
+
+  - id: S-354
+    area: SEO and URLs
+    role: seeker
+    story: "A legacy page, account URL or WordPress feed lands on the page that replaced it."
+    steps:
+      - "Open `/about-us/`, `/contact-2/`, `/employer/`, `/home-2/`, `/blog/` and `/?feed=`."
+      - "Open `/login/?redirect_to=…&role=…`, `/register/`, `/sign-up/`, `/my-profile/` and `/submit/`."
+    expected: "A renamed page 301s to its new address and keeps its children with it; the account pages go to `/account` or `/account/login`; the feeds go to the site feed route; a page that kept its address (`/contact/`, `/organisations/`) is left to its own route rather than being redirected to itself."
+    settings:
+      - seo.legacyRedirects
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/redirects/legacy-map.test.ts
+      - apps/vwok/src/legacy-crawl.test.ts
+
+  - id: S-355
+    area: SEO and URLs
+    role: seeker
+    story: "A legacy job archive page, job attachment or uploaded file lands on the job, the file or the listing."
+    steps:
+      - "Open `/jobs/page/2/`, `/jobs/{slug}/attachment/{id}/` and `/app/uploads/YYYY/MM/{file}.pdf`."
+      - "Open `/jobs/{slug}/feed/` and `/jobs/{slug}/{image}/`."
+    expected: "A later page 301s to `/jobs?page=N` and page 1 to `/jobs`; a job attachment and an uploaded file 301 to their file on R2 when the media import carried it, and 410 when it did not; a job feed or any other child of a job 301s to the job page; the job page and the listing themselves are left to their own routes."
+    settings:
+      - seo.legacyRedirects
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/redirects/legacy-map.test.ts
+      - apps/vwok/src/legacy-crawl.test.ts
+
+  - id: S-356
+    area: SEO and URLs
+    role: seeker
+    story: "A legacy job search or date-archive URL lands on the new listing with the filters it asked for."
+    steps:
+      - "Open `/jobs/?s=chef&location=Port+Vila`, a `{job-type}=show` checkbox and `/job-date-archive/?time=week`."
+      - "Open `/jobs/?utm_source=…` and `/jobs/` with no query."
+    expected: "The keyword becomes `q` and the typed location a slugged `location`; each type checkbox becomes the listing's single `type`; the date window, `radius` and unknown parameters are dropped rather than carried; a modern filter or a tracking tag is not mistaken for a legacy search, and the listing itself is left to its own route."
+    settings:
+      - seo.legacyRedirects
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/redirects/legacy-map.test.ts
+      - apps/vwok/src/legacy-crawl.test.ts
+
+  - id: S-357
+    area: SEO and URLs
+    role: seeker
+    story: "A WordPress `?p={id}` shortlink lands on the post it named."
+    steps:
+      - "Open `/?p={id}` for a post the importer carried over."
+      - "Open `/?p={id}` for an id it did not, and `/?p=abc`."
+    expected: "A known id 301s to the post's new path on any path, as WordPress did; an id nobody carried over and a non-numeric id answer 410; no shortlink target is itself a redirect."
+    settings:
+      - seo.legacyRedirects
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/redirects/legacy-map.test.ts
+      - apps/vwok/src/legacy-routes.test.ts
+
+  - id: S-358
+    area: SEO and URLs
+    role: site manager
+    story: "A site can override one legacy path without changing the shared rules."
+    steps:
+      - "Give a site a table entry that sends `/about-us` somewhere else, and another that turns `/employer` into a 410."
+      - "Send a POST to a legacy path."
+    expected: "An exact path in the site's table wins over every rule, may be a redirect or a 410, and is not consulted for a path it does not name; a method other than GET or HEAD is never redirected, because it is a form target rather than a page a crawler asks for."
+    settings:
+      - seo.legacyRedirects
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/redirects/legacy-map.test.ts
+      - packages/launchpad/src/redirects/answer.test.ts
+
+  - id: S-359
+    area: SEO and URLs
+    role: seeker
+    story: "A legacy URL answers with one permanent redirect, never a chain and never a temporary one."
+    steps:
+      - "Follow every redirect target back through the table."
+      - "Request a legacy path with GET and with HEAD."
+    expected: "Every answer is 301 with a Location header and a cacheable response; feeding a target back through the table yields no further redirect, because a target is a final URL, so a crawler pays for the hop once."
+    settings:
+      - seo.legacyRedirects
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/redirects/legacy-map.test.ts
+      - packages/launchpad/src/redirects/answer.test.ts
+      - apps/vwok/src/legacy-crawl.test.ts
 
   - id: S-127
     area: SEO and URLs
@@ -3342,3 +3507,73 @@ stories:
     status: built
     tests:
       - packages/payload-wp-import/src/sync.test.ts
+
+  # ---------------------------------------------------------------------------
+  # Performance pass (PJ-44)
+  # ---------------------------------------------------------------------------
+  - id: S-360
+    area: Public site
+    role: seeker
+    story: "The public pages score a perfect 100 in Lighthouse on a phone, and CI keeps them there."
+    steps:
+      - "Run `pnpm --filter @mission-control/vwok lighthouse` and `lighthouse:listing`."
+    expected: "Performance, accessibility, best practices and SEO are 1.0 (mobile) on the home page, a job page and the listing, and the run fails below that or above 50 KB of JavaScript."
+    settings: []
+    mvp: true
+    status: built
+    tests:
+      - apps/vwok/src/config.test.ts
+
+  - id: S-361
+    area: Public site
+    role: seeker
+    story: "Every public page, job and listing included, carries the site's icons, so the browser never asks for a missing favicon."
+    steps:
+      - "Open a job page and the listing and read the document head."
+    expected: "The site's icon links are in the head of both pages, because they take the site's head content."
+    settings: []
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/components/components.test.ts
+
+  - id: S-362
+    area: Public site
+    role: seeker
+    story: "The header logo is sharp on a phone and never shifts the page."
+    steps:
+      - "Load a page with a 400 x 86 logo on a phone."
+    expected: "The logo is drawn at most 200 px wide with its own shape and size attributes; a smaller logo is never enlarged, and a logo with no usable size is left to the browser."
+    settings:
+      - tenant.branding.logo
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/tenant/logo.test.ts
+      - packages/launchpad/src/components/components.test.ts
+
+  - id: S-363
+    area: Public site
+    role: seeker
+    story: "No stylesheet blocks the first paint."
+    steps:
+      - "Load a page with the network throttled and read the document."
+    expected: "The page's CSS is inlined in the HTML, so there is no render-blocking CSS request."
+    settings: []
+    mvp: true
+    status: built
+    tests:
+      - apps/vwok/src/config.test.ts
+
+  - id: S-364
+    area: Public site
+    role: seeker
+    story: "A screen-reader user finds the listing's jobs under its heading, with no skipped level."
+    steps:
+      - "Open the job listing and list its headings."
+    expected: "The page has one h1 and each job title is an h2 directly under it."
+    settings: []
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/components/components.test.ts
