@@ -100,6 +100,8 @@ describe('sign in: finish with the code or the link @S-196', () => {
       'mc_session=jwt.a.b; HttpOnly; Max-Age=86400; Path=/; SameSite=Lax; Secure',
       'signed_in=1; Max-Age=86400; Path=/; SameSite=Lax; Secure',
       'mc_sign_in_email=; HttpOnly; Max-Age=0; Path=/account/sign-in; SameSite=Lax; Secure',
+      // A stale view-as banner hint goes with it.
+      'impersonating=; Max-Age=0; Path=/; SameSite=Lax; Secure',
     ])
   })
 
@@ -162,7 +164,7 @@ describe('sign out @S-082', () => {
     expect(response.status).toBe(303)
     expect(response.headers.get('location')).toBe('/')
     expect(cookies(response).every((cookie) => cookie.includes('Max-Age=0'))).toBe(true)
-    expect(cookies(response).map((cookie) => cookie.split('=')[0])).toEqual(['mc_session', 'signed_in', 'mc_sign_in_email'])
+    expect(cookies(response).map((cookie) => cookie.split('=')[0])).toEqual(['mc_session', 'signed_in', 'mc_sign_in_email', 'impersonating'])
     expect(spy).toHaveBeenCalledWith(
       'https://cms.example/api/tenants/vwok/account/logout',
       expect.objectContaining({ headers: expect.objectContaining({ authorization: 'Bearer jwt.a.b' }) }),
@@ -173,7 +175,7 @@ describe('sign out @S-082', () => {
     vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('down') }))
 
     const response = await handleSignOut(post('/account/sign-out', {}, { cookie: 'mc_session=t', origin: ORIGIN }), env)
-    expect(cookies(response)).toHaveLength(3)
+    expect(cookies(response)).toHaveLength(4)
 
     expect((await handleSignOut(post('/account/sign-out', {}, { origin: 'https://evil.example' }), env)).status).toBe(403)
   })

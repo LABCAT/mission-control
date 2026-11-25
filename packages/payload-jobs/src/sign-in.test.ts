@@ -495,6 +495,76 @@ describe('email sign-in (PJ-109)', () => {
       expect((await verify(tenantA, { token: lastLinkToken() })).body.error.code).toBe('invalid_code')
     })
 
+    it('spends the code after 5 wrong guesses even when they arrive at the same moment @S-196', async () => {
+      const email = await createUser({ tenant: tenantA })
+      await request(tenantA, email)
+      const right = lastCode()
+      const wrong = right === '000000' ? '111111' : '000000'
+
+      const results = await Promise.all(
+        Array.from({ length: 20 }, () => verify(tenantA, { code: wrong, email })),
+      )
+      expect(results.every((result) => result.status === 400)).toBe(true)
+
+      // Twenty guesses against a cap of five: the right code no longer works.
+      expect((await verify(tenantA, { code: right, email })).body.error.code).toBe('invalid_code')
+    })
+
+    it('lets only one of several simultaneous correct submissions sign in @S-196', async () => {
+      const email = await createUser({ tenant: tenantA })
+      await request(tenantA, email)
+      const code = lastCode()
+
+      const results = await Promise.all(Array.from({ length: 6 }, () => verify(tenantA, { code, email })))
+
+      expect(results.filter((result) => result.status === 200)).toHaveLength(1)
+      expect(results.filter((result) => result.status === 400)).toHaveLength(5)
+    })
+
+    it('lets only one of the code and the link win when both arrive together @S-196', async () => {
+      const email = await createUser({ tenant: tenantA })
+      await request(tenantA, email)
+      const code = lastCode()
+      const token = lastLinkToken()
+
+      const results = await Promise.all([
+        verify(tenantA, { code, email }),
+        verify(tenantA, { token }),
+        verify(tenantA, { code, email }),
+        verify(tenantA, { token }),
+      ])
+
+      expect(results.filter((result) => result.status === 200)).toHaveLength(1)
+    })
+
+    it('keeps counting wrong guesses across new codes, so re-requesting does not reset the cap @S-196', async () => {
+      const email = await createUser({ tenant: tenantA })
+      let right = ''
+
+      // Four rounds of 5 wrong guesses each = 20, the daily budget for one address on one site.
+      for (let round = 0; round < 4; round++) {
+        await request(tenantA, email)
+        right = lastCode()
+        const wrong = right === '000000' ? '111111' : '000000'
+        for (let attempt = 0; attempt < 5; attempt++) await verify(tenantA, { code: wrong, email })
+
+        // Make the next request count as a fresh code.
+        const key = await recordKeyOf(tenantA, email)
+        const record = await payload.kv.get<Record<string, any>>(key)
+        if (record) await payload.kv.set(key, { ...record, issuedAt: 0 })
+      }
+
+      await request(tenantA, email)
+      const fresh = lastCode()
+      const refused = await verify(tenantA, { code: fresh, email })
+
+      expect(refused.status).toBe(429)
+      expect(refused.body.error.code).toBe('too_many_requests')
+
+      // The link in the same email is unguessable, so it still works.
+      expect((await verify(tenantA, { token: lastLinkToken() })).status).toBe(200)
+    })
+
     it('still accepts the right code after fewer than 5 wrong guesses', async () => {
       const email = await createUser({ tenant: tenantA })
       await request(tenantA, email)

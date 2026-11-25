@@ -13,7 +13,12 @@ import {
   verifySignIn,
   type SignInClient,
 } from '@mission-control/launchpad/sign-in'
-import { isSameOriginPost, readCookie, SESSION_COOKIE } from '@mission-control/launchpad/view-as'
+import {
+  clearViewAsCookies,
+  isSameOriginPost,
+  readCookie,
+  SESSION_COOKIE,
+} from '@mission-control/launchpad/view-as'
 
 import { siteTenant } from './brand'
 
@@ -141,6 +146,8 @@ export const handleSignInSubmit = async (request: Request, env: SignInEnv): Prom
   return redirect(result.returnTo ?? formReturnTo ?? ACCOUNT_PATH, [
     ...signInCookies({ expiresIn: result.expiresIn, secure, token: result.token }),
     clearSignInEmailCookie({ secure }),
+    // A new session replaces any view-as one, so its banner hint goes too.
+    clearViewAsCookies({ secure })[1]!,
   ])
 }
 
@@ -161,5 +168,10 @@ export const handleSignOut = async (request: Request, env: SignInEnv): Promise<R
 
   const secure = isSecure(request)
 
-  return redirect('/', [...clearSignInCookies({ secure }), clearSignInEmailCookie({ secure })])
+  return redirect('/', [
+    ...clearSignInCookies({ secure }),
+    clearSignInEmailCookie({ secure }),
+    // Signing out also ends a view-as banner left behind.
+    clearViewAsCookies({ secure })[1]!,
+  ])
 }

@@ -240,6 +240,8 @@ export const renewRollingSession = async ({
   await payload.db.updateOne({
     id: user.id,
     collection: usersSlug as CollectionSlug,
+    // The whole row, as Payload's own session writes do: a partial update blanks the other
+    // columns on this adapter. The row was read a moment ago, so the window is a few milliseconds.
     data: {
       ...user,
       sessions: removeExpiredSessions(user.sessions ?? []),

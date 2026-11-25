@@ -25,6 +25,7 @@ import {
   TURNSTILE_TOKEN_FIELD,
   verifyTurnstileWithCloudflare,
 } from './forms'
+import { atomicKV } from './kv-atomic'
 import { assertNotViewingAs } from './view-as'
 
 /**
@@ -46,6 +47,9 @@ export const SIGN_IN_EVENT = 'account.sign_in_code'
 export const SIGN_IN_CODE_TTL_SECONDS = 15 * 60
 export const SIGN_IN_RESEND_SECONDS = 30
 export const SIGN_IN_MAX_ATTEMPTS = 5
+/** Code guesses allowed per address and site in a day, however many codes were asked for. */
+export const SIGN_IN_MAX_GUESSES_PER_DAY = 20
+const GUESS_WINDOW_MS = 24 * 60 * 60 * 1000
 
 /** The variables the sign-in code email can use. */
 export type SignInEmailDoc = {
@@ -76,6 +80,7 @@ type CodeRecord = {
 
 const RECORD_PREFIX = 'mc:sign-in:'
 const TOKEN_PREFIX = 'mc:sign-in-token:'
+const GUESS_PREFIX = 'mc:sign-in-guesses:'
 
 const encoder = new TextEncoder()
 
@@ -281,6 +286,20 @@ const spend = async (payload: Payload, key: string, record: CodeRecord): Promise
   await payload.kv.delete(`${TOKEN_PREFIX}${record.tokenHash}`)
 }
 
+/**
+ * Take the record, once. Of any number of requests that hold the right code or link at the same
+ * moment, only one gets it. Without the atomic path (not Postgres) it falls back to read-then-delete.
+ */
+const takeRecord = async (payload: Payload, key: string, record: CodeRecord): Promise<boolean> => {
+  const atomic = atomicKV(payload)
+  const taken = atomic ? await atomic.take<CodeRecord>(key) : record
+
+  if (!atomic) await payload.kv.delete(key)
+  if (taken) await payload.kv.delete(`${TOKEN_PREFIX}${record.tokenHash}`)
+
+  return taken !== null
+}
+
 const verifyCode: Handler = async ({ options, req, tenant }) => {
   await assertNotViewingAs(req, 'account.sign-in-verify')
 
@@ -318,23 +337,49 @@ const verifyCode: Handler = async ({ options, req, tenant }) => {
     throw invalidCode
   }
 
-  // A link token is unguessable. A 6-digit code is not, so it gets a few tries and is then spent.
+  // A link token is unguessable. A 6-digit code is not, so every guess is counted BEFORE it is
+  // compared, in one atomic step: parallel guesses cannot all read "0 so far".
   if (!token) {
-    const matches = sameText(record.codeHash, await codeHashOf(tenant.id, email!, code))
+    const atomic = atomicKV(req.payload)
 
-    if (!matches) {
-      if (record.attempts + 1 >= SIGN_IN_MAX_ATTEMPTS) {
+    // The daily budget for this address survives a new code, so asking again does not reset it.
+    // It is checked first, and only the code path is limited: the link still works.
+    if (atomic) {
+      const guesses = await atomic.countInWindow(
+        `${GUESS_PREFIX}${await sha256Hex(`${tenant.id}:${record.email}`)}`,
+        GUESS_WINDOW_MS,
+        Date.now(),
+      )
+
+      if (guesses > SIGN_IN_MAX_GUESSES_PER_DAY) {
+        throw new AccountAuthError(ERRORS.tooManyRequests, { 'retry-after': '3600' })
+      }
+    }
+
+    const attempts = atomic
+      ? await atomic.claimAttempt(key, SIGN_IN_MAX_ATTEMPTS)
+      : record.attempts + 1 <= SIGN_IN_MAX_ATTEMPTS
+        ? record.attempts + 1
+        : null
+
+    if (attempts === null) {
+      await spend(req.payload, key, record)
+      throw invalidCode
+    }
+
+    if (!sameText(record.codeHash, await codeHashOf(tenant.id, email!, code))) {
+      if (attempts >= SIGN_IN_MAX_ATTEMPTS) {
         await spend(req.payload, key, record)
-      } else {
-        await req.payload.kv.set(key, { ...record, attempts: record.attempts + 1 })
+      } else if (!atomic) {
+        await req.payload.kv.set(key, { ...record, attempts })
       }
 
       throw invalidCode
     }
   }
 
-  // Spent before anything else happens, so a second request with the same code finds nothing.
-  await spend(req.payload, key, record)
+  // Spent before anything else happens, and only one request gets it.
+  if (!(await takeRecord(req.payload, key, record))) throw invalidCode
 
   const user = await findUserByEmail(req.payload, options, record.email)
   if (!user || !canSignInOn(user, tenant.id, options)) throw invalidCode
