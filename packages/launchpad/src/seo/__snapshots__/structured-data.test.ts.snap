@@ -1,0 +1,284 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`breadcrumbStructuredData @S-342 > numbers each crumb from one 1`] = `
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "item": "https://vanuatuwok.vu/",
+      "name": "Home",
+      "position": 1,
+    },
+    {
+      "@type": "ListItem",
+      "item": "https://vanuatuwok.vu/jobs/",
+      "name": "Jobs",
+      "position": 2,
+    },
+    {
+      "@type": "ListItem",
+      "item": "https://vanuatuwok.vu/jobs/head-chef/",
+      "name": "Head Chef",
+      "position": 3,
+    },
+  ],
+}
+`;
+
+exports[`contentPageStructuredData @S-344 > describes an about page with the site and its trail 1`] = `
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "name": "Vanuatu Wok",
+      "potentialAction": {
+        "@type": "SearchAction",
+        "query-input": "required name=search_term_string",
+        "target": {
+          "@type": "EntryPoint",
+          "urlTemplate": "https://vanuatuwok.vu/jobs/?q={search_term_string}",
+        },
+      },
+      "url": "https://vanuatuwok.vu/",
+    },
+    {
+      "@type": "AboutPage",
+      "about": {
+        "@type": "Organization",
+        "name": "Vanuatu Wok",
+      },
+      "name": "About us",
+      "url": "https://vanuatuwok.vu/about/",
+    },
+    {
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "item": "https://vanuatuwok.vu/",
+          "name": "Home",
+          "position": 1,
+        },
+        {
+          "@type": "ListItem",
+          "item": "https://vanuatuwok.vu/about/",
+          "name": "About us",
+          "position": 2,
+        },
+      ],
+    },
+  ],
+}
+`;
+
+exports[`itemListStructuredData @S-343 > lists the items with positions and absolute URLs 1`] = `
+{
+  "@context": "https://schema.org",
+  "@type": "ItemList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "name": "Head Chef",
+      "position": 1,
+      "url": "https://vanuatuwok.vu/jobs/head-chef/",
+    },
+    {
+      "@type": "ListItem",
+      "name": "Baker",
+      "position": 2,
+      "url": "https://vanuatuwok.vu/jobs/baker/",
+    },
+  ],
+  "name": "Live jobs",
+  "numberOfItems": 2,
+  "url": "https://vanuatuwok.vu/jobs/",
+}
+`;
+
+exports[`jobStructuredData @S-347 > keeps the posting and adds the trail 1`] = `
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "JobPosting",
+      "datePosted": "2026-11-01T00:00:00.000Z",
+      "hiringOrganization": {
+        "@type": "Organization",
+        "name": "Santo Bakery",
+      },
+      "title": "Head Chef",
+    },
+    {
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "item": "https://vanuatuwok.vu/",
+          "name": "Home",
+          "position": 1,
+        },
+        {
+          "@type": "ListItem",
+          "item": "https://vanuatuwok.vu/jobs/",
+          "name": "Jobs",
+          "position": 2,
+        },
+        {
+          "@type": "ListItem",
+          "item": "https://vanuatuwok.vu/jobs/head-chef/",
+          "name": "Head Chef",
+          "position": 3,
+        },
+      ],
+    },
+  ],
+}
+`;
+
+exports[`listingStructuredData @S-345 > describes the section as a CollectionPage of the jobs it shows 1`] = `
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "name": "Vanuatu Wok",
+      "potentialAction": {
+        "@type": "SearchAction",
+        "query-input": "required name=search_term_string",
+        "target": {
+          "@type": "EntryPoint",
+          "urlTemplate": "https://vanuatuwok.vu/jobs/?q={search_term_string}",
+        },
+      },
+      "url": "https://vanuatuwok.vu/",
+    },
+    {
+      "@type": "CollectionPage",
+      "mainEntity": {
+        "@type": "ItemList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "name": "Head Chef",
+            "position": 1,
+            "url": "https://vanuatuwok.vu/jobs/head-chef/",
+          },
+          {
+            "@type": "ListItem",
+            "name": "Baker",
+            "position": 2,
+            "url": "https://vanuatuwok.vu/jobs/baker/",
+          },
+        ],
+        "name": "Jobs",
+        "numberOfItems": 2,
+        "url": "https://vanuatuwok.vu/jobs/",
+      },
+      "name": "Jobs",
+      "url": "https://vanuatuwok.vu/jobs/",
+    },
+    {
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "item": "https://vanuatuwok.vu/",
+          "name": "Home",
+          "position": 1,
+        },
+        {
+          "@type": "ListItem",
+          "item": "https://vanuatuwok.vu/jobs/",
+          "name": "Jobs",
+          "position": 2,
+        },
+      ],
+    },
+  ],
+}
+`;
+
+exports[`organisationStructuredData @S-346 > describes the organisation, its live jobs and the trail 1`] = `
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "name": "Vanuatu Wok",
+      "potentialAction": {
+        "@type": "SearchAction",
+        "query-input": "required name=search_term_string",
+        "target": {
+          "@type": "EntryPoint",
+          "urlTemplate": "https://vanuatuwok.vu/jobs/?q={search_term_string}",
+        },
+      },
+      "url": "https://vanuatuwok.vu/",
+    },
+    {
+      "@type": "Organization",
+      "description": "Bread, daily.",
+      "logo": "https://cdn.example/santo.png",
+      "name": "Santo Bakery",
+      "url": "https://santobakery.example/",
+    },
+    {
+      "@type": "ItemList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "name": "Baker",
+          "position": 1,
+          "url": "https://vanuatuwok.vu/jobs/baker/",
+        },
+      ],
+      "name": "Jobs at Santo Bakery",
+      "numberOfItems": 1,
+      "url": "https://vanuatuwok.vu/organisations/santo-bakery/",
+    },
+    {
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "item": "https://vanuatuwok.vu/",
+          "name": "Home",
+          "position": 1,
+        },
+        {
+          "@type": "ListItem",
+          "item": "https://vanuatuwok.vu/organisations/",
+          "name": "Organisations",
+          "position": 2,
+        },
+        {
+          "@type": "ListItem",
+          "item": "https://vanuatuwok.vu/organisations/santo-bakery/",
+          "name": "Santo Bakery",
+          "position": 3,
+        },
+      ],
+    },
+  ],
+}
+`;
+
+exports[`webSiteStructuredData @S-340 > names the site and offers search over the listing 1`] = `
+{
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  "name": "Vanuatu Wok",
+  "potentialAction": {
+    "@type": "SearchAction",
+    "query-input": "required name=search_term_string",
+    "target": {
+      "@type": "EntryPoint",
+      "urlTemplate": "https://vanuatuwok.vu/jobs/?q={search_term_string}",
+    },
+  },
+  "url": "https://vanuatuwok.vu/",
+}
+`;

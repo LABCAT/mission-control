@@ -11,14 +11,17 @@ type Props = {
   path?: string
   /** Error pages and previews stay out of the index. */
   noindex?: boolean
+  /** Structured data for this page (PJ-104), rendered as JSON-LD in the head. */
+  jsonLd?: Record<string, unknown>
 }
 
-const { title, description, path, noindex } = Astro.props as Props
+const { title, description, path, noindex, jsonLd } = Astro.props as Props
 const siteUrl = Astro.site ? Astro.site.origin : undefined
 ---
 
 <BaseLayout
   description={description}
+  jsonLd={jsonLd}
   noindex={noindex}
   path={path}
   siteUrl={siteUrl}
