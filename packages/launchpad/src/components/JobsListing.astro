@@ -70,7 +70,7 @@ const clear = view.hasActiveFilters ? clearHref : undefined
       <Grid as="ul" columns={2}>
         {view.jobs.map((job) => (
           <li>
-            <JobCard job={job} locale={view.locale} timezone={timezone ?? undefined} />
+            <JobCard headingLevel={2} job={job} locale={view.locale} timezone={timezone ?? undefined} />
           </li>
         ))}
       </Grid>

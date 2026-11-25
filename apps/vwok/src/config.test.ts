@@ -44,21 +44,22 @@ describe('Worker configuration', () => {
   })
 })
 
-describe('Lighthouse budget', () => {
+describe('Lighthouse budget (PJ-44)', () => {
   const config = readConfig('lighthouserc.json') as {
     ci: {
       assert: { assertions: Record<string, [string, { minScore?: number; maxNumericValue?: number }]> }
+      collect: { settings?: { preset?: string }; url: string[] }
     }
   }
 
-  it('holds every category at 0.98 or better', () => {
+  it('holds every category at a perfect 1.0 @S-360', () => {
     for (const category of [
       'categories:performance',
       'categories:accessibility',
       'categories:best-practices',
       'categories:seo',
     ]) {
-      expect(config.ci.assert.assertions[category]).toEqual(['error', { minScore: 0.98 }])
+      expect(config.ci.assert.assertions[category]).toEqual(['error', { minScore: 1 }])
     }
   })
 
@@ -67,5 +68,44 @@ describe('Lighthouse budget', () => {
       'error',
       { maxNumericValue: 51_200 },
     ])
+  })
+
+  it('audits as a phone, not a desktop @S-360', () => {
+    // Lighthouse emulates a mobile device unless a preset says otherwise.
+    expect(config.ci.collect.settings?.preset).toBeUndefined()
+  })
+
+  it('audits the home page and a job page @S-360', () => {
+    const paths = config.ci.collect.url.map((url) => new URL(url).pathname)
+
+    expect(paths).toContain('/')
+    expect(paths.some((path) => /^\/jobs\/[^/]+$/.test(path))).toBe(true)
+  })
+})
+
+describe('Listing Lighthouse budget (PJ-44)', () => {
+  const config = readConfig('lighthouserc.listing.json') as {
+    ci: { assert: { assertions: Record<string, unknown> }; collect: { settings?: { preset?: string }; url: string[] } }
+  }
+
+  it('holds the listing to the same perfect score, as a phone @S-360', () => {
+    for (const category of [
+      'categories:performance',
+      'categories:accessibility',
+      'categories:best-practices',
+      'categories:seo',
+    ]) {
+      expect(config.ci.assert.assertions[category]).toEqual(['error', { minScore: 1 }])
+    }
+    expect(config.ci.collect.settings?.preset).toBeUndefined()
+    expect(config.ci.collect.url).toEqual(['/jobs/index.html'])
+  })
+})
+
+describe('Critical CSS @S-363', () => {
+  it('inlines every stylesheet, so no CSS file blocks the first paint', () => {
+    const config = readFileSync(join(appRoot, 'astro.config.mjs'), 'utf8')
+
+    expect(config).toMatch(/inlineStylesheets:\s*'always'/)
   })
 })

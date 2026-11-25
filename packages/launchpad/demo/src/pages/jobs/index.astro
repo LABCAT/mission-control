@@ -14,7 +14,11 @@ const view = await demoListing({ basePath: '/jobs', search: Astro.url.search })
 <JobsPage
   description="Jobs in Vanuatu, from every employer on the site."
   path="/jobs"
+  siteUrl="https://demo.example"
   tenant={tenant}
   title="Jobs in Vanuatu"
   view={view}
-/>
+>
+  <!-- The demo has no icon files; an empty icon keeps the browser from requesting /favicon.ico. -->
+  <link slot="head" rel="icon" href="data:," />
+</JobsPage>
