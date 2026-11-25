@@ -51,11 +51,11 @@ const docs: Record<string, unknown[]> = {
 
 type FindAllCall = { collection: string; query?: Record<string, unknown> }
 
-const fakeCms = () => {
+const fakeCms = (overrides: Record<string, unknown[]> = {}) => {
   const calls: FindAllCall[] = []
   const findAll = vi.fn(async (collection: string, query?: Record<string, unknown>) => {
     calls.push({ collection, query })
-    return docs[collection] ?? []
+    return overrides[collection] ?? docs[collection] ?? []
   })
 
   return { calls, cms: { findAll } as SitemapCms }
@@ -122,6 +122,22 @@ describe('loadSitemap @S-123', () => {
     expect(paths).toContain('/about')
     expect(paths).not.toContain('/hidden')
     expect(paths).not.toContain('/draft-page')
+  })
+
+  it('leaves a noindex job and a noindex organisation out of the sitemap @S-349', async () => {
+    const { cms } = fakeCms({
+      jobs: [
+        { slug: 'head-chef', updatedAt: '2026-05-01T00:00:00.000Z' },
+        { seo: { noIndex: true }, slug: 'hidden-job', updatedAt: '2026-05-01T00:00:00.000Z' },
+      ],
+      organisations: [{ slug: 'santo-bakery' }, { seo: { noIndex: true }, slug: 'hidden-org' }],
+    })
+    const paths = (await loadSitemap({ cms, now: NOW, tenant })).entries.map((entry) => entry.path)
+
+    expect(paths).toContain('/jobs/head-chef')
+    expect(paths).toContain('/organisations/santo-bakery')
+    expect(paths).not.toContain('/jobs/hidden-job')
+    expect(paths).not.toContain('/organisations/hidden-org')
   })
 
   it('builds the taxonomy pages from the live jobs it fetched', async () => {

@@ -204,6 +204,35 @@ describe('organisation page @S-224', () => {
     expect(await loadOrganisationProfile({ cms, slug: 'x', tenant })).toEqual({ kind: 'not-found' })
   })
 
+  it('carries the SEO tab’s overrides, and leaves them out when blank @S-127', async () => {
+    const { cms } = fakeCms({
+      bySlug: {
+        santo: {
+          ...santo,
+          seo: { description: ' Fresh bread in Luganville. ', noIndex: true, title: ' Santo Bakery ' },
+        },
+      },
+    })
+    const withOverrides = await loadOrganisationProfile({ cms, slug: 'santo', tenant })
+
+    expect(withOverrides.kind === 'found' && withOverrides.profile).toMatchObject({
+      seoDescription: 'Fresh bread in Luganville.',
+      seoNoIndex: true,
+      seoTitle: 'Santo Bakery',
+    })
+
+    // Blank overrides must not become empty strings: the page falls back to the generated values.
+    const { cms: blankCms } = fakeCms({
+      bySlug: { santo: { ...santo, seo: { description: '  ', noIndex: false, title: '' } } },
+    })
+    const blank = await loadOrganisationProfile({ cms: blankCms, slug: 'santo', tenant })
+    const profile = blank.kind === 'found' ? blank.profile : {}
+
+    expect(profile).not.toHaveProperty('seoDescription')
+    expect(profile).not.toHaveProperty('seoTitle')
+    expect(profile).not.toHaveProperty('seoNoIndex')
+  })
+
   it('links only a real web address', async () => {
     for (const website of ['javascript:alert(1)', 'not a url', '']) {
       const { cms } = fakeCms({ bySlug: { santo: { ...santo, website } } })

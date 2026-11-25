@@ -108,6 +108,13 @@ export type DetailJobOrganisation = DetailJobRef & {
 
 export type DetailJobFile = { filename?: null | string; url?: null | string }
 
+/** The SEO overrides a job or an organisation may carry (PJ-104), all optional. */
+export type SeoOverrides = {
+  description?: null | string
+  noIndex?: null | boolean
+  title?: null | string
+}
+
 export type DetailJob = {
   /** Online applying switch. Missing means on, as the CMS default. */
   applyOnline?: boolean | null
@@ -125,6 +132,8 @@ export type DetailJob = {
   organisation?: DetailJobOrganisation | null | number
   publishedAt?: null | string
   salaryBand?: DetailJobRef | null | number
+  /** The one SEO tab's overrides (PJ-104). Empty fields fall back to the job itself. */
+  seo?: SeoOverrides | null
   slug?: null | string
   status?: null | string
   /** The tenant document, populated by the detail query, so the page needs no second request. */
@@ -151,6 +160,12 @@ export type JobDetail = {
   pdf?: { filename?: string; url: string }
   postedAt?: string
   salaryBand?: string
+  /** The job's own meta description, when its SEO tab sets one. */
+  seoDescription?: string
+  /** Present and true when the job's SEO tab asks search engines to skip it. */
+  seoNoIndex?: true
+  /** The job's own browser title, when its SEO tab sets one. */
+  seoTitle?: string
   slug: string
   title: string
   url: string
@@ -233,6 +248,9 @@ export const toJobDetail = (
     ...(pdfUrl ? { pdf: { ...(pdf?.filename ? { filename: pdf.filename } : {}), url: pdfUrl } } : {}),
     ...(job.publishedAt ? { postedAt: job.publishedAt } : {}),
     ...(nameOf(job.salaryBand) ? { salaryBand: nameOf(job.salaryBand)! } : {}),
+    ...(textOf(job.seo?.description) ? { seoDescription: job.seo!.description!.trim() } : {}),
+    ...(job.seo?.noIndex === true ? { seoNoIndex: true as const } : {}),
+    ...(textOf(job.seo?.title) ? { seoTitle: job.seo!.title!.trim() } : {}),
     slug,
     title,
     url: jobDetailPath(slug),
@@ -297,6 +315,8 @@ export type JobDetailView = {
   applyMode: ApplyMode
   detail: JobDetail
   jsonLd?: JobPostingStructuredData
+  /** The SEO tab asks search engines to skip this job (PJ-104). */
+  noindex: boolean
   /** The tenant's public view counter is on and the page is live. */
   showViews: boolean
   /** `notice`: show the "No longer accepting applications" banner. */
@@ -339,6 +359,10 @@ export const jobDetailView = ({
 }: JobDetailPageInput): JobDetailView => {
   const live = status === 'live'
 
+  // A closed job is noindex, and so is one whose SEO tab says so; only a live, indexable job
+  // carries a posting.
+  const indexable = live && detail.seoNoIndex !== true
+
   return {
     applyMode: applyMode({
       accountRequired: settings.accountRequiredToApply,
@@ -347,8 +371,9 @@ export const jobDetailView = ({
       live,
     }),
     detail,
-    ...(live ? { jsonLd: jobPageJsonLd({ detail, jobTypeSlug, siteUrl }) ?? undefined } : {}),
+    ...(indexable ? { jsonLd: jobPageJsonLd({ detail, jobTypeSlug, siteUrl }) ?? undefined } : {}),
     expired: !live,
+    noindex: !indexable,
     showViews: live && settings.publicJobViews,
     similar: live ? [] : similar,
     status: live ? 'live' : 'expired',

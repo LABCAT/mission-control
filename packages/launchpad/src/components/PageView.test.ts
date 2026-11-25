@@ -69,6 +69,7 @@ const view: PageViewData = {
     },
     { block: { blockType: 'latest-jobs', heading: 'Latest jobs' }, kind: 'latest-jobs' },
   ],
+  trail: [{ name: 'Home', page: { id: 1, role: 'home', title: 'Home' }, path: '/' }],
 }
 
 const components = { hero: Hero, 'feature-boxes': FeatureBoxes, 'rich-text': RichText }
@@ -109,11 +110,12 @@ describe('PageView', () => {
     expect(html).not.toContain('astro-island')
     expect(html).not.toContain('type="module"')
 
-    // The only script is the view-as banner's inline snippet (PJ-119), which renders nothing
-    // unless the hint cookie is set, so the cached HTML stays the same for every visitor.
+    // Two inline scripts, neither fetched: the view-as banner's snippet (PJ-119), which renders
+    // nothing unless the hint cookie is set, and the page's JSON-LD (PJ-104).
     const scripts = html.match(/<script[^>]*>/g) ?? []
-    expect(scripts).toHaveLength(1)
-    expect(scripts[0]).not.toContain('src=')
+    expect(scripts).toHaveLength(2)
+    expect(scripts.every((script) => !script.includes('src='))).toBe(true)
+    expect(scripts.filter((script) => script.includes('application/ld+json'))).toHaveLength(1)
   })
 
   it('keeps the page out of the index when its SEO says so @S-292', async () => {
@@ -205,9 +207,10 @@ describe('organisation directory block (PJ-38)', () => {
 
     expect(html).not.toContain('astro-island')
     expect(html).not.toContain('type="module"')
+    // Only inline scripts: the view-as snippet and the page's JSON-LD (PJ-104).
     const scripts = html.match(/<script[^>]*>/g) ?? []
-    expect(scripts).toHaveLength(1)
-    expect(scripts[0]).not.toContain('src=')
+    expect(scripts).toHaveLength(2)
+    expect(scripts.every((script) => !script.includes('src='))).toBe(true)
   })
 
   it('hides a filter the block turns off and shows an empty state @S-223', async () => {

@@ -22,6 +22,7 @@ import {
   type MissionControlUser,
   type TenantRole,
 } from '../access'
+import { seoCollapsible } from '../seo-fields'
 import { getSiteKeyHeader, resolveSiteKey } from '../site-keys'
 import { mergeCollectionAccess, type CollectionAccess } from '../slugs'
 import { uniqueSlugPerTenant, validateTaxonomySlug } from '../taxonomies'
@@ -715,6 +716,9 @@ const profileFields = (
       },
     ],
   },
+  // The one SEO group (PJ-104). An organisation page is indexed unless this says otherwise, and
+  // its structured data is generated from the profile, never typed in here.
+  seoCollapsible({ mediaSlug }),
   {
     name: 'legacyId',
     type: 'number',

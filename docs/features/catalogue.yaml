@@ -19,7 +19,7 @@
 meta:
   title: Mission Control features catalogue
   version: 1
-  updated: 2026-11-23
+  updated: 2026-11-24
   sources:
     - docs/migration/STATUS.md
     - docs/migration/PROPOSAL-ROLES.md
@@ -2175,7 +2175,7 @@ stories:
     story: "A search engine reads a sitemap of every live job, organisation and page."
     steps:
       - "Fetch /sitemap.xml."
-    expected: "The sitemap lists only live, indexable URLs, excludes empty filters and expired jobs, and is referenced from robots.txt."
+    expected: "The sitemap lists only live, indexable URLs, excludes empty filters, expired jobs, drafts and pages whose SEO tab sets noIndex, and is referenced from robots.txt."
     settings:
       - seo.sitemap
     mvp: true
@@ -2191,8 +2191,9 @@ stories:
     story: "A crawler reads a robots.txt that points at the sitemap and blocks private areas."
     steps:
       - "Fetch /robots.txt."
-    expected: "Robots allows public pages, blocks /admin and /account, and points at the sitemap."
+    expected: "Robots allows public pages, blocks /admin and /account, and points at the sitemap. Whether the named AI crawlers may read the site is the tenant's allowAiCrawlers setting, which defaults to allow; a deployment's AI_CRAWLERS_ALLOWED only covers a site with no CMS."
     settings:
+      - allowAiCrawlers
       - seo.robots
     mvp: true
     status: built
@@ -3306,6 +3307,153 @@ stories:
     tests:
       - packages/launchpad/src/organisations/organisations.test.ts
       - packages/launchpad/src/components/PageView.test.ts
+
+  # ---------------------------------------------------------------------------
+  # GEO: generated structured data, llms.txt and the AI-crawler switch (PJ-104)
+  # ---------------------------------------------------------------------------
+  - id: S-340
+    area: SEO and URLs
+    role: seeker
+    story: "Every public page names the site itself, with the search action a search engine shows under the site name."
+    steps:
+      - "Open a CMS page and read the JSON-LD in the head."
+    expected: "One WebSite node carries the tenant's name, its canonical URL and a SearchAction pointing at the job listing's ?q= search. A site with no canonical origin drops the URL and the search action rather than emitting a relative URL."
+    settings: []
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/seo/structured-data.test.ts
+
+  - id: S-341
+    area: SEO and URLs
+    role: seeker
+    story: "The structured data describes the organisation, not just its name, so a search engine can build a result with a logo and a link."
+    steps:
+      - "Open an organisation page and a page whose content is about the site."
+    expected: "An Organization node carries the name, the description, the logo when the profile has one, and the organisation's own website or its page URL. Empty values are left out instead of emitted blank."
+    settings: []
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/seo/structured-data.test.ts
+
+  - id: S-342
+    area: SEO and URLs
+    role: seeker
+    story: "A nested page shows a breadcrumb trail in the search result."
+    steps:
+      - "Open a page two levels below the home page and inspect its structured data."
+    expected: "A BreadcrumbList lists the trail from the home page with position, name and absolute URL. A page with a single crumb, or one with no origin to name, gets no trail, because Google rejects both."
+    settings: []
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/seo/structured-data.test.ts
+
+  - id: S-343
+    area: SEO and URLs
+    role: seeker
+    story: "A page that lists things tells a search engine what the list is."
+    steps:
+      - "Open the jobs listing and an organisation page."
+    expected: "An ItemList carries each item's name and absolute URL, in the order the page shows them. An empty list, or one with no origin, emits nothing: advertising zero items is worse than saying nothing."
+    settings: []
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/seo/structured-data.test.ts
+
+  - id: S-344
+    area: SEO and URLs
+    role: seeker
+    story: "A system page is described by the type it is: AboutPage, ContactPage or CollectionPage."
+    steps:
+      - "Open the About page, the Contact page and the Organisations page."
+    expected: "Each page's node carries its specific schema.org type, its name, description and canonical URL, with the site named as its subject. A plain page stays WebPage."
+    settings: []
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/seo/structured-data.test.ts
+
+  - id: S-345
+    area: SEO and URLs
+    role: seeker
+    story: "The jobs listing is described as a collection of the jobs it shows, and a filtered or paged variant carries nothing."
+    steps:
+      - "Open /jobs, then the same page with a filter and on page two."
+    expected: "The unfiltered first page carries a CollectionPage whose main entity lists the jobs, plus the trail. A filtered or paged variant is noindex and emits no structured data, so the index sees one page for the section."
+    settings: []
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/seo/structured-data.test.ts
+      - packages/launchpad/src/components/components.test.ts
+
+  - id: S-346
+    area: SEO and URLs
+    role: seeker
+    story: "A public organisation page describes the organisation, its live jobs and where it sits."
+    steps:
+      - "Open a public organisation page with live jobs."
+    expected: "The page carries the site, an Organization node, an ItemList of that organisation's live jobs and the trail Home → Organisations → name. An organisation with no live jobs leaves the list out."
+    settings: []
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/seo/structured-data.test.ts
+
+  - id: S-347
+    area: SEO and URLs
+    role: seeker
+    story: "A live job carries JobPosting and its trail; an expired job carries no posting at all."
+    steps:
+      - "Open a live job page, then a job whose closing date has passed."
+    expected: "The live page carries the JobPosting the job page already emitted plus Home → Jobs → title. The expired page keeps its notice and its noindex and emits neither the posting nor the trail, so a search engine never sees a closed job as open."
+    settings: []
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/seo/structured-data.test.ts
+      - packages/launchpad/src/components/components.test.ts
+
+  - id: S-348
+    area: SEO and URLs
+    role: seeker
+    story: "An AI agent reads /llms.txt and finds the site's summary and its key URLs, all of them real."
+    steps:
+      - "Fetch /llms.txt."
+    expected: "The file has an H1 with the tenant's name, a summary and then the core links, the published pages, the live jobs and the public organisations — from the same data as the sitemap, so it never names a noindex page, a draft, an expired job or a private organisation. Every URL is absolute; with no canonical origin or no CMS the route answers 404 rather than a file of nothing."
+    settings: []
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/seo/llms.test.ts
+      - packages/launchpad/src/seo/llms-serve.test.ts
+      - apps/vwok/src/llms.test.ts
+
+  - id: S-349
+    area: SEO and URLs
+    role: site manager
+    story: "A site manager overrides a page, job or organisation's title and description in one SEO tab, and the head, the JSON-LD and the sitemap all follow."
+    steps:
+      - "Open the SEO tab on a page, a job and an organisation and set a title and a description."
+      - "Tick noIndex on one of them, then clear the fields and save again."
+    expected: "The same group of overrides (title, description, optional share image, noIndex) sits on all three. A filled title and description win in the head and the JSON-LD; a blank one falls back to the generated value. A noIndexed document is noindex in the head, carries no structured data and is left out of the sitemap, while a live job marked noIndex also loses its JobPosting."
+    settings:
+      - seo.overrides
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/seo/structured-data.test.ts
+      - packages/launchpad/src/seo/serve.test.ts
+      - packages/launchpad/src/seo/llms-serve.test.ts
+      - packages/payload-jobs/src/seo-fields.test.ts
+      - packages/payload-jobs/src/collections/jobs.test.ts
+      - packages/payload-jobs/src/collections/organisations.test.ts
+      - packages/launchpad/src/organisations/organisations.test.ts
+      - packages/launchpad/src/cms/tenant-settings.test.ts
+      - packages/launchpad/src/components/components.test.ts
 
   - id: S-300
     area: Applications

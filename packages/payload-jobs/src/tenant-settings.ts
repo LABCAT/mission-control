@@ -12,6 +12,7 @@ import { resolveSiteKey } from './site-keys'
  */
 export const PUBLIC_TENANT_SETTINGS_FIELDS = [
   'accountRequiredToApply',
+  'allowAiCrawlers',
   'branding',
   'currency',
   'currencyMinorUnits',
@@ -28,6 +29,8 @@ export const PUBLIC_TENANT_SETTINGS_FIELDS = [
 export type PublicTenantSettings = {
   /** Guests are sent to sign in before they can apply (PJ-45). Off by default. */
   accountRequiredToApply?: boolean
+  /** The tenant's robots.txt switch for AI crawlers (PJ-104). Default allow. */
+  allowAiCrawlers?: boolean
   branding?: { colorAccent?: string; colorHover?: string; colorPrimary?: string; logo?: unknown }
   currency?: string
   currencyMinorUnits?: number
@@ -72,6 +75,8 @@ export const publicTenantSettings = (tenant: TenantDoc): PublicTenantSettings | 
 
   return {
     ...(tenant.accountRequiredToApply === true ? { accountRequiredToApply: true } : {}),
+    // Explicit `false` only: a tenant that never saved the field reads as the documented default.
+    ...(tenant.allowAiCrawlers === false ? { allowAiCrawlers: false } : {}),
     ...(branding && typeof branding === 'object' ? { branding } : {}),
     ...(text(tenant.currency) ? { currency: text(tenant.currency) } : {}),
     ...(number(tenant.currencyMinorUnits) !== undefined

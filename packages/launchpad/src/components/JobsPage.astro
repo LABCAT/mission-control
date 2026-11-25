@@ -12,6 +12,7 @@ import Container from '@labcat2020/rocketship/components/Container'
 import BaseLayout from './BaseLayout.astro'
 import JobsListing from './JobsListing.astro'
 import type { JobListingView } from '../jobs/listing'
+import { listingStructuredData, type Breadcrumb } from '../seo/structured-data'
 import type { SiteTenant } from '../tenant/types'
 
 type Props = {
@@ -27,16 +28,35 @@ type Props = {
   clearHref?: string
   /** Keep the page out of the index whatever the filters say. */
   noindex?: boolean
+  /** The trail from the home page, when the section nests under CMS pages. */
+  trail?: Breadcrumb[]
 }
 
-const { tenant, view, path, title, description, siteUrl, clearHref = '/jobs', noindex = false } = Astro.props as Props
+const {
+  tenant,
+  view,
+  path,
+  title,
+  description,
+  siteUrl,
+  clearHref = '/jobs',
+  noindex = false,
+  trail = [
+    { name: 'Home', path: '/' },
+    { name: title, path },
+  ],
+} = Astro.props as Props
 
 // A filtered or paged view is a variant of the section, not a page of its own.
 const variant = view.hasActiveFilters || view.page > 1
+
+// The listing's own markup (PJ-104); a filtered or paged variant gets none.
+const jsonLd = listingStructuredData({ description, siteUrl, tenant, title, trail, view })
 ---
 
 <BaseLayout
   description={description}
+  jsonLd={jsonLd ?? undefined}
   noindex={noindex || variant}
   path={path}
   siteUrl={siteUrl}
