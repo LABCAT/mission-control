@@ -30,6 +30,11 @@ import {
   refundCreditOnCancel,
   refuseDeleteWhileInCreditLedger,
 } from './credits'
+import { emailLogCollection } from './email-engine/log'
+import { emailLogRetentionTask } from './email-engine/log-jobs'
+import { createEmailEventRegistry, type EmailTemplateEvent } from './email-engine/events'
+import type { EmailEngineConfig, RedirectConfig } from './email-engine/send'
+import { emailTemplatesCollection } from './email-engine/templates'
 import { couponCollection, removeTenantCouponsFor, removeTenantCoupons } from './coupons'
 import { withLegacyPasswords } from './legacy-password'
 import { tenantLocationSettings, type TenantLocationSource } from './location-settings'
@@ -101,6 +106,7 @@ export * from './coupons'
 export * from './credit-settings'
 export * from './credits'
 export * from './email'
+export * from './email-engine'
 export * from './forms'
 export * from './legacy-password'
 export * from './location-settings'
@@ -183,6 +189,8 @@ export const payloadJobsTenantCollections = (
   slugs.orders,
   slugs.creditLedger,
   slugs.siteSettings,
+  slugs.emailTemplates,
+  slugs.emailLog,
 ]
 
 /**
@@ -237,6 +245,18 @@ export type PayloadJobsOrdersOptions = {
   purchaseRights?: PurchaseRightsCheck
 }
 
+export type PayloadJobsEmailOptions = {
+  /** Events beyond the built-in ones; one with a built-in's slug replaces it. */
+  events?: EmailTemplateEvent[]
+  /**
+   * The non-production redirect (PJ-94), applied by `sendTemplate` whatever the transport.
+   * Return a config to redirect everything; return nothing in production. Read per send.
+   * Leave it out when the adapter already redirects (the Cloudflare adapter's `redirect`),
+   * or the subject is prefixed twice.
+   */
+  redirect?: () => Promise<RedirectConfig | undefined> | RedirectConfig | undefined
+}
+
 export type PayloadJobsOptions = {
   /**
    * Front-end account auth endpoints for the Astro sites (PJ-81), multi-tenant mode only.
@@ -269,6 +289,11 @@ export type PayloadJobsOptions = {
    * on; pass `false` for a host whose forms are only written from the admin.
    */
   forms?: FormsOptions | false
+  /**
+   * The email engine (PJ-50): per-tenant templates, `sendTemplate` and the email log. On by
+   * default; pass `false` to leave it out.
+   */
+  email?: PayloadJobsEmailOptions | false
   /** Orders: organisation owners and payment providers (PJ-23). */
   orders?: PayloadJobsOrdersOptions
   /** Slug of the host's upload collection for PDF job descriptions. Defaults to `documents`. */
@@ -847,6 +872,39 @@ const jobBoardPlugin =
       ? [creditLedgerCollection({ access: collectionOptions.creditLedger?.access, slugs, tenantScoped: tenancy === 'multi', usersSlug })]
       : []
 
+    // The email engine (PJ-50): templates and the log go last, so no existing compound index
+    // name shifts. Both are always tenant-scoped in multi mode.
+    const emailEnabled = options.email !== false
+    const emailOptions = options.email === false ? {} : (options.email ?? {})
+    const emailEvents = createEmailEventRegistry(emailOptions.events)
+    const emailCollections = emailEnabled
+      ? [
+          emailTemplatesCollection({
+            access: collectionOptions.emailTemplates?.access,
+            events: emailEvents,
+            slug: slugs.emailTemplates,
+            tenantScoped: tenancy === 'multi',
+          }),
+          emailLogCollection({
+            access: collectionOptions.emailLog?.access,
+            slug: slugs.emailLog,
+            templatesSlug: slugs.emailTemplates,
+            tenantScoped: tenancy === 'multi',
+          }),
+        ]
+      : []
+    const emailEngine: EmailEngineConfig | undefined = emailEnabled
+      ? {
+          events: emailEvents,
+          logSlug: slugs.emailLog,
+          redirect: emailOptions.redirect,
+          settingsSlug,
+          templatesSlug: slugs.emailTemplates,
+          tenancy,
+          tenantsSlug,
+        }
+      : undefined
+
     const jobsWithPlacements = [...(config.collections ?? []), jobs].find(
       (collection) => collection.slug === slugs.jobs,
     )
@@ -897,6 +955,17 @@ const jobBoardPlugin =
           ],
         }
       : jobsWithForms
+
+    // Mask and delete email log rows nightly, each tenant by its own periods (PJ-50).
+    const tasksWithEmailLog: Config['jobs'] = emailEnabled
+      ? {
+          ...tasksWithRetention,
+          tasks: [
+            ...(tasksWithRetention?.tasks ?? []),
+            emailLogRetentionTask({ logSlug: slugs.emailLog, settingsSlug, tenancy, tenantsSlug }),
+          ],
+        }
+      : tasksWithRetention
 
     const jobBoardConfig: Config = {
       ...config,
@@ -950,8 +1019,9 @@ const jobBoardPlugin =
         grantingOrders,
         // The credit ledger after orders (PJ-24), for the same reason.
         ...creditLedger,
+        ...emailCollections,
       ],
-      jobs: tasksWithRetention,
+      jobs: tasksWithEmailLog,
       custom: {
         ...config.custom,
         payloadJobs: {
@@ -959,6 +1029,7 @@ const jobBoardPlugin =
           features,
           registry,
           paymentProviders: paymentProviders.map((provider) => provider.key),
+          ...(emailEngine ? { email: emailEngine } : {}),
           // The dashboard and other admin code read the slugs back from here (PJ-80). Every
           // resolved slug travels, so renamed collections (orders, PJ-23) are found.
           slugs: { ...slugs, tenants: tenantsSlug },
