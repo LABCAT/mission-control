@@ -6,6 +6,7 @@
 import OrganisationProfile from '@mission-control/launchpad/components/OrganisationProfile'
 import SiteNav from '@mission-control/launchpad/components/SiteNav'
 import { menuFor } from '@mission-control/launchpad/pages'
+import { organisationStructuredData } from '@mission-control/launchpad/seo/structured-data'
 import { resolveLocale } from '@mission-control/launchpad/tenant/locale'
 
 import NotFoundPage from '../../components/NotFoundPage.astro'
@@ -24,11 +25,22 @@ const route = await organisationRoute({
 if (route.kind === 'not-found') Astro.response.status = 404
 const primary = menuFor(route.menus, 'primary')
 const footer = menuFor(route.menus, 'footer')
+const siteUrl = Astro.site ? Astro.site.origin : undefined
+const jsonLd =
+  route.kind === 'found'
+    ? organisationStructuredData({ profile: route.profile, siteUrl, tenant: siteTenant })
+    : null
 ---
 
 {
   route.kind === 'found' ? (
-    <SiteLayout path={pathname} title={`${route.profile.name} | ${siteTenant.name}`}>
+    <SiteLayout
+      description={route.profile.seoDescription ?? route.profile.about}
+      jsonLd={jsonLd ?? undefined}
+      noindex={route.profile.seoNoIndex}
+      path={pathname}
+      title={route.profile.seoTitle ?? `${route.profile.name} | ${siteTenant.name}`}
+    >
       <Fragment slot="nav">
         <SiteNav currentPath={pathname} label="Main" links={primary} />
       </Fragment>

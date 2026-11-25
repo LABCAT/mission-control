@@ -9,8 +9,9 @@
 # With either one empty the site serves only `/`, from its static shell, and every other path is
 # a 404: a local checkout, a preview build and the Lighthouse run need no CMS.
 #
-# robots.txt lets AI crawlers read the site by default, which is vwok's legacy behaviour. Set
-# this to `false` to turn them away until the per-tenant setting (PJ-104) takes over:
+# AI crawlers in robots.txt are a per-tenant setting (PJ-104): the tenant's SEO switch, default
+# allow, which is vwok's legacy behaviour. This deployment switch is only read when the CMS is not
+# configured at all, so a local checkout or a Lighthouse run still answers:
 #   AI_CRAWLERS_ALLOWED=true
 #
 # The form islands (PJ-45, PJ-47) need the public Turnstile site key, whose documented test value

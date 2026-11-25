@@ -72,14 +72,15 @@ export type Sitemap = {
 type Ref = { id: number; slug: string }
 type LocationRef = Ref & { parent?: null | number | { id: number } }
 type TypeRef = Ref & { isVolunteer?: null | boolean }
-type JobRef = {
+type NoIndexSeo = { seo?: null | { noIndex?: null | boolean } }
+type JobRef = NoIndexSeo & {
   categories?: (null | number | { id: number })[] | null
   jobType?: null | number | { id: number }
   location?: (null | number | { id: number })[] | null
   slug?: null | string
   updatedAt?: null | string
 }
-type OrganisationRef = { slug?: null | string; updatedAt?: null | string }
+type OrganisationRef = NoIndexSeo & { slug?: null | string; updatedAt?: null | string }
 type PageDoc = SitemapPage & {
   seo?: null | { noIndex?: null | boolean }
   /** Payload adds this to a drafts-enabled collection; `SitemapPage` keeps the shape minimal. */
@@ -93,6 +94,9 @@ type PageDoc = SitemapPage & {
  */
 const isIndexablePage = (page: PageDoc): boolean =>
   page['_status'] !== 'draft' && page.seo?.noIndex !== true
+
+/** A job or organisation whose SEO tab says `noIndex` stays off the sitemap (S-349). */
+const isIndexable = (doc: NoIndexSeo): boolean => doc.seo?.noIndex !== true
 
 /**
  * Every URL the site may publish, in sitemap order.
@@ -132,8 +136,8 @@ export const loadSitemap = async ({
     entries: sitemapEntries({
       facets,
       filterPaths,
-      jobs,
-      organisations,
+      jobs: jobs.filter(isIndexable),
+      organisations: organisations.filter(isIndexable),
       pages: pages.filter(isIndexablePage),
     }),
     facets,

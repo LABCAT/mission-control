@@ -13,11 +13,14 @@ import { siteCollections, type SiteCollections } from './collections'
 import { loadOrganisationDirectory, parseDirectoryFilters, type OrganisationDirectory } from '../organisations/directory'
 import { loadLatestJobs, type LatestJobsResult } from './latest-jobs'
 import { menuViews, type ContentMenu, type MenuView } from './menus'
-import { resolveContentRoute, type ContentPage } from './pathing'
+import { pageTrail, resolveContentRoute, type ContentPage } from './pathing'
 import { pageMetadata, type PageMetadata } from './seo'
 
 /** The latest-jobs block's data: the jobs it shows, and the feed link when the site has one. */
 export type LatestJobsView = LatestJobsResult & { rssHref?: string }
+
+/** One crumb of a page's trail: the page, its title and its path. */
+export type PageTrailEntry = { name: string; page: ContentPage; path: string }
 
 export type LoadedPage = {
   /** Present only when the layout names the organisation directory block (PJ-38). */
@@ -28,6 +31,8 @@ export type LoadedPage = {
   path: string
   /** The layout split into what `RenderBlocks` draws and what needs the loaded jobs. */
   segments: PageSegment[]
+  /** The page's own trail from the home page, for breadcrumbs (PJ-104). */
+  trail: PageTrailEntry[]
 }
 
 export type PageView = {
@@ -40,6 +45,8 @@ export type PageView = {
   metadata: PageMetadata
   path: string
   page: ContentPage
+  /** The page's trail from the home page, for the breadcrumb markup (PJ-104). */
+  trail: PageTrailEntry[]
 }
 
 export type PageViewOptions = {
@@ -61,6 +68,7 @@ export const pageView = (loaded: LoadedPage, { rssHref, tenant }: PageViewOption
     page: loaded.page,
     path: loaded.path,
     segments: loaded.segments,
+    trail: loaded.trail,
   }
 }
 
@@ -136,5 +144,6 @@ export const loadSite = async ({
     page,
     path,
     segments,
+    trail: pageTrail(page, pages),
   }
 }
