@@ -35,7 +35,7 @@ import * as migration_20261124_084533_pack_credit_timing from './20261124_084533
 import * as migration_20261124_091222_application_retention from './20261124_091222_application_retention';
 import * as migration_20261124_093958_publish_moderation from './20261124_093958_publish_moderation';
 import * as migration_20261124_235856_email_core from './20261124_235856_email_core';
-import * as migration_20261125_192344_email_sign_in from './20261125_192344_email_sign_in';
+import * as migration_20261125_190333_geo_structured_data from './20261125_190333_geo_structured_data';
 
 export const migrations = [
   {
@@ -224,8 +224,8 @@ export const migrations = [
     name: '20261124_235856_email_core',
   },
   {
-    up: migration_20261125_192344_email_sign_in.up,
-    down: migration_20261125_192344_email_sign_in.down,
-    name: '20261125_192344_email_sign_in'
+    up: migration_20261125_190333_geo_structured_data.up,
+    down: migration_20261125_190333_geo_structured_data.down,
+    name: '20261125_190333_geo_structured_data'
   },
 ];

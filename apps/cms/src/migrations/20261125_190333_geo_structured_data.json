@@ -4424,20 +4424,6 @@
           "notNull": false,
           "default": false
         },
-        "session_default_days": {
-          "name": "session_default_days",
-          "type": "numeric",
-          "primaryKey": false,
-          "notNull": false,
-          "default": 1
-        },
-        "session_keep_signed_in_days": {
-          "name": "session_keep_signed_in_days",
-          "type": "numeric",
-          "primaryKey": false,
-          "notNull": false,
-          "default": 30
-        },
         "pack_credits_usable_at": {
           "name": "pack_credits_usable_at",
           "type": "enum_tenants_pack_credits_usable_at",
@@ -4482,6 +4468,13 @@
           "primaryKey": false,
           "notNull": false,
           "default": false
+        },
+        "allow_ai_crawlers": {
+          "name": "allow_ai_crawlers",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": true
         },
         "account_required_to_apply": {
           "name": "account_required_to_apply",
@@ -5970,6 +5963,31 @@
           "primaryKey": false,
           "notNull": false
         },
+        "seo_title": {
+          "name": "seo_title",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "seo_description": {
+          "name": "seo_description",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "seo_image_id": {
+          "name": "seo_image_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "seo_no_index": {
+          "name": "seo_no_index",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": false
+        },
         "legacy_id": {
           "name": "legacy_id",
           "type": "numeric",
@@ -6072,6 +6090,21 @@
           "columns": [
             {
               "expression": "location_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "organisations_seo_seo_image_idx": {
+          "name": "organisations_seo_seo_image_idx",
+          "columns": [
+            {
+              "expression": "seo_image_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -6195,6 +6228,19 @@
           "tableTo": "locations",
           "columnsFrom": [
             "location_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "organisations_seo_image_id_media_id_fk": {
+          "name": "organisations_seo_image_id_media_id_fk",
+          "tableFrom": "organisations",
+          "tableTo": "media",
+          "columnsFrom": [
+            "seo_image_id"
           ],
           "columnsTo": [
             "id"
@@ -14949,6 +14995,25 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": false
+        },
+        "seo_title": {
+          "name": "seo_title",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "seo_description": {
+          "name": "seo_description",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "seo_no_index": {
+          "name": "seo_no_index",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": false
         },
         "plan_id": {
           "name": "plan_id",
@@ -26207,6 +26272,6 @@
     "tables": {},
     "columns": {}
   },
-  "id": "c51e1c09-eb12-462f-868b-6c935baf5380",
+  "id": "f6b6c280-2514-4af0-bd21-cafa0128da29",
   "prevId": "00000000-0000-0000-0000-000000000000"
 }

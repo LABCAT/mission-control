@@ -6,7 +6,6 @@ import {
   type CollectionBeforeValidateHook,
   type CollectionConfig,
   type CollectionSlug,
-  type Field,
   type PayloadRequest,
   type Where,
 } from 'payload'
@@ -27,6 +26,7 @@ import {
   type PageRole,
 } from '../system-pages'
 import { mergeCollectionAccess, type CollectionAccess } from '../slugs'
+import { seoTab } from '../seo-fields'
 import { uniqueSlugPerTenant } from '../taxonomies'
 
 export const PAGES_SLUG = 'pages'
@@ -137,38 +137,6 @@ export type PagesOptions = {
   /** `false` in single-tenant mode, where there is no tenants collection. */
   tenantScoped?: boolean
 }
-
-const seoFields = (mediaSlug: null | string): Field => ({
-  name: 'seo',
-  type: 'group',
-  admin: {
-    description: 'Overrides for the page metadata. Empty fields fall back to the title.',
-  },
-  fields: [
-    { name: 'title', type: 'text', admin: { description: 'Browser tab and search result title.' } },
-    {
-      name: 'description',
-      type: 'textarea',
-      admin: { description: 'Meta description, ideally 50 to 160 characters.' },
-    },
-    ...(mediaSlug
-      ? ([
-          {
-            name: 'image',
-            type: 'upload',
-            relationTo: mediaSlug,
-            admin: { description: 'Open Graph image. Falls back to the site-wide default.' },
-          },
-        ] as Field[])
-      : []),
-    {
-      name: 'noIndex',
-      type: 'checkbox',
-      defaultValue: false,
-      admin: { description: 'Ask search engines not to index this page.' },
-    },
-  ],
-})
 
 /**
  * Write access: super admins and the tenant-admin/editor memberships of at least one tenant.
@@ -479,7 +447,7 @@ export const pagesCollection = ({
       // The host registers the block configs (PJ-84); the plugin only names them by slug.
       blocks: [...blockSlugs] as BlocksField['blocks'],
     },
-    seoFields(mediaSlug),
+    seoTab({ mediaSlug }),
     {
       name: 'legacyId',
       type: 'number',

@@ -593,6 +593,42 @@ describe('JobDetailPage @S-280 @S-282 @S-285', () => {
     expect(shown).toContain('data-job-views-count')
   })
 
+  it('takes the SEO tab’s title and description over the generated ones @S-127', async () => {
+    const detail = toJobDetail(
+      { ...doc, seo: { description: 'Kitchen lead for a bakery.', title: 'Head Chef, Santo Bakery' } },
+      {},
+    )!
+    const html = await container.renderToString(JobDetailPage, {
+      props: {
+        siteUrl: 'https://vanuatuwok.vu',
+        view: jobDetailView({ detail, settings: tenantJobPageSettings({}), status: 'live', tenant }),
+      },
+    })
+
+    expect(html).toContain('<title>Head Chef, Santo Bakery</title>')
+    expect(html).toContain('<meta name="description" content="Kitchen lead for a bakery.">')
+  })
+
+  it('drops a live job out of the index when its SEO tab says so, posting included @S-127', async () => {
+    const detail = toJobDetail({ ...doc, seo: { noIndex: true } }, {})!
+    const html = await container.renderToString(JobDetailPage, {
+      props: {
+        siteUrl: 'https://vanuatuwok.vu',
+        view: jobDetailView({ detail, settings: tenantJobPageSettings({}), status: 'live', tenant }),
+      },
+    })
+
+    expect(html).toContain('name="robots" content="noindex, follow"')
+    expect(html).not.toContain('JobPosting')
+  })
+
+  it('adds the job’s trail to the page markup, so the head describes where the job sits', async () => {
+    const html = await render('live')
+
+    expect(html).toContain('"@type":"BreadcrumbList"')
+    expect(html).toContain('"@type":"JobPosting"')
+  })
+
   it('shows the closed notice, noindex, no JobPosting, no apply button and no beacon when expired', async () => {
     const html = await render('expired')
 
