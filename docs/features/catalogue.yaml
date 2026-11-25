@@ -3471,28 +3471,6 @@ stories:
       - packages/payload-jobs/src/checkout.integration.test.ts
       - packages/payload-jobs/src/admin/ApproveJobButton.test.ts
 
-  - id: S-365
-    area: Applications
-    role: seeker
-    story: "An application can only be sent to a live job of the site it is made on, and only when the job takes online applications."
-    steps:
-      - "Post an application to a job of another site, a closed job, and a job with Apply online off."
-    expected: "Another site's job answers 'not found' exactly like a missing one, a closed or offline job is refused with a clear message, and nothing is stored or emailed in any of these cases."
-    settings:
-      - jobs.applyOnline
-    mvp: true
-    status: built
-    tests:
-      - packages/payload-jobs/src/apply.test.ts
-
-  - id: S-366
-    area: Applications
-    role: employer
-    story: "The employer opens the CV from the application email through a link that expires and works for that file only."
-    steps:
-      - "Open the CV link in the application email."
-      - "Change the file id or the expiry in the link, then open it again after it expires."
-    expected: "The file downloads as an attachment, uncached. A link for another file, with an altered expiry, or past its expiry answers 'not found'. The files themselves stay private."
   # ---------------------------------------------------------------------------
   # Performance pass (PJ-44)
   # ---------------------------------------------------------------------------
@@ -3507,21 +3485,6 @@ stories:
     mvp: true
     status: built
     tests:
-      - packages/payload-jobs/src/apply.test.ts
-
-  - id: S-367
-    area: Applications
-    role: employer
-    story: "A new application is emailed to the employer, a copy goes to the applicant, and the site admin gets a copy when the site has an admin address."
-    steps:
-      - "Apply to a job with an application recipient set, then to one without."
-    expected: "The employer's email carries the applicant's details and signed CV links; the applicant's copy carries no file links; the admin copy goes only when the site has an admin address. The employer's address never appears in any answer to the browser, and a failed email does not lose the application."
-    settings:
-      - jobs.applicationsRecipient
-    mvp: true
-    status: built
-    tests:
-      - packages/payload-jobs/src/apply.test.ts
       - apps/vwok/src/config.test.ts
 
   - id: S-361
@@ -3577,3 +3540,60 @@ stories:
     status: built
     tests:
       - packages/launchpad/src/components/components.test.ts
+
+  - id: S-365
+    area: Applications
+    role: seeker
+    story: "An application can only be sent to a live job of the site it is made on, and only when the job takes online applications."
+    steps:
+      - "Post an application to a job of another site, a closed job, and a job with Apply online off."
+    expected: "Another site's job answers 'not found' exactly like a missing one, a closed or offline job is refused with a clear message, and nothing is stored or emailed in any of these cases."
+    settings:
+      - jobs.applyOnline
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/apply.test.ts
+
+  - id: S-366
+    area: Applications
+    role: employer
+    story: "The employer opens the CV from the application email through a link that expires and works for that file only."
+    steps:
+      - "Open the CV link in the application email."
+      - "Change the file id or the expiry in the link, then open it again after it expires."
+    expected: "The file downloads as an attachment, uncached. A link for another file, with an altered expiry, or past its expiry answers 'not found'. The files themselves stay private."
+    settings: []
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/apply.test.ts
+
+  - id: S-367
+    area: Applications
+    role: employer
+    story: "A new application is emailed to the employer, a copy goes to the applicant, and the site admin gets a copy when the site has an admin address."
+    steps:
+      - "Apply to a job with an application recipient set, then to one without."
+    expected: "The employer's email carries the applicant's details and signed CV links; the applicant's copy carries no file links; the admin copy goes only when the site has an admin address. The employer's address never appears in any answer to the browser, and a failed email does not lose the application."
+    settings:
+      - jobs.applicationsRecipient
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/apply.test.ts
+
+  - id: S-368
+    area: Applications
+    role: super admin
+    story: "An application post is refused before it is read when its declared size is missing or over the limit, and the per-IP limit applies before the body is parsed."
+    steps:
+      - "Post an application with no Content-Length, then with one over 21 MB, then flood from one IP."
+    expected: "The first two answer 413 without the body being parsed or anything stored; once the IP is over its limit further posts answer 429 without being parsed."
+    settings:
+      - security.rateLimits
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/apply.test.ts
+      - apps/vwok/src/apply-route.test.ts

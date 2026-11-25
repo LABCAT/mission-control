@@ -127,7 +127,7 @@ describe('forwardApplication (POST)', () => {
   })
 })
 
-describe('body size guard', () => {
+describe('body size guard @S-368', () => {
   const post = (headers: Record<string, string>) =>
     new Request('https://vanuatuwok.vu/jobs/welder/apply', { body: 'x', headers, method: 'POST' })
 
