@@ -5,6 +5,7 @@ import type { MissionControlUser } from './access'
 import { DASHBOARD_COMPONENT_PATH } from './admin'
 import { SITE_MANAGER_NAV_COLLECTIONS, siteManagerVisibleCollections } from './admin/nav'
 import { EXPIRE_PLACEMENTS_TASK, jobsTenantCollections, payloadJobs } from './index'
+import { EMAIL_LOG_RETENTION_TASK } from './email-engine/log-jobs'
 import { DELETE_APPLICATIONS_TASK } from './retention'
 import { DEFAULT_PAYLOAD_JOBS_SLUGS } from './slugs'
 import { TAXONOMY_SLUGS } from './taxonomies'
@@ -57,6 +58,8 @@ describe('payloadJobs', () => {
       'applications',
       'orders',
       'credit-ledger',
+      'email-templates',
+      'email-log',
     ])
     expect(result.collections?.[0]?.fields.map((f) => ('name' in f ? f.name : null))).toContain(
       'legacyPasswordHash',
@@ -71,6 +74,7 @@ describe('payloadJobs', () => {
       payloadJobs: {
         enabled: true,
         features: { applications: true, credits: true, coupons: true, pages: true },
+        email: expect.any(Object),
         paymentProviders: ['invoice'],
         registry: expect.any(Object),
         slugs: { ...DEFAULT_PAYLOAD_JOBS_SLUGS, tenants: 'tenants' },
@@ -93,6 +97,7 @@ describe('payloadJobs', () => {
       payloadJobs: {
         enabled: true,
         features: { applications: true, credits: true, coupons: false, pages: true },
+        email: expect.any(Object),
         paymentProviders: ['invoice'],
         registry: expect.any(Object),
         slugs: { ...DEFAULT_PAYLOAD_JOBS_SLUGS, tenants: 'tenants' },
@@ -221,10 +226,10 @@ describe('payloadJobs', () => {
     const jobs = result.collections?.find((collection) => collection.slug === 'jobs')
 
     expect(jobs?.fields.some((field) => 'name' in field && field.name === 'placements')).toBe(true)
-    expect(taskSlugs(result)).toEqual(['heartbeat', EXPIRE_PLACEMENTS_TASK, DELETE_APPLICATIONS_TASK])
+    expect(taskSlugs(result)).toEqual(['heartbeat', EXPIRE_PLACEMENTS_TASK, DELETE_APPLICATIONS_TASK, EMAIL_LOG_RETENTION_TASK])
     // The retention task goes quiet when a host turns applications off.
     const withoutApplications = await payloadJobs({ features: { applications: false } })(withHostTask)
-    expect(taskSlugs(withoutApplications)).toEqual(['heartbeat', EXPIRE_PLACEMENTS_TASK])
+    expect(taskSlugs(withoutApplications)).toEqual(['heartbeat', EXPIRE_PLACEMENTS_TASK, EMAIL_LOG_RETENTION_TASK])
   })
 
   it('gives a site manager a cut-down nav and a dashboard of their own @S-117', async () => {
@@ -371,6 +376,8 @@ const OVERRIDES = {
   addOns: { slug: 'extras' },
   coupons: { slug: 'vouchers' },
   creditLedger: { slug: 'credit-moves' },
+  emailLog: { slug: 'mail-log' },
+  emailTemplates: { slug: 'mail-templates' },
   jobCategories: { slug: 'categories' },
   jobs: { slug: 'vacancies' },
   jobTypes: { slug: 'employment-types' },
@@ -424,6 +431,8 @@ describe('collection slug overrides', () => {
       'applications',
       'purchases',
       'credit-moves',
+      'mail-templates',
+      'mail-log',
     ])
 
     const targets = new Set(
@@ -453,6 +462,8 @@ describe('collection slug overrides', () => {
         // Orders relate to organisations, plans, add-ons, coupons, jobs and users; jobs to orders.
         'vouchers',
         'purchases',
+        // The email log points at the renamed templates collection.
+        'mail-templates',
       ]),
     )
 
@@ -478,6 +489,8 @@ describe('collection slug overrides', () => {
       'purchases',
       'credit-moves',
       'site-settings',
+      'mail-templates',
+      'mail-log',
     ])
   })
 
