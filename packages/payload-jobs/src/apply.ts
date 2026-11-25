@@ -15,6 +15,7 @@ import {
 } from './collections/applications'
 import { FORM_HONEYPOT_FIELD, TURNSTILE_TOKEN_FIELD, verifyTurnstileWithCloudflare, type TurnstileVerifier } from './forms'
 import type { RateLimiter } from './rate-limit'
+import { sendTemplate } from './email-engine/send'
 import { resolveSiteKey } from './site-keys'
 import { DEFAULT_PAYLOAD_JOBS_SLUGS, type PayloadJobsCollectionSlugs } from './slugs'
 
@@ -46,11 +47,12 @@ const FILE_TYPES: Record<string, { mime: string; signatures: number[][] }> = {
 }
 
 export const APPLICATION_EVENTS = {
-  /** Copy to the site admin (per-tenant setting, vwok on). */
-  admin: 'application.admin-copy',
+  /** Copy to the site admin (per-tenant switch in the email templates, vwok on). */
+  admin: 'application-admin-copy',
+  /** Copy to the applicant. */
+  applicant: 'application-copy',
   /** The application itself, to the employer. */
-  applicant: 'application.copy',
-  employer: 'application.received',
+  employer: 'application-received',
 } as const
 
 export type ApplicationEmailEvent = (typeof APPLICATION_EVENTS)[keyof typeof APPLICATION_EVENTS]
@@ -82,11 +84,25 @@ export type ApplicationEmailDoc = {
   to: string
 }
 
+/**
+ * The real email path: PJ-50's `sendTemplate`. The recipient is `doc.to`, the tenant is the job's,
+ * and the log row points at the application. Bodies and links are variables only, so the email
+ * log never holds them.
+ */
+export const engineSender =
+  (payload: PayloadRequest['payload']): SendApplicationEmail =>
+  (event, doc) =>
+    sendTemplate(payload, event, doc as unknown as Record<string, unknown>, {
+      linked: { collection: APPLICATIONS_SLUG, id: doc.applicationId },
+      tenant: doc.tenantId,
+      to: doc.to,
+    })
+
 export type ApplyOptions = {
   /** How long the employer's file links work. Defaults to 7 days. */
   fileLinkTtlSeconds?: number
   rateLimiter?: ((req: PayloadRequest) => RateLimiter | undefined) | RateLimiter
-  /** Without it the application is stored and nothing is emailed. */
+  /** Overrides the email path (tests). Default: `sendTemplate`, when the email engine is on. */
   sendEmail?: SendApplicationEmail
   slugs?: PayloadJobsCollectionSlugs
   tenantsSlug?: string
@@ -597,7 +613,9 @@ const sendApplicationEmails = async ({
   req: PayloadRequest
   tenant: TenantDoc
 }): Promise<void> => {
-  const send = options.sendEmail
+  // The engine is on unless the plugin was set up with `email: false`; without it, nothing is sent.
+  const engineOn = Boolean((req.payload.config?.custom as { payloadJobs?: { email?: unknown } } | undefined)?.payloadJobs?.email)
+  const send = options.sendEmail ?? (engineOn ? engineSender(req.payload) : undefined)
   if (!send) return
 
   const ttl = options.fileLinkTtlSeconds ?? DEFAULT_LINK_TTL_SECONDS

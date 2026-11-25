@@ -526,3 +526,98 @@ describe('application file download', () => {
     expect((await run({ expiresAt: past, signature: expired })).response.status).toBe(404)
   })
 })
+
+describe('apply emails through the real email engine (fake transport) @S-367', () => {
+  const tenantDoc = { emailFromAddress: 'jobs@site.example', emailFromName: 'Site', id: 1, name: 'Site' }
+
+  const engine = async ({ templates = [] as Record<string, unknown>[], redirect }: { redirect?: { to?: string }; templates?: Record<string, unknown>[] } = {}) => {
+    const { createEmailEventRegistry } = await import('./email-engine/events')
+    const { sendTemplateWith } = await import('./email-engine/send')
+    const messages: { subject: string; text: string; html: string; to: string }[] = []
+    const logs: Record<string, unknown>[] = []
+    const payload = {
+      create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+        logs.push(data)
+        return { id: logs.length }
+      }),
+      find: vi.fn(async ({ where }: { where: { and: Record<string, any>[] } }) => {
+        const event = where.and.find((clause) => clause.event)?.event.equals
+        return { docs: templates.filter((template) => template.event === event) }
+      }),
+      findByID: vi.fn(async () => tenantDoc),
+    }
+    const ctx = {
+      events: createEmailEventRegistry(),
+      logSlug: 'email-log',
+      payload,
+      redirect: () => redirect,
+      sendEmail: async (message: (typeof messages)[number]) => {
+        messages.push(message)
+      },
+      settingsSlug: 'job-board-settings',
+      templatesSlug: 'email-templates',
+      tenancy: 'multi' as const,
+      tenantsSlug: 'tenants',
+    }
+    const send = (event: string, doc: ApplicationEmailDoc) =>
+      sendTemplateWith(ctx as never, event, doc as never, { linked: { collection: 'applications', id: doc.applicationId }, tenant: doc.tenantId, to: doc.to })
+
+    return { logs, messages, send }
+  }
+
+  const run = async (engineOptions?: Parameters<typeof engine>[0], harnessOptions: Parameters<typeof harness>[0] = {}) => {
+    const wired = await engine(engineOptions)
+    const world = await harness({ ...harnessOptions, options: { sendEmail: wired.send as never } })
+    await world.call(goodForm({ coverLetter: file('letter.pdf') }))
+
+    return { ...wired, world }
+  }
+
+  it('renders and sends the employer, applicant and admin emails with the default text', async () => {
+    const { messages } = await run()
+
+    expect(messages.map((message) => message.to)).toEqual(['hr@employer.example', 'ada@example.com', 'admin@site.example'])
+    const [employer, applicant] = messages
+    expect(employer!.subject).toBe('New application: Nurse')
+    expect(employer!.text).toContain('Ada Lovelace applied for Nurse.')
+    expect(employer!.text).toMatch(/download\/100\?exp=\d+&sig=/)
+    expect(applicant!.subject).toBe('Your application: Nurse')
+    expect(applicant!.text).not.toMatch(/download\//)
+  })
+
+  it('escapes what the applicant typed in the email body', async () => {
+    const wired = await engine()
+    const world = await harness({ options: { sendEmail: wired.send as never } })
+    await world.call(goodForm({ name: 'Ada <b>x</b>' }))
+
+    expect(wired.messages[0]!.html).not.toContain('<b>x</b>')
+    expect(wired.messages[0]!.html).toContain('&lt;b&gt;')
+  })
+
+  it("honours the tenant's switch per event: a disabled admin copy is skipped and logged", async () => {
+    const { logs, messages } = await run({ templates: [{ enabled: false, event: 'application-admin-copy', id: 9 }] })
+
+    expect(messages.map((message) => message.to)).toEqual(['hr@employer.example', 'ada@example.com'])
+    expect(logs.find((row) => row.event === 'application-admin-copy')).toMatchObject({ reason: 'disabled', status: 'skipped' })
+  })
+
+  it('logs each email against the application with no body, no links and no message text', async () => {
+    const { logs } = await run()
+
+    expect(logs.map((row) => [row.event, row.status, row.linkedCollection])).toEqual([
+      ['application-received', 'sent', 'applications'],
+      ['application-copy', 'sent', 'applications'],
+      ['application-admin-copy', 'sent', 'applications'],
+    ])
+    const stored = JSON.stringify(logs)
+    expect(stored).not.toContain('download/')
+    expect(stored).not.toContain('I would like to apply')
+  })
+
+  it('redirects every email outside production, so a preview never mails the public', async () => {
+    const { messages } = await run({ redirect: { to: 'qa@internal.example' } })
+
+    expect(messages.every((message) => message.to === 'qa@internal.example')).toBe(true)
+    expect(messages[0]!.subject).toContain('hr@employer.example')
+  })
+})
