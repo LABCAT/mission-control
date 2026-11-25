@@ -16,6 +16,8 @@ import type { Importer, MappedDoc, SkippedRow } from '../types'
 
 /** The domain of the address a removed user keeps (`payload-jobs` `REMOVED_USER_EMAIL_DOMAIN`). */
 const REMOVED_USER_EMAIL_DOMAIN = 'removed.invalid'
+/** The tombstone field the removal writes (`payload-jobs` `REMOVED_FROM_TENANTS_FIELD`): site ids, comma separated. */
+export const REMOVED_FROM_TENANTS_FIELD = 'removedFromTenants'
 
 export type UserImportOptions = {
   /** An organisation page stays public when it was public on the legacy site. Default true. */
@@ -492,7 +494,8 @@ export const usersImporters = (
 
       // A person whose personal data was removed (PJ-89) keeps an anonymised row with the same
       // legacy id but no tenant link, so the runner cannot find it. While WordPress still has them,
-      // they must not be created again with their name, email and password hash.
+      // they must not be created again with their name, email and password hash. The row records
+      // which sites it came from: another site's user with the same WordPress id is someone else.
       const removed = await ctx.payload.find({
         collection: options.usersSlug ?? 'users',
         depth: 0,
@@ -500,7 +503,12 @@ export const usersImporters = (
         pagination: false,
         where: { legacyId: { equals: facts.user.ID } },
       })
-      if (removed.docs.some((doc) => String(doc.email ?? '').endsWith(`@${REMOVED_USER_EMAIL_DOMAIN}`))) {
+      const isTombstone = (doc: Record<string, any>) =>
+        String(doc.email ?? '').endsWith(`@${REMOVED_USER_EMAIL_DOMAIN}`) &&
+        String(doc[REMOVED_FROM_TENANTS_FIELD] ?? '')
+          .split(',')
+          .includes(String(ctx.tenant))
+      if (removed.docs.some(isTombstone)) {
         return { keep: true, legacyId: facts.user.ID, skip: 'anonymised' }
       }
 

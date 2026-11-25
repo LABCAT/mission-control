@@ -281,12 +281,13 @@ site is live. A second run creates nothing: it updates or skips.
   in (signing in clears it). It is never brought back afterwards, and an empty hash never blanks a
   stored one.
 - **Removed users stay removed.** A person whose personal data was removed (PJ-89) keeps an
-  anonymised row with their legacy id as a tombstone; the users importer skips them (`anonymised`)
-  and never re-creates them, even while WordPress still has the account. The tombstone is matched
-  by legacy id alone (the removal clears the tenant link), so a second legacy site importing into
-  another tenant must not reuse ids.
+  anonymised row with their legacy id and the ids of the sites they belonged to
+  (`removedFromTenants`). The users importer skips them for those sites (`anonymised`) and never
+  re-creates them while WordPress still has the account. Another site's user with the same
+  WordPress id is a different person and is imported. Rows anonymised before this field existed
+  carry no site list and cannot be matched.
 - Credential refresh also skips a user who has their own Payload password (`hash`).
-- Removal updates carry the context `{ wpImportSync: true }` so hooks can tell them from staff actions.
+- Removal updates carry the context `{ wpImportSync: true }`. Hooks may read it to tell an import action from a staff action; none does yet, so a removal still runs the job lifecycle hooks.
 - `--limit` is refused with `sync`. Logs carry collection, ids and the change only, no personal data.
 - **Not included yet:** media (`wp-import-media` needs the uploads directory) and role/organisation
   change reporting for users.

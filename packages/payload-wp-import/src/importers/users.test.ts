@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
+import { REMOVED_FROM_TENANTS_FIELD as REMOVED_FROM_TENANTS_FIELD_IN_JOBS } from '@mission-control/payload-jobs'
+
 import { MysqlReader } from '../mysql-reader'
 import { runImport } from '../run-import'
 import { createFakePayload } from '../test-utils'
@@ -14,6 +16,7 @@ import {
   normaliseOrganisationName,
   parseCapabilities,
   parseLastLogin,
+  REMOVED_FROM_TENANTS_FIELD,
   tenantRoleFor,
   usersImporters,
   type LegacyUserFacts,
@@ -327,16 +330,20 @@ describe('the users and organisations importers @S-130', () => {
     expect(sync.summary.importers.users!.refreshed).toBe(1)
   })
 
-  it('never re-creates a user whose personal data was removed, even though WordPress still has them @S-331', async () => {
+  const tombstone = (removedFromTenants: string | null) => ({
+    email: 'removed-user-1@removed.invalid',
+    firstName: null,
+    legacyId: 2,
+    legacyPasswordHash: null,
+    removedFromTenants,
+    tenants: [],
+  })
+
+  it('never re-creates a user whose personal data was removed from this site, even though WordPress still has them @S-331', async () => {
     const first = await run(false)
     const pat = first.store.users!.find((doc) => doc.legacyId === 2)!
-    // What the personal-data removal leaves: the row, anonymised, with no tenant link, same legacy id.
-    Object.assign(pat, {
-      email: 'removed-user-1@removed.invalid',
-      firstName: null,
-      legacyPasswordHash: null,
-      tenants: [],
-    })
+    // What the personal-data removal leaves: the row, anonymised, no tenant link, the legacy id and the sites it came from.
+    Object.assign(pat, tombstone('3,7'))
 
     const second = await run(false, first as never, {}, true)
 
@@ -345,6 +352,28 @@ describe('the users and organisations importers @S-130', () => {
     expect(second.summary.importers.users!.skipReasons).toMatchObject({ anonymised: 1 })
     expect(pat).toMatchObject({ email: 'removed-user-1@removed.invalid', firstName: null, tenants: [] })
     expect(JSON.stringify(first.store.users)).not.toContain('pat@example.com')
+  })
+
+  it('does not let a user removed from another site block a different person with the same WordPress id @S-331', async () => {
+    const payload = createFakePayload({ users: [{ id: 1, ...tombstone('99') }] })
+
+    const { store, summary } = await run(false, payload)
+
+    expect(summary.importers.users!.created).toBe(8)
+    expect(summary.importers.users!.skipReasons).not.toHaveProperty('anonymised')
+    expect(store.users!.filter((doc) => doc.legacyId === 2)).toHaveLength(2)
+  })
+
+  it('cannot tell which site an older tombstone came from, so it does not block the import @S-331', async () => {
+    const payload = createFakePayload({ users: [{ id: 1, ...tombstone(null) }] })
+
+    const { summary } = await run(false, payload)
+
+    expect(summary.importers.users!.skipReasons).not.toHaveProperty('anonymised')
+  })
+
+  it('reads the tombstone field the removal writes', () => {
+    expect(REMOVED_FROM_TENANTS_FIELD).toBe(REMOVED_FROM_TENANTS_FIELD_IN_JOBS)
   })
 
   it('keeps users of another tenant apart even when the legacy id is the same', async () => {
