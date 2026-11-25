@@ -55,6 +55,19 @@ describe('job emails @S-365', () => {
     expect(planJobEmails(live, { ...live }, ctx)).toEqual([])
   })
 
+  it('copies the billing address of an invoice-eligible organisation on "live", once, without duplicates @S-368', () => {
+    const live = { ...job, status: 'published' }
+    const withBilling = { ...ctx, billingEmail: 'accounts@brew.test' }
+    expect(planJobEmails(live, job, withBilling).map((entry) => [entry.event, entry.to])).toEqual([
+      ['job-approved', 'boss@brew.test'],
+      ['job-approved', 'accounts@brew.test'],
+    ])
+    const same = { ...ctx, billingEmail: 'boss@brew.test' }
+    expect(planJobEmails(live, job, same).map((entry) => entry.to)).toEqual(['boss@brew.test'])
+    const keys = planJobEmails(live, job, withBilling).map((entry) => entry.key)
+    expect(new Set(keys).size).toBe(2)
+  })
+
   it('tells the admin when an employer edits a job that is waiting, but not for system or bookkeeping saves', () => {
     const edited = { ...job, title: 'Head cook', updatedAt: 't2' }
     expect(planJobEmails(edited, job, ctx).map((entry) => entry.event)).toEqual(['job-edited-pending'])

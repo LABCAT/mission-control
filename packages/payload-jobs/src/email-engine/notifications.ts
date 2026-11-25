@@ -175,12 +175,12 @@ export const planJobEmails = (
   } else if (status === 'published' && before !== 'published') {
     // Published in the same action as the submission (a trusted employer, paid by credit):
     // the submission email is the one email.
-    const to = (ctx.employer ?? ctx.owner)?.email
-    if (to) {
+    // An invoice-eligible organisation's billing address is told too, like on submission.
+    for (const to of ownerAddresses(ctx.employer ?? ctx.owner, ctx, true)) {
       out.push({
         doc: { ...base, employerEmail: to },
         event: 'job-approved',
-        key: `job-approved:${String(doc.id)}`,
+        key: `job-approved:${String(doc.id)}:${to}`,
         linked,
         to,
       })
