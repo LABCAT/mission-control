@@ -3471,6 +3471,128 @@ stories:
       - packages/payload-jobs/src/checkout.integration.test.ts
       - packages/payload-jobs/src/admin/ApproveJobButton.test.ts
 
+  - id: S-180
+    area: Email
+    role: site manager
+    story: "Every email is sent in one tested, responsive layout, with chips filled in safely and a plain-text part."
+    steps:
+      - "Write a template with a variable chip (for example First name)."
+      - "Trigger the email with a name containing HTML."
+    expected: "The email shows the layout with the site's logo, colours and footer; the name appears as text, never as markup; a plain-text version is sent too."
+    settings:
+      - tenant.emailBranding
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/email-engine/render.test.ts
+
+  - id: S-181
+    area: Email
+    role: site manager
+    story: "I edit each email's subject (plain text with an Insert variable picker) and body (rich text with variable chips) for my site only."
+    steps:
+      - "Open Settings > Email templates and pick an event."
+      - "Insert a variable in the subject and a chip in the body; try a variable the event does not have."
+    expected: "Only the event's own variables are accepted; there is one template per event and site; another site's templates are not visible or editable."
+    settings: []
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/email-engine/subject.test.ts
+      - packages/payload-jobs/src/email-engine/email-engine.integration.test.ts
+
+  - id: S-182
+    area: Email
+    role: super admin
+    story: "All email leaves through one path that finds the site's template, renders it, sends it with the site's sender and logs it."
+    steps:
+      - "Trigger an event on two sites that each have their own template and sender."
+    expected: "Each site's email uses its own template and sender; a failed send is logged as failed and never breaks the action that caused it; on a non-production environment the message goes only to the test inbox."
+    settings:
+      - tenant.emailFromName
+      - tenant.emailFromAddress
+      - env.EMAIL_REDIRECT_TO
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/email-engine/email-engine.integration.test.ts
+
+  - id: S-183
+    area: Email
+    role: site manager
+    story: "The email log shows what was sent, to whom and when for my site, and never stores the message text or attachments."
+    steps:
+      - "Send an email, then open Settings > Email log."
+      - "Try to edit or delete a log row."
+    expected: "The row shows event, template, linked record, status and time; there is no body; rows cannot be edited or deleted by hand; another site's rows are not visible."
+    settings: []
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/email-engine/email-engine.integration.test.ts
+
+  - id: S-184
+    area: Email
+    role: site manager
+    story: "The recipient address in the email log is readable for 90 days, then masked, and the row is deleted after 12 months; both periods are my site's setting."
+    steps:
+      - "Leave the defaults, or change the visible days and delete months in the site's email settings."
+      - "Wait for the nightly job."
+    expected: "After the visible period the address reads j***@example.com; after the delete period the row is gone; one site's periods never affect another's."
+    settings:
+      - tenant.emailLogRetention.visibleDays
+      - tenant.emailLogRetention.deleteMonths
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/email-engine/log-policy.test.ts
+      - packages/payload-jobs/src/email-engine/email-engine.integration.test.ts
+
+  - id: S-185
+    area: Email
+    role: super admin
+    story: "I can see how many emails each site sent in a month, for billing."
+    steps:
+      - "Ask for the monthly volume of a site for a month."
+    expected: "The count is the emails handed to the transport in that UTC month; skipped and failed sends are not counted; sites are counted separately."
+    settings: []
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/email-engine/log-policy.test.ts
+      - packages/payload-jobs/src/email-engine/email-engine.integration.test.ts
+
+  - id: S-186
+    area: Email
+    role: site manager
+    story: "My site's emails carry my logo, colours and footer."
+    steps:
+      - "Set the logo address, brand colour and footer in the site's email settings."
+      - "Trigger an email."
+    expected: "The email header uses the logo and colour and the footer text appears at the bottom; an invalid colour or an insecure logo address is ignored."
+    settings:
+      - tenant.emailBranding
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/email-engine/render.test.ts
+      - packages/payload-jobs/src/email-engine/email-engine.integration.test.ts
+
+  - id: S-187
+    area: Email
+    role: site manager
+    story: "I can switch an individual email off for my site, and the switch applies only to my site."
+    steps:
+      - "Untick Enabled on one email template."
+      - "Trigger that event on my site and on another site."
+    expected: "My site sends nothing for that event and the log shows it as skipped; the other site still sends."
+    settings:
+      - emailTemplates.enabled
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/email-engine/email-engine.integration.test.ts
+
   # ---------------------------------------------------------------------------
   # Performance pass (PJ-44)
   # ---------------------------------------------------------------------------
