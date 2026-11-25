@@ -569,6 +569,7 @@ describe('JobDetailPage @S-280 @S-282 @S-285', () => {
     expect(html).toContain('"@type":"JobPosting"')
     expect(html).toContain('<meta property="og:image" content="https://vanuatuwok.vu/og/jobs/head-chef.png">')
     expect(html).toContain('<meta name="twitter:card" content="summary_large_image">')
+    expect(html).toContain('<meta name="twitter:image" content="https://vanuatuwok.vu/og/jobs/head-chef.png">')
     expect(html).toContain('href="/jobs/head-chef/apply"')
   })
 

@@ -17,7 +17,8 @@
     "./seo": "./src/seo/index.ts",
     "./seo/*": "./src/seo/*.ts",
     "./tenant/*": "./src/tenant/*.ts",
-    "./view-as": "./src/view-as/index.ts"
+    "./view-as": "./src/view-as/index.ts",
+    "./og/*": "./src/og/*.ts"
   },
   "scripts": {
     "build": "astro build --root demo",
@@ -26,8 +27,12 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@fontsource/inter": "5.2.8",
     "@labcat2020/rocketship": "0.3.0",
-    "@mission-control/rocketship-payload": "workspace:*"
+    "@mission-control/rocketship-payload": "workspace:*",
+    "@resvg/resvg-wasm": "2.6.2",
+    "satori": "0.15.2",
+    "yoga-wasm-web": "0.3.3"
   },
   "peerDependencies": {
     "astro": "7.4.12",

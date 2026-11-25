@@ -16,3 +16,7 @@
 # The form islands (PJ-45, PJ-47) need the public Turnstile site key, whose documented test value
 # always passes:
 #   PUBLIC_TURNSTILE_SITE_KEY=1x00000000000000000000AA
+#
+# Share images (PJ-105) need no variable: `wrangler.jsonc` binds the `OG_IMAGES` R2 bucket and
+# `wrangler dev` gives it a local store under `.wrangler/state`. Without the bucket the images are
+# still generated and edge-cached; they just do not survive the isolate.

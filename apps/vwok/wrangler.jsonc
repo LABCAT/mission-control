@@ -5,5 +5,9 @@
   "name": "mc-vwok",
   "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
+  // Share images (PJ-105) are generated on first request and kept here so a later isolate (or a
+  // later deploy) reads the PNG instead of re-rendering it. Without the binding they are still
+  // generated and edge-cached; they just do not survive the isolate.
+  "r2_buckets": [{ "binding": "OG_IMAGES", "bucket_name": "mission-control-og" }],
   "observability": { "enabled": true }
 }

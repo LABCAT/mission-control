@@ -79,6 +79,7 @@ const jsonLdText = jsonLd ? JSON.stringify(jsonLd).replace(/</g, '\\u003c') : un
     {meta.description && <meta property="og:description" content={meta.description} />}
     {image && <meta property="og:image" content={image} />}
     <meta name="twitter:card" content={image ? 'summary_large_image' : 'summary'} />
+    {image && <meta name="twitter:image" content={image} />}
     {
       jsonLdText && (
         <script type="application/ld+json" set:html={jsonLdText} is:inline>

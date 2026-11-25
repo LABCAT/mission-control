@@ -8,6 +8,7 @@ import Hero from '@mission-control/rocketship-payload/astro/hero'
 import type { HeroBlock } from '@mission-control/rocketship-payload/types'
 
 import SiteLayout from '../layouts/SiteLayout.astro'
+import { ogImagePath } from '../og-route'
 
 const blocks: HeroBlock[] = [
   {
@@ -17,10 +18,13 @@ const blocks: HeroBlock[] = [
   },
 ]
 const components = { hero: Hero }
+// The shell is a shareable page too, so it points at the generated home card (PJ-105).
+const image = `${Astro.site?.origin ?? Astro.url.origin}${ogImagePath({ kind: 'home' })}`
 ---
 
 <SiteLayout
   description="Find a job in Vanuatu: vacancies from employers in Port Vila, Luganville and across the islands."
+  image={image}
   path="/"
   title="Find a job in Vanuatu | Vanuatu Wok"
 >

@@ -22,6 +22,7 @@ import NotFoundPage from '../components/NotFoundPage.astro'
 
 import { siteTenant } from '../brand'
 import { siteEnv } from '../env'
+import { ogImagePath } from '../og-route'
 import { pageRoute } from '../page-route'
 import { cmsFromEnv } from '../site'
 
@@ -56,6 +57,13 @@ if (route.kind === 'not-found') {
   // A 404 could gain a page later, so it is not worth a shared cache.
   Astro.response.headers.set('cache-control', 'no-store')
 }
+
+// Only the home page has a generated share image (PJ-105). Another page keeps its own
+// `seo.image` from the CMS, which an editor chose.
+const image =
+  route.kind === 'page' && pathname === '/'
+    ? `${Astro.site?.origin ?? Astro.url.origin}${ogImagePath({ kind: 'home' })}`
+    : undefined
 ---
 
 {
@@ -63,6 +71,7 @@ if (route.kind === 'not-found') {
     <PageView
       allJobsHref="/jobs"
       components={components}
+      image={image}
       menus={route.menus}
       siteUrl={Astro.site?.origin}
       tenant={siteTenant}

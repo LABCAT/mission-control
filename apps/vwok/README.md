@@ -20,6 +20,7 @@ pnpm --filter @mission-control/vwok lighthouse # build, then Lighthouse CI again
 | `src/env.ts`           | the Worker's environment (`CMS_URL`, `SITE_KEY`, the AI switch) |
 | `src/robots.ts`        | `robots.txt` for one hostname; production allows, previews block |
 | `src/sitemap.ts`       | `/sitemap.xml` and its shards, read from the CMS               |
+| `src/og-route.ts`      | an `/og/…` path → the page it names, and that page's card     |
 | `src/layouts/`         | page chrome around the launchpad `BaseLayout`                  |
 | `src/page-route.ts`    | one request path → the CMS page it names, a 404, or the shell   |
 | `src/pages/`           | the catch-all route, plus `robots.txt`                         |
