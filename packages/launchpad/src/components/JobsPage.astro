@@ -43,6 +43,7 @@ const variant = view.hasActiveFilters || view.page > 1
   tenant={tenant}
   title={title}
 >
+  <slot name="head" slot="head" />
   <Container size="wide">
     <JobsListing clearHref={clearHref} description={description} timezone={tenant.timezone} title={title} view={view} />
   </Container>

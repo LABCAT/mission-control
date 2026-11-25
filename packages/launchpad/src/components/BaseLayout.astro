@@ -9,6 +9,7 @@ import { SIGNED_IN_SCRIPT } from '../sign-in'
 import type { MenuLink } from '../pages/menus'
 import { brandingStyleAttribute } from '../tenant/branding'
 import { resolveLocale } from '../tenant/locale'
+import { logoDisplaySize } from '../tenant/logo'
 import { seoMeta } from '../tenant/seo'
 import type { SiteTenant } from '../tenant/types'
 
@@ -51,6 +52,7 @@ const {
 const meta = seoMeta({ description, noindex, path, siteUrl, title })
 const branding = brandingStyleAttribute(tenant.branding)
 const locale = resolveLocale(tenant)
+const logoSize = logoDisplaySize(tenant.branding?.logo ?? {})
 
 // JSON-LD must not be able to close its own <script> element.
 const jsonLdText = jsonLd ? JSON.stringify(jsonLd).replace(/</g, '\\u003c') : undefined
@@ -100,9 +102,9 @@ const jsonLdText = jsonLd ? JSON.stringify(jsonLd).replace(/</g, '\\u003c') : un
                 {tenant.branding?.logo?.url ? (
                   <img
                     alt={tenant.branding.logo.alt ?? tenant.name}
-                    height={tenant.branding.logo.height ?? undefined}
+                    height={logoSize.height}
                     src={tenant.branding.logo.url}
-                    width={tenant.branding.logo.width ?? undefined}
+                    width={logoSize.width}
                   />
                 ) : (
                   tenant.name
@@ -171,6 +173,12 @@ const jsonLdText = jsonLd ? JSON.stringify(jsonLd).replace(/</g, '\\u003c') : un
     font-size: var(--rs-font-size-lg);
     font-weight: var(--rs-font-weight-semibold);
     text-decoration: none;
+  }
+
+  /* The attributes give the shape; this keeps it when the bar is narrower than the logo. */
+  .lp-brand img {
+    block-size: auto;
+    max-inline-size: 100%;
   }
 
   .lp-footer {

@@ -58,6 +58,7 @@ const description = view.detail.descriptionHtml
   tenant={tenant}
   title={view.title}
 >
+  <slot name="head" slot="head" />
   <JobDetail
     applyHref={applyHref}
     labels={labels}
