@@ -38,7 +38,7 @@ const withAfterChange = (collection: CollectionConfig, hook: any): CollectionCon
   hooks: { ...collection.hooks, afterChange: [...(collection.hooks?.afterChange ?? []), hook] },
 })
 
-describe.skipIf(!databaseUrl)('job, order and organisation emails @S-365 @S-366 @S-367 @S-368', () => {
+describe.skipIf(!databaseUrl)('job, order and organisation emails @S-380 @S-381 @S-382 @S-383', () => {
   let harness: TestHarness
   let payload: Payload
   let sent: { subject: string; to: string }[] = []

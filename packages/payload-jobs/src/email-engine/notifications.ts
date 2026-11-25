@@ -166,7 +166,7 @@ export const planJobEmails = (
   if (status === 'pending' && before !== 'pending') {
     const withOrder = { ...base, ...orderVariables(ctx.order) }
     const key = `job-submitted:${String(doc.id)}`
-    for (const to of ownerAddresses(ctx.employer ?? ctx.owner, ctx, ctx.order?.paymentMethod === 'invoice')) {
+    for (const to of ownerAddresses(ctx.employer ?? ctx.owner, ctx, true)) {
       out.push({ doc: { ...withOrder, employerEmail: to }, event: 'job-submitted', key: `${key}:${to}`, linked, to })
     }
     if (ctx.adminEmail) {
@@ -181,6 +181,16 @@ export const planJobEmails = (
         doc: { ...base, employerEmail: to },
         event: 'job-approved',
         key: `job-approved:${String(doc.id)}:${to}`,
+        linked,
+        to,
+      })
+    }
+  } else if (status === 'expired' && before !== null && before !== 'expired') {
+    for (const to of ownerAddresses(ctx.employer ?? ctx.owner, ctx, true)) {
+      out.push({
+        doc: { ...base, employerEmail: to },
+        event: 'job-expired',
+        key: `job-expired:${String(doc.id)}:${str(doc.expiresAt)}:${to}`,
         linked,
         to,
       })

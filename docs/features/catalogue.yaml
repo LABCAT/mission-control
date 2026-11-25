@@ -3734,7 +3734,7 @@ stories:
     tests:
       - packages/payload-jobs/src/email-engine/email-engine.integration.test.ts
 
-  - id: S-365
+  - id: S-380
     area: Emails
     role: employer
     story: "Submitting a job sends one email to the employer (with the order details) and one to the site admin; going live and edits are told once."
@@ -3751,7 +3751,7 @@ stories:
       - packages/payload-jobs/src/email-engine/notifications.integration.test.ts
       - packages/payload-jobs/src/checkout.integration.test.ts
 
-  - id: S-366
+  - id: S-381
     area: Emails
     role: site manager
     story: "Each job, order and organisation email can be switched off for my site, and a failed checkout never sends one."
@@ -3767,7 +3767,7 @@ stories:
       - packages/payload-jobs/src/email-engine/notifications.test.ts
       - packages/payload-jobs/src/email-engine/notifications.integration.test.ts
 
-  - id: S-367
+  - id: S-382
     area: Emails
     role: org owner
     story: "The site admin is told when an organisation asks for a public page, and the owner is told when it is approved."
@@ -3783,7 +3783,7 @@ stories:
       - packages/payload-jobs/src/email-engine/notifications.test.ts
       - packages/payload-jobs/src/email-engine/notifications.integration.test.ts
 
-  - id: S-368
+  - id: S-383
     area: Emails
     role: org owner
     story: "An invoice-me organisation's billing address gets a copy of the job and order emails."
@@ -3867,3 +3867,17 @@ stories:
     status: built
     tests:
       - packages/launchpad/src/components/components.test.ts
+
+  - id: S-384
+    area: Emails
+    role: employer
+    story: "An employer is told once when a job expires (the expiring-soon reminder is PJ-52)."
+    steps:
+      - "Let a live job pass its close date."
+    expected: "The employer (and the billing address of an invoice-eligible organisation) gets one 'Job expired' email; saving the job again sends nothing."
+    settings:
+      - tenant.emailTemplates
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/email-engine/notifications.test.ts

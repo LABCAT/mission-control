@@ -343,7 +343,7 @@ describe('checkout integration', () => {
   })
 
   describe('emails', () => {
-    it('sends ONE job-submitted email with the order details, one to the admin, and nothing for the order @S-365 @S-039', async () => {
+    it('sends ONE job-submitted email with the order details, one to the admin, and nothing for the order @S-380 @S-039', async () => {
       const listing = await job(orgs.brew)
       mailed.length = 0
 
@@ -360,7 +360,7 @@ describe('checkout integration', () => {
       expect(mailed).toEqual([])
     })
 
-    it('sends nothing for a checkout that fails and rolls back @S-365', async () => {
+    it('sends nothing for a checkout that fails and rolls back @S-380', async () => {
       const listing = await job(orgs.brew)
       mailed.length = 0
 

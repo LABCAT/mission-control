@@ -2222,6 +2222,7 @@ export interface EmailTemplate {
     | 'job-submitted-admin'
     | 'job-edited-pending'
     | 'job-approved'
+    | 'job-expired'
     | 'order-created'
     | 'order-created-admin'
     | 'order-paid'

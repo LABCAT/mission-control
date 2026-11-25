@@ -5,7 +5,7 @@ import type { DefaultParagraph, EmailTemplateEvent, EmailVariable } from './even
  * One event per email an action sends. Each has its own per-tenant on/off switch, so the
  * admin copy of "job submitted" is its own event with its own switch.
  *
- * Out of scope here: applications (PJ-45), alerts digest (PJ-48), expiry (PJ-52), sign-in,
+ * Out of scope here: applications (PJ-45), alerts digest (PJ-48), the expiring-soon email (PJ-52), sign-in,
  * welcome and reset (PJ-109), invite/join/duplicate (PJ-29) and the contact form (PJ-102).
  */
 
@@ -85,6 +85,14 @@ export const NOTIFICATION_EVENTS: EmailTemplateEvent[] = [
     defaultBody: [hello, [{ variable: 'jobTitle' }, ' is now live.']],
     defaultSubject: 'Your job is live: {{jobTitle}}',
     label: 'Job approved and live (employer)',
+    recipient: recipientOf('employerEmail'),
+    variables: JOB_VARIABLES,
+  },
+  {
+    slug: 'job-expired',
+    defaultBody: [hello, [{ variable: 'jobTitle' }, ' has expired and is no longer listed.']],
+    defaultSubject: 'Your job has expired: {{jobTitle}}',
+    label: 'Job expired (employer)',
     recipient: recipientOf('employerEmail'),
     variables: JOB_VARIABLES,
   },

@@ -21,7 +21,7 @@ const ctx: NotificationContext = {
 }
 const job = { id: 5, status: 'pending', tenant: 1, title: 'Cook', updatedAt: 't1' }
 
-describe('job emails @S-365', () => {
+describe('job emails @S-380', () => {
   it('sends ONE submitted email to the employer, with the order inside, and one to the admin', () => {
     const out = planJobEmails(job, { ...job, status: 'draft' }, ctx)
 
@@ -33,15 +33,22 @@ describe('job emails @S-365', () => {
     expect(out[0]?.doc.orderTotal).toMatch(/3,?900/)
   })
 
-  it('copies the billing address of an invoice-me organisation, and only that one @S-368', () => {
+  it('copies the billing address of an invoice-me organisation, and only that one @S-383', () => {
     const withBilling = { ...ctx, billingEmail: 'accounts@brew.test' }
     expect(planJobEmails(job, null, withBilling).map((entry) => entry.to)).toEqual([
       'boss@brew.test',
       'accounts@brew.test',
       'admin@site.test',
     ])
-    const card = { ...withBilling, order: { ...ctx.order!, paymentMethod: 'card' } }
-    expect(planJobEmails(job, null, card).map((entry) => entry.to)).toEqual(['boss@brew.test', 'admin@site.test'])
+    // Whatever the payment method (a credit-funded or card submission too): billing follows the organisation.
+    const credit = { ...withBilling, order: { ...ctx.order!, paymentMethod: 'credit' } }
+    expect(planJobEmails(job, null, credit).map((entry) => entry.to)).toEqual([
+      'boss@brew.test',
+      'accounts@brew.test',
+      'admin@site.test',
+    ])
+    // An organisation that is not invoice-eligible has no billing address in the context.
+    expect(planJobEmails(job, null, ctx).map((entry) => entry.to)).toEqual(['boss@brew.test', 'admin@site.test'])
   })
 
   it('falls back to the organisation owner when the creator is unknown, and skips the admin when none is set', () => {
@@ -55,7 +62,7 @@ describe('job emails @S-365', () => {
     expect(planJobEmails(live, { ...live }, ctx)).toEqual([])
   })
 
-  it('copies the billing address of an invoice-eligible organisation on "live", once, without duplicates @S-368', () => {
+  it('copies the billing address of an invoice-eligible organisation on "live", once, without duplicates @S-383', () => {
     const live = { ...job, status: 'published' }
     const withBilling = { ...ctx, billingEmail: 'accounts@brew.test' }
     expect(planJobEmails(live, job, withBilling).map((entry) => [entry.event, entry.to])).toEqual([
@@ -74,6 +81,18 @@ describe('job emails @S-365', () => {
     expect(planJobEmails(edited, job, ctx, { system: true })).toEqual([])
     expect(planJobEmails({ ...job, views: 4, updatedAt: 't3' }, job, ctx)).toEqual([])
     expect(jobContentChanged({ ...job, order: 3 }, job)).toBe(false)
+  })
+
+  it('tells the employer (and billing) once when a job expires, and not for other moves @S-384', () => {
+    const live = { ...job, status: 'published' }
+    const expired = { ...job, status: 'expired' }
+    const withBilling = { ...ctx, billingEmail: 'accounts@brew.test' }
+    expect(planJobEmails(expired, live, withBilling).map((entry) => [entry.event, entry.to])).toEqual([
+      ['job-expired', 'boss@brew.test'],
+      ['job-expired', 'accounts@brew.test'],
+    ])
+    expect(planJobEmails(expired, expired, withBilling)).toEqual([])
+    expect(planJobEmails(expired, null, ctx)).toEqual([])
   })
 
   it('has a distinct key for every transition, so a repeat is recognised', () => {
@@ -108,7 +127,7 @@ describe('order emails @S-110', () => {
   })
 })
 
-describe('organisation page emails @S-367', () => {
+describe('organisation page emails @S-382', () => {
   const organisation = { id: 3, listingRequested: false, pageEnabled: false, tenant: 1 }
 
   it('tells the admin when a page is requested and the owner when it is approved, each once', () => {
@@ -124,7 +143,7 @@ describe('organisation page emails @S-367', () => {
   })
 })
 
-describe('dispatch @S-366', () => {
+describe('dispatch @S-381', () => {
   it('holds emails while a transaction may roll back, and never queues the same key twice in a request', async () => {
     const held: unknown[] = []
     const req = { context: { [EMAIL_DEFER_CONTEXT]: held }, payload: {} } as never
@@ -145,7 +164,7 @@ describe('dispatch @S-366', () => {
   it('declares an event with variables for everything the plans send', () => {
     const slugs = BUILT_IN_EMAIL_EVENTS.map((event) => event.slug)
     for (const slug of [
-      'job-submitted', 'job-submitted-admin', 'job-edited-pending', 'job-approved', 'order-created', 'order-created-admin',
+      'job-submitted', 'job-submitted-admin', 'job-edited-pending', 'job-approved', 'job-expired', 'order-created', 'order-created-admin',
       'order-paid', 'order-cancelled', 'organisation-page-requested', 'organisation-page-approved',
     ]) {
       expect(slugs).toContain(slug)
