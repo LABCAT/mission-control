@@ -30,6 +30,8 @@ import { tenantPackCreditsField } from './credit-settings'
 import { endOfLocalDayAfter } from './local-time'
 import { orderCollection, refuseDeleteWhileOrdered } from './orders'
 import { DEFAULT_PUBLICATION_SETTINGS, tenantPublicationSettings } from './publication'
+import { cancelJob, endJobEarly, jobActionEndpoints, relistJob } from './job-actions'
+import { JOB_SYSTEM_CONTEXT } from './job-status'
 import { tenantPublicationField } from './publication-settings'
 import { orderEventHook } from './plug-points/gate'
 import type { PaymentProviderRegistration } from './plug-points/definitions'
@@ -303,6 +305,106 @@ describe('checkout integration', () => {
 
   afterAll(async () => {
     await harness?.destroy()
+  })
+
+  describe('job actions (PJ-33)', () => {
+    // eslint-disable-next-line unicorn/consistent-function-scoping
+    const actionArgs = async (user: null | User, listing: Doc) => ({
+      jobId: listing.id,
+      payload,
+      req: await reqFor(user),
+      slugs: DEFAULT_PAYLOAD_JOBS_SLUGS,
+      tenantScoped: true,
+      tenantsSlug: 'tenants',
+      user,
+    })
+
+    it('ends a published job early, logs the employer, and never refunds its credit @S-044', async () => {
+      await giveCredits(orgs.brew, 1)
+      await payload.update({ collection: 'organisations', data: { trusted: true } as never, id: orgs.brew.id, ...system })
+      const listing = await job(orgs.brew)
+      await checkout(users.owner, { jobId: listing.id, useCredit: true })
+      expect((await ledger(orgs.brew)).filter((row) => String(row.job) === String(listing.id)).map((row) => row.delta)).toEqual([-1])
+
+      const result = await endJobEarly(await actionArgs(users.owner, await read('jobs', listing.id)))
+      expect(result.job.status).toBe('expired')
+      expect((await ledger(orgs.brew)).filter((row) => String(row.job) === String(listing.id)).map((row) => row.delta)).toEqual([-1])
+      expect((result.job.log as Doc[]).at(-1)).toMatchObject({ actor: 'employer', from: 'published', note: 'Ended early by employer', to: 'expired' })
+      await payload.update({ collection: 'organisations', data: { trusted: false } as never, id: orgs.brew.id, ...system })
+    })
+
+    it('cancels a pending job and refunds its reserved credit exactly once @S-044', async () => {
+      await giveCredits(orgs.brew, 1)
+      await payload.update({ collection: 'tenants', data: { jobPublication: { ...DEFAULT_PUBLICATION_SETTINGS, moderation: 'always' } } as never, id: harness.tenantA.id, ...system })
+      const listing = await job(orgs.brew)
+      const checkedOut = await checkout(users.owner, { jobId: listing.id, useCredit: true })
+      expect(checkedOut.job.status).toBe('pending')
+      expect((await ledger(orgs.brew)).filter((row) => String(row.job) === String(listing.id)).map((row) => row.delta)).toEqual([-1])
+
+      const cancelled = await cancelJob(await actionArgs(users.owner, await read('jobs', listing.id)))
+      expect(cancelled.job.status).toBe('cancelled')
+      expect((cancelled.job.log as Doc[]).at(-1)).toMatchObject({ actor: 'employer', from: 'pending', note: 'Cancelled before publication', to: 'cancelled' })
+      expect((await ledger(orgs.brew)).filter((row) => String(row.job) === String(listing.id)).map((row) => row.delta)).toEqual([-1, 1])
+      await expect(cancelJob(await actionArgs(users.owner, await read('jobs', listing.id)))).rejects.toMatchObject({ code: 'invalid_status' })
+      expect((await ledger(orgs.brew)).filter((row) => String(row.job) === String(listing.id)).map((row) => row.delta)).toEqual([-1, 1])
+      await payload.update({ collection: 'tenants', data: { jobPublication: DEFAULT_PUBLICATION_SETTINGS } as never, id: harness.tenantA.id, ...system })
+    })
+
+    it('refuses cross-organisation actions, ends of non-live jobs, and relisting non-expired jobs @S-044', async () => {
+      const draft = await job(orgs.brew)
+      await expect(cancelJob(await actionArgs(users.stranger, draft))).rejects.toMatchObject({ code: 'not_found' })
+      await expect(endJobEarly(await actionArgs(users.owner, draft))).rejects.toMatchObject({ code: 'invalid_status' })
+      await expect(relistJob(await actionArgs(users.owner, draft))).rejects.toMatchObject({ code: 'invalid_status' })
+      const expired = { ...draft, status: 'expired' }
+      await expect(relistJob(await actionArgs(users.stranger, expired))).rejects.toMatchObject({ code: 'not_found' })
+      await expect(cancelJob(await actionArgs(null, draft))).rejects.toMatchObject({ code: 'not_found' })
+    })
+
+    it('allows only members of the organisation and managers of the job tenant @S-044', async () => {
+      const listing = await job(orgs.brew, { status: 'published' })
+      const managerArgs = await actionArgs(harness.tenantAdminA as User, listing)
+      expect((await endJobEarly(managerArgs)).job.status).toBe('expired')
+
+      const otherTenantJob = await job(orgs.shop)
+      await expect(cancelJob(await actionArgs(harness.tenantAdminA as User, otherTenantJob))).rejects.toMatchObject({ code: 'not_found' })
+    })
+
+    it('exposes the three CMS action endpoints @S-043 @S-044', async () => {
+      const endpoints = jobActionEndpoints()
+      expect(endpoints.map(({ method, path }) => `${method} ${path}`)).toEqual([
+        'post /:id/end-early',
+        'post /:id/cancel',
+        'post /:id/relist',
+      ])
+      const listing = await job(orgs.brew)
+      const endpoint = endpoints.find(({ path }) => path === '/:id/cancel')!
+      const req = await createPayloadRequest({
+        payload,
+        req: { headers: new Headers(), routeParams: { id: String(listing.id) } } as never,
+        user: users.owner as never,
+      })
+      const response = (await endpoint.handler(req)) as Response
+      expect(response.status).toBe(200)
+      expect((await read('jobs', listing.id)).status).toBe('cancelled')
+    })
+
+    it('duplicates an expired job as a draft and logs the relist in organisation history @S-043 @S-044', async () => {
+      const listing = await job(orgs.brew, { plan: plans.regular.id, status: 'published' })
+      const req = await reqFor(users.owner)
+      req.context[JOB_SYSTEM_CONTEXT] = true
+      await payload.update({ collection: 'jobs', data: { status: 'expired' } as never, id: listing.id, overrideAccess: true, req })
+      delete req.context[JOB_SYSTEM_CONTEXT]
+
+      const result = await relistJob(await actionArgs(users.owner, await read('jobs', listing.id)))
+      expect(result.job).toMatchObject({ status: 'draft', title: listing.title, organisation: orgs.brew.id, plan: plans.regular.id })
+      expect(result.job.id).not.toBe(listing.id)
+      expect(result.checkoutUrl).toBe(`/api/tenants/${harness.tenantA.slug}/account/checkout`)
+      expect(result.checkoutInput).toEqual({ jobId: result.job.id, planId: plans.regular.id })
+      expect((await read('jobs', listing.id)).status).toBe('expired')
+      expect(((await read('jobs', listing.id)).log as Doc[]).at(-1)).toMatchObject({ event: 'status', note: `Relisted as job ${result.job.id}` })
+      const history = await organisationHistory({ organisation: orgs.brew.id, payload })
+      expect(history.entries.some((entry) => entry.event === 'relisted' && String(entry.job?.id) === String(listing.id))).toBe(true)
+    })
   })
 
   describe('pricing and orders', () => {

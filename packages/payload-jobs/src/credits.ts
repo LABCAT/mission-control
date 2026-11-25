@@ -1157,7 +1157,7 @@ export const buildOrganisationHistory = ({
     const log = Array.isArray(job.log) ? job.log.filter(isRecord) : []
     const seen = new Set<string>()
     log.forEach((entry, index) => {
-      const event = entry.event === 'created' ? 'posted' : String(entry.to)
+      const event = entry.event === 'created' ? 'posted' : typeof entry.note === 'string' && entry.note.startsWith('Relisted as job ') ? 'relisted' : String(entry.to)
       if (!(HISTORY_JOB_EVENTS as readonly string[]).includes(event)) return
       seen.add(event)
       const by = entry.by === undefined || entry.by === null ? (event === 'posted' ? byOf(job.createdBy) : null) : byOf(entry.by)

@@ -192,6 +192,11 @@ describe('payloadJobs', () => {
       expect(((jobs?.endpoints || []) as { method: string; path: string }[]).map((e) => `${e.method} ${e.path}`)).toContain(
         'post /:id/approve',
       )
+      expect(((jobs?.endpoints || []) as { method: string; path: string }[]).map((e) => `${e.method} ${e.path}`)).toEqual(expect.arrayContaining([
+        'post /:id/end-early',
+        'post /:id/cancel',
+        'post /:id/relist',
+      ]))
       const controls = (jobs?.admin?.components?.edit as { beforeDocumentControls?: { path: string }[] } | undefined)
         ?.beforeDocumentControls
       expect(controls?.map((control) => control.path)).toContain('@mission-control/payload-jobs/client#ApproveJobButton')

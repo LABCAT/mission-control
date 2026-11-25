@@ -6,6 +6,7 @@ import {
   datesForTransition,
   isLiveJob,
   JOB_STATUSES,
+  JOB_END_EARLY_CONTEXT,
   JOB_TRANSITIONS,
   jobTransitionProblem,
   type JobActor,
@@ -52,6 +53,11 @@ describe('job status machine @S-033', () => {
         expect([`${from}>${to}`, ok]).toEqual([`${from}>${to}`, from === to || allowed.has(`${from}>${to}`)])
       }
     }
+  })
+
+  it('marks employer end-early as a server-side action separate from ordinary employer status changes @S-044', () => {
+    expect(JOB_END_EARLY_CONTEXT).toBe('jobEndEarly')
+    expect(jobTransitionProblem('published', 'expired', 'employer')).toContain('Only staff or checkout')
   })
 
   it('starts jobs as draft or pending, and for staff and the system also published or waiting for purchase; never expired or cancelled @S-191', () => {

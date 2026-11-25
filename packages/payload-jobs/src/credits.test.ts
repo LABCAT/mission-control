@@ -233,6 +233,22 @@ describe('organisation history @S-149', () => {
     })
   })
 
+  it('includes an explicit relist action in organisation job history @S-043 @S-044', () => {
+    const job = {
+      createdAt: at(4),
+      id: 20,
+      log: [
+        { at: at(4), event: 'created', to: 'published' },
+        { at: at(20), event: 'status', from: 'published', note: 'Ended early by employer', to: 'expired' },
+        { at: at(21), event: 'status', from: 'expired', note: 'Relisted as job 22', to: 'expired' },
+      ],
+      status: 'expired',
+      title: 'Brewer',
+    }
+    const history = buildOrganisationHistory({ jobs: [job], ledger: [], orders: [], organisation: 4 })
+    expect(history.entries.map((entry) => entry.event)).toEqual(['posted', 'expired', 'relisted'])
+  })
+
   it('links each entry to its order and job, and names who did it', () => {
     const history = buildOrganisationHistory({ jobs, ledger, orders, organisation: 4 })
     const used = history.entries.find((entry) => entry.credit?.id === 101)

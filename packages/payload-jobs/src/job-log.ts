@@ -75,7 +75,8 @@ export const jobLogField = (usersSlug: string): Field => ({
   ],
 })
 
-/** `req.context` key that carries the note a site manager's action wants in the log. */
+/** `req.context` keys for server-side job actions and their audit entries. */
+export const JOB_LOG_ACTION_CONTEXT = 'jobLogAction'
 export const JOB_LOG_NOTE_CONTEXT = 'jobLogNote'
 export type JobLogNote = { [JOB_LOG_NOTE_CONTEXT]: string }
 
@@ -108,7 +109,8 @@ export const jobStatusLog =
     }
 
     const from = (originalDoc?.status ?? null) as JobStatus | null
-    if (from === to) return previous.length === 0 ? data : { ...data, [JOB_LOG_FIELD]: previous }
+    const action = context?.[JOB_LOG_ACTION_CONTEXT]
+    if (from === to && action !== 'relisted') return previous.length === 0 ? data : { ...data, [JOB_LOG_FIELD]: previous }
 
     const note = typeof context?.[JOB_LOG_NOTE_CONTEXT] === 'string' ? context[JOB_LOG_NOTE_CONTEXT] : null
     return {

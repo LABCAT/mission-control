@@ -64,6 +64,8 @@ export const JOB_INITIAL_STATUSES: readonly JobStatus[] = [
  * the system's (the rule decided it), whoever's request carries it. Server-side only.
  */
 export const JOB_SYSTEM_CONTEXT = 'jobSystem'
+/** A one-request marker for an employer's explicit early-close action. */
+export const JOB_END_EARLY_CONTEXT = 'jobEndEarly'
 
 /** Who is acting: an employer on their own job, staff, or system code (no user). */
 export type JobActor = 'employer' | 'staff' | 'system'
