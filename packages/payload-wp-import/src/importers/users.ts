@@ -503,13 +503,20 @@ export const usersImporters = (
         pagination: false,
         where: { legacyId: { equals: facts.user.ID } },
       })
-      const isTombstone = (doc: Record<string, any>) =>
-        String(doc.email ?? '').endsWith(`@${REMOVED_USER_EMAIL_DOMAIN}`) &&
+      const anonymised = removed.docs.filter((doc: Record<string, any>) =>
+        String(doc.email ?? '').endsWith(`@${REMOVED_USER_EMAIL_DOMAIN}`),
+      )
+      const sites = (doc: Record<string, any>) =>
         String(doc[REMOVED_FROM_TENANTS_FIELD] ?? '')
           .split(',')
-          .includes(String(ctx.tenant))
-      if (removed.docs.some(isTombstone)) {
+          .filter(Boolean)
+      if (anonymised.some((doc) => sites(doc).includes(String(ctx.tenant)))) {
         return { keep: true, legacyId: facts.user.ID, skip: 'anonymised' }
+      }
+      // Fail closed: an anonymised row with no site list could be this person, and we cannot tell.
+      // Privacy wins, so skip them (never create or refresh) until someone reconciles the row.
+      if (anonymised.some((doc) => sites(doc).length === 0)) {
+        return { keep: true, legacyId: facts.user.ID, skip: 'anonymised-unscoped' }
       }
 
       const hash = String(facts.user.user_pass ?? '').trim()

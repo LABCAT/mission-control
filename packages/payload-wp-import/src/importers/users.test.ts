@@ -364,12 +364,16 @@ describe('the users and organisations importers @S-130', () => {
     expect(store.users!.filter((doc) => doc.legacyId === 2)).toHaveLength(2)
   })
 
-  it('cannot tell which site an older tombstone came from, so it does not block the import @S-331', async () => {
+  it('fails closed on an anonymised row with no site list: it is never re-created or refreshed @S-331', async () => {
     const payload = createFakePayload({ users: [{ id: 1, ...tombstone(null) }] })
 
-    const { summary } = await run(false, payload)
+    const { store, summary } = await run(false, payload)
 
-    expect(summary.importers.users!.skipReasons).not.toHaveProperty('anonymised')
+    // Cannot tell which site it came from, so the person is skipped and reported, never created.
+    expect(summary.importers.users!.created).toBe(7)
+    expect(summary.importers.users!.skipReasons).toMatchObject({ 'anonymised-unscoped': 1 })
+    expect(store.users!.filter((doc) => doc.legacyId === 2)).toHaveLength(1)
+    expect(JSON.stringify(store.users)).not.toContain('pat@example.com')
   })
 
   it('reads the tombstone field the removal writes', () => {

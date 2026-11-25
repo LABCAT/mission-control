@@ -284,8 +284,10 @@ site is live. A second run creates nothing: it updates or skips.
   anonymised row with their legacy id and the ids of the sites they belonged to
   (`removedFromTenants`). The users importer skips them for those sites (`anonymised`) and never
   re-creates them while WordPress still has the account. Another site's user with the same
-  WordPress id is a different person and is imported. Rows anonymised before this field existed
-  carry no site list and cannot be matched.
+  WordPress id is a different person and is imported. An anonymised row with this legacy
+  id but no site list fails closed: the user is skipped (`anonymised-unscoped`), never created or
+  refreshed, and counted in the summary. Rows anonymised before PJ-121 also lost their legacy id,
+  so they cannot be matched at all.
 - Credential refresh also skips a user who has their own Payload password (`hash`).
 - Removal updates carry the context `{ wpImportSync: true }`. Hooks may read it to tell an import action from a staff action; none does yet, so a removal still runs the job lifecycle hooks.
 - `--limit` is refused with `sync`. Logs carry collection, ids and the change only, no personal data.
