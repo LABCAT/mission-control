@@ -210,8 +210,8 @@ describe('organisation directory block (PJ-38)', () => {
     expect(html).not.toContain('type="module"')
     // Only inline scripts: the view-as snippet and the page's JSON-LD (PJ-104).
     const scripts = html.match(/<script[^>]*>/g) ?? []
-    // Two inline snippets, no file: the view-as banner (PJ-119) and the signed-in link swap (PJ-109).
-    expect(scripts).toHaveLength(2)
+    // Three inline snippets, no file: the view-as banner (PJ-119), the signed-in link swap (PJ-109) and the JSON-LD.
+    expect(scripts).toHaveLength(3)
     expect(scripts.every((script) => !script.includes('src='))).toBe(true)
   })
 
