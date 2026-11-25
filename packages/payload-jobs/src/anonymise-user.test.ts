@@ -250,6 +250,7 @@ describe('personal data removal in Postgres @S-311', () => {
       firstName: 'Sera',
       lastName: 'Seeker',
       password: 'test-password',
+      legacyId: 4242,
       phone: '+678 555 1234',
       role: 'user',
       tenants: [{ role: 'seeker', tenant }],
@@ -319,6 +320,8 @@ describe('personal data removal in Postgres @S-311', () => {
     expect(user?.lastName ?? null).toBeNull()
     expect(user?.phone ?? null).toBeNull()
     expect(user?.tenants).toEqual([])
+    // The legacy id stays as a tombstone, so a later import does not re-create the person (@S-331).
+    expect(user?.legacyId).toBe(4242)
 
     expect(await count('applications', { email: { equals: emails.seeker } })).toBe(0)
     expect(await count(APPLICATION_FILES_SLUG, { id: { in: [ids.cv, ids.coverLetter, ids.guestCv] } })).toBe(0)

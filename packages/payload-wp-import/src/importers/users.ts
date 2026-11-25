@@ -14,6 +14,9 @@ import type { Importer, MappedDoc, SkippedRow } from '../types'
  * group is its owner. Nothing here reads applications, CVs, resumes, logs or `user_IP`.
  */
 
+/** The domain of the address a removed user keeps (`payload-jobs` `REMOVED_USER_EMAIL_DOMAIN`). */
+const REMOVED_USER_EMAIL_DOMAIN = 'removed.invalid'
+
 export type UserImportOptions = {
   /** An organisation page stays public when it was public on the legacy site. Default true. */
   keepPageVisibility?: boolean
@@ -485,6 +488,20 @@ export const usersImporters = (
           },
         })
         organisation = found.docs[0]?.id
+      }
+
+      // A person whose personal data was removed (PJ-89) keeps an anonymised row with the same
+      // legacy id but no tenant link, so the runner cannot find it. While WordPress still has them,
+      // they must not be created again with their name, email and password hash.
+      const removed = await ctx.payload.find({
+        collection: options.usersSlug ?? 'users',
+        depth: 0,
+        overrideAccess: true,
+        pagination: false,
+        where: { legacyId: { equals: facts.user.ID } },
+      })
+      if (removed.docs.some((doc) => String(doc.email ?? '').endsWith(`@${REMOVED_USER_EMAIL_DOMAIN}`))) {
+        return { keep: true, legacyId: facts.user.ID, skip: 'anonymised' }
       }
 
       const hash = String(facts.user.user_pass ?? '').trim()

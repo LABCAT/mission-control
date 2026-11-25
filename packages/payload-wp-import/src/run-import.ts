@@ -186,7 +186,8 @@ const handleRemovals = async (args: {
       continue
     }
     try {
-      await ctx.payload.update({ collection, data: action, id: doc.id, overrideAccess: true })
+      // The context lets hooks tell an import action from a staff action (no emails, no refunds).
+      await ctx.payload.update({ collection, context: { wpImportSync: true }, data: action, id: doc.id, overrideAccess: true })
       removal.applied = true
       log(`removed from legacy, changed: ${label}`)
     } catch (error) {
@@ -228,11 +229,15 @@ export const wrapLocalizedFields = (
 
 /** The `refreshWhileSet` fields that still hold a value on the document and now differ. */
 const refreshedFields = (found: Record<string, any>, wanted: Record<string, unknown> | undefined) =>
-  Object.fromEntries(
-    Object.entries(wanted ?? {}).filter(
-      ([field, value]) => value !== undefined && value !== null && value !== '' && found[field] && found[field] !== value,
-    ),
-  )
+  // A document with its own password hash has been claimed (signed in, or password set or reset,
+  // by any route): its legacy value never follows WordPress again.
+  found.hash
+    ? {}
+    : Object.fromEntries(
+        Object.entries(wanted ?? {}).filter(
+          ([field, value]) => value !== undefined && value !== null && value !== '' && found[field] && found[field] !== value,
+        ),
+      )
 
 const importRow = async (
   importer: Importer,
@@ -273,6 +278,8 @@ const importRow = async (
       limit: 1,
       overrideAccess: true,
       pagination: false,
+      // Hidden fields (a user's password hash) are needed to decide on `refreshWhileSet`.
+      showHiddenFields: true,
       where: {
         and: [{ [matchField]: { equals: matchValue } }, { [scope.path]: { equals: ctx.tenant } }],
       },

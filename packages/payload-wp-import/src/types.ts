@@ -28,6 +28,7 @@ export type ImportPayload = {
     limit?: number
     overrideAccess?: boolean
     pagination?: boolean
+    showHiddenFields?: boolean
     where?: any
   }) => Promise<{ docs: ({ id: number | string } & Record<string, any>)[] }>
   update: (args: {

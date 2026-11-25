@@ -115,7 +115,7 @@ describe('jobs import against Payload @S-155', () => {
     expect(total.totalDocs).toBe(5)
   }, 120_000)
 
-  it('a sync cancels, never deletes, the imported job that left the legacy site @S-330', async () => {
+  it('a sync unpublishes, never deletes, the imported job that left the legacy site @S-330', async () => {
     const { payload, tenantA } = harness
     const jobWhere = (legacyId: number) => ({ and: [{ legacyId: { equals: legacyId } }, { tenant: { equals: tenantA.id } }] }) as never
     // Job 1001 is renumbered to an id the legacy site no longer has: as if it had been trashed there.
@@ -131,10 +131,23 @@ describe('jobs import against Payload @S-155', () => {
     expect(real.errors).toEqual([])
     expect(real.removals).toEqual([expect.objectContaining({ applied: true, legacyId: 9999 })])
     const after = await payload.findByID({ collection: 'jobs', id: gone!.id, depth: 0, ...system })
-    expect(after.status).toBe('cancelled')
+    expect(after.status).toBe('expired') // reversible: a cancelled job could never come back
 
-    // Already off the site: the next sync has nothing to do. The other tenant is untouched.
+    // Already off the site: the next sync has nothing to do.
     expect((await doImport(false, { apply: true })).removals).toEqual([])
+
+    // The job is republished on the legacy site: the next sync relists it, with no failed row, and
+    // later syncs still check removals.
+    // (The earlier runs re-created 1001 from the source beside the renumbered copy; drop that copy.)
+    const [copy] = (await payload.find({ collection: 'jobs', depth: 0, limit: 1, where: jobWhere(1001), ...system })).docs
+    await payload.db.deleteOne({ collection: 'jobs', where: { id: { equals: copy!.id } } } as never)
+    await payload.db.updateOne({ collection: 'jobs', data: { legacyId: 1001, slug: gone!.slug }, where: { id: { equals: gone!.id } } } as never)
+    const back = await doImport(false, { apply: true })
+    expect(back.errors).toEqual([])
+    expect(back.importers.jobs!.removalsRefused).toBeUndefined()
+    expect((await payload.findByID({ collection: 'jobs', id: gone!.id, depth: 0, ...system })).status).toBe('published')
+
+    // The other tenant is untouched.
     expect((await payload.count({ collection: 'jobs', where: { tenant: { equals: harness.tenantB.id } }, ...system })).totalDocs).toBe(0)
   }, 120_000)
 })

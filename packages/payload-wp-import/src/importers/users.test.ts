@@ -327,6 +327,26 @@ describe('the users and organisations importers @S-130', () => {
     expect(sync.summary.importers.users!.refreshed).toBe(1)
   })
 
+  it('never re-creates a user whose personal data was removed, even though WordPress still has them @S-331', async () => {
+    const first = await run(false)
+    const pat = first.store.users!.find((doc) => doc.legacyId === 2)!
+    // What the personal-data removal leaves: the row, anonymised, with no tenant link, same legacy id.
+    Object.assign(pat, {
+      email: 'removed-user-1@removed.invalid',
+      firstName: null,
+      legacyPasswordHash: null,
+      tenants: [],
+    })
+
+    const second = await run(false, first as never, {}, true)
+
+    expect(first.store.users).toHaveLength(8)
+    expect(second.summary.importers.users).toMatchObject({ created: 0, failed: 0 })
+    expect(second.summary.importers.users!.skipReasons).toMatchObject({ anonymised: 1 })
+    expect(pat).toMatchObject({ email: 'removed-user-1@removed.invalid', firstName: null, tenants: [] })
+    expect(JSON.stringify(first.store.users)).not.toContain('pat@example.com')
+  })
+
   it('keeps users of another tenant apart even when the legacy id is the same', async () => {
     const payload = createFakePayload({
       users: [{ id: 1, legacyId: 2, tenants: [{ role: 'employer', tenant: 99 }] }],

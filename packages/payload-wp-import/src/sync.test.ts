@@ -56,6 +56,21 @@ describe('sync removals (@S-330)', () => {
     expect(lines.join('\n')).toMatch(/changed: jobs legacyId 11/)
   })
 
+  it('marks its change as an import, so hooks can tell it from a staff action', async () => {
+    const { payload, writes } = seed()
+    const contexts: unknown[] = []
+    const update = payload.update
+    payload.update = async (args) => {
+      if ((args.data as { status?: string }).status === 'cancelled') contexts.push(args.context)
+      return update(args)
+    }
+
+    await sync([jobs([{ id: 10 }])], payload, { applyRemovals: true })
+
+    expect(contexts).toEqual([{ wpImportSync: true }])
+    expect(writes.length).toBeGreaterThan(0)
+  })
+
   it('applies nothing in a dry run, and nothing again once a document is already off the site', async () => {
     const dry = seed()
     await sync([jobs([{ id: 10 }])], dry.payload, { applyRemovals: true, dryRun: true })
@@ -191,6 +206,12 @@ describe('sync credential refresh (@S-331)', () => {
 
     expect(store.users![0]!.legacyPasswordHash).toBe('new')
     expect(summary.importers.users!.refreshed).toBe(1)
+  })
+
+  it('leaves a user who has a Payload password alone, whatever the legacy hash says', async () => {
+    const { store } = await run([{ hash: 'pbkdf2', id: 1, legacyId: 5, legacyPasswordHash: 'old', tenant: 1 }], 'new')
+
+    expect(store.users![0]!.legacyPasswordHash).toBe('old')
   })
 
   it('never brings back a hash for a user who already claimed the account', async () => {

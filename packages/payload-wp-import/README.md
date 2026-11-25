@@ -272,7 +272,7 @@ site is live. A second run creates nothing: it updates or skips.
   never updated.
 - **Removals are reported, never applied by default.** Imported documents (with a `legacyId`, in
   the run's tenant) whose legacy row is gone or trashed are listed. With `--apply-deletions`, an
-  importer's `removal` policy runs (`jobs`: status becomes `cancelled`). Nothing is hard-deleted,
+  importer's `removal` policy runs (`jobs`: a published job becomes `expired`, which can be relisted when the job comes back on the legacy site; a cancelled job could not). Nothing is hard-deleted,
   and orders, the credit ledger and users have no policy, so they are never touched. Nothing is
   checked for an importer whose read was incomplete (no rows, a failed row, a skipped row without a
   `legacyId`, an aborted read). A skipped row can return `{ skip, legacyId }` (its earlier import is
@@ -280,6 +280,13 @@ site is live. A second run creates nothing: it updates or skips.
 - **`--refresh-credentials`** replaces a user's legacy password hash while the user has not signed
   in (signing in clears it). It is never brought back afterwards, and an empty hash never blanks a
   stored one.
+- **Removed users stay removed.** A person whose personal data was removed (PJ-89) keeps an
+  anonymised row with their legacy id as a tombstone; the users importer skips them (`anonymised`)
+  and never re-creates them, even while WordPress still has the account. The tombstone is matched
+  by legacy id alone (the removal clears the tenant link), so a second legacy site importing into
+  another tenant must not reuse ids.
+- Credential refresh also skips a user who has their own Payload password (`hash`).
+- Removal updates carry the context `{ wpImportSync: true }` so hooks can tell them from staff actions.
 - `--limit` is refused with `sync`. Logs carry collection, ids and the change only, no personal data.
 - **Not included yet:** media (`wp-import-media` needs the uploads directory) and role/organisation
   change reporting for users.

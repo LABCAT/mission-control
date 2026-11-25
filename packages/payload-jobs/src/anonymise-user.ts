@@ -285,8 +285,9 @@ const anonymiseInTransaction = async (
   const scrub: Record<string, unknown> = { email: removedUserEmail(user.id) }
   if (hasField('role')) scrub.role = 'user'
 
+  // `legacyId` stays: it is the tombstone that stops a later import from re-creating the person
+  // from the legacy site (it is an id, not personal data).
   const optional: Record<string, unknown> = {
-    legacyId: null,
     legacyPasswordHash: null,
     lockUntil: null,
     loginAttempts: 0,

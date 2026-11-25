@@ -492,7 +492,7 @@ export const jobsImporters = (
     map: async (job, ctx): Promise<MappedDoc | SkippedRow> => {
       const status = importableStatus(job.status)
       if (!status) {
-        // Left the site (draft, trash, ...): a sync may cancel the job an earlier run imported.
+        // Left the site (draft, trash, ...): a sync may expire the job an earlier run imported.
         return { legacyId: job.id, skip: `status-${job.status || 'none'}` }
       }
       // A data problem, not a removal: an earlier import of the job stays.
@@ -647,8 +647,10 @@ export const jobsImporters = (
       }
     },
     name: 'jobs',
-    // Sync: a job that left the legacy site (trashed, unpublished) is cancelled here, never deleted.
-    removal: (doc) => (doc.status === 'cancelled' || doc.status === 'expired' ? undefined : { status: 'cancelled' }),
+    // Sync: a live job that left the legacy site (trashed, unpublished) is expired here, never
+    // deleted. Expired can be relisted when the job comes back; cancelled is final, so it would
+    // fail every later sync of that job. A job that is not live has nothing to take off the site.
+    removal: (doc) => (doc.status === 'published' ? { status: 'expired' } : undefined),
     read: async function* (reader) {
       yield* (await planFor(reader)).jobs
     },

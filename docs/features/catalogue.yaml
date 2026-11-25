@@ -3470,7 +3470,7 @@ stories:
     steps:
       - "Run `pnpm wp-import sync --tenant vwok` and read the list of records gone from the legacy site."
       - "Run it again with `--apply-deletions`."
-    expected: "The first run changes nothing. The second cancels each listed job (published or not), logs each change, and a third run has nothing left to do. Only this tenant's records that have a legacy id are considered; orders, the credit ledger and users have no removal policy and are never touched; nothing is hard-deleted. Nothing is checked when the source returned no rows, a row failed, a skipped row gave no id, or a read aborted."
+    expected: "The first run changes nothing. The second expires each listed live job (it can be relisted if it returns on the old site), logs each change, and a third run has nothing left to do. Only this tenant's records that have a legacy id are considered; orders, the credit ledger and users have no removal policy and are never touched; nothing is hard-deleted. Nothing is checked when the source returned no rows, a row failed, a skipped row gave no id, or a read aborted."
     settings: []
     mvp: false
     status: built
@@ -3485,7 +3485,7 @@ stories:
     steps:
       - "Change a legacy user's password on the old site after the first import."
       - "Run `pnpm wp-import sync --tenant vwok --refresh-credentials`."
-    expected: "The user's stored legacy hash is replaced, so the new WordPress password signs them in. A user who already signed in keeps their Payload password, an empty legacy hash never blanks a stored one, and a run without the flag leaves credentials alone."
+    expected: "The user's stored legacy hash is replaced, so the new WordPress password signs them in. A user who already signed in or has a Payload password keeps it, a person whose personal data was removed is never re-created from the old site, an empty legacy hash never blanks a stored one, and a run without the flag leaves credentials alone."
     settings: []
     mvp: false
     status: built

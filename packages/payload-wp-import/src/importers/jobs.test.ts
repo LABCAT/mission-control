@@ -324,3 +324,14 @@ describe('the jobs importer @S-155', () => {
     expect(payload.store.jobs!.filter((j) => j.tenant === TENANT)).toHaveLength(5)
   })
 })
+
+describe('the jobs removal policy @S-330', () => {
+  const { jobs } = jobsImporters({ planProvider: createPlanProvider() })
+
+  it('unpublishes a live job reversibly, and leaves jobs that are not live alone', () => {
+    expect(jobs.removal!({ status: 'published' })).toEqual({ status: 'expired' })
+    for (const status of ['draft', 'pending', 'waiting_for_purchase', 'expired', 'cancelled']) {
+      expect(jobs.removal!({ status })).toBeUndefined()
+    }
+  })
+})
