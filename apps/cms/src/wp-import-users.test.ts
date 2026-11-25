@@ -96,7 +96,7 @@ describe.skipIf(!databaseUrl)('legacy users import (PJ-62) @S-130', () => {
       // mission-control: the plugin refuses a real user delete (PJ-89); teardown bypasses it.
       context: { payloadJobsPurge: true },
       overrideAccess: true,
-      where: { email: { like: '@example.com' } },
+      where: { or: [{ email: { like: '@example.com' } }, { email: { like: '@removed.invalid' } }] },
     })
 
   afterAll(async () => {
