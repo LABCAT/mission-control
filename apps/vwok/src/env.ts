@@ -10,6 +10,8 @@ export type SiteEnv = {
   /** PJ-104 takes this over as a per-tenant setting; until then it is a deployment switch. */
   AI_CRAWLERS_ALLOWED?: string
   CMS_URL?: string
+  /** Public Turnstile site key for the apply form (PJ-45). The secret stays in the CMS. */
+  PUBLIC_TURNSTILE_SITE_KEY?: string
   SITE_KEY?: string
 }
 

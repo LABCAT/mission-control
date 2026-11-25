@@ -261,12 +261,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "removed_from_tenants": {
-          "name": "removed_from_tenants",
-          "type": "varchar",
-          "primaryKey": false,
-          "notNull": false
-        },
         "organisation_id": {
           "name": "organisation_id",
           "type": "integer",
@@ -26195,7 +26189,10 @@
       "schema": "public",
       "values": [
         "job-submitted",
-        "job-approved"
+        "job-approved",
+        "application-received",
+        "application-copy",
+        "application-admin-copy"
       ]
     },
     "public.enum_email_log_status": {
@@ -26278,6 +26275,6 @@
     "tables": {},
     "columns": {}
   },
-  "id": "8dae0e70-0c8c-4e33-a7c7-dd6c9b61596a",
+  "id": "d79a1076-b762-490b-9e0e-de906b998b91",
   "prevId": "00000000-0000-0000-0000-000000000000"
 }

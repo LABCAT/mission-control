@@ -420,7 +420,7 @@ All Agent tasks.
 | PJ-53 | Admin CSV report: jobs + orders by month | PJ-23 |
 
 **PJ-45**
-- A form (name, email, message, CV required, cover letter, Turnstile) that works without JavaScript, with an island only for upload progress.
+- A form (name, email, message, CV required, cover letter, Turnstile) that works without JavaScript when the tenant has Turnstile off. Turnstile needs JavaScript, so when it is on, the form shows a `<noscript>` notice ("JavaScript is needed to send your application.") and a submit with no token gets a clear error. The only island is Turnstile.
 - The endpoint stores the application.
 - Emails the organisation (or `applicationsRecipient`) with signed, expiring file links, plus a copy to the applicant.
 

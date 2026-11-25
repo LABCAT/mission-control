@@ -36,7 +36,7 @@ import * as migration_20261124_091222_application_retention from './20261124_091
 import * as migration_20261124_093958_publish_moderation from './20261124_093958_publish_moderation';
 import * as migration_20261124_235856_email_core from './20261124_235856_email_core';
 import * as migration_20261125_190333_geo_structured_data from './20261125_190333_geo_structured_data';
-import * as migration_20261125_193507_import_sync from './20261125_193507_import_sync';
+import * as migration_20261125_192747_apply_form from './20261125_192747_apply_form';
 
 export const migrations = [
   {
@@ -230,8 +230,8 @@ export const migrations = [
     name: '20261125_190333_geo_structured_data',
   },
   {
-    up: migration_20261125_193507_import_sync.up,
-    down: migration_20261125_193507_import_sync.down,
-    name: '20261125_193507_import_sync'
+    up: migration_20261125_192747_apply_form.up,
+    down: migration_20261125_192747_apply_form.down,
+    name: '20261125_192747_apply_form'
   },
 ];
