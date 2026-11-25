@@ -9,9 +9,8 @@ import {
 } from '@mission-control/payload-jobs'
 
 import { alertEndpoints, type AlertEndpointsOptions } from './endpoints'
-import { ALERT_EMAIL_EVENT_DEFINITIONS } from './email'
 import { alertSettingsFields } from './settings'
-import { ALERTS_ADD_ON_KEY } from './service'
+import { ALERTS_ADD_ON_KEY, PURGE_UNCONFIRMED_ALERTS_TASK, purgeUnconfirmedAlertsTask } from './service'
 import {
   ALERT_SUBSCRIPTIONS_SLUG,
   alertSubscriptionCollection,
@@ -69,16 +68,6 @@ export const payloadJobsAlerts =
       label: 'Job alerts',
     })
 
-    // The events and variables PJ-50/PJ-51 build templates for.
-    for (const event of ALERT_EMAIL_EVENT_DEFINITIONS) {
-      registry.emailEvents.register({
-        ...event,
-        blocks: [],
-        recipients: [...event.recipients],
-        variables: [...event.variables],
-      })
-    }
-
     const gate = { key: ALERTS_ADD_ON_KEY, registry }
     const base = alertSubscriptionCollection({ access: options.access, slug, slugs, tenantScoped })
     const access = base.access ?? {}
@@ -135,6 +124,14 @@ export const payloadJobsAlerts =
         ),
         collection,
       ],
+      // Alerts nobody confirmed within the link's lifetime are deleted daily.
+      jobs: {
+        ...incoming.jobs,
+        tasks: [
+          ...(incoming.jobs?.tasks ?? []).filter((task) => task.slug !== PURGE_UNCONFIRMED_ALERTS_TASK),
+          purgeUnconfirmedAlertsTask({ alertsSlug: slug }),
+        ],
+      },
       ...(tenantScoped
         ? {}
         : {

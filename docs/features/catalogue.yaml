@@ -1438,7 +1438,7 @@ stories:
     steps:
       - "Save a search with keywords, locations and types."
       - "Open the confirmation link."
-    expected: "The alert stays unconfirmed until the link is opened, and double opt-in follows the tenant setting."
+    expected: "The alert stays unconfirmed until the confirm button on the emailed link is pressed (merely opening the link, as a mail scanner does, changes nothing), and double opt-in follows the tenant setting."
     settings:
       - alerts.doubleOptIn
     mvp: true
@@ -1508,13 +1508,13 @@ stories:
     status: planned
     tests: []
 
-  - id: S-360
+  - id: S-370
     area: Job alerts
     role: seeker
-    story: "Every link in an alert email is signed for one purpose and one site."
+    story: "Every link in an alert email is sealed for one purpose and one site."
     steps:
       - "Use a confirm link to unsubscribe, a link from one site on another, a link after it expired, and an edited link."
-    expected: "Each is refused with the same invalid-link answer. Confirm and manage links expire; an unsubscribe link never does, so the List-Unsubscribe header keeps working."
+    expected: "Each is refused with the same invalid-link answer. Confirm and manage links expire; an unsubscribe link never does, so the List-Unsubscribe header keeps working. A link does not show the subscriber's address."
     settings: []
     mvp: true
     status: built
@@ -1522,7 +1522,7 @@ stories:
       - packages/payload-jobs-alerts/src/tokens.test.ts
       - packages/payload-jobs-alerts/src/service.integration.test.ts
 
-  - id: S-361
+  - id: S-371
     area: Job alerts
     role: seeker
     story: "An alert is the exact listing filter, stored once per address, and an address can hold several."
@@ -1538,7 +1538,7 @@ stories:
       - packages/payload-jobs-alerts/src/subscriptions.test.ts
       - packages/payload-jobs-alerts/src/service.integration.test.ts
 
-  - id: S-362
+  - id: S-372
     area: Job alerts
     role: seeker
     story: "The alert form is protected from bots and from being used to mail-bomb an address."
@@ -1553,7 +1553,7 @@ stories:
       - packages/payload-jobs-alerts/src/endpoints.integration.test.ts
       - packages/payload-jobs-alerts/src/filters.test.ts
 
-  - id: S-363
+  - id: S-373
     area: Job alerts
     role: seeker
     story: "'Get these jobs by email' is on the listing pages, and every alert page works without JavaScript."
@@ -1568,13 +1568,13 @@ stories:
       - packages/launchpad/src/alerts/alerts.test.ts
       - apps/vwok/src/alerts.test.ts
 
-  - id: S-364
+  - id: S-374
     area: Job alerts
     role: site manager
     story: "A site manager decides whether alerts need an account, whether they need confirming, and how many one address may hold."
     steps:
       - "Turn off 'allow alerts without account', turn off double opt-in, lower the maximum per email."
-    expected: "Without the first, only a signed-in member subscribes, using their own address; without the second, a new alert starts at once with no email; past the maximum a new search is refused while a repeat of an existing one is not."
+    expected: "Without the first, only a signed-in member subscribes, using their own address; without the second, a new alert starts at once with no email; past the maximum of confirmed alerts a new search is refused while a repeat of an existing one is not, and alerts nobody confirmed within the link's lifetime are deleted daily."
     settings:
       - alerts.allowWithoutAccount
       - alerts.doubleOptIn
@@ -1584,6 +1584,20 @@ stories:
     tests:
       - packages/payload-jobs-alerts/src/service.integration.test.ts
       - packages/payload-jobs-alerts/src/endpoints.integration.test.ts
+
+  - id: S-375
+    area: Job alerts
+    role: site manager
+    story: "The alert confirmation and manage-link emails are templates a site manager can edit, sent through the platform's email engine."
+    steps:
+      - "Open the email templates and find the two job alert emails."
+      - "Subscribe to an alert and read the confirmation email."
+    expected: "Both events are listed with their variables; the email uses the tenant's template and layout, goes to the subscriber, is logged without its text, and what a visitor typed into the search is escaped. A failed send is reported to the visitor; an email the tenant switched off is not an error."
+    settings: []
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs-alerts/src/email.test.ts
 
   - id: S-090
     area: Job alerts

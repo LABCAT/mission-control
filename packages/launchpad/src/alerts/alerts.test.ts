@@ -34,7 +34,7 @@ const clientWith = (respond: () => Response | Promise<Response>) => {
 
 const json = (body: unknown, status = 200) => Response.json(body, { status })
 
-describe('alerts client @S-085 @S-086 @S-087 @S-363', () => {
+describe('alerts client @S-085 @S-086 @S-087 @S-373', () => {
   it('posts to the tenant’s endpoint with the site key and the visitor’s IP, and never in the URL', async () => {
     const { client, seen } = clientWith(() => json({ ok: true, status: 'pending' }))
 
@@ -101,7 +101,7 @@ describe('alerts client @S-085 @S-086 @S-087 @S-363', () => {
   })
 })
 
-describe('alert forms @S-363', () => {
+describe('alert forms @S-373', () => {
   const form = (entries: Record<string, string>) => {
     const data = new FormData()
     for (const [key, value] of Object.entries(entries)) data.set(key, value)
@@ -154,7 +154,7 @@ describe('alert forms @S-363', () => {
   })
 })
 
-describe('alert page wording @S-363', () => {
+describe('alert page wording @S-373', () => {
   const error = { code: 'invalid_token', message: 'This link is invalid or has expired.', ok: false, status: 400 } as const
 
   it('says "check your email" for a pending alert, and "saved" when it is already on', () => {

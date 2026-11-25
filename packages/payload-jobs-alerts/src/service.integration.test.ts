@@ -11,6 +11,7 @@ import type { AlertEmailDoc, AlertEmailEvent } from './email'
 import { alertSettingsFields } from './settings'
 import {
   alertManageURL,
+  purgeUnconfirmedAlerts,
   alertUnsubscribeHeaders,
   alertUnsubscribeURL,
   confirmAlert,
@@ -42,7 +43,7 @@ const taxonomies = (): CollectionConfig[] => [
 
 const tokenOf = (url: string): string => url.slice(url.lastIndexOf('/') + 1)
 
-describe('alert subscribe, confirm, manage and unsubscribe @S-085 @S-086 @S-087 @S-360 @S-361', () => {
+describe('alert subscribe, confirm, manage and unsubscribe @S-085 @S-086 @S-087 @S-370 @S-371', () => {
   let harness: TestHarness
   let sent: Sent[]
   let failEmail = false
@@ -200,10 +201,11 @@ describe('alert subscribe, confirm, manage and unsubscribe @S-085 @S-086 @S-087 
       expect(await count({ email: { equals: 'jo@example.com' } })).toBe(3)
     })
 
-    it('caps the alerts per address at the tenant setting @S-364', async () => {
+    it('caps the alerts per address at the tenant setting @S-374', async () => {
       const capped = await reload(a, { alertsMaxPerEmail: 2 })
       await subscribeToAlert(capped, { email: 'jo@example.com', filters: { q: 'one' } })
       await subscribeToAlert(capped, { email: 'jo@example.com', filters: { q: 'two' } })
+      for (const email of sent) await confirmAlert(capped, tokenOf(email.doc.variables.confirmUrl!))
 
       await expect(
         subscribeToAlert(capped, { email: 'jo@example.com', filters: { q: 'three' } }),
@@ -214,6 +216,33 @@ describe('alert subscribe, confirm, manage and unsubscribe @S-085 @S-086 @S-087 
       ).resolves.toEqual({ status: 'pending' })
       // Another address is unaffected.
       await expect(subscribeToAlert(capped, { email: 'al@example.com' })).resolves.toBeDefined()
+    })
+
+    it('counts only confirmed alerts toward the cap, so a stranger cannot lock the owner out @S-374', async () => {
+      const capped = await reload(a, { alertsMaxPerEmail: 2 })
+      // Someone else asks for alerts on jo's address; none is ever confirmed.
+      for (const q of ['one', 'two', 'three', 'four']) {
+        await subscribeToAlert(capped, { email: 'jo@example.com', filters: { q } })
+      }
+      // The owner can still set up their own, and confirm it.
+      await subscribeToAlert(capped, { email: 'jo@example.com', filters: { q: 'mine' } })
+      const mine = sent.at(-1)!.doc.variables.confirmUrl!
+      await confirmAlert(capped, tokenOf(mine))
+
+      expect(await count({ confirmed: { equals: true } })).toBe(1)
+      // Stale pending ones are replaced rather than piling up without end.
+      expect(await count({ confirmed: { equals: false } })).toBeLessThanOrEqual(2)
+    })
+
+    it('uses the frequency asked for the second time when the first alert is still unconfirmed', async () => {
+      await subscribeToAlert(a, { email: 'jo@example.com', filters: { q: 'cook' } })
+      await subscribeToAlert(a, { email: 'jo@example.com', filters: { q: 'cook' }, frequency: 'weekly' })
+
+      expect(await count()).toBe(1)
+      expect((await harness.payload.find({ collection: ALERT_SUBSCRIPTIONS_SLUG, overrideAccess: true })).docs[0]).toMatchObject({
+        frequency: 'weekly',
+      })
+      expect(sent.at(-1)!.doc.variables.frequency).toBe('weekly')
     })
 
     it('treats the same address on two sites as two subscribers', async () => {
@@ -260,7 +289,7 @@ describe('alert subscribe, confirm, manage and unsubscribe @S-085 @S-086 @S-087 
       expect(sent).toHaveLength(0)
     })
 
-    it('starts the alert at once, with no email, when double opt-in is off @S-364', async () => {
+    it('starts the alert at once, with no email, when double opt-in is off @S-374', async () => {
       const open = await reload(a, { alertsDoubleOptIn: false })
 
       expect(await subscribeToAlert(open, { email: 'jo@example.com' })).toEqual({ status: 'subscribed' })
@@ -268,7 +297,7 @@ describe('alert subscribe, confirm, manage and unsubscribe @S-085 @S-086 @S-087 
       expect(sent).toHaveLength(0)
     })
 
-    it('needs a signed-in account when the tenant turns anonymous alerts off @S-364', async () => {
+    it('needs a signed-in account when the tenant turns anonymous alerts off @S-374', async () => {
       const closed = await reload(a, { alertsAllowWithoutAccount: false })
 
       await expect(subscribeToAlert(closed, { email: 'jo@example.com' })).rejects.toMatchObject({
@@ -314,6 +343,25 @@ describe('alert subscribe, confirm, manage and unsubscribe @S-085 @S-086 @S-087 
       await expect(subscribeToAlert(bare, { email: 'al@example.com' })).rejects.toMatchObject({
         code: 'tenant_not_configured',
       })
+    })
+  })
+
+  describe('purge of unconfirmed alerts @S-374', () => {
+    it('deletes alerts nobody confirmed within the link’s lifetime, and nothing else', async () => {
+      await subscribeToAlert(a, { email: 'old@example.com', filters: { q: 'one' } })
+      await subscribeToAlert(a, { email: 'old@example.com', filters: { q: 'two' } })
+      await confirmAlert(a, tokenOf(sent[1]!.doc.variables.confirmUrl!))
+      await subscribeToAlert(b, { email: 'old@example.com', filters: { q: 'other site' } })
+
+      const day = 24 * 60 * 60 * 1000
+      // Six days on: still within the 7-day confirm link, so nothing goes.
+      expect(await purgeUnconfirmedAlerts(harness.payload, { alertsSlug: ALERT_SUBSCRIPTIONS_SLUG, now: new Date(Date.now() + 6 * day) })).toBe(0)
+      // Eight days on: the two unconfirmed ones (both sites) go; the confirmed one stays.
+      expect(await purgeUnconfirmedAlerts(harness.payload, { alertsSlug: ALERT_SUBSCRIPTIONS_SLUG, now: new Date(Date.now() + 8 * day) })).toBe(2)
+
+      const left = (await harness.payload.find({ collection: ALERT_SUBSCRIPTIONS_SLUG, depth: 0, overrideAccess: true })).docs
+      expect(left).toHaveLength(1)
+      expect(left[0]).toMatchObject({ confirmed: true, keywords: 'two' })
     })
   })
 

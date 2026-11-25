@@ -15,7 +15,7 @@ import {
   type TurnstileVerifier,
 } from '@mission-control/payload-jobs'
 
-import type { AlertEmailSender } from './email'
+import { createAlertTemplateSender, type AlertEmailSender } from './email'
 import { normaliseSubscriberEmail } from './filters'
 import {
   assertAlertsEnabled,
@@ -72,7 +72,7 @@ export type AlertEndpointsOptions = {
   paths?: AlertPaths
   /** Per visitor IP and address. Pass the Cloudflare Rate Limiting binding in production. */
   rateLimiter?: LimiterOption
-  /** The email seam: PJ-50's `sendTemplate(event, doc)`. */
+  /** Defaults to PJ-50's `sendTemplate`; pass another sender to send mail some other way. */
   sendEmail?: AlertEmailSender
   slugs?: PayloadJobsCollectionSlugs
   tenantsSlug?: string
@@ -102,6 +102,8 @@ const ERRORS = {
     status: 500,
   },
 } as const
+
+const defaultSender = createAlertTemplateSender()
 
 const HOUR_MS = 60 * 60 * 1000
 const defaultEmailLimiter = createMemoryRateLimiter({ limit: 3, windowMs: HOUR_MS })
@@ -222,11 +224,8 @@ const handle =
         paths: options.paths,
         payload: req.payload,
         secret: req.payload.secret,
-        sendEmail:
-          options.sendEmail ??
-          (() => {
-            throw new AccountAuthError(ERRORS.emailNotConfigured)
-          }),
+        // PJ-50's sendTemplate unless the host brought its own sender.
+        sendEmail: options.sendEmail ?? defaultSender,
         slugs: options.slugs,
         tenant,
         tenantScoped: true,

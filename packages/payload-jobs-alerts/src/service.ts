@@ -1,4 +1,4 @@
-import type { CollectionSlug, Payload, Where } from 'payload'
+import type { CollectionSlug, Payload, TaskConfig, TaskSlug, Where } from 'payload'
 
 import {
   AccountAuthError,
@@ -20,7 +20,7 @@ import {
 } from './filters'
 import { alertSettings } from './settings'
 import { ALERT_FREQUENCIES, type AlertFrequency } from './subscriptions'
-import { signAlertToken, verifyAlertToken, type AlertTokenPurpose } from './tokens'
+import { ALERT_TOKEN_TTL_MS, signAlertToken, verifyAlertToken, type AlertTokenPurpose } from './tokens'
 
 /**
  * The alert flow itself (PJ-47): subscribe, confirm, manage, unsubscribe. The endpoints are thin
@@ -301,7 +301,7 @@ const sendAlertEmail = async (
   doc: AlertEmailDoc,
 ): Promise<void> => {
   try {
-    await context.sendEmail(event, doc)
+    await context.sendEmail(event, doc, { alertsSlug: context.alertsSlug, payload: context.payload })
   } catch (error) {
     context.payload.logger.error({ err: error, event, msg: 'alerts: email failed' })
     throw new AccountAuthError(ERRORS.emailNotConfigured)
@@ -371,21 +371,32 @@ export const subscribeToAlert = async (
       return { status }
     }
 
-    if (live) {
-      await context.payload.update({
-        collection: context.alertsSlug as CollectionSlug,
-        data: { confirmed: true, frequency } as never,
-        id: sameSearch.id,
-        overrideAccess: true,
-      })
-      return { status }
-    }
+    // Still waiting for confirmation: the latest ask wins, so the email and the row agree.
+    await context.payload.update({
+      collection: context.alertsSlug as CollectionSlug,
+      data: { ...(live ? { confirmed: true } : {}), frequency } as never,
+      id: sameSearch.id,
+      overrideAccess: true,
+    })
+    if (!live) await sendConfirmation(context, { ...sameSearch, frequency: frequency as AlertFrequency }, email)
 
-    await sendConfirmation(context, sameSearch, email)
     return { status }
   }
 
-  if (existing.length >= settings.maxPerEmail) throw new AccountAuthError(ERRORS.tooMany)
+  // Only alerts the owner confirmed count toward the cap. A stranger can ask for alerts on
+  // someone's address, but never confirm one, so they must not be able to use up the owner's
+  // room. Their unconfirmed ones are capped too, by replacing the oldest.
+  const confirmed = existing.filter((alert) => alert.confirmed === true)
+  if (confirmed.length >= settings.maxPerEmail) throw new AccountAuthError(ERRORS.tooMany)
+
+  const pending = existing.filter((alert) => alert.confirmed !== true)
+  for (const stale of pending.slice(0, Math.max(0, pending.length - settings.maxPerEmail + 1))) {
+    await context.payload.delete({
+      collection: context.alertsSlug as CollectionSlug,
+      id: stale.id,
+      overrideAccess: true,
+    })
+  }
 
   let created: RawAlert
   try {
@@ -583,3 +594,54 @@ export const unsubscribeAlert = async (
 }
 
 export { alertQueryString }
+
+/**
+ * Delete alerts nobody confirmed within the confirm link's lifetime. They hold an address that
+ * never agreed to anything, and their links can no longer be used. Runs for every site at once:
+ * the rule is the same everywhere, and confirmed alerts are never touched. Returns how many went.
+ */
+export const purgeUnconfirmedAlerts = async (
+  payload: Payload,
+  { alertsSlug, now = new Date() }: { alertsSlug: string; now?: Date },
+): Promise<number> => {
+  const ttl = ALERT_TOKEN_TTL_MS.confirm ?? 0
+  const cutoff = new Date(now.getTime() - ttl).toISOString()
+  let deleted = 0
+
+  for (;;) {
+    const { docs } = await payload.find({
+      collection: alertsSlug as CollectionSlug,
+      depth: 0,
+      limit: 100,
+      overrideAccess: true,
+      pagination: false,
+      where: { and: [{ confirmed: { not_equals: true } }, { createdAt: { less_than: cutoff } }] },
+    })
+    if (docs.length === 0) return deleted
+
+    for (const doc of docs) {
+      await payload.delete({ collection: alertsSlug as CollectionSlug, id: doc.id, overrideAccess: true })
+      deleted += 1
+    }
+  }
+}
+
+export const PURGE_UNCONFIRMED_ALERTS_TASK = 'purge-unconfirmed-alerts'
+
+/** The daily task that runs `purgeUnconfirmedAlerts`. Cron has six fields: seconds first. */
+export const purgeUnconfirmedAlertsTask = ({
+  alertsSlug,
+  cron = '0 45 3 * * *',
+  queue = 'hourly',
+}: {
+  alertsSlug: string
+  cron?: string
+  queue?: string
+}): TaskConfig => ({
+  slug: PURGE_UNCONFIRMED_ALERTS_TASK as TaskSlug,
+  handler: async ({ req }) => ({
+    output: { alertsDeleted: await purgeUnconfirmedAlerts(req.payload, { alertsSlug }) },
+  }),
+  outputSchema: [{ name: 'alertsDeleted', type: 'number' }],
+  schedule: [{ cron, queue }],
+})

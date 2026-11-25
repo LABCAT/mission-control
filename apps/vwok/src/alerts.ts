@@ -44,6 +44,7 @@ export const ALERT_PAGE_HEADERS = {
 } as const
 
 export type AlertPage =
+  | { kind: 'confirm-form'; status: number }
   | { kind: 'manage-list'; alerts: AlertSummary[]; message?: string; status: number }
   | { kind: 'manage-request'; notice?: AlertNotice; status: number }
   | { kind: 'notice'; notice: AlertNotice; status: number }
@@ -87,12 +88,21 @@ export const subscribePage = async (
   return { kind: 'notice', notice: subscribeNotice(reply), status: statusFor(reply) }
 }
 
-/** `GET /alerts/confirm/:token`: the double opt-in link. */
+/**
+ * `/alerts/confirm/:token`: the double opt-in link.
+ *
+ * - A GET shows one button and changes nothing. Mail security scanners and link previewers open
+ *   every link in an email; if that confirmed the alert, someone could be signed up by a
+ *   stranger and the scanner would complete the opt-in for them.
+ * - A POST (the button) confirms.
+ */
 export const confirmPage = async (
   client: AlertsClient | null,
+  request: Request,
   token: string,
   { clientIp }: Visitor = {},
 ): Promise<AlertPage> => {
+  if (request.method !== 'POST') return { kind: 'confirm-form', status: 200 }
   if (!client) return notConfigured
   const reply = await client.confirm({ clientIp, token })
 

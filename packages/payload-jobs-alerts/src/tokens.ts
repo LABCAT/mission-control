@@ -1,14 +1,18 @@
 /**
- * Signed alert tokens (PJ-47). Every link in an alert email carries one: confirm, manage and
- * unsubscribe. They are stateless HMAC-SHA256 tokens, so nothing secret is stored, a link cannot
- * be guessed, and the tenant and purpose are part of what is signed:
+ * Sealed alert tokens (PJ-47). Every link in an alert email carries one: confirm, manage and
+ * unsubscribe. A token is AES-256-GCM over a small JSON payload, so it is both signed and
+ * unreadable, and nothing secret is stored:
  *
- * - a confirm link cannot unsubscribe, and a link from one site is worthless on another;
+ * - the subscriber's address (in a manage link) is not visible in the URL, which ends up in
+ *   browser history, forwarded mail and request logs;
+ * - the purpose and tenant are inside what is sealed, so a confirm link cannot unsubscribe and a
+ *   link from one site is worthless on another;
  * - confirm and manage links expire; an unsubscribe link never does, because a List-Unsubscribe
  *   header must keep working for as long as the email sits in an inbox.
  *
- * Format: `base64url(json).base64url(hmac)`. The key is the CMS secret, so there is no new
- * secret to provision; the purpose inside the signed payload keeps the uses apart.
+ * Format: `base64url(iv).base64url(ciphertext+tag)`. The key is derived from the CMS secret with
+ * a label of its own, so no other use of that secret shares it and the label can be bumped to
+ * rotate every link.
  */
 
 export type AlertTokenPurpose = 'confirm' | 'manage' | 'unsubscribe'
@@ -34,6 +38,10 @@ type Payload = {
 const encoder = new TextEncoder()
 const decoder = new TextDecoder()
 
+/** Bump the version to invalidate every outstanding link. */
+const KEY_LABEL = 'mission-control/payload-jobs-alerts/v1'
+const IV_BYTES = 12
+
 const toBase64Url = (bytes: Uint8Array): string => {
   let binary = ''
 
@@ -55,10 +63,19 @@ const fromBase64Url = (value: string): Uint8Array | null => {
   }
 }
 
-const hmacKey = (secret: string, usage: 'sign' | 'verify'): Promise<CryptoKey> =>
-  crypto.subtle.importKey('raw', encoder.encode(secret), { hash: 'SHA-256', name: 'HMAC' }, false, [
-    usage,
-  ])
+/** HMAC(secret, label) is the key: a sub-key, so the raw secret is never used directly. */
+const sealingKey = async (secret: string, usage: 'decrypt' | 'encrypt'): Promise<CryptoKey> => {
+  const hmac = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(secret),
+    { hash: 'SHA-256', name: 'HMAC' },
+    false,
+    ['sign'],
+  )
+  const raw = await crypto.subtle.sign('HMAC', hmac, encoder.encode(KEY_LABEL))
+
+  return crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, [usage])
+}
 
 export type SignAlertTokenArgs = {
   now?: Date
@@ -84,10 +101,14 @@ export const signAlertToken = async ({
     s: subject,
     t: String(tenant),
   }
-  const body = toBase64Url(encoder.encode(JSON.stringify(payload)))
-  const signature = await crypto.subtle.sign('HMAC', await hmacKey(secret, 'sign'), encoder.encode(body))
+  const iv = crypto.getRandomValues(new Uint8Array(IV_BYTES))
+  const sealed = await crypto.subtle.encrypt(
+    { iv, name: 'AES-GCM' },
+    await sealingKey(secret, 'encrypt'),
+    encoder.encode(JSON.stringify(payload)),
+  )
 
-  return `${body}.${toBase64Url(new Uint8Array(signature))}`
+  return `${toBase64Url(iv)}.${toBase64Url(new Uint8Array(sealed))}`
 }
 
 export type VerifyAlertTokenArgs = {
@@ -98,7 +119,7 @@ export type VerifyAlertTokenArgs = {
   token: string
 }
 
-/** The subject the token was signed for, or `null` for anything that is not a valid, live token. */
+/** The subject the token was sealed for, or `null` for anything that is not a valid, live token. */
 export const verifyAlertToken = async ({
   now = new Date(),
   purpose,
@@ -111,24 +132,20 @@ export const verifyAlertToken = async ({
   const parts = token.split('.')
   if (parts.length !== 2) return null
 
-  const [body, signature] = parts as [string, string]
-  const signatureBytes = fromBase64Url(signature)
-  const bodyBytes = fromBase64Url(body)
-  if (!signatureBytes || !bodyBytes) return null
-
-  // `verify` compares in constant time.
-  const genuine = await crypto.subtle.verify(
-    'HMAC',
-    await hmacKey(secret, 'verify'),
-    signatureBytes as BufferSource,
-    encoder.encode(body),
-  )
-  if (!genuine) return null
+  const iv = fromBase64Url(parts[0]!)
+  const sealed = fromBase64Url(parts[1]!)
+  if (!iv || iv.length !== IV_BYTES || !sealed) return null
 
   let payload: Partial<Payload>
 
   try {
-    payload = JSON.parse(decoder.decode(bodyBytes)) as Partial<Payload>
+    // GCM authenticates: any changed byte, or another secret, fails here.
+    const opened = await crypto.subtle.decrypt(
+      { iv: iv as BufferSource, name: 'AES-GCM' },
+      await sealingKey(secret, 'decrypt'),
+      sealed as BufferSource,
+    )
+    payload = JSON.parse(decoder.decode(opened)) as Partial<Payload>
   } catch {
     return null
   }

@@ -11,7 +11,11 @@ import { Tags } from './collections/Tags'
 
 // mission-control: job board plugins. Keep this block small so orbit merges stay clean.
 import { payloadJobs, type RateLimiter } from '@mission-control/payload-jobs'
-import { ALERT_SUBSCRIPTIONS_SLUG, payloadJobsAlerts } from '@mission-control/payload-jobs-alerts'
+import {
+  ALERT_EMAIL_TEMPLATE_EVENTS,
+  ALERT_SUBSCRIPTIONS_SLUG,
+  payloadJobsAlerts,
+} from '@mission-control/payload-jobs-alerts'
 import { payloadJobsReports } from '@mission-control/payload-jobs-reports'
 import { payloadJobsXero } from '@mission-control/payload-jobs-xero'
 import { multiTenantPlugin } from '@payloadcms/plugin-multi-tenant'
@@ -146,6 +150,8 @@ export default buildConfig({
     // binding in Workers, and fall back to an in-memory limiter in dev.
     payloadJobs({
       accountAuth: { rateLimiter: () => workerEnv?.ACCOUNT_RATE_LIMIT },
+      // mission-control: the alert add-on's email events (PJ-47), editable per tenant (PJ-50).
+      email: { events: ALERT_EMAIL_TEMPLATE_EVENTS },
       // mission-control: job page views (PJ-37) limit per visitor in Workers, per isolate in dev.
       jobViews: { rateLimiter: () => workerEnv?.JOB_VIEW_RATE_LIMIT },
       // mission-control: public form submissions (PJ-102). Turnstile is verified server-side;
@@ -165,9 +171,9 @@ export default buildConfig({
     }),
     // mission-control: add-ons (PJ-115), after payloadJobs(). Tenants switch them with `addOns`.
     // mission-control: alert subscribe/confirm/manage/unsubscribe endpoints (PJ-47). Turnstile
-    // and the account rate limit are the same ones the forms and account endpoints use. The
-    // email seam (`sendEmail`) is PJ-50's `sendTemplate`: until that is merged no alert email
-    // can leave, and the endpoints answer 503 `email_not_configured` instead of dropping it.
+    // and the account rate limit are the same ones the forms and account endpoints use. Alert
+    // emails go out through PJ-50's `sendTemplate`; their two events are declared in
+    // `payloadJobs({ email: { events } })` above so site managers can edit them.
     payloadJobsAlerts({
       rateLimiter: () => workerEnv?.ACCOUNT_RATE_LIMIT,
       slug: ALERT_SUBSCRIPTIONS_SLUG,

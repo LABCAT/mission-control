@@ -273,6 +273,7 @@ export interface Config {
       'expire-job-placements': TaskExpireJobPlacements;
       'delete-expired-applications': TaskDeleteExpiredApplications;
       'email-log-retention': TaskEmailLogRetention;
+      'purge-unconfirmed-alerts': TaskPurgeUnconfirmedAlerts;
       'xero-invoice-sync': TaskXeroInvoiceSync;
       inline: {
         input: unknown;
@@ -2187,7 +2188,7 @@ export interface EmailTemplate {
   /**
    * The email this text is for. The variables you can insert depend on it.
    */
-  event: 'job-submitted' | 'job-approved';
+  event: 'job-submitted' | 'job-approved' | 'alert-confirm' | 'alert-manage-link';
   /**
    * Untick to stop sending this email on this site. Skipped sends are logged.
    */
@@ -2584,6 +2585,7 @@ export interface PayloadJob {
           | 'expire-job-placements'
           | 'delete-expired-applications'
           | 'email-log-retention'
+          | 'purge-unconfirmed-alerts'
           | 'xero-invoice-sync';
         taskID: string;
         input:
@@ -2622,6 +2624,7 @@ export interface PayloadJob {
                 | 'expire-job-placements'
                 | 'delete-expired-applications'
                 | 'email-log-retention'
+                | 'purge-unconfirmed-alerts'
                 | 'xero-invoice-sync'
               )
             | null;
@@ -2637,6 +2640,7 @@ export interface PayloadJob {
         | 'expire-job-placements'
         | 'delete-expired-applications'
         | 'email-log-retention'
+        | 'purge-unconfirmed-alerts'
         | 'xero-invoice-sync'
       )
     | null;
@@ -4304,6 +4308,16 @@ export interface TaskEmailLogRetention {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "TaskPurge-unconfirmed-alerts".
+ */
+export interface TaskPurgeUnconfirmedAlerts {
+  input?: unknown;
+  output: {
+    alertsDeleted?: number | null;
+  };
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "TaskXero-invoice-sync".
  */
 export interface TaskXeroInvoiceSync {
@@ -4322,7 +4336,7 @@ export interface TaskXeroInvoiceSync {
 export interface Variable {
   id: string;
   blockType: 'variable';
-  key: 'firstName' | 'jobTitle';
+  key: 'firstName' | 'jobTitle' | 'siteName' | 'alertSummary' | 'frequency' | 'confirmUrl' | 'manageUrl';
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema

@@ -177,7 +177,8 @@ export const uniqueAlertPerSearch =
     if (docs.some((doc) => selfID === undefined || String(doc.id) !== String(selfID))) {
       throw new ValidationError({
         collection: collectionSlug as CollectionSlug,
-        errors: [{ message: `${email} already has this alert`, path: 'email' }],
+        // No address in the message: it can end up in a log.
+        errors: [{ message: 'This address already has an alert for this search', path: 'email' }],
         req,
       })
     }

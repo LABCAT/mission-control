@@ -69,6 +69,17 @@ describe('alert subscription collection config', () => {
     )
   })
 
+  it('schedules a daily purge of unconfirmed alerts, using the resolved slug @S-374', async () => {
+    const core = await payloadJobs()({ collections: [{ slug: 'users', fields: [] }], secret: 'test' } as never)
+    const config = payloadJobsAlerts({ slug: 'subscribers' })(core) as Config
+    const task = config.jobs?.tasks?.find((candidate) => candidate.slug === 'purge-unconfirmed-alerts')
+
+    expect(task).toBeDefined()
+    expect(task?.schedule).toEqual([{ cron: '0 45 3 * * *', queue: 'hourly' }])
+    // The core plugin's own tasks are kept.
+    expect((config.jobs?.tasks ?? []).length).toBeGreaterThan(1)
+  })
+
   it('honours a slug override and gates its access and writes by add-on', async () => {
     const core = await payloadJobs()({ collections: [{ slug: 'users', fields: [] }], secret: 'test' } as never)
     const config = payloadJobsAlerts({ slug: 'subscribers' })(core) as Config
@@ -295,7 +306,7 @@ describe('unique search per address and tenant hook', () => {
     expect(error).toMatchObject({
       data: {
         errors: [
-          { message: 'seeker@example.invalid already has this alert', path: 'email' },
+          { message: 'This address already has an alert for this search', path: 'email' },
         ],
       },
     })
@@ -428,7 +439,7 @@ describe('alert subscriptions integration @S-084', () => {
       keywords: ' nurse ',
     }).catch((thrown: unknown) => thrown)
 
-    expect(fieldMessages(error)).toBe('seeker@example.invalid already has this alert')
+    expect(fieldMessages(error)).toBe('This address already has an alert for this search')
   })
 
   it('allows several alerts for one address when their searches differ @S-086', async () => {

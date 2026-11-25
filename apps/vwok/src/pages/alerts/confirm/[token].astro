@@ -1,5 +1,8 @@
 ---
-/** `GET /alerts/confirm/:token` (PJ-47): the link in the confirmation email. */
+/**
+ * `/alerts/confirm/:token` (PJ-47): the link in the confirmation email. A GET shows a button and
+ * changes nothing, because mail scanners open every link; the POST confirms.
+ */
 import AlertsView from '../../../components/AlertsView.astro'
 import { alertsChrome, alertsClientFromEnv, confirmPage } from '../../../alerts'
 import { siteEnv } from '../../../env'
@@ -8,7 +11,7 @@ import { cmsFromEnv } from '../../../site'
 export const prerender = false
 
 const env = await siteEnv()
-const page = await confirmPage(alertsClientFromEnv(env), Astro.params.token ?? '', {
+const page = await confirmPage(alertsClientFromEnv(env), Astro.request, Astro.params.token ?? '', {
   clientIp: Astro.clientAddress,
 })
 if (page.kind === 'redirect') return Astro.redirect(page.location)

@@ -41,7 +41,7 @@ const fresh = (): AlertEndpointsOptions => ({
   rateLimiter: createMemoryRateLimiter({ limit: 1000, windowMs: 60_000 }),
 })
 
-describe('alert endpoints @S-085 @S-086 @S-087 @S-362', () => {
+describe('alert endpoints @S-085 @S-086 @S-087 @S-372', () => {
   let harness: TestHarness
   let sent: Sent[]
   let verified: string[]

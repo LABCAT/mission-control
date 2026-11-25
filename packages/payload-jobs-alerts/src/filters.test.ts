@@ -8,7 +8,7 @@ import {
   normaliseSubscriberEmail,
 } from './filters'
 
-describe('alert filters @S-361', () => {
+describe('alert filters @S-371', () => {
   it('reads the listing filter names, trimmed, lowercase slugs, keywords tidied', () => {
     expect(
       normaliseAlertFilterInput({
@@ -55,7 +55,7 @@ describe('alert filters @S-361', () => {
   })
 })
 
-describe('subscriber email @S-362', () => {
+describe('subscriber email @S-372', () => {
   it('lowercases and trims, and refuses things that are not addresses', () => {
     expect(normaliseSubscriberEmail('  Jo@Example.COM ')).toBe('jo@example.com')
     for (const bad of ['', 'nope', 'a@b', 'a b@c.com', 'a@@c.com', `${'a'.repeat(250)}@c.com`, 5, null]) {

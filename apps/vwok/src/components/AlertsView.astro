@@ -58,6 +58,16 @@ const footer = menuFor(menus, 'footer')
             {page.notice && <AlertNotice notice={page.notice} />}
             <AlertManageRequest action={path} turnstileSiteKey={turnstileSiteKey} />
           </>
+        ) : page.kind === 'confirm-form' ? (
+          <>
+            <Typography>
+              <h1>Confirm your job alert</h1>
+              <p>Press the button to start getting emails from this job alert.</p>
+            </Typography>
+            <form action={path} method="post">
+              <Button name="confirm" type="submit" value="1">Confirm job alert</Button>
+            </form>
+          </>
         ) : (
           <>
             <Typography>

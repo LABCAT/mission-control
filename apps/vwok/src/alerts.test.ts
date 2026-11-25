@@ -38,7 +38,7 @@ describe('alertsClientFromEnv', () => {
   })
 })
 
-describe('alert pages without JavaScript @S-085 @S-086 @S-087 @S-363', () => {
+describe('alert pages without JavaScript @S-085 @S-086 @S-087 @S-373', () => {
   it('subscribing passes the form and the visitor’s IP to the CMS, and says to check email', async () => {
     const client = clientWith()
     const page = await subscribePage(
@@ -78,7 +78,7 @@ describe('alert pages without JavaScript @S-085 @S-086 @S-087 @S-363', () => {
   it('says alerts are unavailable, with 503, when the site has no CMS configured', async () => {
     for (const page of [
       await subscribePage(null, post('/alerts/subscribe', { email: 'a@b.co' })),
-      await confirmPage(null, 'a.b'),
+      await confirmPage(null, post('/alerts/confirm/a.b', { confirm: '1' }), 'a.b'),
       await managePage(null, get('/alerts/manage/a.b'), 'a.b'),
       await unsubscribePage(null, post('/alerts/unsubscribe/a.b', {}), 'a.b'),
     ]) {
@@ -86,11 +86,28 @@ describe('alert pages without JavaScript @S-085 @S-086 @S-087 @S-363', () => {
     }
   })
 
-  it('confirms on opening the link, and shows a stale link as an error page', async () => {
-    const good = clientWith({ confirm: vi.fn(async () => ok({ alert, manageToken: 'm.t' })) })
-    expect(await confirmPage(good, 'a.b')).toMatchObject({ notice: { title: 'Job alert confirmed' }, status: 200 })
+  it('confirm: opening the link changes nothing, so a link scanner cannot confirm a subscription', async () => {
+    const client = clientWith({ confirm: vi.fn(async () => ok({ alert, manageToken: 'm.t' })) })
 
-    expect(await confirmPage(clientWith(), 'a.b')).toMatchObject({
+    expect(await confirmPage(client, get('/alerts/confirm/a.b'), 'a.b')).toEqual({
+      kind: 'confirm-form',
+      status: 200,
+    })
+    expect(client.confirm).not.toHaveBeenCalled()
+  })
+
+  it('confirm: only the button’s POST confirms, and says so in the subscriber’s words', async () => {
+    const client = clientWith({ confirm: vi.fn(async () => ok({ alert, manageToken: 'm.t' })) })
+    const page = await confirmPage(client, post('/alerts/confirm/a.b', { confirm: '1' }), 'a.b', {
+      clientIp: '203.0.113.7',
+    })
+
+    expect(client.confirm).toHaveBeenCalledWith({ clientIp: '203.0.113.7', token: 'a.b' })
+    expect(page).toMatchObject({ kind: 'notice', notice: { title: 'Job alert confirmed' }, status: 200 })
+  })
+
+  it('confirm: a stale link on the POST is an error page', async () => {
+    expect(await confirmPage(clientWith(), post('/alerts/confirm/a.b', { confirm: '1' }), 'a.b')).toMatchObject({
       notice: { kind: 'error', title: 'This link is not valid' },
       status: 400,
     })

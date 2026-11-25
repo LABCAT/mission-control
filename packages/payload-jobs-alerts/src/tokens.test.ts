@@ -21,7 +21,7 @@ const verify = (
   secret = SECRET,
 ) => verifyAlertToken({ now, purpose, secret, tenant, token })
 
-describe('alert tokens @S-360 @S-087', () => {
+describe('alert tokens @S-370 @S-087', () => {
   it('round-trips the subject for its own purpose and tenant', async () => {
     expect(await verify(await sign())).toEqual({ subject: '42' })
     expect(await verify(await sign('manage', 'a@example.com'), 'manage')).toEqual({
@@ -49,15 +49,36 @@ describe('alert tokens @S-360 @S-087', () => {
     expect(await verify(await sign(), 'confirm', 1, NOW, 'another-secret')).toBeNull()
   })
 
-  it('refuses a payload that was edited after signing', async () => {
-    const [payload, signature] = (await sign('confirm', '42')).split('.')
-    const forged = btoa(JSON.stringify({ e: 0, p: 'confirm', s: '43', t: '1' }))
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '')
+  it('refuses a token with any byte changed', async () => {
+    const token = await sign('confirm', '42')
+    const [iv, sealed] = token.split('.') as [string, string]
+    // Flip one character in the sealed part, and one in the iv.
+    const flip = (value: string) => `${value.slice(0, 3)}${value[3] === 'A' ? 'B' : 'A'}${value.slice(4)}`
 
-    expect(forged).not.toBe(payload)
-    expect(await verify(`${forged}.${signature}`)).toBeNull()
+    expect(await verify(`${iv}.${flip(sealed)}`)).toBeNull()
+    expect(await verify(`${flip(iv)}.${sealed}`)).toBeNull()
+    expect(await verify(`${iv}.${sealed.slice(0, -2)}`)).toBeNull()
+  })
+
+  it('keeps the subscriber’s address unreadable: a manage link ends up in logs and history', async () => {
+    const token = await sign('manage', 'jane@example.com')
+    const decoded = (part: string) => {
+      try {
+        return atob(part.replace(/-/g, '+').replace(/_/g, '/'))
+      } catch {
+        return ''
+      }
+    }
+
+    for (const part of token.split('.')) {
+      expect(decoded(part)).not.toContain('jane')
+      expect(decoded(part)).not.toContain('example.com')
+    }
+    expect(token).not.toContain('jane')
+  })
+
+  it('makes each token of the same thing different, so a link cannot be matched by eye', async () => {
+    expect(await sign('manage', 'jane@example.com')).not.toBe(await sign('manage', 'jane@example.com'))
   })
 
   it.each(['', 'nodot', 'a.b.c', '.', 'abc.', '.abc', '%%%.%%%', 'e30.e30'])(

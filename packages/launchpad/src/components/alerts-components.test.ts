@@ -15,7 +15,7 @@ beforeAll(async () => {
 const render = (component: Parameters<typeof container.renderToString>[0], props: Record<string, unknown>) =>
   container.renderToString(component, { props })
 
-describe('AlertSignup @S-085 @S-363', () => {
+describe('AlertSignup @S-085 @S-373', () => {
   it('is a plain POST form that carries the listing’s filters and nothing else', async () => {
     const html = await render(AlertSignup, {
       filters: { category: 'hospitality', location: 'efate', page: '3', q: 'cook' },
@@ -63,7 +63,7 @@ describe('AlertSignup @S-085 @S-363', () => {
   })
 })
 
-describe('alert manage pages @S-086 @S-087 @S-363', () => {
+describe('alert manage pages @S-086 @S-087 @S-373', () => {
   const alerts = [
     { active: true, confirmed: true, frequency: 'daily', id: 4, summary: '“cook”' },
     { active: false, confirmed: false, frequency: 'weekly', id: 9, summary: 'All jobs' },
@@ -105,7 +105,7 @@ describe('alert manage pages @S-086 @S-087 @S-363', () => {
   })
 })
 
-describe('the listing page offers the alert form only when asked @S-363', () => {
+describe('the listing page offers the alert form only when asked @S-373', () => {
   it('draws the form on a listing page that passes `alerts`, with the page’s own filters', async () => {
     const { default: JobsListing } = await import('./JobsListing.astro')
     const { jobFilterDefinitions, jobListingView } = await import('../jobs/listing')
