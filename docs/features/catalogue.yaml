@@ -670,8 +670,10 @@ stories:
     settings:
       - billing.invoiceOnly
     mvp: true
-    status: planned
-    tests: []
+    status: built
+    tests:
+      - packages/payload-jobs/src/checkout.integration.test.ts
+      - packages/payload-jobs/src/email-engine/notifications.test.ts
 
   - id: S-040
     area: Job posting
@@ -1876,8 +1878,10 @@ stories:
     settings:
       - email.orders
     mvp: true
-    status: planned
-    tests: []
+    status: built
+    tests:
+      - packages/payload-jobs/src/email-engine/notifications.test.ts
+      - packages/payload-jobs/src/email-engine/notifications.integration.test.ts
 
   - id: S-111
     area: Emails
@@ -3581,3 +3585,68 @@ stories:
     status: built
     tests:
       - packages/payload-jobs/src/email-engine/email-engine.integration.test.ts
+
+  - id: S-365
+    area: Emails
+    role: employer
+    story: "Submitting a job sends one email to the employer (with the order details) and one to the site admin; going live and edits are told once."
+    steps:
+      - "Submit a job that creates an order."
+      - "Have a site manager approve it, and edit a waiting job as the employer."
+    expected: "The employer gets ONE 'Job submitted' email that includes the order; the admin gets one copy; no standalone order email follows; 'live' is sent once, and not again when the job goes live in the same action as the submission; an edit to a waiting job tells the admin."
+    settings:
+      - tenant.adminEmail
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/email-engine/notifications.test.ts
+      - packages/payload-jobs/src/email-engine/notifications.integration.test.ts
+      - packages/payload-jobs/src/checkout.integration.test.ts
+
+  - id: S-366
+    area: Emails
+    role: site manager
+    story: "Each job, order and organisation email can be switched off for my site, and a failed checkout never sends one."
+    steps:
+      - "Switch off the admin copy of 'Job submitted' in Email templates."
+      - "Submit a job."
+    expected: "The employer's email still goes; the admin's is logged as skipped (disabled); another site's emails are not affected; a checkout that rolls back sends nothing."
+    settings:
+      - tenant.emailTemplates
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/email-engine/notifications.test.ts
+      - packages/payload-jobs/src/email-engine/notifications.integration.test.ts
+
+  - id: S-367
+    area: Emails
+    role: org owner
+    story: "The site admin is told when an organisation asks for a public page, and the owner is told when it is approved."
+    steps:
+      - "Request a public page for an organisation."
+      - "Approve the page."
+    expected: "The admin gets one 'page requested' email; the owner gets one 'page approved' email; saving again sends nothing."
+    settings:
+      - organisations.pagesNeedApproval
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/email-engine/notifications.test.ts
+      - packages/payload-jobs/src/email-engine/notifications.integration.test.ts
+
+  - id: S-368
+    area: Emails
+    role: org owner
+    story: "An invoice-me organisation's billing address gets a copy of the job and order emails."
+    steps:
+      - "Set a billing email on an invoice organisation."
+      - "Submit a job or buy a credit pack."
+    expected: "The owner and the billing address each get the email once; an organisation that does not pay by invoice never copies its billing address."
+    settings:
+      - organisations.billingEmail
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/email-engine/notifications.test.ts
+      - packages/payload-jobs/src/email-engine/notifications.integration.test.ts

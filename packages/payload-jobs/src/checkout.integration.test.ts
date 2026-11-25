@@ -13,6 +13,15 @@ import {
   type CheckoutInput,
 } from './checkout'
 import { ApprovalError, approveJob, approveJobEndpoint, releaseJobsOnSettle } from './approval'
+import { createEmailEventRegistry } from './email-engine/events'
+import { emailLogCollection } from './email-engine/log'
+import {
+  jobNotificationHook,
+  orderNotificationHook,
+  type NotificationHookOptions,
+} from './email-engine/notifications'
+import { tenantEmailFields } from './email-engine/settings'
+import { emailTemplatesCollection } from './email-engine/templates'
 import { jobsCollection } from './collections/jobs'
 import { locationsCollection } from './collections/locations'
 import { organisationField, organisationRoleField, organisationsCollection } from './collections/organisations'
@@ -91,11 +100,22 @@ const failingRegistry = (): PayloadJobsRegistry => {
 const Outbox: CollectionConfig = { slug: 'outbox', fields: [{ name: 'orderID', type: 'text', required: true }], versions: false }
 
 /** The ledger and orders first: the harness deletes in this order, and the guards keep referenced rows. */
+const emailHooks: NotificationHookOptions = {
+  jobsSlug: 'jobs',
+  ordersSlug: 'orders',
+  organisationsSlug: 'organisations',
+  tenancy: 'multi',
+  usersSlug: 'users',
+}
+const emailEvents = createEmailEventRegistry()
+
 const collections = (): CollectionConfig[] => [
   creditLedgerCollection(),
-  withHooks(orderCollection(), { afterChange: [orderEventHook(registry), releaseJobsOnSettle(), grantPackCreditsOnPaid()] }),
+  withHooks(orderCollection(), {
+    afterChange: [orderEventHook(registry), orderNotificationHook(emailHooks), releaseJobsOnSettle(), grantPackCreditsOnPaid()],
+  }),
   withHooks(jobsCollection({ richTextDescription: false, withOrder: true }), {
-    afterChange: [refundCreditOnCancel()],
+    afterChange: [refundCreditOnCancel(), jobNotificationHook(emailHooks)],
     beforeDelete: [refuseDeleteWhileInCreditLedger({ field: 'job', noun: 'job' }), refuseDeleteWhileOrdered({ field: 'jobs', noun: 'job' })],
   }),
   couponCollection(),
@@ -104,6 +124,8 @@ const collections = (): CollectionConfig[] => [
   addOnCollection(),
   locationsCollection({ requireTenant: true }),
   ...withPlanRestrictionGuards(taxonomyCollections({ tenantScoped: true })),
+  emailTemplatesCollection({ events: emailEvents }),
+  emailLogCollection(),
 ]
 
 const SiteKeys: CollectionConfig = {
@@ -118,6 +140,10 @@ const SiteKeys: CollectionConfig = {
 }
 
 const tenantFields: Field[] = [
+  { name: 'adminEmail', type: 'email' },
+  { name: 'emailFromAddress', type: 'email' },
+  { name: 'emailFromName', type: 'text' },
+  ...tenantEmailFields(),
   { name: 'currency', type: 'text' },
   { name: 'timezone', type: 'text' },
   tenantPublicationField(),
@@ -145,6 +171,7 @@ describe('checkout integration', () => {
   let category: Doc
   let otherCategory: Doc
   let siteKeyA = ''
+  const mailed: { subject: string; to: string }[] = []
 
   const makeUser = async (label: string, tenants: User['tenants'], extra: Record<string, unknown> = {}): Promise<User> => {
     const doc = (await payload.create({
@@ -241,7 +268,7 @@ describe('checkout integration', () => {
       globalCollections: [SiteKeys, Outbox],
       tenantData: (which) =>
         which === 'A'
-          ? { currency: 'VUV', timezone: 'Pacific/Efate' }
+          ? { adminEmail: 'admin-a@site.test', currency: 'VUV', emailFromAddress: 'hello-a@site.test', emailFromName: 'Site A', timezone: 'Pacific/Efate' }
           // Tenant B grants a pack's credits on invoice instead of on payment (PJ-120).
           : { currency: 'NZD', packCreditsUsableAt: 'on_invoice', timezone: 'Pacific/Auckland' },
       tenantFields,
@@ -255,6 +282,16 @@ describe('checkout integration', () => {
     })
     payload = harness.payload
     const { tenantA, tenantB } = harness
+    // PJ-51: the emails are real; only the transport is a spy.
+    ;(payload.config as { custom?: Record<string, unknown> }).custom = {
+      ...payload.config.custom,
+      payloadJobs: {
+        email: { events: emailEvents, logSlug: 'email-log', settingsSlug: 'job-board-settings', templatesSlug: 'email-templates', tenancy: 'multi', tenantsSlug: 'tenants' },
+      },
+    }
+    ;(payload as { sendEmail: unknown }).sendEmail = async (message: { subject: string; to: string }) => {
+      mailed.push({ subject: message.subject, to: message.to })
+    }
 
     orgs.brew = await org(tenantA.id, 'Brew')
     orgs.bank = await org(tenantA.id, 'Bank')
@@ -303,6 +340,42 @@ describe('checkout integration', () => {
 
   afterAll(async () => {
     await harness?.destroy()
+  })
+
+  describe('emails', () => {
+    it('sends ONE job-submitted email with the order details, one to the admin, and nothing for the order @S-365 @S-039', async () => {
+      const listing = await job(orgs.brew)
+      mailed.length = 0
+
+      const result = await checkout(users.owner, { jobId: listing.id })
+
+      expect(result.order.status).toBe('invoiced')
+      expect(mailed.map((mail) => mail.to).sort()).toEqual([users.owner.email, 'admin-a@site.test'].sort())
+      expect(mailed.find((mail) => mail.to === users.owner.email)?.subject).toContain(String(listing.title))
+      // The order it created is told by the job email, not a second one.
+      expect(mailed.some((mail) => /order/i.test(mail.subject) && mail.to === users.owner.email)).toBe(false)
+      // A repeated identical checkout returns the first order and emails no one.
+      mailed.length = 0
+      await checkout(users.owner, { jobId: listing.id })
+      expect(mailed).toEqual([])
+    })
+
+    it('sends nothing for a checkout that fails and rolls back @S-365', async () => {
+      const listing = await job(orgs.brew)
+      mailed.length = 0
+
+      await expect(
+        checkoutJob({
+          options: { registry: failingRegistry() },
+          input: { addOnIds: [], closeDate: null, couponCode: null, planId: plans.regular.id, useCredit: false, jobId: listing.id },
+          payload,
+          req: await reqFor(users.owner),
+          tenantID: harness.tenantA.id,
+          user: users.owner,
+        }),
+      ).rejects.toThrow()
+      expect(mailed).toEqual([])
+    })
   })
 
   describe('pricing and orders', () => {

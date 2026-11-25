@@ -6,6 +6,8 @@
  * Wiring an event to the code that triggers it is PJ-51; this file is only the declaration.
  */
 
+import { NOTIFICATION_EVENTS } from './notification-events'
+
 export type EmailValue = boolean | null | number | string | undefined
 
 /** A value a template can place with a chip, e.g. "First name". */
@@ -45,42 +47,8 @@ export type EmailTemplateEvent = {
   variables: EmailVariable[]
 }
 
-const str = (value: unknown): string => (typeof value === 'string' ? value : '')
-
-/**
- * The events payload-jobs ships. PJ-51 adds the rest of the legacy set; the engine does not
- * care how many there are.
- */
-export const BUILT_IN_EMAIL_EVENTS: EmailTemplateEvent[] = [
-  {
-    slug: 'job-submitted',
-    defaultBody: [
-      ['Hello ', { variable: 'firstName' }, ','],
-      ['Thanks for submitting ', { variable: 'jobTitle' }, '. We will review it shortly.'],
-    ],
-    defaultSubject: 'We received your job: {{jobTitle}}',
-    label: 'Job submitted',
-    recipient: (doc) => str(doc.employerEmail) || undefined,
-    variables: [
-      { key: 'firstName', label: 'First name', resolve: (doc) => str(doc.firstName) },
-      { key: 'jobTitle', label: 'Job title', resolve: (doc) => str(doc.title) },
-    ],
-  },
-  {
-    slug: 'job-approved',
-    defaultBody: [
-      ['Hello ', { variable: 'firstName' }, ','],
-      [{ variable: 'jobTitle' }, ' is now live.'],
-    ],
-    defaultSubject: 'Your job is live: {{jobTitle}}',
-    label: 'Job approved',
-    recipient: (doc) => str(doc.employerEmail) || undefined,
-    variables: [
-      { key: 'firstName', label: 'First name', resolve: (doc) => str(doc.firstName) },
-      { key: 'jobTitle', label: 'Job title', resolve: (doc) => str(doc.title) },
-    ],
-  },
-]
+/** The events payload-jobs ships: the job, order and organisation emails (PJ-51). */
+export const BUILT_IN_EMAIL_EVENTS: EmailTemplateEvent[] = NOTIFICATION_EVENTS
 
 export type EmailEventRegistry = ReadonlyMap<string, EmailTemplateEvent>
 

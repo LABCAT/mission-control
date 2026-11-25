@@ -43,6 +43,7 @@ import {
 } from './orders'
 import type { OrderPaymentMethod } from './payment-providers'
 import type { CheckoutContext, PaymentResult } from './plug-points/definitions'
+import { EMAIL_DEFER_CONTEXT, flushNotifications } from './email-engine/notifications'
 import { emitDeferredOrderEvents, ORDER_EVENTS_DEFER_CONTEXT, type DeferredOrderEvent } from './plug-points/gate'
 import { createPayloadJobsRegistry, forTenant, type PayloadJobsRegistry } from './plug-points/payload-jobs-registry'
 import {
@@ -731,7 +732,8 @@ export const previewCheckout = async (args: CheckoutJobArgs): Promise<CheckoutPr
  */
 const isolatedRequest = async (req: PayloadRequest): Promise<PayloadRequest> =>
   createPayloadRequest({
-    context: { ...req.context, [ORDER_EVENTS_DEFER_CONTEXT]: [] },
+    // mission-control: PJ-51 holds the job/order emails too, until the transaction has committed.
+    context: { ...req.context, [EMAIL_DEFER_CONTEXT]: [], [ORDER_EVENTS_DEFER_CONTEXT]: [] },
     payload: req.payload,
     user: (req.user ?? null) as never,
   })
@@ -748,6 +750,10 @@ const committed = async <T>(req: PayloadRequest, options: Resolved, organisation
   const events = (req.context[ORDER_EVENTS_DEFER_CONTEXT] as DeferredOrderEvent[] | undefined) ?? []
   req.context[ORDER_EVENTS_DEFER_CONTEXT] = []
   await emitDeferredOrderEvents(options.registry, req.payload, events)
+  // mission-control: PJ-51. Only now, after the commit, do the emails go out.
+  const held = (req.context[EMAIL_DEFER_CONTEXT] as Parameters<typeof flushNotifications>[1] | undefined) ?? []
+  req.context[EMAIL_DEFER_CONTEXT] = []
+  await flushNotifications(req.payload, held)
   return result
 }
 
