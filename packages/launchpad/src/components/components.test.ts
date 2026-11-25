@@ -1,6 +1,8 @@
 import { experimental_AstroContainer as AstroContainer } from 'astro/container'
 import { beforeAll, describe, expect, it } from 'vitest'
 
+import ApplyForm from './ApplyForm.astro'
+import ApplyPage from './ApplyPage.astro'
 import BaseLayout from './BaseLayout.astro'
 import ConsentLine from './ConsentLine.astro'
 import FilterBar from './FilterBar.astro'
@@ -625,6 +627,98 @@ describe('JobDetailPage @S-280 @S-282 @S-285', () => {
     expect(html).not.toContain('JobPosting')
     expect(html).not.toContain('/jobs/head-chef/apply')
     expect(html).not.toMatch(/<p[^>]*data-job-views/)
+  })
+})
+
+describe('apply section and page @S-049 @S-050', () => {
+  const doc: DetailJob = {
+    description: { root: { children: [] } },
+    expiresAt: '2099-12-01T00:00:00.000Z',
+    howToApply: 'Email hr@example.com.',
+    id: 7,
+    organisation: { approved: true, id: 3, name: 'Santo Bakery', pageEnabled: false, slug: 'santo-bakery' },
+    slug: 'head-chef',
+    status: 'published',
+    title: 'Head Chef',
+  }
+
+  const renderJob = (source: Parameters<typeof tenantJobPageSettings>[0], applyOnline = true) =>
+    container.renderToString(JobDetailPage, {
+      props: {
+        applyHref: '/jobs/head-chef/apply',
+        siteUrl: 'https://vanuatuwok.vu',
+        view: jobDetailView({
+          applyOnline,
+          detail: toJobDetail(doc, {})!,
+          settings: tenantJobPageSettings(source),
+          status: 'live',
+          tenant,
+        }),
+      },
+    })
+
+  it('links to the apply page and ships no form on the job page', async () => {
+    const html = await renderJob({})
+
+    expect(html).toContain('data-apply="form"')
+    expect(html).toContain('href="/jobs/head-chef/apply"')
+    expect(html).not.toContain('multipart/form-data')
+    expect(html).not.toContain('data-apply-placeholder')
+  })
+
+  it('asks a guest to sign in, coming back to the apply page, when the site requires an account @S-050', async () => {
+    const html = await renderJob({ accountRequiredToApply: true })
+
+    expect(html).toContain('data-apply="sign-in"')
+    expect(html).toContain('href="/account/sign-in?return=%2Fjobs%2Fhead-chef%2Fapply"')
+    expect(html).toContain('Sign in to apply')
+  })
+
+  it('shows the how-to-apply text and no apply button when online applying is off @S-032', async () => {
+    const html = await renderJob({}, false)
+
+    expect(html).toContain('Email hr@example.com.')
+    expect(html).not.toContain('data-apply=')
+    expect(html).not.toContain('href="/jobs/head-chef/apply"')
+  })
+
+  it('renders a multipart form that works without JavaScript and keeps what was typed @S-049', async () => {
+    const html = await container.renderToString(ApplyForm, {
+      props: {
+        action: '/jobs/head-chef/apply',
+        errors: [{ field: 'cv', message: 'Attach your CV.' }],
+        message: 'Attach your CV.',
+        turnstileSiteKey: '1x00000000000000000000AA',
+        values: { email: 'ada@example.com', message: 'Hello', name: 'Ada' },
+      },
+    })
+
+    expect(html).toMatch(/<form[^>]*method="post"[^>]*enctype="multipart\/form-data"/)
+    expect(html).toContain('name="cv"')
+    expect(html).toContain('accept=".pdf,.doc,.docx"')
+    expect(html).toContain('name="coverLetter"')
+    expect(html).toContain('name="consent"')
+    expect(html).toContain('href="/privacy"')
+    expect(html).toContain('value="ada@example.com"')
+    expect(html).toContain('Attach your CV.')
+    expect(html).toContain('name="rp-website"')
+    expect(html).toContain('cf-turnstile-response')
+    // Turnstile cannot run without JavaScript, so the form says so instead of failing silently.
+    expect(html).toMatch(/<noscript>[\s\S]*JavaScript is needed to send your application\.[\s\S]*<\/noscript>/)
+    // The recipient is not known to the site, so it cannot be on the page.
+    expect(html).not.toMatch(/recipient/i)
+  })
+
+  it('shows the confirmation, or the closed notice, on the apply page and is never indexed @S-049', async () => {
+    const props = { action: '/jobs/head-chef/apply', jobPath: '/jobs/head-chef', jobTitle: 'Head Chef', tenant }
+    const sent = await container.renderToString(ApplyPage, { props: { ...props, state: 'sent' } })
+    expect(sent).toContain('Your application was sent')
+    expect(sent).not.toContain('multipart/form-data')
+    expect(sent).toContain('noindex')
+
+    const closed = await container.renderToString(ApplyPage, { props: { ...props, message: 'This job is closed.', state: 'closed' } })
+    expect(closed).toContain('This job is closed.')
+    expect(closed).not.toContain('multipart/form-data')
   })
 })
 

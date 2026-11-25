@@ -1,0 +1,53 @@
+---
+/**
+ * `/jobs/{slug}/apply` (PJ-45): the form, or the confirmation, or why applying is not possible.
+ * Never indexed and never cached: it answers for the visitor who holds the cookie.
+ */
+import Alert from '@labcat2020/rocketship/components/Alert'
+import Button from '@labcat2020/rocketship/components/Button'
+import Container from '@labcat2020/rocketship/components/Container'
+import Stack from '@labcat2020/rocketship/components/Stack'
+
+import type { ApplyFieldError } from '../jobs/apply'
+import type { SiteTenant } from '../tenant/types'
+import ApplyForm from './ApplyForm.astro'
+import BaseLayout from './BaseLayout.astro'
+
+type Props = {
+  action: string
+  errors?: ApplyFieldError[]
+  jobPath: string
+  jobTitle: string
+  /** An alert shown above the form, or in place of it when `state` is not `form`. */
+  message?: string
+  siteUrl?: string
+  state: 'closed' | 'form' | 'sent'
+  tenant: SiteTenant
+  turnstileSiteKey?: string
+  values?: { email?: string; message?: string; name?: string; phone?: string }
+}
+
+const { action, errors, jobPath, jobTitle, message, siteUrl, state, tenant, turnstileSiteKey, values } = Astro.props as Props
+---
+
+<BaseLayout noindex path={`${jobPath}/apply`} siteUrl={siteUrl} tenant={tenant} title={`Apply: ${jobTitle}`}>
+  <Container>
+    <Stack gap="large">
+      <h1>Apply: {jobTitle}</h1>
+
+      {state === 'sent' && (
+        <Alert variant="success" role="status">
+          Your application was sent. We emailed you a copy.
+        </Alert>
+      )}
+
+      {state === 'closed' && <Alert variant="warning" role="alert">{message}</Alert>}
+
+      {state === 'form' && (
+        <ApplyForm action={action} errors={errors} message={message} turnstileSiteKey={turnstileSiteKey} values={values} />
+      )}
+
+      <p><Button href={jobPath} variant="secondary">Back to the job</Button></p>
+    </Stack>
+  </Container>
+</BaseLayout>

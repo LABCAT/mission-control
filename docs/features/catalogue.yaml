@@ -571,8 +571,11 @@ stories:
       - jobs.applyOnline
       - jobs.applicationsRecipient
     mvp: true
-    status: planned
-    tests: []
+    status: built
+    tests:
+      - packages/payload-jobs/src/apply.test.ts
+      - packages/launchpad/src/jobs/apply.test.ts
+      - packages/launchpad/src/components/components.test.ts
 
   - id: S-033
     area: Job posting
@@ -806,14 +809,18 @@ stories:
     steps:
       - "Open the apply form on a live job."
       - "Attach a PDF CV, write a message and submit."
-    expected: "The form validates, passes Turnstile, accepts PDF/DOC/DOCX up to the limit, and confirms the application."
+    expected: "The form validates, passes Turnstile, accepts PDF/DOC/DOCX up to the limit, and confirms the application. Turnstile needs JavaScript: with it on, a visitor without JavaScript sees 'JavaScript is needed to send your application' and a submit with no token is refused with that message; with Turnstile off the form submits without JavaScript."
     settings:
       - jobs.applyOnline
       - jobs.applyCVRequired
       - security.turnstile
     mvp: true
-    status: planned
-    tests: []
+    status: built
+    tests:
+      - packages/payload-jobs/src/apply.test.ts
+      - packages/launchpad/src/jobs/apply.test.ts
+      - packages/launchpad/src/components/components.test.ts
+      - apps/vwok/src/apply-route.test.ts
 
   - id: S-050
     area: Applications
@@ -825,8 +832,12 @@ stories:
     settings:
       - jobs.accountRequired
     mvp: true
-    status: planned
-    tests: []
+    status: built
+    tests:
+      - packages/payload-jobs/src/apply.test.ts
+      - packages/launchpad/src/jobs/apply.test.ts
+      - packages/launchpad/src/components/components.test.ts
+      - apps/vwok/src/apply-route.test.ts
 
   - id: S-051
     area: Applications
@@ -3734,73 +3745,10 @@ stories:
     tests:
       - packages/payload-jobs/src/email-engine/email-engine.integration.test.ts
 
-  - id: S-380
-    area: Emails
-    role: employer
-    story: "Submitting a job sends one email to the employer (with the order details) and one to the site admin; going live and edits are told once."
-    steps:
-      - "Submit a job that creates an order."
-      - "Have a site manager approve it, and edit a waiting job as the employer."
-    expected: "The employer gets ONE 'Job submitted' email that includes the order; the admin gets one copy; no standalone order email follows; 'live' is sent once, and not again when the job goes live in the same action as the submission; an edit to a waiting job tells the admin."
-    settings:
-      - tenant.adminEmail
-    mvp: true
-    status: built
-    tests:
-      - packages/payload-jobs/src/email-engine/notifications.test.ts
-      - packages/payload-jobs/src/email-engine/notifications.integration.test.ts
-      - packages/payload-jobs/src/checkout.integration.test.ts
-
-  - id: S-381
-    area: Emails
-    role: site manager
-    story: "Each job, order and organisation email can be switched off for my site, and a failed checkout never sends one."
-    steps:
-      - "Switch off the admin copy of 'Job submitted' in Email templates."
-      - "Submit a job."
-    expected: "The employer's email still goes; the admin's is logged as skipped (disabled); another site's emails are not affected; a checkout that rolls back sends nothing."
-    settings:
-      - tenant.emailTemplates
-    mvp: true
-    status: built
-    tests:
-      - packages/payload-jobs/src/email-engine/notifications.test.ts
-      - packages/payload-jobs/src/email-engine/notifications.integration.test.ts
-
-  - id: S-382
-    area: Emails
-    role: org owner
-    story: "The site admin is told when an organisation asks for a public page, and the owner is told when it is approved."
-    steps:
-      - "Request a public page for an organisation."
-      - "Approve the page."
-    expected: "The admin gets one 'page requested' email; the owner gets one 'page approved' email; saving again sends nothing."
-    settings:
-      - organisations.pagesNeedApproval
-    mvp: true
-    status: built
-    tests:
-      - packages/payload-jobs/src/email-engine/notifications.test.ts
-      - packages/payload-jobs/src/email-engine/notifications.integration.test.ts
-
-  - id: S-383
-    area: Emails
-    role: org owner
-    story: "An invoice-me organisation's billing address gets a copy of the job and order emails."
-    steps:
-      - "Set a billing email on an invoice organisation."
-      - "Submit a job or buy a credit pack."
-    expected: "The owner and the billing address each get the email once; an organisation that does not pay by invoice never copies its billing address."
-    settings:
-      - organisations.billingEmail
-    mvp: true
-    status: built
-    tests:
-      - packages/payload-jobs/src/email-engine/notifications.test.ts
-      - packages/payload-jobs/src/email-engine/notifications.integration.test.ts
   # ---------------------------------------------------------------------------
   # Performance pass (PJ-44)
   # ---------------------------------------------------------------------------
+
   - id: S-360
     area: Public site
     role: seeker
@@ -3867,6 +3815,128 @@ stories:
     status: built
     tests:
       - packages/launchpad/src/components/components.test.ts
+
+  - id: S-365
+    area: Applications
+    role: seeker
+    story: "An application can only be sent to a live job of the site it is made on, and only when the job takes online applications."
+    steps:
+      - "Post an application to a job of another site, a closed job, and a job with Apply online off."
+    expected: "Another site's job answers 'not found' exactly like a missing one, a closed or offline job is refused with a clear message, and nothing is stored or emailed in any of these cases."
+    settings:
+      - jobs.applyOnline
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/apply.test.ts
+
+  - id: S-366
+    area: Applications
+    role: employer
+    story: "The employer opens the CV from the application email through a link that expires and works for that file only."
+    steps:
+      - "Open the CV link in the application email."
+      - "Change the file id or the expiry in the link, then open it again after it expires."
+    expected: "The file downloads as an attachment, uncached. A link for another file, with an altered expiry, or past its expiry answers 'not found'. The files themselves stay private."
+    settings: []
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/apply.test.ts
+
+  - id: S-367
+    area: Applications
+    role: employer
+    story: "A new application is emailed to the employer, a copy goes to the applicant, and the site admin gets a copy when the site has an admin address."
+    steps:
+      - "Apply to a job with an application recipient set, then to one without."
+    expected: "The employer's email carries the applicant's details and signed CV links; the applicant's copy carries no file links; the admin copy goes only when the site has an admin address. The employer's address never appears in any answer to the browser, and a failed email does not lose the application."
+    settings:
+      - jobs.applicationsRecipient
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/apply.test.ts
+
+  - id: S-368
+    area: Applications
+    role: super admin
+    story: "An application post is refused before it is read when its declared size is missing or over the limit, and the per-IP limit applies before the body is parsed."
+    steps:
+      - "Post an application with no Content-Length, then with one over 21 MB, then flood from one IP."
+    expected: "The first two answer 413 without the body being parsed or anything stored; once the IP is over its limit further posts answer 429 without being parsed."
+    settings:
+      - security.rateLimits
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/apply.test.ts
+      - apps/vwok/src/apply-route.test.ts
+
+  - id: S-380
+    area: Emails
+    role: employer
+    story: "Submitting a job sends one email to the employer (with the order details) and one to the site admin; going live and edits are told once."
+    steps:
+      - "Submit a job that creates an order."
+      - "Have a site manager approve it, and edit a waiting job as the employer."
+    expected: "The employer gets ONE 'Job submitted' email that includes the order; the admin gets one copy; no standalone order email follows; 'live' is sent once, and not again when the job goes live in the same action as the submission; an edit to a waiting job tells the admin."
+    settings:
+      - tenant.adminEmail
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/email-engine/notifications.test.ts
+      - packages/payload-jobs/src/email-engine/notifications.integration.test.ts
+      - packages/payload-jobs/src/checkout.integration.test.ts
+
+  - id: S-381
+    area: Emails
+    role: site manager
+    story: "Each job, order and organisation email can be switched off for my site, and a failed checkout never sends one."
+    steps:
+      - "Switch off the admin copy of 'Job submitted' in Email templates."
+      - "Submit a job."
+    expected: "The employer's email still goes; the admin's is logged as skipped (disabled); another site's emails are not affected; a checkout that rolls back sends nothing."
+    settings:
+      - tenant.emailTemplates
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/email-engine/notifications.test.ts
+      - packages/payload-jobs/src/email-engine/notifications.integration.test.ts
+
+  - id: S-382
+    area: Emails
+    role: org owner
+    story: "The site admin is told when an organisation asks for a public page, and the owner is told when it is approved."
+    steps:
+      - "Request a public page for an organisation."
+      - "Approve the page."
+    expected: "The admin gets one 'page requested' email; the owner gets one 'page approved' email; saving again sends nothing."
+    settings:
+      - organisations.pagesNeedApproval
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/email-engine/notifications.test.ts
+      - packages/payload-jobs/src/email-engine/notifications.integration.test.ts
+
+  - id: S-383
+    area: Emails
+    role: org owner
+    story: "An invoice-me organisation's billing address gets a copy of the job and order emails."
+    steps:
+      - "Set a billing email on an invoice organisation."
+      - "Submit a job or buy a credit pack."
+    expected: "The owner and the billing address each get the email once; an organisation that does not pay by invoice never copies its billing address."
+    settings:
+      - organisations.billingEmail
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/email-engine/notifications.test.ts
+      - packages/payload-jobs/src/email-engine/notifications.integration.test.ts
 
   - id: S-384
     area: Emails

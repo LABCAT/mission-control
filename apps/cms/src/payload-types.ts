@@ -2228,7 +2228,10 @@ export interface EmailTemplate {
     | 'order-paid'
     | 'order-cancelled'
     | 'organisation-page-requested'
-    | 'organisation-page-approved';
+    | 'organisation-page-approved'
+    | 'application-received'
+    | 'application-copy'
+    | 'application-admin-copy';
   /**
    * Untick to stop sending this email on this site. Skipped sends are logged.
    */
@@ -4374,7 +4377,14 @@ export interface Variable {
     | 'orderTotal'
     | 'orderStatus'
     | 'paymentMethod'
-    | 'pageUrl';
+    | 'pageUrl'
+    | 'applicantName'
+    | 'applicantEmail'
+    | 'applicantPhone'
+    | 'message'
+    | 'cvLink'
+    | 'coverLetterLink'
+    | 'linksExpireAt';
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
