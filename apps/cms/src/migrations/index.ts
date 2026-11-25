@@ -34,6 +34,7 @@ import * as migration_20261124_081812_org_directory from './20261124_081812_org_
 import * as migration_20261124_084533_pack_credit_timing from './20261124_084533_pack_credit_timing';
 import * as migration_20261124_091222_application_retention from './20261124_091222_application_retention';
 import * as migration_20261124_093958_publish_moderation from './20261124_093958_publish_moderation';
+import * as migration_20261124_235856_email_core from './20261124_235856_email_core';
 
 export const migrations = [
   {
@@ -214,6 +215,11 @@ export const migrations = [
   {
     up: migration_20261124_093958_publish_moderation.up,
     down: migration_20261124_093958_publish_moderation.down,
-    name: '20261124_093958_publish_moderation'
+    name: '20261124_093958_publish_moderation',
+  },
+  {
+    up: migration_20261124_235856_email_core.up,
+    down: migration_20261124_235856_email_core.down,
+    name: '20261124_235856_email_core'
   },
 ];

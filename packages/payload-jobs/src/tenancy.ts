@@ -10,6 +10,7 @@ import {
 import { tenantLocationFields } from './location-settings'
 import { tenantSessionFields } from './account-sessions'
 import { tenantPublicationField } from './publication-settings'
+import { tenantEmailFields } from './email-engine/settings'
 import { tenantRetentionField } from './retention'
 import { tenantTaxField } from './tax-settings'
 
@@ -294,6 +295,8 @@ export const jobBoardTenantFields: Field[] = [
     validate: (value: null | string | undefined, options: ValidationOptions) =>
       requiredUnlessAggregate(value, options, 'Admin email is required'),
   },
+  // Logo, colours and footer of every email, and how long the email log is kept (PJ-50).
+  ...tenantEmailFields(showForSiteTenant),
   // Contact and other public forms (PJ-102). 0 means "email only": the notification is sent
   // and no submission is stored.
   {

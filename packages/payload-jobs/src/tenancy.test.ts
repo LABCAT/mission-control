@@ -52,6 +52,7 @@ describe('payloadJobs tenancy modes', () => {
     expect(result.custom?.payloadJobs).toEqual({
       enabled: true,
       features: { applications: true, credits: true, coupons: true, pages: true },
+      email: expect.any(Object),
       paymentProviders: ['invoice'],
       registry: expect.any(Object),
       slugs: { ...DEFAULT_PAYLOAD_JOBS_SLUGS, tenants: 'tenants' },
@@ -133,6 +134,7 @@ describe('payloadJobs tenancy modes', () => {
     expect(result.custom?.payloadJobs).toEqual({
       enabled: true,
       features: { applications: true, credits: true, coupons: true, pages: true },
+      email: expect.any(Object),
       paymentProviders: ['invoice'],
       registry: expect.any(Object),
       slugs: { ...DEFAULT_PAYLOAD_JOBS_SLUGS, tenants: 'tenants' },

@@ -12,21 +12,54 @@ permissions:
   issues: write
 
 jobs:
+  # Picks the review tier. "deep" goes to the Daruma proxy entry named by
+  # vars.KINSHO_DEEP_AGENT (e.g. kinsho-deep, mapped to a stronger model in the
+  # dashboard). With that variable unset, every PR uses the standard entry.
+  route:
+    runs-on: ubuntu-latest
+    outputs:
+      agent: ${{ steps.pick.outputs.agent }}
+      effort: ${{ steps.pick.outputs.effort }}
+    steps:
+      - id: pick
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number || github.event.issue.number }}
+          DEEP_AGENT: ${{ vars.KINSHO_DEEP_AGENT }}
+          DEEP_EFFORT: ${{ vars.KINSHO_DEEP_EFFORT || 'high' }}
+          STD_EFFORT: ${{ vars.KINSHO_EFFORT }}
+        run: |
+          agent=kinsho; effort="$STD_EFFORT"; tier=standard
+          if [ -n "$DEEP_AGENT" ] && [ -n "$PR" ]; then
+            labels=$(gh api "repos/$REPO/issues/$PR/labels" --jq '.[].name' 2>/dev/null || true)
+            files=$(gh api "repos/$REPO/pulls/$PR/files" --paginate --jq '.[].filename' 2>/dev/null || true)
+            # Money, auth and tenancy code, plus migrations.
+            deep_paths='^(packages/payload-xero/|apps/cms/src/migrations/|packages/payload-jobs/src/(orders|credits|coupons|plans|pricing|money|tax|add-ons|access|account-auth|legacy-password|legacy-login|site-keys|tenancy|placements))'
+            if echo "$labels" | grep -qx 'review:deep' || echo "$files" | grep -qE "$deep_paths"; then
+              agent="$DEEP_AGENT"; effort="$DEEP_EFFORT"; tier=deep
+            fi
+          fi
+          echo "Kinsho tier: $tier ($agent)"
+          echo "agent=$agent" >> "$GITHUB_OUTPUT"
+          echo "effort=$effort" >> "$GITHUB_OUTPUT"
+
   review:
+    needs: route
     # Pinned to kinsho main at DD-136 (llm_base_url); no release tag exists for it yet.
     uses: LABCAT/kinsho/.github/workflows/review.yml@cdd7583a69b01e34de630833347be0814d940117
     with:
       # Through the Daruma dashboard LLM proxy: the provider and model are picked in
       # dashboard settings (Agent LLM proxy -> kinsho). `model` is only the label shown
       # in the review comment.
-      llm_base_url: https://daruma.labcat.workers.dev/api/llm/kinsho/v1
+      llm_base_url: https://daruma.labcat.workers.dev/api/llm/${{ needs.route.outputs.agent }}/v1
       model: daruma
       # mc-checks.yml already runs these; Kinsho reads its check runs instead of re-running them
       # in a bare sandbox (no Node 24 / pnpm install).
       run_commands: false
       test_command: pnpm test
       check_command: pnpm typecheck && pnpm lint
-      effort: ${{ vars.KINSHO_EFFORT }}
+      effort: ${{ needs.route.outputs.effort }}
       # A runtime change can only PASS once this check is green on the head.
       evidence_checks: |
         Admin smoke

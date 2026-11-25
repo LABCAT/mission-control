@@ -22,6 +22,7 @@ import {
   tenantRoleOptions,
   END_USER_IP_HEADER,
   createMemoryRateLimiter,
+  atomicKV,
   generateSignInCode,
   renewRollingSession,
   safeReturnPath,
@@ -557,12 +558,33 @@ describe('email sign-in (PJ-109)', () => {
       await request(tenantA, email)
       const fresh = lastCode()
       const refused = await verify(tenantA, { code: fresh, email })
+      const unknown = await verify(tenantA, { code: fresh, email: newEmail('nobody') })
 
-      expect(refused.status).toBe(429)
-      expect(refused.body.error.code).toBe('too_many_requests')
+      // Over the budget looks exactly like an unknown address: same status, same body, no signal
+      // about whether the address has an account.
+      expect(refused.status).toBe(400)
+      expect(refused.body).toEqual(unknown.body)
+      expect(refused.body.error.code).toBe('invalid_code')
+      expect(refused.response.headers.get('retry-after')).toBeNull()
+      expect(unknown.response.headers.get('retry-after')).toBeNull()
 
       // The link in the same email is unguessable, so it still works.
       expect((await verify(tenantA, { token: lastLinkToken() })).status).toBe(200)
+    })
+
+    it('only counts and takes the record whose code hash it was given @S-196', async () => {
+      const atomic = atomicKV(payload)!
+      const key = `mc:sign-in:guard-${runId}`
+      await payload.kv.set(key, { attempts: 0, codeHash: 'new-code', tokenHash: 'new-token' })
+
+      // A guess checked against an older record must not count against, or take, the new one.
+      expect(await atomic.claimAttempt(key, 5, 'old-code')).toBeNull()
+      expect(await atomic.take(key, { codeHash: 'old-code' })).toBeNull()
+      expect(await atomic.take(key, { tokenHash: 'old-token' })).toBeNull()
+
+      expect(await atomic.claimAttempt(key, 5, 'new-code')).toBe(1)
+      expect(await atomic.take(key, { tokenHash: 'new-token' })).toMatchObject({ codeHash: 'new-code' })
+      expect(await payload.kv.get(key)).toBeNull()
     })
 
     it('still accepts the right code after fewer than 5 wrong guesses', async () => {
