@@ -16,16 +16,21 @@ type Query = (text: string, values: unknown[]) => Promise<{ rows: Record<string,
 export type AtomicKV = {
   /**
    * Add one to `attempts` on the record at `key`, but only while it is below `max`.
-   * Returns the new count, or null when the record is gone or already at the cap.
+   * Returns the new count, or null when the record is gone, already at the cap, or no longer the
+   * record whose code hash is `codeHash` (a re-request replaced it since it was read).
    */
-  claimAttempt: (key: string, max: number) => Promise<null | number>
+  claimAttempt: (key: string, max: number, codeHash: string) => Promise<null | number>
   /**
    * Add one to a windowed counter at `key` (created on first use) and return the count in the
    * current window. A window that has ended starts again at 1.
    */
   countInWindow: (key: string, windowMs: number, now: number) => Promise<number>
-  /** Delete the record and return it, once: of any number of simultaneous callers one gets it. */
-  take: <T>(key: string) => Promise<null | T>
+  /**
+   * Delete the record and return it, once: of any number of simultaneous callers one gets it.
+   * With `match`, only a record whose `codeHash` or `tokenHash` is that value is taken, so a
+   * request that read an older record cannot take the one that replaced it.
+   */
+  take: <T>(key: string, match?: { codeHash?: string; tokenHash?: string }) => Promise<null | T>
 }
 
 const identifier = (value: string): string => `"${value.replace(/"/g, '""')}"`
@@ -44,13 +49,14 @@ export const atomicKV = (payload: Payload): AtomicKV | null => {
   )}`
 
   return {
-    claimAttempt: async (key, max) => {
+    claimAttempt: async (key, max, codeHash) => {
       const { rows } = await query(
         `UPDATE ${table}
             SET data = jsonb_set(data, '{attempts}', to_jsonb(COALESCE((data->>'attempts')::int, 0) + 1))
-          WHERE key = $1 AND COALESCE((data->>'attempts')::int, 0) < $2
+          WHERE key = $1 AND data->>'codeHash' = $3
+            AND COALESCE((data->>'attempts')::int, 0) < $2
         RETURNING (data->>'attempts')::int AS attempts`,
-        [key, max],
+        [key, max, codeHash],
       )
 
       return rows[0] ? Number(rows[0].attempts) : null
@@ -73,8 +79,15 @@ export const atomicKV = (payload: Payload): AtomicKV | null => {
       return Number(rows[0]?.count ?? 1)
     },
 
-    take: async <T>(key: string) => {
-      const { rows } = await query(`DELETE FROM ${table} WHERE key = $1 RETURNING data`, [key])
+    take: async <T>(key: string, match?: { codeHash?: string; tokenHash?: string }) => {
+      const { rows } = await query(
+        `DELETE FROM ${table}
+          WHERE key = $1
+            AND ($2::text IS NULL OR data->>'codeHash' = $2)
+            AND ($3::text IS NULL OR data->>'tokenHash' = $3)
+        RETURNING data`,
+        [key, match?.codeHash ?? null, match?.tokenHash ?? null],
+      )
 
       return (rows[0]?.data as T | undefined) ?? null
     },

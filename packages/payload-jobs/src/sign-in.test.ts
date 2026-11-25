@@ -22,7 +22,6 @@ import {
   tenantRoleOptions,
   END_USER_IP_HEADER,
   createMemoryRateLimiter,
-  atomicKV,
   generateSignInCode,
   renewRollingSession,
   safeReturnPath,
@@ -30,6 +29,7 @@ import {
   type RateLimiter,
   type SignInEmailDoc,
 } from './index'
+import { atomicKV } from './kv-atomic'
 
 const databaseUrl = process.env.TEST_DATABASE_URL
 const SCHEMA = 'sign_in_test'

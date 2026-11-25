@@ -18,6 +18,7 @@ import {
   isSameOriginPost,
   readCookie,
   SESSION_COOKIE,
+  VIEW_AS_HINT_COOKIE,
 } from '@mission-control/launchpad/view-as'
 
 import { siteTenant } from './brand'
@@ -147,9 +148,13 @@ export const handleSignInSubmit = async (request: Request, env: SignInEnv): Prom
     ...signInCookies({ expiresIn: result.expiresIn, secure, token: result.token }),
     clearSignInEmailCookie({ secure }),
     // A new session replaces any view-as one, so its banner hint goes too.
-    clearViewAsCookies({ secure })[1]!,
+    viewAsHintCleared(secure),
   ])
 }
+
+/** The cookie that clears the view-as banner hint, found by name rather than by position. */
+const viewAsHintCleared = (secure: boolean): string =>
+  clearViewAsCookies({ secure }).find((cookie) => cookie.startsWith(`${VIEW_AS_HINT_COOKIE}=`)) ?? ''
 
 const safeDecode = (value: string): string => {
   try {
@@ -172,6 +177,6 @@ export const handleSignOut = async (request: Request, env: SignInEnv): Promise<R
     ...clearSignInCookies({ secure }),
     clearSignInEmailCookie({ secure }),
     // Signing out also ends a view-as banner left behind.
-    clearViewAsCookies({ secure })[1]!,
+    viewAsHintCleared(secure),
   ])
 }

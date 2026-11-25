@@ -78,7 +78,7 @@ Both ways in (password `login` and `sign-in/verify`) take the session length fro
 
 `sign-in/request` sends **one** email carrying a magic link (same device) and a 6-digit code (another device). Code: `packages/payload-jobs/src/sign-in.ts`; the sites' pages: `apps/vwok/src/pages/account/sign-in/`.
 
-- **Codes** last 15 minutes and work once. Using the code spends the link, and the link spends the code. Five wrong codes spend it too, so it cannot be brute forced. Only hashes are stored (`payload.kv`, no table), per tenant and address.
+- **Codes** last 15 minutes and work once. Using the code spends the link, and the link spends the code. Five wrong codes spend it too, so it cannot be brute forced. Each address also has a budget of 20 code guesses per site per day, however many codes are asked for. Once it is used up, `sign-in/verify` answers exactly as it does for an unknown address (`400 invalid_code`), so the budget cannot be used to learn which addresses have accounts. Only hashes are stored (`payload.kv`, no table), per tenant and address.
 - **Resend**: asking again within 30 seconds sends nothing new. After that a new code replaces the old one.
 - **Same answer always**: an unknown address, a member of another tenant and a real account all get the same `202`, so addresses cannot be probed. Nothing is sent unless the address is a member of this tenant in an account role.
 - **Turnstile** is checked on `sign-in/request` (secret `TURNSTILE_SECRET_KEY`, a Worker secret) and fails closed without one. Both endpoints are rate limited per visitor and per address like `login`.

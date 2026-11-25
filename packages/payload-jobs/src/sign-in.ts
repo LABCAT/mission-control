@@ -292,12 +292,33 @@ const spend = async (payload: Payload, key: string, record: CodeRecord): Promise
  */
 const takeRecord = async (payload: Payload, key: string, record: CodeRecord): Promise<boolean> => {
   const atomic = atomicKV(payload)
-  const taken = atomic ? await atomic.take<CodeRecord>(key) : record
 
-  if (!atomic) await payload.kv.delete(key)
+  if (!atomic) {
+    warnNotAtomic(payload)
+    await payload.kv.delete(key)
+    await payload.kv.delete(`${TOKEN_PREFIX}${record.tokenHash}`)
+
+    return true
+  }
+
+  // Only the record that was checked: a re-request that replaced it in the meantime keeps its own.
+  const taken = await atomic.take<CodeRecord>(key, {
+    codeHash: record.codeHash,
+    tokenHash: record.tokenHash,
+  })
   if (taken) await payload.kv.delete(`${TOKEN_PREFIX}${record.tokenHash}`)
 
   return taken !== null
+}
+
+let warnedNotAtomic = false
+
+/** Said once per isolate: without the Postgres pool the guess cap is only correct one request at a time. */
+const warnNotAtomic = (payload: Payload): void => {
+  if (warnedNotAtomic) return
+
+  warnedNotAtomic = true
+  payload.logger.warn('account-auth: sign-in codes are not counted atomically (no Postgres pool)')
 }
 
 const verifyCode: Handler = async ({ options, req, tenant }) => {
@@ -351,13 +372,15 @@ const verifyCode: Handler = async ({ options, req, tenant }) => {
         Date.now(),
       )
 
-      if (guesses > SIGN_IN_MAX_GUESSES_PER_DAY) {
-        throw new AccountAuthError(ERRORS.tooManyRequests, { 'retry-after': '3600' })
-      }
+      // Over the budget answers exactly like an unknown address (400, same body, no header), so
+      // nobody can tell from it whether the address has an account.
+      if (guesses > SIGN_IN_MAX_GUESSES_PER_DAY) throw invalidCode
+    } else {
+      warnNotAtomic(req.payload)
     }
 
     const attempts = atomic
-      ? await atomic.claimAttempt(key, SIGN_IN_MAX_ATTEMPTS)
+      ? await atomic.claimAttempt(key, SIGN_IN_MAX_ATTEMPTS, record.codeHash)
       : record.attempts + 1 <= SIGN_IN_MAX_ATTEMPTS
         ? record.attempts + 1
         : null
