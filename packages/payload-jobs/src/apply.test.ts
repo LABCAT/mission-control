@@ -292,6 +292,23 @@ describe('apply endpoint', () => {
     expect(world.created).toEqual([])
   })
 
+  it('tells a visitor without JavaScript why the form was refused, not a blank failure @S-049', async () => {
+    const { call, world } = await harness()
+
+    const { body, response } = await call(goodForm({ 'cf-turnstile-response': null }))
+    expect(response.status).toBe(400)
+    expect(body.error.code).toBe('turnstile_failed')
+    expect(body.error.message).toBe('JavaScript is needed to send your application. Turn it on and try again.')
+    expect(world.created).toEqual([])
+  })
+
+  it('still takes an application with no token when Turnstile is off @S-049', async () => {
+    const { call, world } = await harness({ options: { turnstile: { enabled: false } } })
+
+    expect((await call(goodForm({ 'cf-turnstile-response': null }))).response.status).toBe(201)
+    expect(world.created.map((row) => row.collection)).toContain('applications')
+  })
+
   it('fails closed when no Turnstile secret is configured', async () => {
     const { call } = await harness({ options: { turnstile: { secret: () => undefined } } })
 

@@ -338,6 +338,7 @@ const ERRORS = {
   signInRequired: { code: 'sign_in_required', message: 'Sign in to apply for this job.', status: 401 },
   tooLarge: { code: 'payload_too_large', message: 'The application is too large. Files can be at most 10 MB each.', status: 413 },
   tooManyRequests: { code: 'too_many_requests', message: 'Too many attempts. Try again in a minute.', status: 429 },
+  turnstileMissing: { code: 'turnstile_failed', message: 'JavaScript is needed to send your application. Turn it on and try again.', status: 400 },
   turnstile: { code: 'turnstile_failed', message: 'The verification did not pass. Reload the page and try again.', status: 400 },
 } as const
 
@@ -437,7 +438,7 @@ export const applyEndpoint = (options: ApplyOptions = {}): Endpoint => {
           if (!secret) throw new AccountAuthError(ERRORS.notConfigured)
 
           const token = textField(form, TURNSTILE_TOKEN_FIELD)
-          if (!token) throw new AccountAuthError(ERRORS.turnstile)
+          if (!token) throw new AccountAuthError(ERRORS.turnstileMissing)
 
           const result = await turnstile.verify({ remoteIp: remoteIp(req), secret, token })
           if (!result.success) throw new AccountAuthError(ERRORS.turnstile)

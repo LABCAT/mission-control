@@ -807,7 +807,7 @@ stories:
     steps:
       - "Open the apply form on a live job."
       - "Attach a PDF CV, write a message and submit."
-    expected: "The form validates, passes Turnstile, accepts PDF/DOC/DOCX up to the limit, and confirms the application."
+    expected: "The form validates, passes Turnstile, accepts PDF/DOC/DOCX up to the limit, and confirms the application. Turnstile needs JavaScript: with it on, a visitor without JavaScript sees 'JavaScript is needed to send your application' and a submit with no token is refused with that message; with Turnstile off the form submits without JavaScript."
     settings:
       - jobs.applyOnline
       - jobs.applyCVRequired

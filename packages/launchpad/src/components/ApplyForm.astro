@@ -112,7 +112,7 @@ const errorFor = (field: string) => errors.find((error) => error.field === field
       {errorFor('consent') && <p class="lp-apply__error">{errorFor('consent')}</p>}
     </Field>
 
-    {turnstileSiteKey && <Turnstile action="apply" siteKey={turnstileSiteKey} />}
+    {turnstileSiteKey && <Turnstile action="apply" noscriptMessage="JavaScript is needed to send your application." siteKey={turnstileSiteKey} />}
 
     <Button type="submit" size="large">{labels.submit}</Button>
   </Stack>

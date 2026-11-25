@@ -703,6 +703,8 @@ describe('apply section and page @S-049 @S-050', () => {
     expect(html).toContain('Attach your CV.')
     expect(html).toContain('name="rp-website"')
     expect(html).toContain('cf-turnstile-response')
+    // Turnstile cannot run without JavaScript, so the form says so instead of failing silently.
+    expect(html).toMatch(/<noscript>[\s\S]*JavaScript is needed to send your application\.[\s\S]*<\/noscript>/)
     // The recipient is not known to the site, so it cannot be on the page.
     expect(html).not.toMatch(/recipient/i)
   })
