@@ -9,6 +9,7 @@
 import BaseLayout from './BaseLayout.astro'
 import JobDetail, { type Labels } from './JobDetail.astro'
 import type { JobDetailView } from '../jobs/detail'
+import { jobStructuredData } from '../seo/structured-data'
 import type { SiteTenant } from '../tenant/types'
 
 type Props = {
@@ -41,22 +42,29 @@ const {
 // The job's own tenant wins: its settings and branding are what the page applies.
 const tenant = passedTenant ?? view.tenant
 
-const description = view.detail.descriptionHtml
-  ?.replace(/<[^>]*>/g, ' ')
-  .replace(/\s+/g, ' ')
-  .trim()
-  .slice(0, 200)
+// The SEO tab's description wins; otherwise the first 200 characters of the job's own text.
+const description =
+  view.detail.seoDescription ??
+  view.detail.descriptionHtml
+    ?.replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 200)
+
+// The posting plus its trail (PJ-104). A closed job emits nothing, which is what `view.jsonLd`
+// already says by being absent.
+const jsonLd = jobStructuredData({ siteUrl, view })
 ---
 
 <BaseLayout
   description={description || `${view.detail.title} at ${view.detail.organisation.name}.`}
   image={image}
-  jsonLd={view.jsonLd}
-  noindex={view.expired}
+  jsonLd={jsonLd ?? undefined}
+  noindex={view.noindex}
   path={view.detail.url}
   siteUrl={siteUrl}
   tenant={tenant}
-  title={view.title}
+  title={view.detail.seoTitle ?? view.title}
 >
   <slot name="head" slot="head" />
   <JobDetail

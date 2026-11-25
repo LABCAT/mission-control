@@ -119,6 +119,43 @@ export const normalisePath = (pathname: string): string => {
   return collapsed === '' ? '/' : `/${collapsed.replace(/^\/+/, '')}`
 }
 
+/**
+ * The chain of pages from the site root to `page`, each with its path. Breadcrumbs and the
+ * `BreadcrumbList` structured data both read this, so the trail a visitor sees and the trail a
+ * crawler reads cannot disagree.
+ *
+ * A page whose chain is broken contributes what could be resolved; the page itself is always
+ * last, and a page with no usable address has no trail at all.
+ */
+export const pageTrail = (
+  page: ContentPage,
+  pages: readonly ContentPage[],
+): { name: string; page: ContentPage; path: string }[] => {
+  const byID = pageIndex(pages)
+  const chain: ContentPage[] = [page]
+  const seen = new Set<unknown>([String(page.id)])
+
+  let current = page
+  for (let depth = 0; depth < MAX_PAGE_DEPTH; depth += 1) {
+    if (current.role === 'home' || current.role === 'organisations') break
+
+    const parentID = pageID(current.parent)
+    if (parentID === null) break
+
+    const parent = byID.get(parentID)
+    if (!parent || seen.has(parentID)) break
+    seen.add(parentID)
+    chain.unshift(parent)
+    current = parent
+  }
+
+  return chain.flatMap((entry) => {
+    const path = pagePath(entry, pages)
+
+    return path ? [{ name: entry.title, page: entry, path }] : []
+  })
+}
+
 export type ContentRoute =
   | { kind: 'not-found' }
   | { kind: 'page'; page: ContentPage; path: string }

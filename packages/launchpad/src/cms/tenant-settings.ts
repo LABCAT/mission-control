@@ -22,6 +22,7 @@ export const tenantFromSettings = (
 
   return {
     ...fallback,
+    ...(settings.allowAiCrawlers === false ? { allowAiCrawlers: false } : {}),
     ...(settings.branding ? { branding: { ...fallback.branding, ...settings.branding } } : {}),
     ...(settings.currency ? { currency: settings.currency } : {}),
     ...(typeof settings.currencyMinorUnits === 'number'

@@ -1,0 +1,13 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`llmsTxt @S-348 > opens with the site name and a summary, then the key URLs 1`] = `
+"# Vanuatu Wok
+
+> Vanuatu Wok lists live jobs and the organisations that post them.
+
+## Start here
+
+- [Jobs](https://vanuatuwok.vu/jobs): every live job, with filters
+- [Organisations](https://vanuatuwok.vu/organisations): employers with a public page
+"
+`;

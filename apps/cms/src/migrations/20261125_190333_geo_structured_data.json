@@ -261,12 +261,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "removed_from_tenants": {
-          "name": "removed_from_tenants",
-          "type": "varchar",
-          "primaryKey": false,
-          "notNull": false
-        },
         "organisation_id": {
           "name": "organisation_id",
           "type": "integer",
@@ -4475,6 +4469,13 @@
           "notNull": false,
           "default": false
         },
+        "allow_ai_crawlers": {
+          "name": "allow_ai_crawlers",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": true
+        },
         "account_required_to_apply": {
           "name": "account_required_to_apply",
           "type": "boolean",
@@ -5962,6 +5963,31 @@
           "primaryKey": false,
           "notNull": false
         },
+        "seo_title": {
+          "name": "seo_title",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "seo_description": {
+          "name": "seo_description",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "seo_image_id": {
+          "name": "seo_image_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "seo_no_index": {
+          "name": "seo_no_index",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": false
+        },
         "legacy_id": {
           "name": "legacy_id",
           "type": "numeric",
@@ -6064,6 +6090,21 @@
           "columns": [
             {
               "expression": "location_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "organisations_seo_seo_image_idx": {
+          "name": "organisations_seo_seo_image_idx",
+          "columns": [
+            {
+              "expression": "seo_image_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -6187,6 +6228,19 @@
           "tableTo": "locations",
           "columnsFrom": [
             "location_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "organisations_seo_image_id_media_id_fk": {
+          "name": "organisations_seo_image_id_media_id_fk",
+          "tableFrom": "organisations",
+          "tableTo": "media",
+          "columnsFrom": [
+            "seo_image_id"
           ],
           "columnsTo": [
             "id"
@@ -14941,6 +14995,25 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": false
+        },
+        "seo_title": {
+          "name": "seo_title",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "seo_description": {
+          "name": "seo_description",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "seo_no_index": {
+          "name": "seo_no_index",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": false
         },
         "plan_id": {
           "name": "plan_id",
@@ -26199,6 +26272,6 @@
     "tables": {},
     "columns": {}
   },
-  "id": "ae5c4bb7-f250-425a-9485-053f1e6c1ca8",
+  "id": "f6b6c280-2514-4af0-bd21-cafa0128da29",
   "prevId": "00000000-0000-0000-0000-000000000000"
 }
