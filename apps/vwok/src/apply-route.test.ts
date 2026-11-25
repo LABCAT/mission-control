@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { applyRoute, forwardApplication } from './apply-route'
+import { APPLY_BODY_MAX_BYTES, applyRoute, bodyTooLarge, forwardApplication } from './apply-route'
 
 const job = (overrides: Record<string, unknown> = {}) => ({
   applyOnline: true,
@@ -124,5 +124,30 @@ describe('forwardApplication (POST)', () => {
     const request = new Request('https://vanuatuwok.vu/jobs/welder/apply', { body: '{}', headers: { 'content-type': 'application/json' }, method: 'POST' })
 
     expect((await forwardApplication({ clientAddress: '1.1.1.1', env, jobId: 7, request })).kind).toBe('error')
+  })
+})
+
+describe('body size guard', () => {
+  const post = (headers: Record<string, string>) =>
+    new Request('https://vanuatuwok.vu/jobs/welder/apply', { body: 'x', headers, method: 'POST' })
+
+  it('allows a body up to the cap and refuses one over it, a missing length or a nonsense one @S-049', () => {
+    expect(bodyTooLarge(post({ 'content-length': String(APPLY_BODY_MAX_BYTES) }))).toBe(false)
+    expect(bodyTooLarge(post({ 'content-length': String(APPLY_BODY_MAX_BYTES + 1) }))).toBe(true)
+    expect(bodyTooLarge(post({}))).toBe(true)
+    expect(bodyTooLarge(post({ 'content-length': 'abc' }))).toBe(true)
+  })
+
+  it('parses the form once: a pre-parsed form is forwarded without reading the request body again', async () => {
+    const request = formRequest()
+    const form = await request.formData()
+    const spy = vi.spyOn(request, 'formData')
+    const fetcher = vi.fn(async () => Response.json({ ok: true }, { status: 201 }))
+
+    const outcome = await forwardApplication({ clientAddress: '1.1.1.1', env, fetcher: fetcher as never, form, jobId: 7, request })
+
+    expect(outcome).toEqual({ kind: 'sent' })
+    expect(spy).not.toHaveBeenCalled()
+    expect(((fetcher.mock.calls[0] as unknown[])[1] as RequestInit).body).toBe(form)
   })
 })

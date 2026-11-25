@@ -9,7 +9,7 @@ import { applyPath, signInPath, type ApplyFieldError } from '@mission-control/la
 import { isSameOriginPost } from '@mission-control/launchpad/view-as'
 
 import NotFoundPage from '../../../components/NotFoundPage.astro'
-import { applyRoute, forwardApplication } from '../../../apply-route'
+import { applyRoute, bodyTooLarge, forwardApplication } from '../../../apply-route'
 import { siteEnv } from '../../../env'
 import { cmsFromEnv } from '../../../site'
 
@@ -43,31 +43,40 @@ if (route.kind === 'closed') {
 if (request.method === 'POST' && route.kind !== 'not-found') {
   if (!isSameOriginPost(request)) return new Response('Forbidden', { status: 403 })
 
-  // Read what to keep on the form before the body goes to the CMS (files cannot be kept).
-  const kept = await request.clone().formData().catch(() => null)
-  const text = (name: string) => (typeof kept?.get(name) === 'string' ? (kept!.get(name) as string) : undefined)
-  values = { email: text('email'), message: text('message'), name: text('name'), phone: text('phone') }
+  // Refuse before reading anything: a body past the cap is never parsed, cloned or forwarded.
+  const parsed = bodyTooLarge(request) ? null : await request.formData().catch(() => null)
 
-  const outcome = await forwardApplication({
-    clientAddress: Astro.clientAddress,
-    env,
-    jobId: route.view.detail.id,
-    request,
-  })
-
-  if (outcome.kind === 'sent') {
-    state = 'sent'
-    values = {}
-  } else if (outcome.kind === 'sign-in') {
-    return Astro.redirect(signInPath(applyPath(slug)))
-  } else if (outcome.kind === 'closed') {
-    state = 'closed'
-    message = outcome.message
-  } else {
+  if (!parsed) {
     state = 'form'
-    message = outcome.message
-    if (outcome.kind === 'invalid') errors = outcome.errors
-    Astro.response.status = outcome.kind === 'rate-limited' ? 429 : outcome.kind === 'invalid' ? 400 : 502
+    message = 'The application is too large or could not be read. Files can be at most 10 MB each.'
+    Astro.response.status = 413
+  } else {
+    // One parse serves both: what to keep on the form (files cannot be kept) and the upstream body.
+    const text = (name: string) => (typeof parsed.get(name) === 'string' ? (parsed.get(name) as string) : undefined)
+    values = { email: text('email'), message: text('message'), name: text('name'), phone: text('phone') }
+
+    const outcome = await forwardApplication({
+      clientAddress: Astro.clientAddress,
+      env,
+      form: parsed,
+      jobId: route.view.detail.id,
+      request,
+    })
+
+    if (outcome.kind === 'sent') {
+      state = 'sent'
+      values = {}
+    } else if (outcome.kind === 'sign-in') {
+      return Astro.redirect(signInPath(applyPath(slug)))
+    } else if (outcome.kind === 'closed') {
+      state = 'closed'
+      message = outcome.message
+    } else {
+      state = 'form'
+      message = outcome.message
+      if (outcome.kind === 'invalid') errors = outcome.errors
+      Astro.response.status = outcome.kind === 'rate-limited' ? 429 : outcome.kind === 'invalid' ? 400 : 502
+    }
   }
 }
 ---

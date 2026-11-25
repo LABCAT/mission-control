@@ -13,6 +13,17 @@ import { SITE_COLLECTIONS } from './site'
  * The employer's address is resolved by the CMS and never reaches this site.
  */
 
+/** Two files at 10 MB each, plus the text fields and multipart overhead (matches the CMS cap). */
+export const APPLY_BODY_MAX_BYTES = 2 * 10 * 1024 * 1024 + 1024 * 1024
+
+/** True when the declared length is missing, not a number, or over the cap. Checked before the body is read. */
+export const bodyTooLarge = (request: Request): boolean => {
+  const declared = request.headers.get('content-length')?.trim()
+  if (!declared || !/^\d+$/.test(declared)) return true
+
+  return Number(declared) > APPLY_BODY_MAX_BYTES
+}
+
 export type ApplyRoute =
   | { kind: 'closed'; message: string; view: JobDetailView }
   | { kind: 'form'; view: JobDetailView }
@@ -69,12 +80,15 @@ export const forwardApplication = async ({
   clientAddress,
   env,
   fetcher = fetch,
+  form,
   jobId,
   request,
 }: {
   clientAddress: string
   env: { CMS_URL?: string; SITE_KEY?: string }
   fetcher?: typeof fetch
+  /** The form already parsed by the caller, so the body is read once. */
+  form?: FormData
   jobId: number | string
   request: Request
 }): Promise<ApplyOutcome> => {
@@ -84,7 +98,7 @@ export const forwardApplication = async ({
 
   let incoming: FormData
   try {
-    incoming = await request.formData()
+    incoming = form ?? (await request.formData())
   } catch {
     return GENERIC_ERROR
   }

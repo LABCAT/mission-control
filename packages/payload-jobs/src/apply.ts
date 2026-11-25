@@ -99,6 +99,17 @@ export type ApplyOptions = {
   usersSlug?: string
 }
 
+/** Two files at the 10 MB limit, plus a little for the text fields and multipart overhead. */
+export const APPLY_BODY_MAX_BYTES = 2 * APPLICATION_FILE_MAX_BYTES + 1024 * 1024
+
+/** True when the declared length is missing, not a number, or over the cap. Checked before reading. */
+export const bodyTooLarge = (req: Pick<Request, 'headers'>): boolean => {
+  const declared = req.headers.get('content-length')?.trim()
+  if (!declared || !/^\d+$/.test(declared)) return true
+
+  return Number(declared) > APPLY_BODY_MAX_BYTES
+}
+
 const DEFAULT_LINK_TTL_SECONDS = 7 * 24 * 60 * 60
 const MAX_NAME = 200
 const MAX_PHONE = 40
@@ -309,6 +320,7 @@ const ERRORS = {
     status: 409,
   },
   signInRequired: { code: 'sign_in_required', message: 'Sign in to apply for this job.', status: 401 },
+  tooLarge: { code: 'payload_too_large', message: 'The application is too large. Files can be at most 10 MB each.', status: 413 },
   tooManyRequests: { code: 'too_many_requests', message: 'Too many attempts. Try again in a minute.', status: 429 },
   turnstile: { code: 'turnstile_failed', message: 'The verification did not pass. Reload the page and try again.', status: 400 },
 } as const
@@ -336,8 +348,10 @@ const idOf = (value: unknown): null | number | string => {
   return value as number | string
 }
 
+// The site's proxy passes the visitor in `x-end-user-ip`; `cf-connecting-ip` is then the proxy's own
+// address. The header is only trusted together with a valid site key, which this endpoint requires.
 const remoteIp = (req: PayloadRequest): null | string =>
-  req.headers.get('cf-connecting-ip')?.trim() || req.headers.get('x-end-user-ip')?.trim() || null
+  req.headers.get('x-end-user-ip')?.trim() || req.headers.get('cf-connecting-ip')?.trim() || null
 
 const isLive = (job: JobDoc, now: Date): boolean =>
   job.status === 'published' && (!job.expiresAt || Date.parse(job.expiresAt) > now.getTime())
@@ -371,6 +385,10 @@ export const applyEndpoint = (options: ApplyOptions = {}): Endpoint => {
         if (!siteKey) throw new AccountAuthError(ERRORS.invalidSiteKey)
 
         const rateTenant = { id: siteKey.tenantID }
+        // Cheapest checks first: the per-IP limit and the size cap run before the body is read, so
+        // a flood of big bodies is cut off without being parsed.
+        await enforceRateLimit({ action: 'apply', options: { rateLimiter: options.rateLimiter }, req, tenant: rateTenant })
+        if (bodyTooLarge(req)) throw new AccountAuthError(ERRORS.tooLarge)
 
         const rawId = req.routeParams?.id
         if (typeof rawId !== 'string' && typeof rawId !== 'number') throw new AccountAuthError(ERRORS.notFound)
@@ -385,16 +403,18 @@ export const applyEndpoint = (options: ApplyOptions = {}): Endpoint => {
         // A bot that fills the trap gets the same answer as a person and nothing is stored.
         if (textField(form, FORM_HONEYPOT_FIELD)) return accountResponse({ ok: true }, 202)
 
-        // Limit per IP and per address (so rotating IPs does not get round it) before anything
-        // costs money: Turnstile verification, database reads and file writes.
+        // The address limit stops one person rotating IPs; it counts under its own action, so the
+        // IP counter above is not charged twice.
         const email = textField(form, 'email').toLowerCase()
-        await enforceRateLimit({
-          action: 'apply',
-          identifier: EMAIL.test(email) && email.length <= 254 ? email : null,
-          options: { rateLimiter: options.rateLimiter },
-          req,
-          tenant: rateTenant,
-        })
+        if (EMAIL.test(email) && email.length <= 254) {
+          await enforceRateLimit({
+            action: 'apply-email',
+            identifier: email,
+            options: { rateLimiter: options.rateLimiter },
+            req,
+            tenant: rateTenant,
+          })
+        }
 
         if (turnstile.enabled) {
           const secret = turnstile.secret?.()?.trim()

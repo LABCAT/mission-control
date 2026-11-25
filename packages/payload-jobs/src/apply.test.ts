@@ -132,7 +132,7 @@ const harness = async ({
     })
     const request = new Request('https://cms.example/api/jobs/7/apply', {
       body: form,
-      headers: { 'x-site-key': SITE_KEY, 'x-end-user-ip': '203.0.113.9', ...headers },
+      headers: { 'content-length': '5000', 'x-site-key': SITE_KEY, 'x-end-user-ip': '203.0.113.9', ...headers },
       method: 'POST',
     })
     const req = Object.assign(request, { payload, routeParams: { id }, user })
@@ -206,13 +206,13 @@ describe('signed file links', () => {
   const secret = 's3cret'
   const future = Math.floor(Date.now() / 1000) + 60
 
-  it('verifies a fresh signature @S-361', async () => {
+  it('verifies a fresh signature @S-366', async () => {
     const signature = await signFileLink({ expiresAt: future, fileId: 5, secret })
 
     expect(await verifyFileLink({ expiresAt: future, fileId: 5, secret, signature })).toBe(true)
   })
 
-  it('rejects another file, another expiry, another secret and an expired link @S-361', async () => {
+  it('rejects another file, another expiry, another secret and an expired link @S-366', async () => {
     const signature = await signFileLink({ expiresAt: future, fileId: 5, secret })
 
     expect(await verifyFileLink({ expiresAt: future, fileId: 6, secret, signature })).toBe(false)
@@ -321,7 +321,7 @@ describe('apply endpoint', () => {
     expect((await call(goodForm(), { headers: { 'x-site-key': 'wrong' } })).response.status).toBe(401)
   })
 
-  it("answers 404 for another tenant's job, as if it did not exist @S-360", async () => {
+  it("answers 404 for another tenant's job, as if it did not exist @S-365", async () => {
     const { call, world } = await harness({ job: { ...JOB, tenant: 2 } })
 
     expect((await call(goodForm())).response.status).toBe(404)
@@ -385,8 +385,55 @@ describe('apply endpoint', () => {
   })
 })
 
+describe('apply body size and abuse controls', () => {
+  it('refuses an oversized or unsized body with 413 before reading it or touching the database', async () => {
+    const { call, payload, world } = await harness()
+    const formData = vi.spyOn(Request.prototype, 'formData')
+
+    const big = await call(goodForm(), { headers: { 'content-length': String(21 * 1024 * 1024 + 1) } })
+    expect(big.response.status).toBe(413)
+    expect(big.body.error.code).toBe('payload_too_large')
+
+    const unsized = await call(goodForm(), { headers: { 'content-length': '' } })
+    expect(unsized.response.status).toBe(413)
+
+    const nonsense = await call(goodForm(), { headers: { 'content-length': 'abc' } })
+    expect(nonsense.response.status).toBe(413)
+
+    expect(formData).not.toHaveBeenCalled()
+    expect(world.created).toEqual([])
+    expect(payload.findByID).not.toHaveBeenCalled()
+    formData.mockRestore()
+  })
+
+  it('accepts a body at the cap', async () => {
+    const { call } = await harness()
+
+    expect((await call(goodForm(), { headers: { 'content-length': String(21 * 1024 * 1024) } })).response.status).toBe(201)
+  })
+
+  it('rate limits by IP before the body is read, so a flood of big bodies is cut off', async () => {
+    const { call } = await harness()
+    const formData = vi.spyOn(Request.prototype, 'formData')
+    for (let attempt = 0; attempt < 3; attempt += 1) await call(goodForm(), { headers: { 'content-length': '5000' } })
+    formData.mockClear()
+
+    expect((await call(goodForm())).response.status).toBe(429)
+    expect(formData).not.toHaveBeenCalled()
+    formData.mockRestore()
+  })
+
+  it('gives Turnstile the visitor address from x-end-user-ip, not the proxy egress address', async () => {
+    const verify = vi.fn(async () => ({ success: true }))
+    const { call } = await harness({ options: { turnstile: { secret: () => 'secret', verify } } })
+    await call(goodForm(), { headers: { 'cf-connecting-ip': '198.51.100.99', 'x-end-user-ip': '203.0.113.9' } })
+
+    expect(verify).toHaveBeenCalledWith(expect.objectContaining({ remoteIp: '203.0.113.9' }))
+  })
+})
+
 describe('apply emails', () => {
-  it('sends the application to the employer, a copy to the applicant and a copy to the admin @S-362', async () => {
+  it('sends the application to the employer, a copy to the applicant and a copy to the admin @S-367', async () => {
     const { call, sent } = await harness()
     await call(goodForm({ coverLetter: file('letter.pdf') }))
 
@@ -420,7 +467,7 @@ describe('apply emails', () => {
     expect(world.created).toHaveLength(2)
   })
 
-  it('never reveals the recipient to the browser, and a failed email does not fail the application @S-362', async () => {
+  it('never reveals the recipient to the browser, and a failed email does not fail the application @S-367', async () => {
     const { call, payload, sendEmail } = await harness()
     sendEmail.mockRejectedValue(new Error('smtp down hr@employer.example'))
     const { body, response } = await call(goodForm())
@@ -455,7 +502,7 @@ describe('application file download', () => {
     return { handler, response }
   }
 
-  it('serves the file for a valid signed link, uncached and as an attachment @S-361', async () => {
+  it('serves the file for a valid signed link, uncached and as an attachment @S-366', async () => {
     const expiresAt = Math.floor(Date.now() / 1000) + 60
     const signature = await signFileLink({ expiresAt, fileId: 5, secret: 'test-secret' })
     const { handler, response } = await run({ expiresAt, signature })
@@ -467,7 +514,7 @@ describe('application file download', () => {
     expect(handler).toHaveBeenCalled()
   })
 
-  it('answers 404 for a forged, expired or other-file signature @S-361', async () => {
+  it('answers 404 for a forged, expired or other-file signature @S-366', async () => {
     const expiresAt = Math.floor(Date.now() / 1000) + 60
     const signature = await signFileLink({ expiresAt, fileId: 5, secret: 'test-secret' })
 

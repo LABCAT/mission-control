@@ -145,6 +145,22 @@ describe('BaseLayout', () => {
   })
 })
 
+describe('BaseLayout logo @S-362', () => {
+  it('draws the header logo at a capped size with its real shape, so it is neither stretched nor blurred', async () => {
+    const html = await container.renderToString(BaseLayout, {
+      props: {
+        tenant: {
+          ...tenant,
+          branding: { ...tenant.branding, logo: { alt: 'Vanuatu Wok', height: 86, url: '/logo.png', width: 400 } },
+        },
+        title: 'Home',
+      },
+    })
+
+    expect(html).toMatch(/<img[^>]*alt="Vanuatu Wok"[^>]*height="43"[^>]*src="\/logo.png"[^>]*width="200"/)
+  })
+})
+
 describe('JobCard', () => {
   it('shows the tenant currency and timezone', async () => {
     const html = await container.renderToString(JobCard, {
@@ -345,6 +361,24 @@ describe('JobsPage', () => {
       total: overrides.total ?? 2,
     })
 
+  it('titles each card with an h2 under the page h1, so the heading order has no gap @S-364', async () => {
+    const html = await container.renderToString(JobsPage, {
+      props: { path: '/jobs', tenant, title: 'Jobs in Vanuatu', view: listingView() },
+    })
+
+    expect(html).toMatch(/<h2[^>]*class="rs-card__title"/)
+    expect(html).not.toMatch(/<h3[^>]*class="rs-card__title"/)
+  })
+
+  it('lets the site add to the document head @S-361', async () => {
+    const html = await container.renderToString(JobsPage, {
+      props: { path: '/jobs', tenant, title: 'Jobs in Vanuatu', view: listingView() },
+      slots: { head: '<link rel="icon" href="/brand/icon-32.png">' },
+    })
+
+    expect(html).toContain('<link rel="icon" href="/brand/icon-32.png">')
+  })
+
   it('renders the heading, the summary, the cards and a GET filter form', async () => {
     const html = await container.renderToString(JobsPage, {
       props: { path: '/jobs', tenant, title: 'Jobs in Vanuatu', view: listingView() },
@@ -513,6 +547,22 @@ describe('JobDetailPage @S-280 @S-282 @S-285', () => {
       },
     })
   }
+
+  it('lets the site add to the document head, so the job page keeps the brand icons @S-361', async () => {
+    const detail = toJobDetail(doc, {})!
+    const view = jobDetailView({
+      detail,
+      settings: tenantJobPageSettings({}),
+      status: 'live',
+      tenant,
+    })
+    const html = await container.renderToString(JobDetailPage, {
+      props: { view },
+      slots: { head: '<link rel="icon" href="/brand/icon-32.png">' },
+    })
+
+    expect(html).toContain('<link rel="icon" href="/brand/icon-32.png">')
+  })
 
   it('is indexable, carries JobPosting and the share tags, and has an apply button when live', async () => {
     const html = await render('live')
