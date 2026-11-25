@@ -120,6 +120,7 @@ export type CmsClient = {
 
 /** The public settings the plugin's `GET /api/tenant-settings` returns (PJ-37). */
 export type CmsTenantSettings = {
+  accountRequiredToApply?: boolean
   /** The tenant's robots.txt switch for AI crawlers (PJ-104). Absent means allow. */
   allowAiCrawlers?: boolean
   branding?: { colorAccent?: null | string; colorHover?: null | string; colorPrimary?: null | string } | null

@@ -145,8 +145,15 @@ describe('job page state @S-282 @S-283', () => {
 })
 
 describe('tenant job page settings @S-288', () => {
+  it('reads the account-required-to-apply setting, off unless it is exactly true @S-050', () => {
+    expect(tenantJobPageSettings({ accountRequiredToApply: true }).accountRequiredToApply).toBe(true)
+    expect(tenantJobPageSettings({ accountRequiredToApply: false }).accountRequiredToApply).toBe(false)
+    expect(tenantJobPageSettings({ accountRequiredToApply: 'yes' as never }).accountRequiredToApply).toBe(false)
+  })
+
   it('defaults to the documented behaviour: notice, twelve months, no public views', () => {
     expect(tenantJobPageSettings(undefined)).toEqual({
+      accountRequiredToApply: false,
       expiredJobMode: 'notice',
       goneAfterMonths: 12,
       publicJobViews: false,
@@ -161,7 +168,7 @@ describe('tenant job page settings @S-288', () => {
         expiredJobMode: 'gone',
         publicJobViews: true,
       }),
-    ).toEqual({ expiredJobMode: 'gone', goneAfterMonths: 3, publicJobViews: true })
+    ).toEqual({ accountRequiredToApply: false, expiredJobMode: 'gone', goneAfterMonths: 3, publicJobViews: true })
 
     expect(tenantJobPageSettings({ expiredJobMode: 'hide' }).expiredJobMode).toBe('notice')
     expect(tenantJobPageSettings({ expiredJobGoneAfterMonths: -4 }).goneAfterMonths).toBe(12)

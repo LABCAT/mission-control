@@ -2217,7 +2217,7 @@ export interface EmailTemplate {
   /**
    * The email this text is for. The variables you can insert depend on it.
    */
-  event: 'job-submitted' | 'job-approved';
+  event: 'job-submitted' | 'job-approved' | 'application-received' | 'application-copy' | 'application-admin-copy';
   /**
    * Untick to stop sending this email on this site. Skipped sends are logged.
    */
@@ -4354,7 +4354,17 @@ export interface TaskXeroInvoiceSync {
 export interface Variable {
   id: string;
   blockType: 'variable';
-  key: 'firstName' | 'jobTitle';
+  key:
+    | 'firstName'
+    | 'jobTitle'
+    | 'applicantName'
+    | 'applicantEmail'
+    | 'applicantPhone'
+    | 'message'
+    | 'organisationName'
+    | 'cvLink'
+    | 'coverLetterLink'
+    | 'linksExpireAt';
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
