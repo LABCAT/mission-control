@@ -83,10 +83,33 @@ secrets (PJ-35).
 
 ## Lighthouse budget
 
-`lighthouserc.json` holds every category — performance, accessibility, best practices, SEO — at
-≥ 0.98, plus at most 50 KB of JavaScript. The site ships none: there is no island, and the theme's
-only island (`Turnstile`) appears on the forms PJ-45 and PJ-47 add.
+`lighthouserc.json` holds every category — performance, accessibility, best practices, SEO — at a
+perfect **1.0**, as a phone (Lighthouse's default mobile emulation), plus at most 50 KB of
+JavaScript. It audits the home page and a job page (`/jobs/head-chef`). The site ships no script
+beyond the job page's small view beacon.
 
-The audit runs three times against `astro preview`, which serves the build through the Cloudflare
-adapter, so it measures what the Worker serves. The CI job `Lighthouse (vwok)` runs the same thing
-and uploads the HTML report.
+The pages need content, and CI has no CMS, so `scripts/lighthouse-server.mjs` starts
+`scripts/lighthouse-cms.mjs` (a fixed-content stand-in for the REST API) next to `astro preview`
+and points the Worker at it through `dist/server/.dev.vars`. The audit therefore measures what the
+Worker serves for a real CMS page and a real job, not the static shell. Nothing from the fixture
+ships.
+
+`/jobs` is not mounted in this app yet. Until it is, `lighthouserc.listing.json` audits the same
+`JobsPage` components through the launchpad demo (`pnpm --filter @mission-control/vwok
+lighthouse:listing`), with the same thresholds. When the route lands, add its URL to
+`lighthouserc.json` and drop the second config.
+
+What the pass changed, and why the score holds:
+
+- **Critical CSS**: `build.inlineStylesheets: 'always'` puts the page's CSS in the HTML, so no
+  stylesheet blocks the first paint. Pages are cached at the edge, so the bytes are paid once.
+- **Header logo**: drawn at most 200 px wide with the file's own aspect ratio, so a phone gets a
+  sharp image (the file needs about 2x the pixels the box fills) and the box is reserved before it
+  loads (no layout shift). Upload a logo at least 400 px wide for a 200 px display.
+- **Favicons on every page**: the job page and the listing take a `head` slot, so the brand icons
+  load from the page instead of the browser asking for `/favicon.ico` and getting a 404.
+- **Heading order**: job cards directly under the listing's `h1` are `h2`s.
+- **Fonts**: the theme uses the system font stack, so there is no web font to subset or preload.
+  If a tenant adds one, self-host a subset `woff2` and preload it.
+- **Images**: content images carry their size and load lazily below the fold; the hero image is
+  eager with `fetchpriority="high"`. Originals only (variants are PJ-85).

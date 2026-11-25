@@ -62,18 +62,29 @@ export type SupportedTimezones =
   | 'Pacific/Fiji';
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "LexicalNodes_D823B46D".
+ * via the `definition` "LexicalNodes_FD1CD0FA".
  */
-export type LexicalNodes_D823B46D =
+export type LexicalNodes_FD1CD0FA =
   | SerializedTextNode
   | SerializedTabNode
   | SerializedLineBreakNode
-  | SerializedParagraphNode<LexicalNodes_D823B46D>
+  | SerializedParagraphNode<LexicalNodes_FD1CD0FA>
+  | SerializedAutoLinkNode<LexicalNodes_FD1CD0FA, LexicalLinkFields>
+  | SerializedLinkNode<LexicalNodes_FD1CD0FA, LexicalLinkFields>;
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "LexicalNodes_F1CAA341".
+ */
+export type LexicalNodes_F1CAA341 =
+  | SerializedTextNode
+  | SerializedTabNode
+  | SerializedLineBreakNode
+  | SerializedParagraphNode<LexicalNodes_F1CAA341>
   | SerializedHorizontalRuleNode
   | SerializedUploadNode<'media'>
   | SerializedUploadNode<'documents'>
   | SerializedUploadNode<'application-files'>
-  | SerializedQuoteNode<LexicalNodes_D823B46D>
+  | SerializedQuoteNode<LexicalNodes_F1CAA341>
   | SerializedRelationshipNode<
       | 'users'
       | 'folders'
@@ -95,6 +106,8 @@ export type LexicalNodes_D823B46D =
       | 'applications'
       | 'orders'
       | 'credit-ledger'
+      | 'email-templates'
+      | 'email-log'
       | 'audit-log'
       | 'alert-subscriptions'
       | 'xero-settings'
@@ -105,11 +118,26 @@ export type LexicalNodes_D823B46D =
       | 'payload-preferences'
       | 'payload-migrations'
     >
-  | SerializedAutoLinkNode<LexicalNodes_D823B46D, LexicalLinkFields>
-  | SerializedLinkNode<LexicalNodes_D823B46D, LexicalLinkFields>
-  | SerializedListNode<LexicalNodes_D823B46D>
-  | SerializedListItemNode<LexicalNodes_D823B46D>
-  | SerializedHeadingNode<LexicalNodes_D823B46D>;
+  | SerializedAutoLinkNode<LexicalNodes_F1CAA341, LexicalLinkFields>
+  | SerializedLinkNode<LexicalNodes_F1CAA341, LexicalLinkFields>
+  | SerializedListNode<LexicalNodes_F1CAA341>
+  | SerializedListItemNode<LexicalNodes_F1CAA341>
+  | SerializedHeadingNode<LexicalNodes_F1CAA341>;
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "LexicalNodes_C0EC2B4B".
+ */
+export type LexicalNodes_C0EC2B4B =
+  | SerializedTextNode
+  | SerializedTabNode
+  | SerializedLineBreakNode
+  | SerializedParagraphNode<LexicalNodes_C0EC2B4B>
+  | SerializedInlineBlockNode<Variable>
+  | SerializedListNode<LexicalNodes_C0EC2B4B>
+  | SerializedListItemNode<LexicalNodes_C0EC2B4B>
+  | SerializedAutoLinkNode<LexicalNodes_C0EC2B4B, LexicalLinkFields>
+  | SerializedLinkNode<LexicalNodes_C0EC2B4B, LexicalLinkFields>
+  | SerializedHeadingNode<LexicalNodes_C0EC2B4B, 'h1' | 'h2' | 'h3'>;
 /**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "LexicalNodes_3DE324E4".
@@ -163,6 +191,8 @@ export interface Config {
     applications: Application;
     orders: Order;
     'credit-ledger': CreditLedger;
+    'email-templates': EmailTemplate;
+    'email-log': EmailLog;
     'audit-log': AuditLog;
     'alert-subscriptions': AlertSubscription;
     'xero-settings': XeroSetting;
@@ -201,6 +231,8 @@ export interface Config {
     applications: ApplicationsSelect<false> | ApplicationsSelect<true>;
     orders: OrdersSelect<false> | OrdersSelect<true>;
     'credit-ledger': CreditLedgerSelect<false> | CreditLedgerSelect<true>;
+    'email-templates': EmailTemplatesSelect<false> | EmailTemplatesSelect<true>;
+    'email-log': EmailLogSelect<false> | EmailLogSelect<true>;
     'audit-log': AuditLogSelect<false> | AuditLogSelect<true>;
     'alert-subscriptions': AlertSubscriptionsSelect<false> | AlertSubscriptionsSelect<true>;
     'xero-settings': XeroSettingsSelect<false> | XeroSettingsSelect<true>;
@@ -240,6 +272,7 @@ export interface Config {
       heartbeat: TaskHeartbeat;
       'expire-job-placements': TaskExpireJobPlacements;
       'delete-expired-applications': TaskDeleteExpiredApplications;
+      'email-log-retention': TaskEmailLogRetention;
       'xero-invoice-sync': TaskXeroInvoiceSync;
       inline: {
         input: unknown;
@@ -579,6 +612,40 @@ export interface Tenant {
    */
   adminEmail?: string | null;
   /**
+   * How this site’s emails look.
+   */
+  emailBranding?: {
+    /**
+     * Address of the logo image (https). Shown at the top of every email.
+     */
+    logoUrl?: string | null;
+    /**
+     * Header band and link colour, e.g. #1f4e79. Empty uses the standard blue.
+     */
+    brandColour?: string | null;
+    /**
+     * Colour behind the email card, e.g. #f4f4f5.
+     */
+    backgroundColour?: string | null;
+    /**
+     * Shown at the bottom of every email: address, unsubscribe note and so on.
+     */
+    footer?: LexicalRichText<LexicalNodes_FD1CD0FA> | null;
+  };
+  /**
+   * The email log keeps no message text. Recipient addresses are masked, then rows deleted, by the nightly job.
+   */
+  emailLogRetention?: {
+    /**
+     * Days the recipient address stays readable, then j***@example.com. Default 90.
+     */
+    visibleDays?: number | null;
+    /**
+     * Months before a log row is deleted. Default 12.
+     */
+    deleteMonths?: number | null;
+  };
+  /**
    * How many days a form submission is kept before it is deleted. 0 sends the email and stores nothing.
    */
   formRetentionDays?: number | null;
@@ -874,7 +941,7 @@ export interface FeatureBoxesBlock {
  */
 export interface RichTextBlock {
   heading?: string | null;
-  content: LexicalRichText<LexicalNodes_D823B46D>;
+  content: LexicalRichText<LexicalNodes_F1CAA341>;
   id?: string | null;
   blockName?: string | null;
   blockType: 'rich-text';
@@ -929,7 +996,7 @@ export interface FaqBlock {
   heading?: string | null;
   items: {
     question: string;
-    answer: LexicalRichText<LexicalNodes_D823B46D>;
+    answer: LexicalRichText<LexicalNodes_F1CAA341>;
     id?: string | null;
   }[];
   id?: string | null;
@@ -989,7 +1056,7 @@ export interface Form {
   fields?: (Checkbox | Country | Email | Message | Number | Select | State | Text | Textarea)[] | null;
   submitButtonLabel?: string | null;
   confirmationType?: ('message' | 'redirect') | null;
-  confirmationMessage?: LexicalRichText<LexicalNodes_D823B46D>;
+  confirmationMessage?: LexicalRichText<LexicalNodes_F1CAA341>;
   redirect?: {
     url: string;
   };
@@ -1001,7 +1068,7 @@ export interface Form {
         replyTo?: string | null;
         emailFrom?: string | null;
         subject: string;
-        message?: LexicalRichText<LexicalNodes_D823B46D> | null;
+        message?: LexicalRichText<LexicalNodes_F1CAA341> | null;
         id?: string | null;
       }[]
     | null;
@@ -1061,7 +1128,7 @@ export interface Email {
  * via the `definition` "Message".
  */
 export interface Message {
-  message?: LexicalRichText<LexicalNodes_D823B46D> | null;
+  message?: LexicalRichText<LexicalNodes_F1CAA341> | null;
   id?: string | null;
   blockName?: string | null;
   blockType: 'message';
@@ -1712,7 +1779,7 @@ export interface Job {
   publishedAt?: string | null;
   expiresAt?: string | null;
   organisation: number | Organisation;
-  description?: LexicalRichText<LexicalNodes_D823B46D> | null;
+  description?: LexicalRichText<LexicalNodes_F1CAA341> | null;
   jobType?: (number | null) | JobType;
   categories?: (number | JobCategory)[] | null;
   salaryBand?: (number | null) | SalaryBand;
@@ -2139,6 +2206,84 @@ export interface CreditLedger {
   createdAt: string;
 }
 /**
+ * The text of each email this site sends.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "email-templates".
+ */
+export interface EmailTemplate {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  /**
+   * The email this text is for. The variables you can insert depend on it.
+   */
+  event: 'job-submitted' | 'job-approved';
+  /**
+   * Untick to stop sending this email on this site. Skipped sends are logged.
+   */
+  enabled?: boolean | null;
+  /**
+   * Plain text. Use “Insert variable” to add the person’s name, the job title and so on. Empty uses the standard subject.
+   */
+  subject?: string | null;
+  /**
+   * Empty uses the standard text. Variables show as chips; the site’s logo, colours and footer are added around it.
+   */
+  body?: LexicalRichText<LexicalNodes_C0EC2B4B> | null;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * Every email the site sent or skipped. Message text is never stored.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "email-log".
+ */
+export interface EmailLog {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  event: string;
+  /**
+   * Empty when the standard text was used.
+   */
+  template?: (number | null) | EmailTemplate;
+  linkedCollection?: string | null;
+  linkedID?: string | null;
+  recipient?: string | null;
+  /**
+   * Set by the nightly job once the visible period has passed.
+   */
+  recipientMasked?: boolean | null;
+  status: 'sent' | 'failed' | 'skipped';
+  /**
+   * Why it was skipped or failed.
+   */
+  reason?: string | null;
+  /**
+   * Sent to the test inbox instead of the recipient (non-production).
+   */
+  redirected?: boolean | null;
+  sentAt: string;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
  * Privileged actions: who did what, to whom, and when. Append only.
  *
  * This interface was referenced by `Config`'s JSON-Schema
@@ -2454,7 +2599,12 @@ export interface PayloadJob {
         executedAt: string;
         completedAt: string;
         taskSlug:
-          'inline' | 'heartbeat' | 'expire-job-placements' | 'delete-expired-applications' | 'xero-invoice-sync';
+          | 'inline'
+          | 'heartbeat'
+          | 'expire-job-placements'
+          | 'delete-expired-applications'
+          | 'email-log-retention'
+          | 'xero-invoice-sync';
         taskID: string;
         input:
           | {
@@ -2486,7 +2636,14 @@ export interface PayloadJob {
           | null;
         parent?: {
           taskSlug?:
-            | ('inline' | 'heartbeat' | 'expire-job-placements' | 'delete-expired-applications' | 'xero-invoice-sync')
+            | (
+                | 'inline'
+                | 'heartbeat'
+                | 'expire-job-placements'
+                | 'delete-expired-applications'
+                | 'email-log-retention'
+                | 'xero-invoice-sync'
+              )
             | null;
           taskID?: string | null;
         };
@@ -2494,7 +2651,15 @@ export interface PayloadJob {
       }[]
     | null;
   taskSlug?:
-    ('inline' | 'heartbeat' | 'expire-job-placements' | 'delete-expired-applications' | 'xero-invoice-sync') | null;
+    | (
+        | 'inline'
+        | 'heartbeat'
+        | 'expire-job-placements'
+        | 'delete-expired-applications'
+        | 'email-log-retention'
+        | 'xero-invoice-sync'
+      )
+    | null;
   queue?: string | null;
   waitUntil?: string | null;
   processingUntil?: string | null;
@@ -2604,6 +2769,14 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'credit-ledger';
         value: number | CreditLedger;
+      } | null)
+    | ({
+        relationTo: 'email-templates';
+        value: number | EmailTemplate;
+      } | null)
+    | ({
+        relationTo: 'email-log';
+        value: number | EmailLog;
       } | null)
     | ({
         relationTo: 'audit-log';
@@ -2987,6 +3160,20 @@ export interface TenantsSelect<T extends boolean = true> {
   emailFromName?: T;
   emailFromAddress?: T;
   adminEmail?: T;
+  emailBranding?:
+    | T
+    | {
+        logoUrl?: T;
+        brandColour?: T;
+        backgroundColour?: T;
+        footer?: T;
+      };
+  emailLogRetention?:
+    | T
+    | {
+        visibleDays?: T;
+        deleteMonths?: T;
+      };
   formRetentionDays?: T;
   addOns?: T;
   createdBy?: T;
@@ -3525,6 +3712,42 @@ export interface CreditLedgerSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "email-templates_select".
+ */
+export interface EmailTemplatesSelect<T extends boolean = true> {
+  tenant?: T;
+  event?: T;
+  enabled?: T;
+  subject?: T;
+  body?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "email-log_select".
+ */
+export interface EmailLogSelect<T extends boolean = true> {
+  tenant?: T;
+  event?: T;
+  template?: T;
+  linkedCollection?: T;
+  linkedID?: T;
+  recipient?: T;
+  recipientMasked?: T;
+  status?: T;
+  reason?: T;
+  redirected?: T;
+  sentAt?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "audit-log_select".
  */
 export interface AuditLogSelect<T extends boolean = true> {
@@ -3993,6 +4216,8 @@ export interface CollectionQueryWidget {
       | 'applications'
       | 'orders'
       | 'credit-ledger'
+      | 'email-templates'
+      | 'email-log'
       | 'audit-log'
       | 'alert-subscriptions'
       | 'xero-settings'
@@ -4045,6 +4270,8 @@ export interface ActivityWidget {
           | 'applications'
           | 'orders'
           | 'credit-ledger'
+          | 'email-templates'
+          | 'email-log'
           | 'audit-log'
           | 'alert-subscriptions'
           | 'xero-settings'
@@ -4098,6 +4325,17 @@ export interface TaskDeleteExpiredApplications {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "TaskEmail-log-retention".
+ */
+export interface TaskEmailLogRetention {
+  input?: unknown;
+  output: {
+    deleted?: number | null;
+    masked?: number | null;
+  };
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "TaskXero-invoice-sync".
  */
 export interface TaskXeroInvoiceSync {
@@ -4108,6 +4346,15 @@ export interface TaskXeroInvoiceSync {
     action?: string | null;
     error?: string | null;
   };
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "Variable".
+ */
+export interface Variable {
+  id: string;
+  blockType: 'variable';
+  key: 'firstName' | 'jobTitle';
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -4168,6 +4415,39 @@ export interface SerializedParagraphNode<TChildren> extends SerializedLexicalEle
   textStyle: string;
 }
 
+export interface LexicalLinkFields {
+  [k: string]: unknown;
+  doc?: {
+    relationTo: string;
+    value: Config['db']['defaultIDType'] | { [k: string]: unknown; id: Config['db']['defaultIDType'] };
+  } | null;
+  linkType: 'custom' | 'internal';
+  newTab: boolean;
+  url?: string;
+}
+export interface SerializedLinkNode<TChildren, TFields = LexicalLinkFields> extends SerializedLexicalElementBase<TChildren> {
+  type: 'link';
+  fields: TFields;
+  id?: string;
+}
+export interface SerializedAutoLinkNode<TChildren, TFields = LexicalLinkFields> extends SerializedLexicalElementBase<TChildren> {
+  type: 'autolink';
+  fields: TFields;
+}
+
+/** Shape of a Lexical `richText` field. */
+export interface LexicalRichText<TNode> {
+  root: {
+    children: TNode[];
+    direction: LexicalElementDirection;
+    format: LexicalElementFormat;
+    indent: number;
+    type: 'root';
+    /** @deprecated Ignored when loading. Typed as required only to match Lexical's types: rich text sent through the API, CLI or MCP may not contain it. */
+    version: number;
+  };
+}
+
 export interface SerializedHorizontalRuleNode {
   type: 'horizontalrule';
   /** @deprecated Ignored when loading. Typed as required only to match Lexical's types: rich text sent through the API, CLI or MCP may not contain it. */
@@ -4204,26 +4484,6 @@ export type SerializedRelationshipNode<TSlugs extends keyof Config['collections'
   };
 }[TSlugs];
 
-export interface LexicalLinkFields {
-  [k: string]: unknown;
-  doc?: {
-    relationTo: string;
-    value: Config['db']['defaultIDType'] | { [k: string]: unknown; id: Config['db']['defaultIDType'] };
-  } | null;
-  linkType: 'custom' | 'internal';
-  newTab: boolean;
-  url?: string;
-}
-export interface SerializedLinkNode<TChildren, TFields = LexicalLinkFields> extends SerializedLexicalElementBase<TChildren> {
-  type: 'link';
-  fields: TFields;
-  id?: string;
-}
-export interface SerializedAutoLinkNode<TChildren, TFields = LexicalLinkFields> extends SerializedLexicalElementBase<TChildren> {
-  type: 'autolink';
-  fields: TFields;
-}
-
 export interface SerializedListNode<TChildren> extends SerializedLexicalElementBase<TChildren> {
   type: 'list';
   checked?: boolean;
@@ -4246,18 +4506,19 @@ export interface SerializedHeadingNode<
   tag: TTag;
 }
 
-/** Shape of a Lexical `richText` field. */
-export interface LexicalRichText<TNode> {
-  root: {
-    children: TNode[];
-    direction: LexicalElementDirection;
-    format: LexicalElementFormat;
-    indent: number;
-    type: 'root';
-    /** @deprecated Ignored when loading. Typed as required only to match Lexical's types: rich text sent through the API, CLI or MCP may not contain it. */
-    version: number;
-  };
-}
+export type SerializedBlockNode<TFields extends { blockType: string }> = TFields extends unknown ? {
+  type: 'block';
+  format: LexicalElementFormat;
+  /** @deprecated Ignored when loading. Typed as required only to match Lexical's types: rich text sent through the API, CLI or MCP may not contain it. */
+  version: number;
+  fields: { id: string; blockName?: string | null } & Omit<TFields, 'id' | 'blockName'>;
+} : never;
+export type SerializedInlineBlockNode<TFields extends { blockType: string }> = TFields extends unknown ? {
+  type: 'inlineBlock';
+  /** @deprecated Ignored when loading. Typed as required only to match Lexical's types: rich text sent through the API, CLI or MCP may not contain it. */
+  version: number;
+  fields: { id: string } & Omit<TFields, 'id'>;
+} : never;
 
 
 declare module 'payload' {

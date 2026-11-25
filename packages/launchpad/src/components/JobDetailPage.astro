@@ -66,6 +66,7 @@ const jsonLd = jobStructuredData({ siteUrl, view })
   tenant={tenant}
   title={view.detail.seoTitle ?? view.title}
 >
+  <slot name="head" slot="head" />
   <JobDetail
     applyHref={applyHref}
     labels={labels}
