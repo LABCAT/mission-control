@@ -1,0 +1,21 @@
+---
+/** The outcome of an alert action, in words (PJ-47). Plain markup; no client JavaScript. */
+import Alert from '@labcat2020/rocketship/components/Alert'
+import Typography from '@labcat2020/rocketship/components/Typography'
+
+import type { AlertNotice } from '../alerts/views'
+
+type Props = {
+  notice: AlertNotice
+}
+
+const { notice } = Astro.props as Props
+---
+
+<Alert role={notice.kind === 'error' ? 'alert' : 'status'} variant={notice.kind}>
+  <Typography>
+    <h1>{notice.title}</h1>
+    <p>{notice.message}</p>
+    <slot />
+  </Typography>
+</Alert>

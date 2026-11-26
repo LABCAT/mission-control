@@ -1,0 +1,24 @@
+---
+/** `/alerts/manage` (PJ-47): ask for an emailed link to your alerts. */
+import AlertsView from '../../../components/AlertsView.astro'
+import { alertsChrome, alertsClientFromEnv, manageRequestPage } from '../../../alerts'
+import { siteEnv } from '../../../env'
+import { cmsFromEnv } from '../../../site'
+
+export const prerender = false
+
+const env = await siteEnv()
+const page = await manageRequestPage(alertsClientFromEnv(env), Astro.request, {
+  clientIp: Astro.clientAddress,
+})
+if (page.kind === 'redirect') return Astro.redirect(page.location)
+if (page.kind === 'one-click') return new Response(null, { status: page.status })
+const menus = await alertsChrome(cmsFromEnv(env))
+---
+
+<AlertsView
+  menus={menus}
+  page={page}
+  path={Astro.url.pathname}
+  turnstileSiteKey={env.PUBLIC_TURNSTILE_SITE_KEY}
+/>

@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { hashSiteKey } from '../../packages/payload-jobs/src/site-keys'
 import {
   buildSeedSql,
+  checkAlertEndpoints,
   checkSiteKeyReads,
   draftDoc,
   psqlEnv,
@@ -313,5 +314,54 @@ describe('seeded keys', () => {
     const digest = createHash('sha256').update(raw).digest('hex')
 
     expect(await hashSiteKey(raw)).toBe(digest)
+  })
+})
+
+describe('checkAlertEndpoints @S-373', () => {
+  const alerts = (overrides = {}) => ({
+    anonymous: { code: 'invalid_site_key', status: 401 },
+    badKey: { code: 'invalid_site_key', status: 401 },
+    bot: { code: undefined, status: 202 },
+    invalidLink: { code: 'invalid_token', status: 400 },
+    otherSite: { code: 'tenant_mismatch', status: 403 },
+    ...overrides,
+  })
+
+  it('passes when the alert endpoints answer as designed on the preview', () => {
+    expect(checkAlertEndpoints({ responses: alerts() }).failures).toEqual([])
+  })
+
+  it('fails on a server error, which is what a missing migration looks like', () => {
+    const { failures } = checkAlertEndpoints({
+      responses: alerts({ invalidLink: { code: 'server_error', status: 500 } }),
+    })
+
+    expect(failures).toEqual([expect.stringContaining('invalidLink: the preview answered HTTP 500')])
+  })
+
+  it('fails when a link that was never signed is accepted, or answered some other way', () => {
+    expect(
+      checkAlertEndpoints({ responses: alerts({ invalidLink: { code: undefined, status: 200 } }) }).failures,
+    ).toEqual([expect.stringContaining('invalidLink')])
+  })
+
+  it('fails when another site’s key works on this site', () => {
+    expect(
+      checkAlertEndpoints({ responses: alerts({ otherSite: { code: undefined, status: 200 } }) }).failures,
+    ).toEqual([expect.stringContaining('otherSite')])
+  })
+
+  it('fails when a missing or unknown key reaches the alerts', () => {
+    const { failures } = checkAlertEndpoints({
+      responses: alerts({ anonymous: { code: 'invalid_token', status: 400 }, badKey: { code: undefined, status: 200 } }),
+    })
+
+    expect(failures).toHaveLength(2)
+  })
+
+  it('fails when a bot is not answered quietly', () => {
+    expect(
+      checkAlertEndpoints({ responses: alerts({ bot: { code: 'turnstile_failed', status: 400 } }) }).failures,
+    ).toEqual([expect.stringContaining('bot')])
   })
 })

@@ -28,6 +28,8 @@ type Props = {
   clearHref?: string
   /** Keep the page out of the index whatever the filters say. */
   noindex?: boolean
+  /** "Get these jobs by email" (PJ-47): pass where the tenant has the alerts add-on on. */
+  alerts?: { action?: string; language?: string; turnstileSiteKey?: string }
   /** The trail from the home page, when the section nests under CMS pages. */
   trail?: Breadcrumb[]
 }
@@ -41,6 +43,7 @@ const {
   siteUrl,
   clearHref = '/jobs',
   noindex = false,
+  alerts,
   trail = [
     { name: 'Home', path: '/' },
     { name: title, path },
@@ -65,6 +68,6 @@ const jsonLd = listingStructuredData({ description, siteUrl, tenant, title, trai
 >
   <slot name="head" slot="head" />
   <Container size="wide">
-    <JobsListing clearHref={clearHref} description={description} timezone={tenant.timezone} title={title} view={view} />
+    <JobsListing alerts={alerts} clearHref={clearHref} description={description} timezone={tenant.timezone} title={title} view={view} />
   </Container>
 </BaseLayout>

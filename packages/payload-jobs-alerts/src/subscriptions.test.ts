@@ -1,16 +1,14 @@
-import type { AccessArgs, CollectionConfig, Config, Field, TextField } from 'payload'
+import type { AccessArgs, CollectionConfig, Config, Field } from 'payload'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   ALERT_READER_ROLES,
   ALERT_SUBSCRIPTIONS_SLUG,
-  ALERT_TOKEN_PATTERN,
   alertSubscriptionCollection,
-  generateAlertToken,
   normalizeAlertEmail,
   normalizeAlertKeywords,
   removeTenantAlertSubscriptions,
-  uniqueAlertEmailPerTenant,
+  uniqueAlertPerSearch,
 } from './subscriptions'
 import { alertsTenantCollections, payloadJobsAlerts } from './index'
 import {
@@ -71,6 +69,17 @@ describe('alert subscription collection config', () => {
     )
   })
 
+  it('schedules a daily purge of unconfirmed alerts, using the resolved slug @S-374', async () => {
+    const core = await payloadJobs()({ collections: [{ slug: 'users', fields: [] }], secret: 'test' } as never)
+    const config = payloadJobsAlerts({ slug: 'subscribers' })(core) as Config
+    const task = config.jobs?.tasks?.find((candidate) => candidate.slug === 'purge-unconfirmed-alerts')
+
+    expect(task).toBeDefined()
+    expect(task?.schedule).toEqual([{ cron: '0 45 3 * * *', queue: 'hourly' }])
+    // The core plugin's own tasks are kept.
+    expect((config.jobs?.tasks ?? []).length).toBeGreaterThan(1)
+  })
+
   it('honours a slug override and gates its access and writes by add-on', async () => {
     const core = await payloadJobs()({ collections: [{ slug: 'users', fields: [] }], secret: 'test' } as never)
     const config = payloadJobsAlerts({ slug: 'subscribers' })(core) as Config
@@ -103,9 +112,10 @@ describe('alert subscription collection config', () => {
   it('has the fields the task asks for, plus legacyId for the importer', () => {
     expect(collection.fields.map((field) => ('name' in field ? field.name : field.type))).toEqual([
       'email',
+      'frequency',
+      'active',
+      'filterKey',
       'confirmed',
-      'confirmToken',
-      'manageToken',
       'keywords',
       'categories',
       'types',
@@ -137,26 +147,25 @@ describe('alert subscription collection config', () => {
     expect(fieldNamed(collection, 'legacyId')).toMatchObject({ index: true, type: 'number' })
   })
 
-  it('never reads the tokens back over the API', () => {
-    for (const name of ['confirmToken', 'manageToken'] as const) {
-      expect(fieldNamed(collection, name)).toMatchObject({
-        index: true,
-        type: 'text',
-        unique: true,
-      })
-
-      const read = (fieldNamed(collection, name) as TextField).access?.read
-      expect(read?.({} as never)).toBe(false)
+  it('stores no token: the links are signed, so nothing secret sits in a row', () => {
+    for (const name of ['confirmToken', 'manageToken']) {
+      expect(collection.fields.some((field) => 'name' in field && field.name === name)).toBe(false)
     }
+
+    expect(fieldNamed(collection, 'frequency')).toMatchObject({ defaultValue: 'daily', type: 'select' })
+    expect(fieldNamed(collection, 'active')).toMatchObject({ defaultValue: true, type: 'checkbox' })
+    // One alert per address and search; a different search is a second alert.
+    expect(collection.indexes).toEqual([{ fields: ['tenant', 'email', 'filterKey'], unique: true }])
   })
 
-  it('is unique per tenant in multi-tenant mode, and per address when unscoped', () => {
-    expect(collection.indexes).toEqual([{ fields: ['tenant', 'email'], unique: true }])
-    expect(fieldNamed(collection, 'email')).toMatchObject({ unique: false })
+  it('is unique per search, address and tenant (per address and search when unscoped)', () => {
+    expect(collection.indexes).toEqual([{ fields: ['tenant', 'email', 'filterKey'], unique: true }])
+    // An address can hold several alerts, so the address alone is not unique any more.
+    expect(fieldNamed(collection, 'email')).toMatchObject({ index: true })
+    expect(fieldNamed(collection, 'email')).not.toMatchObject({ unique: true })
 
     const single = alertSubscriptionCollection({ tenantScoped: false })
-    expect(single.indexes).toEqual([])
-    expect(fieldNamed(single, 'email')).toMatchObject({ index: true, unique: true })
+    expect(single.indexes).toEqual([{ fields: ['email', 'filterKey'], unique: true }])
   })
 
   it('skips versions so Payload does not create _v tables', () => {
@@ -195,25 +204,6 @@ describe('alert subscription collection config', () => {
     expect(hooksWithoutAlerts).toContain(hostHook)
     // Pages, menus and orders keep their own cleanup; the only difference is the subscription hook.
     expect(hooks.length).toBe(hooksWithoutAlerts.length + 1)
-  })
-})
-
-describe('alert subscription tokens', () => {
-  it('mints 32-byte URL-safe tokens that pass the field validator', () => {
-    const token = generateAlertToken()
-
-    expect(token).toMatch(ALERT_TOKEN_PATTERN)
-    expect(new Set(Array.from({ length: 20 }, generateAlertToken)).size).toBe(20)
-  })
-
-  it('rejects a token that is not URL-safe base64 of the right length', () => {
-    const validate = (fieldNamed(alertSubscriptionCollection(), 'manageToken') as TextField)
-      .validate as (value: unknown) => string | true
-
-    expect(validate(undefined)).toBe(true)
-    expect(validate(generateAlertToken())).toBe(true)
-    expect(validate('short')).toMatch(/43 URL-safe/)
-    expect(validate('a'.repeat(43) + '!')).toMatch(/43 URL-safe/)
   })
 })
 
@@ -277,22 +267,29 @@ const requestWith = (docs: { id: number }[]) => {
   return { find, req: { payload: { find } } as never }
 }
 
-describe('unique address per tenant hook', () => {
-  const hook = uniqueAlertEmailPerTenant(true)
+describe('unique search per address and tenant hook', () => {
+  const hook = uniqueAlertPerSearch(true)
 
   it('looks the address up lowercased inside the tenant', async () => {
     const { find, req } = requestWith([])
 
     await expect(
-      hook({ data: { email: ' Seeker@Example.invalid ', tenant: 10 }, req } as never),
-    ).resolves.toEqual({ email: ' Seeker@Example.invalid ', tenant: 10 })
+      hook({
+        data: { email: ' Seeker@Example.invalid ', filterKey: 'q=nurse|c=|t=|l=', tenant: 10 },
+        req,
+      } as never),
+    ).resolves.toMatchObject({ tenant: 10 })
 
     expect(find).toHaveBeenCalledWith(
       expect.objectContaining({
         collection: ALERT_SUBSCRIPTIONS_SLUG,
         overrideAccess: true,
         where: {
-          and: [{ email: { equals: 'seeker@example.invalid' } }, { tenant: { equals: 10 } }],
+          and: [
+            { email: { equals: 'seeker@example.invalid' } },
+            { filterKey: { equals: 'q=nurse|c=|t=|l=' } },
+            { tenant: { equals: 10 } },
+          ],
         },
       }),
     )
@@ -302,14 +299,14 @@ describe('unique address per tenant hook', () => {
     const { req } = requestWith([{ id: 7 }])
 
     const error = await hook({
-      data: { email: 'seeker@example.invalid', tenant: 10 },
+      data: { email: 'seeker@example.invalid', filterKey: '', tenant: 10 },
       req,
     } as never).catch((thrown: unknown) => thrown)
 
     expect(error).toMatchObject({
       data: {
         errors: [
-          { message: 'seeker@example.invalid is already subscribed on this site', path: 'email' },
+          { message: 'This address already has an alert for this search', path: 'email' },
         ],
       },
     })
@@ -333,13 +330,17 @@ describe('unique address per tenant hook', () => {
   it('does not scope by tenant when the collection is not tenant-scoped', async () => {
     const { find, req } = requestWith([])
 
-    await uniqueAlertEmailPerTenant(false)({
-      data: { email: 'seeker@example.invalid' },
+    await uniqueAlertPerSearch(false)({
+      data: { email: 'seeker@example.invalid', filterKey: '' },
       req,
     } as never)
 
     expect(find).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { email: { equals: 'seeker@example.invalid' } } }),
+      expect.objectContaining({
+        where: {
+          and: [{ email: { equals: 'seeker@example.invalid' } }, { filterKey: { equals: '' } }],
+        },
+      }),
     )
   })
 })
@@ -408,44 +409,61 @@ describe('alert subscriptions integration @S-084', () => {
       ...options,
     })
 
-  it('mints tokens, stores the address lowercase and starts unconfirmed', async () => {
+  it('stores the address lowercase, starts unconfirmed, daily and active', async () => {
     const doc = (await subscribe(harness.tenantA.id, {
       email: '  Seeker@Example.INVALID ',
       keywords: '  nurse   pacific ',
     })) as Record<string, unknown>
 
     expect(doc).toMatchObject({
+      active: true,
       confirmed: false,
       email: 'seeker@example.invalid',
+      filterKey: 'q=nurse pacific|c=|t=|l=',
+      frequency: 'daily',
       keywords: 'nurse pacific',
     })
-    expect(doc.confirmToken).toMatch(ALERT_TOKEN_PATTERN)
-    expect(doc.manageToken).toMatch(ALERT_TOKEN_PATTERN)
-    expect(doc.confirmToken).not.toBe(doc.manageToken)
   })
 
-  it('keeps an imported token and confirmation, so the importer can bring subscribers over', async () => {
-    const token = generateAlertToken()
-    const doc = await subscribe(harness.tenantA.id, {
-      confirmed: true,
-      confirmToken: token,
-      legacyId: 4242,
-      manageToken: generateAlertToken(),
+  it('keeps an imported confirmation, so the importer can bring subscribers over', async () => {
+    const doc = await subscribe(harness.tenantA.id, { confirmed: true, legacyId: 4242 })
+
+    expect(doc).toMatchObject({ confirmed: true, legacyId: 4242 })
+  })
+
+  it('rejects the same search twice for one address in one tenant @S-085', async () => {
+    await subscribe(harness.tenantA.id, { email: 'seeker@example.invalid', keywords: 'Nurse' })
+
+    const error = await subscribe(harness.tenantA.id, {
+      email: 'SEEKER@example.invalid',
+      keywords: ' nurse ',
+    }).catch((thrown: unknown) => thrown)
+
+    expect(fieldMessages(error)).toBe('This address already has an alert for this search')
+  })
+
+  it('allows several alerts for one address when their searches differ @S-086', async () => {
+    await subscribe(harness.tenantA.id, { email: 'seeker@example.invalid', keywords: 'nurse' })
+    await subscribe(harness.tenantA.id, { email: 'seeker@example.invalid', keywords: 'driver' })
+    await expect(
+      subscribe(harness.tenantA.id, { email: 'seeker@example.invalid', frequency: 'weekly' }),
+    ).resolves.toMatchObject({ filterKey: '', frequency: 'weekly' })
+
+    const { totalDocs } = await harness.payload.count({
+      collection: ALERT_SUBSCRIPTIONS_SLUG,
+      overrideAccess: true,
+      where: { email: { equals: 'seeker@example.invalid' } },
     })
-
-    expect(doc).toMatchObject({ confirmed: true, confirmToken: token, legacyId: 4242 })
+    expect(totalDocs).toBe(3)
   })
 
-  it('rejects a second subscription for the same address in the same tenant', async () => {
-    await subscribe(harness.tenantA.id, { email: 'seeker@example.invalid' })
+  it('still rejects the same search twice when the writes race', async () => {
+    const results = await Promise.allSettled([
+      subscribe(harness.tenantA.id, { email: 'race@example.invalid', keywords: 'cook' }),
+      subscribe(harness.tenantA.id, { email: 'race@example.invalid', keywords: 'cook' }),
+    ])
 
-    const error = await subscribe(harness.tenantA.id, { email: 'SEEKER@example.invalid' }).catch(
-      (thrown: unknown) => thrown,
-    )
-
-    expect(fieldMessages(error)).toBe(
-      'seeker@example.invalid is already subscribed on this site',
-    )
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1)
   })
 
   it('allows the same address on two tenants', async () => {
@@ -525,7 +543,7 @@ describe('alert subscriptions integration @S-084', () => {
     }
   })
 
-  it('lets a super admin read every tenant but not see the tokens', async () => {
+  it('lets a super admin read every tenant', async () => {
     const a = await subscribe(harness.tenantA.id)
     const b = await subscribe(harness.tenantB.id)
 
@@ -537,18 +555,6 @@ describe('alert subscriptions integration @S-084', () => {
     expect(new Set(docs.map((doc) => String(doc.id)))).toEqual(
       new Set([String(a.id), String(b.id)]),
     )
-    for (const doc of docs) {
-      expect(doc).not.toHaveProperty('confirmToken')
-      expect(doc).not.toHaveProperty('manageToken')
-    }
-
-    // The token endpoints look a subscription up with overrideAccess, where the token is there.
-    const readBack = await harness.payload.findByID({
-      collection: ALERT_SUBSCRIPTIONS_SLUG,
-      id: a.id,
-      overrideAccess: true,
-    })
-    expect(readBack.confirmToken).toMatch(ALERT_TOKEN_PATTERN)
   })
 
   it('rejects API writes, even for a tenant admin or super admin', async () => {

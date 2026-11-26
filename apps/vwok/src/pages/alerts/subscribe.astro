@@ -1,0 +1,24 @@
+---
+/**
+ * `POST /alerts/subscribe` (PJ-47): the "Get these jobs by email" form posts here without
+ * JavaScript. The CMS does the work (double opt-in, duplicates, rate limits, Turnstile); this
+ * page forwards the form and says what happened. A GET goes back to the listing.
+ */
+import AlertsView from '../../components/AlertsView.astro'
+import { alertsChrome, alertsClientFromEnv, subscribePage } from '../../alerts'
+import { siteEnv } from '../../env'
+import { cmsFromEnv } from '../../site'
+
+export const prerender = false
+
+const env = await siteEnv()
+const page = await subscribePage(alertsClientFromEnv(env), Astro.request, {
+  clientIp: Astro.clientAddress,
+})
+
+if (page.kind === 'redirect') return Astro.redirect(page.location)
+if (page.kind === 'one-click') return new Response(null, { status: page.status })
+const menus = await alertsChrome(cmsFromEnv(env))
+---
+
+<AlertsView menus={menus} page={page} path={Astro.url.pathname} />

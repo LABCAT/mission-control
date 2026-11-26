@@ -1,0 +1,125 @@
+---
+/**
+ * "Get these jobs by email" (PJ-47). A plain POST form: the alert is exactly the filter the
+ * visitor is looking at, carried as hidden fields named like the listing's own query
+ * parameters. It works with JavaScript off; the Turnstile widget (the site's only script) is
+ * the one exception, and without it the server decides whether to accept the form.
+ */
+import Button from '@labcat2020/rocketship/components/Button'
+import Field from '@labcat2020/rocketship/components/Field'
+import Input from '@labcat2020/rocketship/components/Input'
+import Label from '@labcat2020/rocketship/components/Label'
+import Select from '@labcat2020/rocketship/components/Select'
+
+import { alertFilterFields } from '../alerts/forms'
+import ConsentLine from './ConsentLine.astro'
+import Turnstile from './Turnstile.astro'
+
+type Props = {
+  /** Where the form posts: the site's own `/alerts/subscribe` route. */
+  action?: string
+  /** What the alert will match, in words, e.g. `Hospitality in Efate`. */
+  summary?: string
+  /** The listing's current filters (`q`, `category`, `type`, `location`). */
+  filters?: Record<string, string>
+  heading?: string
+  submitLabel?: string
+  /** Public Turnstile site key. Without one the widget is left out. */
+  turnstileSiteKey?: string
+  language?: string
+  /** A second form on a page needs its own id prefix. */
+  id?: string
+  class?: string
+}
+
+const {
+  action = '/alerts/subscribe',
+  summary,
+  filters = {},
+  heading = 'Get these jobs by email',
+  submitLabel = 'Create alert',
+  turnstileSiteKey,
+  language,
+  id = 'alert',
+  class: className,
+} = Astro.props as Props
+
+const hidden = alertFilterFields(filters)
+---
+
+<section class:list={['lp-alert-signup', className]} aria-labelledby={`${id}-heading`}>
+  <h2 id={`${id}-heading`} class="lp-alert-signup__heading">{heading}</h2>
+  <p class="lp-alert-signup__summary">
+    {summary ? `New jobs for ${summary}, sent to your inbox.` : 'New jobs sent to your inbox.'}
+  </p>
+
+  <form action={action} method="post" class="lp-alert-signup__form">
+    {hidden.map((field) => <input type="hidden" name={field.name} value={field.value} />)}
+
+    <Field>
+      <Label for={`${id}-email`}>Email address</Label>
+      <Input
+        autocomplete="email"
+        id={`${id}-email`}
+        name="email"
+        placeholder="you@example.com"
+        required
+        type="email"
+      />
+    </Field>
+
+    <Field>
+      <Label for={`${id}-frequency`}>How often</Label>
+      <Select id={`${id}-frequency`} name="frequency">
+        <option value="daily" selected>Daily</option>
+        <option value="weekly">Weekly</option>
+      </Select>
+    </Field>
+
+    <!-- A bot trap: people never see it, so any value means a bot. -->
+    <div class="lp-alert-signup__trap" aria-hidden="true">
+      <label for={`${id}-website`}>Leave this empty</label>
+      <input id={`${id}-website`} name="alert_website" tabindex="-1" autocomplete="off" type="text" />
+    </div>
+
+    {
+      turnstileSiteKey && (
+        <Turnstile action="alert" id={`${id}-turnstile`} language={language} siteKey={turnstileSiteKey} />
+      )
+    }
+
+    <ConsentLine kind="alert" />
+    <Button type="submit">{submitLabel}</Button>
+  </form>
+</section>
+
+<style>
+  /* Composition only: the controls are Rocketship components, unchanged. */
+  .lp-alert-signup {
+    display: flex;
+    flex-direction: column;
+    gap: var(--rs-space-3);
+  }
+
+  .lp-alert-signup__heading,
+  .lp-alert-signup__summary {
+    margin: 0;
+  }
+
+  .lp-alert-signup__summary {
+    color: var(--rs-color-muted);
+  }
+
+  .lp-alert-signup__form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--rs-space-4);
+  }
+
+  .lp-alert-signup__trap {
+    block-size: 0;
+    inline-size: 0;
+    overflow: hidden;
+    position: absolute;
+  }
+</style>

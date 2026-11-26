@@ -8,8 +8,10 @@ import {
   type CollectionSlug,
   type Field,
   type PayloadRequest,
+  type Where,
 } from 'payload'
 
+import { alertFilterKey, KEYWORDS_MAX_LENGTH, normalizeAlertKeywords } from './filters'
 import {
   DEFAULT_PAYLOAD_JOBS_SLUGS,
   getUserTenantIDsByRole,
@@ -24,21 +26,18 @@ import {
  * Job alert subscriptions (PJ-26). Job seekers do not need an account: a subscription is an
  * email address plus filters, confirmed with a double opt-in.
  *
- * - `confirmToken` is emailed by the subscribe endpoint (PJ-47); the subscriber proves they own
- *   the address by following `/alerts/confirm/:token`. `manageToken` is the long-lived link to
- *   edit the filters or unsubscribe.
- * - Both tokens are bearer secrets: they are random, single purpose, and never returned by a
- *   read. The token endpoints look them up with `overrideAccess: true`, exactly as they set
- *   `confirmed` and `lastSentAt` (PJ-48's digest).
+ * - One row is one alert (a saved listing filter, PJ-47). An address can have several, each
+ *   daily or weekly; two rows of one address are duplicates exactly when their `filterKey`
+ *   matches. The subscriber proves they own the address by following a signed link (`tokens.ts`),
+ *   so no token is stored here.
  * - The collection is read-only in the admin for tenant staff: every change a subscriber makes
- *   goes through those token endpoints, not through the REST collection.
+ *   goes through the token endpoints, which write with `overrideAccess: true`, exactly as
+ *   `confirmed` and `lastSentAt` (PJ-48's digest) are set.
  */
 
 export const ALERT_SUBSCRIPTIONS_SLUG = 'alert-subscriptions'
 
-/** 32 random bytes, base64url: 43 URL-safe characters, enough for a link in an email. */
-export const ALERT_TOKEN_BYTES = 32
-export const ALERT_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/
+export { KEYWORDS_MAX_LENGTH, normalizeAlertKeywords }
 
 /** Roles that may read a tenant's subscribers in the admin, for support. */
 export const ALERT_READER_ROLES = ['tenant-admin'] as const
@@ -54,22 +53,8 @@ export const alertFilterFields = (slugs: PayloadJobsCollectionSlugs = DEFAULT_PA
 /** The filter fields with the plugin's default slugs; the collection binds resolved ones. */
 export const ALERT_FILTER_FIELDS = alertFilterFields()
 
-export const KEYWORDS_MAX_LENGTH = 200
-
-const toBase64Url = (bytes: Uint8Array): string => {
-  let binary = ''
-
-  for (const byte of bytes) binary += String.fromCharCode(byte)
-
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-}
-
-/** A fresh confirmation or manage token. */
-export const generateAlertToken = (): string =>
-  toBase64Url(crypto.getRandomValues(new Uint8Array(ALERT_TOKEN_BYTES)))
-
 /**
- * One subscription per address per tenant, so the address is stored lowercase and trimmed.
+ * Addresses are stored lowercase and trimmed, so comparisons are stable.
  * Payload's `email` field checks the format; this only makes comparisons stable.
  */
 export const normalizeAlertEmail = (value: unknown): null | string => {
@@ -77,14 +62,6 @@ export const normalizeAlertEmail = (value: unknown): null | string => {
   const email = value.trim().toLowerCase()
 
   return email === '' ? null : email
-}
-
-/** Keywords are one space-separated phrase; matching is case-insensitive in PJ-48. */
-export const normalizeAlertKeywords = (value: unknown): null | string => {
-  if (typeof value !== 'string') return null
-  const keywords = value.trim().replace(/\s+/g, ' ')
-
-  return keywords === '' ? null : keywords
 }
 
 const tenantIDOf = (tenant: unknown): null | number | string => {
@@ -138,36 +115,54 @@ export const normalizeAlertSubscription: CollectionBeforeValidateHook = ({ data 
   return next
 }
 
-/** Fill in the tokens on create; the import may pass its own, so an existing value wins. */
-export const generateAlertTokensOnCreate: CollectionBeforeValidateHook = ({ data, operation }) => {
-  if (operation !== 'create' || !data) return data
+/** Frequencies an alert can have; daily is the default and the old site's behaviour. */
+export const ALERT_FREQUENCIES = ['daily', 'weekly'] as const
+export type AlertFrequency = (typeof ALERT_FREQUENCIES)[number]
+
+/**
+ * The identity of the search, worked out here so nothing else can set it: the same filters give
+ * the same key however they were typed (see `alertFilterKey`).
+ */
+export const setAlertFilterKey: CollectionBeforeValidateHook = ({ data, originalDoc }) => {
+  if (!data) return data
+
+  const pick = (key: string) => (submits(data, key) ? data[key] : originalDoc?.[key])
 
   return {
     ...data,
-    confirmToken: data.confirmToken || generateAlertToken(),
-    manageToken: data.manageToken || generateAlertToken(),
+    filterKey: alertFilterKey({
+      categories: pick('categories'),
+      keywords: pick('keywords'),
+      locations: pick('locations'),
+      types: pick('types'),
+    }),
   }
 }
 
 /**
- * One subscription per address per tenant. The unique index still guards concurrent writes;
- * this turns the raw index error into a field error the endpoint can answer with.
+ * One alert per address, search and tenant. The unique index still guards concurrent writes;
+ * this turns the raw index error into a field error the endpoint can answer with. Other alerts
+ * of the same address are fine: that is what "several alerts per email" means.
  */
-export const uniqueAlertEmailPerTenant =
+export const uniqueAlertPerSearch =
   (
     tenantScoped: boolean,
     collectionSlug = ALERT_SUBSCRIPTIONS_SLUG,
   ): CollectionBeforeValidateHook =>
   async ({ data, originalDoc, req }) => {
-    const email = normalizeAlertEmail(data?.email)
-    if (!email) return data
+    const email = normalizeAlertEmail(submits(data, 'email') ? data?.email : originalDoc?.email)
+    if (!email || !data) return data
 
-    const tenantID = tenantIDOf(submits(data, 'tenant') ? data?.tenant : originalDoc?.tenant)
+    const tenantID = tenantIDOf(submits(data, 'tenant') ? data.tenant : originalDoc?.tenant)
     // A tenantless subscription is rejected in beforeChange; in single-tenant mode there is
     // no tenant field to scope by.
     if (tenantScoped && tenantID === null) return data
 
-    const matchesEmail = { email: { equals: email } }
+    const matches: Where[] = [
+      { email: { equals: email } },
+      { filterKey: { equals: data.filterKey ?? '' } },
+      ...(tenantScoped ? [{ tenant: { equals: tenantID } }] : []),
+    ]
     const { docs } = await req.payload.find({
       collection: collectionSlug as CollectionSlug,
       depth: 0,
@@ -175,18 +170,15 @@ export const uniqueAlertEmailPerTenant =
       overrideAccess: true,
       pagination: false,
       req,
-      where: tenantScoped
-        ? { and: [matchesEmail, { tenant: { equals: tenantID } }] }
-        : matchesEmail,
+      where: { and: matches },
     })
 
     const selfID = originalDoc?.id
     if (docs.some((doc) => selfID === undefined || String(doc.id) !== String(selfID))) {
       throw new ValidationError({
         collection: collectionSlug as CollectionSlug,
-        errors: [
-          { message: `${email} is already subscribed on this site`, path: 'email' },
-        ],
+        // No address in the message: it can end up in a log.
+        errors: [{ message: 'This address already has an alert for this search', path: 'email' }],
         req,
       })
     }
@@ -285,23 +277,43 @@ const filterField = (
   },
 })
 
-const validateToken = (value: unknown): string | true => {
-  if (value === null || value === undefined) return true
-  if (typeof value === 'string' && ALERT_TOKEN_PATTERN.test(value)) return true
-
-  return 'Tokens are 43 URL-safe characters; generate one with generateAlertToken'
-}
-
 const fields = (tenantScoped: boolean, slugs: PayloadJobsCollectionSlugs): Field[] => [
   {
     name: 'email',
     type: 'email',
     required: true,
-    // One address per tenant; the compound index covers the multi-tenant lookup instead.
-    index: !tenantScoped,
-    unique: !tenantScoped,
+    // An address can have several alerts; the compound index below keeps each search unique.
+    index: true,
     admin: {
       description: 'Stored lowercase. The subscriber confirms it before any alert is sent.',
+    },
+  },
+  {
+    name: 'frequency',
+    type: 'select',
+    defaultValue: 'daily',
+    required: true,
+    options: [
+      { label: 'Daily', value: 'daily' },
+      { label: 'Weekly', value: 'weekly' },
+    ],
+    admin: { description: 'How often the digest goes out. Daily is the old site’s behaviour.' },
+  },
+  {
+    name: 'active',
+    type: 'checkbox',
+    defaultValue: true,
+    index: true,
+    admin: { description: 'Untick, or the subscriber pauses it, to stop this alert’s emails.' },
+  },
+  {
+    name: 'filterKey',
+    type: 'text',
+    index: true,
+    admin: {
+      description: 'The search this alert saves, as a stable key. Set by the system.',
+      hidden: true,
+      readOnly: true,
     },
   },
   {
@@ -313,29 +325,6 @@ const fields = (tenantScoped: boolean, slugs: PayloadJobsCollectionSlugs): Field
       description:
         'Set when the subscriber follows the double opt-in link. Only confirmed subscribers get alerts.',
     },
-  },
-  {
-    name: 'confirmToken',
-    type: 'text',
-    index: true,
-    unique: true,
-    validate: validateToken,
-    access: {
-      // Bearer secret: read by the token endpoints with overrideAccess, never by a read.
-      read: () => false,
-    },
-    admin: { hidden: true },
-  },
-  {
-    name: 'manageToken',
-    type: 'text',
-    index: true,
-    unique: true,
-    validate: validateToken,
-    access: {
-      read: () => false,
-    },
-    admin: { hidden: true },
   },
   {
     name: 'keywords',
@@ -409,12 +398,13 @@ export const alertSubscriptionCollection = ({
     beforeChange: [alertSubscriptionTenantGuard(tenantScoped, slugs)],
     // Normalize before the uniqueness check, so it compares the form that will be stored.
     beforeValidate: [
-      generateAlertTokensOnCreate,
       normalizeAlertSubscription,
-      uniqueAlertEmailPerTenant(tenantScoped, slug),
+      setAlertFilterKey,
+      uniqueAlertPerSearch(tenantScoped, slug),
     ],
   },
-  // One subscription per address per tenant. Tokens are unique on their own columns.
-  indexes: tenantScoped ? [{ fields: ['tenant', 'email'], unique: true }] : [],
+  // One alert per address and search per tenant: the same search twice is a duplicate, a
+  // different one is a second alert.
+  indexes: [{ fields: tenantScoped ? ['tenant', 'email', 'filterKey'] : ['email', 'filterKey'], unique: true }],
   versions: false,
 })

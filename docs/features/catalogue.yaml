@@ -1439,11 +1439,11 @@ stories:
   - id: S-084
     area: Job alerts
     role: super admin
-    story: "An alert subscription is stored per tenant, unique per email, with secret confirm and unsubscribe tokens."
+    story: "An alert subscription is stored per tenant, unique per email and search, and carries no stored secret."
     steps:
-      - "Create a subscription twice for one email in one tenant and once in another tenant."
+      - "Create the same saved search twice for one email in one tenant, a different search for that email, and the same search in another tenant."
       - "Read the subscription over the API."
-    expected: "The duplicate is rejected, the other tenant is allowed, and tokens are never returned by the API."
+    expected: "The duplicate is rejected, the different search and the other tenant are allowed, and the links in emails are signed rather than stored."
     settings:
       - alerts.enabled
     mvp: true
@@ -1458,12 +1458,15 @@ stories:
     steps:
       - "Save a search with keywords, locations and types."
       - "Open the confirmation link."
-    expected: "The alert stays unconfirmed until the link is opened, and double opt-in follows the tenant setting."
+    expected: "The alert stays unconfirmed until the confirm button on the emailed link is pressed (merely opening the link, as a mail scanner does, changes nothing), and double opt-in follows the tenant setting."
     settings:
       - alerts.doubleOptIn
     mvp: true
-    status: planned
-    tests: []
+    status: built
+    tests:
+      - packages/payload-jobs-alerts/src/service.integration.test.ts
+      - packages/payload-jobs-alerts/src/endpoints.integration.test.ts
+      - apps/vwok/src/alerts.test.ts
 
   - id: S-086
     area: Job alerts
@@ -1476,8 +1479,11 @@ stories:
     settings:
       - alerts.multiple
     mvp: true
-    status: planned
-    tests: []
+    status: built
+    tests:
+      - packages/payload-jobs-alerts/src/service.integration.test.ts
+      - packages/payload-jobs-alerts/src/endpoints.integration.test.ts
+      - packages/launchpad/src/components/alerts-components.test.ts
 
   - id: S-087
     area: Job alerts
@@ -1485,12 +1491,15 @@ stories:
     story: "A subscriber unsubscribes from one alert with one click."
     steps:
       - "Open the unsubscribe link in an alert email."
-    expected: "Only that alert stops, the token is signed, and the page confirms without exposing other subscriber data."
+    expected: "Only that alert stops, the token is signed, and the page confirms without exposing other subscriber data. A mail client's own one-click POST works, and merely opening the link changes nothing."
     settings:
       - alerts.oneClickUnsubscribe
     mvp: true
-    status: planned
-    tests: []
+    status: built
+    tests:
+      - packages/payload-jobs-alerts/src/service.integration.test.ts
+      - packages/payload-jobs-alerts/src/tokens.test.ts
+      - apps/vwok/src/alerts.test.ts
 
   - id: S-088
     area: Job alerts
@@ -1518,6 +1527,99 @@ stories:
     mvp: true
     status: planned
     tests: []
+
+  - id: S-370
+    area: Job alerts
+    role: seeker
+    story: "Every link in an alert email is sealed for one purpose and one site."
+    steps:
+      - "Use a confirm link to unsubscribe, a link from one site on another, a link after it expired, and an edited link."
+    expected: "Each is refused with the same invalid-link answer. Confirm and manage links expire; an unsubscribe link never does, so the List-Unsubscribe header keeps working. A link does not show the subscriber's address."
+    settings: []
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs-alerts/src/tokens.test.ts
+      - packages/payload-jobs-alerts/src/service.integration.test.ts
+
+  - id: S-371
+    area: Job alerts
+    role: seeker
+    story: "An alert is the exact listing filter, stored once per address, and an address can hold several."
+    steps:
+      - "Subscribe twice to the same keywords, category and location typed differently, then to a different search."
+    expected: "The same search is one alert however it was typed; a different search is a second alert; another site's categories are refused as unknown."
+    settings:
+      - alerts.maxPerEmail
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs-alerts/src/filters.test.ts
+      - packages/payload-jobs-alerts/src/subscriptions.test.ts
+      - packages/payload-jobs-alerts/src/service.integration.test.ts
+
+  - id: S-372
+    area: Job alerts
+    role: seeker
+    story: "The alert form is protected from bots and from being used to mail-bomb an address."
+    steps:
+      - "Post the form with a filled honeypot, a bad or missing Turnstile token, a disposable address, and many times for one address from different IPs."
+    expected: "A bot is answered like a person and nothing is stored or sent; a failed check or a disposable address is refused before anything is written; a visitor and an address each have their own rate limit, answered with 429 and retry-after."
+    settings:
+      - security.turnstile
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs-alerts/src/endpoints.integration.test.ts
+      - packages/payload-jobs-alerts/src/filters.test.ts
+
+  - id: S-373
+    area: Job alerts
+    role: seeker
+    story: "'Get these jobs by email' is on the listing pages, and every alert page works without JavaScript."
+    steps:
+      - "Open a filtered listing with JavaScript off, press Create alert, open the emailed links."
+    expected: "The form carries the page's filters, shows the consent line, and posts as a plain form; confirm, manage and unsubscribe are server-rendered pages that are never cached or indexed."
+    settings: []
+    mvp: true
+    status: built
+    tests:
+      - packages/launchpad/src/components/alerts-components.test.ts
+      - packages/launchpad/src/alerts/alerts.test.ts
+      - apps/vwok/src/alerts.test.ts
+      - .github/scripts/site-key-smoke.test.ts
+
+  - id: S-374
+    area: Job alerts
+    role: site manager
+    story: "A site manager decides whether alerts need an account, whether they need confirming, and how many one address may hold."
+    steps:
+      - "Turn off 'allow alerts without account', turn off double opt-in, lower the maximum per email."
+    expected: "Without the first, only a signed-in member subscribes, using their own address; without the second, a new alert starts at once with no email; past the maximum of confirmed alerts a new search is not added but gets the same answer as any request, with a manage link emailed so the address can make room, and alerts nobody confirmed within the link's lifetime are deleted daily."
+    settings:
+      - alerts.allowWithoutAccount
+      - alerts.doubleOptIn
+      - alerts.maxPerEmail
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs-alerts/src/service.integration.test.ts
+      - packages/payload-jobs-alerts/src/endpoints.integration.test.ts
+      - apps/vwok/src/alerts.test.ts
+
+  - id: S-375
+    area: Job alerts
+    role: site manager
+    story: "The alert confirmation and manage-link emails are templates a site manager can edit, sent through the platform's email engine."
+    steps:
+      - "Open the email templates and find the two job alert emails."
+      - "Subscribe to an alert and read the confirmation email."
+    expected: "Both events are listed with their variables; the email uses the tenant's template and layout, goes to the subscriber, is logged without its text, and what a visitor typed into the search is escaped. A failed send is reported to the visitor; an email the tenant switched off is not an error."
+    settings: []
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs-alerts/src/email.test.ts
 
   - id: S-090
     area: Job alerts

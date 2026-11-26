@@ -10,7 +10,7 @@
 import type { SiteTenant } from '../tenant/types'
 
 /** Areas no crawler may enter: the CMS admin, the account dashboards and the private API. */
-export const PRIVATE_ROBOTS_PATHS: readonly string[] = ['/admin', '/account', '/api']
+export const PRIVATE_ROBOTS_PATHS: readonly string[] = ['/admin', '/account', '/alerts', '/api']
 
 /**
  * The crawlers the AI switch covers. Naming them explicitly is what makes the switch work:
