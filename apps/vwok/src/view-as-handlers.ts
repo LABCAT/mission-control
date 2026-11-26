@@ -3,13 +3,18 @@ import {
   endViewAs,
   isSameOriginPost,
   readCookie,
-  readMe,
   redeemViewAsCode,
   SESSION_COOKIE,
   VIEW_AS_LANDING_PATH,
   viewAsCookies,
   type ViewAsClient,
 } from '@mission-control/launchpad/view-as'
+import {
+  clearHintCookie,
+  clearSignInCookies,
+  readSession,
+  signInCookies,
+} from '@mission-control/launchpad/sign-in'
 
 import { siteTenant } from './brand'
 
@@ -84,22 +89,37 @@ export const handleViewAsExit = async (request: Request, env: ViewAsEnv): Promis
 }
 
 /**
- * `/api/me` for the banner: the name and whether this is a view. The email, role and ids stay on
- * the server. A token the CMS no longer accepts clears both cookies, so a stale hint corrects itself.
+ * `/api/me`: the name, whether this is a view, and the self-correction for both hints. Never
+ * cached. The email, role and ids stay on the server. A token the CMS no longer accepts clears the
+ * `impersonating` and `signed_in` hints (and the dead session cookie), so a stale hint corrects
+ * itself and the header goes back to "Sign in" (PJ-109). A "Keep me signed in" session the CMS
+ * rolled arrives as a new token, which replaces the cookie and renews the hint.
  */
 export const handleMe = async (request: Request, env: ViewAsEnv): Promise<Response> => {
   const client = clientFor(env)
   const token = readCookie(request.headers.get('cookie'), SESSION_COOKIE)
-  const unauthenticated = () =>
-    Response.json(
-      { error: 'not_authenticated' },
-      { headers: { ...NO_STORE, 'set-cookie': clearViewAsCookies({ secure: isSecure(request) })[1]! }, status: 401 },
-    )
+  const secure = isSecure(request)
+  const unauthenticated = () => {
+    const headers = new Headers(NO_STORE)
+    headers.append('set-cookie', clearViewAsCookies({ secure })[1]!)
+    headers.append('set-cookie', clearHintCookie({ secure }))
+    // A cookie the CMS refused is dead weight. No cookie at all needs nothing cleared.
+    if (token) headers.append('set-cookie', clearSignInCookies({ secure })[0]!)
+
+    return Response.json({ error: 'not_authenticated' }, { headers, status: 401 })
+  }
 
   if (!client || !token) return unauthenticated()
 
-  const me = await readMe(client, token)
+  const me = await readSession(client, token)
   if (me.status !== 200 || !me.user) return unauthenticated()
 
-  return Response.json({ user: me.user, viewAs: me.viewAs }, { headers: NO_STORE })
+  const headers = new Headers(NO_STORE)
+  if (me.renewed) {
+    for (const cookie of signInCookies({ expiresIn: me.renewed.expiresIn, secure, token: me.renewed.token })) {
+      headers.append('set-cookie', cookie)
+    }
+  }
+
+  return Response.json({ user: me.user, viewAs: me.viewAs }, { headers })
 }

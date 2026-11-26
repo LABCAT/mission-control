@@ -5,6 +5,7 @@ import Container from '@labcat2020/rocketship/components/Container'
 
 import SiteFooter from './SiteFooter.astro'
 import ViewAsBanner from './ViewAsBanner.astro'
+import { SIGNED_IN_SCRIPT } from '../sign-in'
 import type { MenuLink } from '../pages/menus'
 import { brandingStyleAttribute } from '../tenant/branding'
 import { resolveLocale } from '../tenant/locale'
@@ -129,6 +130,8 @@ const jsonLdText = jsonLd ? JSON.stringify(jsonLd).replace(/</g, '\\u003c') : un
         )
       }
     </footer>
+    {/* After the header, so the link it rewrites exists. Does nothing without the signed_in hint cookie (PJ-109). */}
+    <script is:inline set:html={SIGNED_IN_SCRIPT}></script>
   </body>
 </html>
 

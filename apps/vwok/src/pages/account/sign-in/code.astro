@@ -1,0 +1,77 @@
+---
+/**
+ * `/account/sign-in/code` (PJ-109): the second step. The same page whether or not the address
+ * has an account. The address comes from a short-lived HttpOnly cookie, never from the URL.
+ */
+import Button from '@labcat2020/rocketship/components/Button'
+import Container from '@labcat2020/rocketship/components/Container'
+import Field from '@labcat2020/rocketship/components/Field'
+import Input from '@labcat2020/rocketship/components/Input'
+import Label from '@labcat2020/rocketship/components/Label'
+import { safeReturnPath, SIGN_IN_EMAIL_COOKIE, SIGN_IN_PATH } from '@mission-control/launchpad/sign-in'
+
+import SiteLayout from '../../../layouts/SiteLayout.astro'
+import { siteTenant } from '../../../brand'
+
+export const prerender = false
+
+Astro.response.headers.set('cache-control', 'private, no-store')
+
+const returnTo = safeReturnPath(Astro.url.searchParams.get('returnTo'))
+const error = Astro.url.searchParams.get('error')
+const remembered = Astro.cookies.get(SIGN_IN_EMAIL_COOKIE)?.value
+const email = remembered ? decodeURIComponent(remembered) : ''
+const again = returnTo ? `${SIGN_IN_PATH}?returnTo=${encodeURIComponent(returnTo)}` : SIGN_IN_PATH
+---
+
+<SiteLayout noindex path="/account/sign-in/code" title={`Enter your code | ${siteTenant.name}`}>
+  <Container>
+    <h1>Check your email</h1>
+    <p>
+      If there is an account for that address, we have sent a 6-digit code and a sign-in link. They
+      work once and expire in 15 minutes. Open the link on this device, or type the code here.
+    </p>
+    <p>Nothing there? Check your spam folder.</p>
+    {
+      error && (
+        <p role="alert">
+          {error === 'rate_limited'
+            ? 'Too many attempts. Wait a minute and try again.'
+            : 'That code is not right, or it has expired. Check it, or ask for a new one.'}
+        </p>
+      )
+    }
+    <form action="/account/sign-in/submit" method="post">
+      {returnTo && <input type="hidden" name="returnTo" value={returnTo} />}
+      <Field>
+        <Label for="sign-in-code-email">Email address</Label>
+        <Input
+          autocomplete="email"
+          id="sign-in-code-email"
+          inputmode="email"
+          name="email"
+          required
+          type="email"
+          value={email}
+        />
+      </Field>
+      <Field>
+        <Label for="sign-in-code">6-digit code</Label>
+        <Input
+          autocomplete="one-time-code"
+          id="sign-in-code"
+          inputmode="numeric"
+          maxlength={7}
+          name="code"
+          pattern="[0-9 ]{6,7}"
+          required
+          type="text"
+        />
+      </Field>
+      <Button type="submit">Sign in</Button>
+    </form>
+    <p>
+      <a href={again}>Send a new code</a> (you can ask again after 30 seconds).
+    </p>
+  </Container>
+</SiteLayout>

@@ -565,6 +565,14 @@ export interface Tenant {
     trustOnApproval?: boolean | null;
   };
   /**
+   * Days a site sign-in lasts when "Keep me signed in" is not ticked.
+   */
+  sessionDefaultDays?: number | null;
+  /**
+   * Days a sign-in lasts when "Keep me signed in" is ticked. It renews each time the visitor comes back.
+   */
+  sessionKeepSignedInDays?: number | null;
+  /**
    * When a job pack’s credits become usable: once the order is paid (the old site’s rule), or as soon as it is invoiced.
    */
   packCreditsUsableAt?: ('on_payment' | 'on_invoice') | null;
@@ -3160,6 +3168,8 @@ export interface TenantsSelect<T extends boolean = true> {
         newEmployerGoLive?: T;
         trustOnApproval?: T;
       };
+  sessionDefaultDays?: T;
+  sessionKeepSignedInDays?: T;
   packCreditsUsableAt?: T;
   jobModeration?: T;
   retention?:

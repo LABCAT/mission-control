@@ -113,7 +113,8 @@ describe('PageView', () => {
     // Two inline scripts, neither fetched: the view-as banner's snippet (PJ-119), which renders
     // nothing unless the hint cookie is set, and the page's JSON-LD (PJ-104).
     const scripts = html.match(/<script[^>]*>/g) ?? []
-    expect(scripts).toHaveLength(2)
+    // Banner (PJ-119), signed-in link swap (PJ-109) and structured data (PJ-104): inline snippets, no file.
+    expect(scripts).toHaveLength(3)
     expect(scripts.every((script) => !script.includes('src='))).toBe(true)
     expect(scripts.filter((script) => script.includes('application/ld+json'))).toHaveLength(1)
   })
@@ -209,7 +210,8 @@ describe('organisation directory block (PJ-38)', () => {
     expect(html).not.toContain('type="module"')
     // Only inline scripts: the view-as snippet and the page's JSON-LD (PJ-104).
     const scripts = html.match(/<script[^>]*>/g) ?? []
-    expect(scripts).toHaveLength(2)
+    // Three inline snippets, no file: the view-as banner (PJ-119), the signed-in link swap (PJ-109) and the JSON-LD.
+    expect(scripts).toHaveLength(3)
     expect(scripts.every((script) => !script.includes('src='))).toBe(true)
   })
 

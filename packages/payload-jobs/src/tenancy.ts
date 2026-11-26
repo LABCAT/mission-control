@@ -8,6 +8,7 @@ import {
   MAX_FORM_RETENTION_DAYS,
 } from './forms'
 import { tenantLocationFields } from './location-settings'
+import { tenantSessionFields } from './account-sessions'
 import { tenantPublicationField } from './publication-settings'
 import { tenantEmailFields } from './email-engine/settings'
 import { tenantRetentionField } from './retention'
@@ -185,6 +186,8 @@ export const jobBoardTenantFields: Field[] = [
   // When a job goes live and whether it needs review (PJ-32). The rule itself is in
   // `publication.ts`; these are the per-tenant switches it reads.
   tenantPublicationField(showForSiteTenant),
+  // How long a site sign-in lasts, with and without "Keep me signed in" (PJ-109).
+  ...tenantSessionFields(showForSiteTenant),
   // When a pack's credits become usable: on payment (old site's rule) or on invoice (PJ-120).
   tenantPackCreditsField(showForSiteTenant),
   // What happens to a job after checkout (PJ-32 applies it with `decidePublication`).
