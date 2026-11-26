@@ -7,7 +7,9 @@ import type { EmailBranding } from './layout'
 import { renderLexical } from './lexical'
 import { maskEmail } from './log-policy'
 import { renderEmail } from './render'
+import { normaliseMessageId } from './deliverability'
 import { EMAIL_LOG_SLUG, type EmailLogStatus } from './log'
+import { isEmailSuppressed } from './suppressions'
 import { EMAIL_TEMPLATES_SLUG } from './templates'
 
 /**
@@ -40,6 +42,8 @@ export type EmailEngineContext = {
    */
   redirect?: () => Promise<RedirectConfig | undefined> | RedirectConfig | undefined
   settingsSlug: string
+  /** The suppression list (PJ-107). Without it nothing is suppressed. */
+  suppressionsSlug?: string
   templatesSlug: string
   tenancy: 'multi' | 'single'
   tenantsSlug: string
@@ -153,7 +157,7 @@ export const sendTemplateWith = async (
 
   const log = async (
     status: EmailLogStatus,
-    extra: { reason?: string; redirected?: boolean } = {},
+    extra: { messageId?: string; reason?: string; redirected?: boolean } = {},
   ): Promise<number | string> => {
     const row = (await ctx.payload.create({
       collection: ctx.logSlug as CollectionSlug,
@@ -162,6 +166,7 @@ export const sendTemplateWith = async (
         linkedCollection: options.linked?.collection,
         linkedID: options.linked ? String(options.linked.id) : undefined,
         recipient,
+        messageId: extra.messageId,
         reason: extra.reason,
         redirected: extra.redirected ?? false,
         sentAt: now.toISOString(),
@@ -181,6 +186,14 @@ export const sendTemplateWith = async (
   }
   if (!recipient) {
     return { logID: await log('skipped', { reason: 'no recipient' }), redirected: false, status: 'skipped' }
+  }
+
+  // PJ-107: an address that hard-bounced or complained is not emailed again by this tenant.
+  if (
+    ctx.suppressionsSlug &&
+    (await isEmailSuppressed({ address: recipient, payload: ctx.payload, slug: ctx.suppressionsSlug, tenantID: multi ? tenantID : null }))
+  ) {
+    return { logID: await log('skipped', { reason: 'suppressed' }), redirected: false, status: 'skipped' }
   }
 
   const from = tenant?.emailFromAddress
@@ -214,15 +227,18 @@ export const sendTemplateWith = async (
     message = { ...message, subject: `[${redirect.label ?? 'non-production'} → ${recipient}] ${message.subject}`, to: redirect.to }
   }
 
+  let messageId: string | undefined
   try {
-    await (ctx.sendEmail ?? ((outgoing) => ctx.payload.sendEmail(outgoing as never)))(message)
+    const sentResult = await (ctx.sendEmail ?? ((outgoing) => ctx.payload.sendEmail(outgoing as never)))(message)
+    const id = (sentResult as { messageId?: unknown } | null | undefined)?.messageId
+    if (typeof id === 'string' && id.trim()) messageId = normaliseMessageId(id)
   } catch (error) {
     const reason = safeReason(error)
 
     return { error: reason, logID: await log('failed', { reason, redirected }), redirected, status: 'failed' }
   }
 
-  return { logID: await log('sent', { redirected }), redirected, status: 'sent' }
+  return { logID: await log('sent', { messageId, redirected }), redirected, status: 'sent' }
 }
 
 /** What the plugin stores on `config.custom.payloadJobs.email`. */
@@ -231,6 +247,7 @@ export type EmailEngineConfig = {
   logSlug: string
   redirect?: EmailEngineContext['redirect']
   settingsSlug: string
+  suppressionsSlug?: string
   templatesSlug: string
   tenancy: 'multi' | 'single'
   tenantsSlug: string

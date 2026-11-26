@@ -4039,3 +4039,48 @@ stories:
     status: built
     tests:
       - packages/payload-jobs/src/email-engine/notifications.test.ts
+
+  - id: S-385
+    area: Emails
+    role: site manager
+    story: "Delivery events from Cloudflare Email Sending update the email log row for the message."
+    steps:
+      - "Send an email through Cloudflare Email Sending."
+      - "Cloudflare reports it delivered, deferred, bounced, failed, rejected or complained."
+    expected: "The email log row for that message (matched by the send id, with or without angle brackets) shows the new status. A row never moves back to an earlier state; events for unknown messages are retried then dropped."
+    settings:
+      - tenant.emailTransport
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/email-engine/deliverability.test.ts
+      - packages/payload-jobs/src/email-engine/deliverability.integration.test.ts
+
+  - id: S-386
+    area: Emails
+    role: site manager
+    story: "An address that hard-bounces or complains is suppressed for that site and not emailed again; soft bounces are only recorded."
+    steps:
+      - "Cloudflare reports a hard bounce or a complaint for an email."
+      - "The site sends the same address another email (an alert, for example)."
+    expected: "The address is on the site's suppression list and the new email is logged as skipped (suppressed). Other sites can still email the address. Site staff can delete the row to lift the block."
+    settings:
+      - tenant.emailTransport
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/email-engine/deliverability.integration.test.ts
+
+  - id: S-387
+    area: Emails
+    role: site manager
+    story: "A site manager filters the email log by status and sees sent, delivered, bounced and complaint numbers for the last 30 days."
+    steps:
+      - "Open Settings > Email log and filter by status."
+      - "Request the deliverability numbers."
+    expected: "The list filters by status. The numbers cover only the manager's own sites and the last 30 days."
+    settings: []
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/email-engine/deliverability.integration.test.ts

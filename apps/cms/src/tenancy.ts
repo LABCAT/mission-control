@@ -85,6 +85,8 @@ export const multiTenantOptionsFor = (
       // with a site key; seekers are denied.
       [slugs.emailTemplates]: { accessResultOverride: privateToTenant },
       [slugs.emailLog]: { accessResultOverride: privateToTenant },
+      // mission-control: the suppression list (PJ-107) is staff-only too.
+      [slugs.emailSuppressions]: { accessResultOverride: privateToTenant },
       // mission-control: Xero settings and invoice records are billing data: tenant admins and
       // super admins only (their own access), never a site key; seekers are denied (PJ-57).
       ...Object.fromEntries(xeroSlugs.map((slug) => [slug, { accessResultOverride: privateToTenant }])),

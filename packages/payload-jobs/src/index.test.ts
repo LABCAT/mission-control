@@ -60,6 +60,7 @@ describe('payloadJobs', () => {
       'credit-ledger',
       'email-templates',
       'email-log',
+      'email-suppressions',
     ])
     expect(result.collections?.[0]?.fields.map((f) => ('name' in f ? f.name : null))).toContain(
       'legacyPasswordHash',
@@ -377,6 +378,7 @@ const OVERRIDES = {
   coupons: { slug: 'vouchers' },
   creditLedger: { slug: 'credit-moves' },
   emailLog: { slug: 'mail-log' },
+  emailSuppressions: { slug: 'mail-blocks' },
   emailTemplates: { slug: 'mail-templates' },
   jobCategories: { slug: 'categories' },
   jobs: { slug: 'vacancies' },
@@ -433,6 +435,7 @@ describe('collection slug overrides', () => {
       'credit-moves',
       'mail-templates',
       'mail-log',
+      'mail-blocks',
     ])
 
     const targets = new Set(
@@ -491,6 +494,7 @@ describe('collection slug overrides', () => {
       'site-settings',
       'mail-templates',
       'mail-log',
+      'mail-blocks',
     ])
   })
 
