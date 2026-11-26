@@ -20,6 +20,7 @@ import { withViewAs } from './view-as'
 import { DASHBOARD_COMPONENT_PATH, type SiteManagerAdminOptions } from './admin'
 import { approveJobEndpoint, releaseJobsOnSettle } from './approval'
 import { accountCheckoutEndpoints, type PurchaseRightsCheck } from './checkout'
+import { jobActionEndpoints } from './job-actions'
 import type { LocationsOptions } from './collections/locations'
 import { locationsCollection, locationsTenantSlugIndex } from './collections/locations'
 import { ORGANISATION_DIRECTORY_BLOCK, organisationDirectoryBlock } from './blocks/organisation-directory'
@@ -122,6 +123,7 @@ export * from './collections/jobs'
 export * from './collections/applications'
 export * from './approval'
 export * from './job-log'
+export * from './job-actions'
 export * from './job-status'
 export { addLocalDays, endOfLocalDayAfter, validTimeZone } from './local-time'
 export * from './publication'
@@ -831,6 +833,7 @@ const jobBoardPlugin =
       endpoints: [
         ...(Array.isArray(baseJobs.endpoints) ? baseJobs.endpoints : []),
         approveJobEndpoint({ slugs, tenantScoped: tenancy === 'multi' }),
+        ...jobActionEndpoints({ slugs, tenantScoped: tenancy === 'multi', tenantsSlug }),
       ],
     }
     // Credits (PJ-24): a job cancelled before publishing gets its credit back, and documents the

@@ -30,6 +30,7 @@ import {
   datesForTransition,
   EMPLOYER_EDITABLE_STATUSES,
   isJobStatus,
+  JOB_END_EARLY_CONTEXT,
   JOB_STATUS_LABELS,
   JOB_STATUSES,
   JOB_SYSTEM_CONTEXT,
@@ -402,7 +403,9 @@ export const jobStatusRules =
         ? 'system'
         : jobActorFor(userOf(req), resultingTenantID(data, originalDoc), tenantScoped)
 
-    const problem = jobTransitionProblem(from, to, actor)
+    const isEndEarly =
+      req.context?.[JOB_END_EARLY_CONTEXT] === true && from === 'published' && to === 'expired' && actor === 'employer'
+    const problem = isEndEarly ? null : jobTransitionProblem(from, to, actor)
     if (problem) {
       throw new ValidationError({ collection: collection.slug, errors: [{ message: problem, path: 'status' }], req })
     }

@@ -719,17 +719,17 @@ stories:
   - id: S-043
     area: Job posting
     role: employer
-    story: "An employer relists an expired job, paying the relist price and choosing a new close date."
+    story: "An employer relists an expired job as a draft and receives its checkout URL."
     steps:
       - "Choose Relist on an expired job."
       - "Complete the plan and close date."
-    expected: "A new order is created at the relist price, the job goes through payment or approval again, and its post date resets."
+    expected: "The expired job stays in history, a draft duplicates its listing fields, and the endpoint returns the tenant checkout URL and the original plan id. Checkout and its price/payment flow are PJ-82/PJ-32."
     settings:
-      - jobs.relist
-      - jobs.closeDateMaxDays
+      - plan.price
     mvp: true
-    status: planned
-    tests: []
+    status: built
+    tests:
+      - packages/payload-jobs/src/checkout.integration.test.ts
 
   - id: S-044
     area: Job posting
@@ -742,8 +742,9 @@ stories:
     settings:
       - jobs.allowEndEarly
     mvp: true
-    status: planned
-    tests: []
+    status: built
+    tests:
+      - packages/payload-jobs/src/checkout.integration.test.ts
 
   - id: S-045
     area: Job posting
