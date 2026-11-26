@@ -1,6 +1,6 @@
 import type { CollectionConfig, CollectionSlug, Field, Payload } from 'payload'
 
-import { authenticatedAccess, isSeekerOnly } from '../access'
+import { tenantContentWriteAccess } from '../access'
 import { mergeCollectionAccess, type CollectionAccess } from '../slugs'
 
 export const EMAIL_SUPPRESSIONS_SLUG = 'email-suppressions'
@@ -18,8 +18,8 @@ export type EmailSuppressionsOptions = {
 export const normaliseAddress = (address: string): string => address.trim().toLowerCase()
 
 const readOnly = { admin: { readOnly: true } } as const
-const staff = (args: Parameters<typeof authenticatedAccess>[0]) =>
-  isSeekerOnly(args.req.user as never) ? false : authenticatedAccess(args)
+/** Site staff only: super admins and tenant admins/editors. Employers and seekers are denied. */
+const staff = tenantContentWriteAccess
 
 /**
  * The per-tenant suppression list (PJ-107): addresses that hard-bounced or complained. The
