@@ -47,7 +47,7 @@ const reqFor = (user: unknown, url: string, docs: unknown[] = [application], rou
 
 const JOB_URL = 'https://cms.example/api/applications/for-job/7'
 
-describe('canReadJobApplications @S-052', () => {
+describe('canReadJobApplications @S-386', () => {
   const can = (user: unknown) => canReadJobApplications({ job, tenantScoped: true, user: user as never })
 
   it('allows the job organisation, the tenant staff and super admins only', () => {
@@ -61,7 +61,7 @@ describe('canReadJobApplications @S-052', () => {
   })
 })
 
-describe('applications for a job @S-052', () => {
+describe('applications for a job @S-386', () => {
   it('lists them for a member of the job organisation, with signed expiring file links', async () => {
     const { req, find } = reqFor(employerA, JOB_URL)
     const response = await jobApplicationsEndpoint().handler(req as never)
@@ -113,7 +113,7 @@ describe('applications for a job @S-052', () => {
   })
 })
 
-describe('CSV @S-052', () => {
+describe('CSV @S-386', () => {
   it('defuses spreadsheet formulas and quotes commas and quotes', () => {
     expect(csvCell('=1+1')).toBe("'=1+1")
     expect(csvCell('@SUM(A1)')).toBe("'@SUM(A1)")

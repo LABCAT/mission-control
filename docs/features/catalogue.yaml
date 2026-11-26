@@ -864,10 +864,9 @@ stories:
     settings:
       - applications.dashboard
     mvp: true
-    status: built
+    status: planned
     tests:
       - packages/payload-jobs/src/collections/applications.test.ts
-      - packages/payload-jobs/src/application-endpoints.test.ts
 
   - id: S-053
     area: Applications
@@ -4151,6 +4150,22 @@ stories:
       - "Choose a start and end date."
       - "Download the CSV."
     expected: "Super admins get every tenant (or one chosen tenant); tenant admins and editors get only their own tenants; employers, seekers and anonymous callers are refused. The end date is included, and formulas in applicant text are defused."
+    settings:
+      - applications.fileLinkTtlSeconds
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/application-endpoints.test.ts
+
+  - id: S-386
+    area: Applications
+    role: employer
+    story: "The CMS serves an employer's applications for a job as a list and a CSV, with signed, expiring CV and cover-letter links (the dashboard screen is PJ-82, story S-052)."
+    steps:
+      - "Request the applications for one of the organisation's jobs."
+      - "Request the CSV."
+      - "Request another organisation's job."
+    expected: "Members of the job's organisation, its tenant's staff and super admins get the list and CSV with file links that expire; another organisation, another tenant, seekers and anonymous callers are refused. Formulas in applicant text are defused."
     settings:
       - applications.fileLinkTtlSeconds
     mvp: true
