@@ -1,5 +1,6 @@
 import handler from '@tanstack/react-start/server-entry'
 
+import { handleEmailEvents } from './jobs/emailEvents'
 import { runScheduled } from './jobs/runScheduled'
 
 export default {
@@ -16,17 +17,13 @@ export default {
     ctx.waitUntil(runScheduled(payload.jobs))
   },
 
-  // mission-control: Cloudflare Email Sending delivery events arrive here from the Queue
-  // (wrangler.jsonc `queues.consumers`). They update the email log and suppression list (PJ-107).
+  // mission-control: Cloudflare Email Sending delivery events arrive here from the Queue once the
+  // consumer is enabled in wrangler.jsonc (PJ-107). They update the email log and suppression list.
   async queue(batch) {
-    const [{ getPayload }, { default: config }, { consumeDeliveryEvents, emailEngineConfig }] = await Promise.all([
-      import('payload'),
-      import('./payload.config'),
-      import('@mission-control/payload-jobs'),
-    ])
-    const payload = await getPayload({ config })
-    const { logSlug, suppressionsSlug } = emailEngineConfig(payload)
-    if (!suppressionsSlug) throw new Error('email suppressions are not enabled')
-    await consumeDeliveryEvents({ logSlug, payload, suppressionsSlug }, batch.messages)
+    await handleEmailEvents(batch.messages, async () => {
+      const [{ getPayload }, { default: config }] = await Promise.all([import('payload'), import('./payload.config')])
+
+      return getPayload({ config })
+    })
   },
 } satisfies ExportedHandler<Env>

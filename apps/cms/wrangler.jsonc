@@ -30,14 +30,15 @@
   "send_email": [
     { "name": "EMAIL" }
   ],
-  // mission-control: delivery events for Cloudflare Email Sending (PJ-107). The queue must exist
-  // (`wrangler queues create mc-email-events`) and the sending domain's event subscription must
-  // point at it before this deploys.
-  "queues": {
-    "consumers": [
-      { "queue": "mc-email-events", "max_batch_size": 25, "max_batch_timeout": 5, "max_retries": 5 }
-    ]
-  },
+  // mission-control: delivery events for Cloudflare Email Sending (PJ-107). OFF until the queue
+  // exists: create the queue (`wrangler queues create mc-email-events`), point the sending
+  // domain's event subscription at it, then uncomment this block (see docs/migration/EMAIL-DELIVERABILITY.md).
+  // Without the binding the `queue()` handler in src/server.ts is simply never called.
+  // "queues": {
+  //   "consumers": [
+  //     { "queue": "mc-email-events", "max_batch_size": 25, "max_batch_timeout": 5, "max_retries": 5 }
+  //   ]
+  // },
   // mission-control: rate limit for the account auth endpoints (PJ-81): 10 requests per minute
   // per key. namespace_id only has to be unique within the Cloudflare account.
   "ratelimits": [
