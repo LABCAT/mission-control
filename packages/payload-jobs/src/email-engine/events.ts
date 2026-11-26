@@ -47,6 +47,8 @@ export type EmailTemplateEvent = {
   variables: EmailVariable[]
 }
 
+const str = (value: unknown): string => (typeof value === 'string' ? value : '')
+
 /** The events payload-jobs ships: the job, order and organisation emails (PJ-51). */
 export const BUILT_IN_EMAIL_EVENTS: EmailTemplateEvent[] = NOTIFICATION_EVENTS
 
