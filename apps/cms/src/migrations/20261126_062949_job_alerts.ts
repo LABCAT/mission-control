@@ -1,4 +1,29 @@
-import { MigrateUpArgs, MigrateDownArgs, sql } from '@payloadcms/db-postgres'
+import { type MigrateDownArgs, type MigrateUpArgs, sql } from '@payloadcms/db-postgres'
+
+type Executor = { execute: (query: ReturnType<typeof sql>) => Promise<unknown> }
+
+/**
+ * Give alerts saved before this migration the key the service computes (`alertFilterKey`), so a
+ * re-submitted search finds its existing row instead of storing a second copy. Same rules: keywords
+ * trimmed, whitespace collapsed and lower-cased; ids de-duplicated and sorted as text; no filters
+ * at all gives ''. The old unique index allowed one alert per address, so no two rows collide.
+ */
+export async function backfillAlertFilterKeys(db: Executor): Promise<void> {
+  await db.execute(sql`
+   UPDATE "alert_subscriptions" AS a SET "filter_key" = CASE
+     WHEN k.q = '' AND k.c = '' AND k.t = '' AND k.l = '' THEN ''
+     ELSE 'q=' || k.q || '|c=' || k.c || '|t=' || k.t || '|l=' || k.l
+   END
+   FROM (
+     SELECT s."id",
+       lower(btrim(regexp_replace(coalesce(s."keywords", ''), '[[:space:]]+', ' ', 'g'))) AS q,
+       coalesce((SELECT string_agg(DISTINCT (r."job_categories_id"::text COLLATE "C"), ',' ORDER BY (r."job_categories_id"::text COLLATE "C")) FROM "alert_subscriptions_rels" r WHERE r."parent_id" = s."id" AND r."path" = 'categories' AND r."job_categories_id" IS NOT NULL), '') AS c,
+       coalesce((SELECT string_agg(DISTINCT (r."job_types_id"::text COLLATE "C"), ',' ORDER BY (r."job_types_id"::text COLLATE "C")) FROM "alert_subscriptions_rels" r WHERE r."parent_id" = s."id" AND r."path" = 'types' AND r."job_types_id" IS NOT NULL), '') AS t,
+       coalesce((SELECT string_agg(DISTINCT (r."locations_id"::text COLLATE "C"), ',' ORDER BY (r."locations_id"::text COLLATE "C")) FROM "alert_subscriptions_rels" r WHERE r."parent_id" = s."id" AND r."path" = 'locations' AND r."locations_id" IS NOT NULL), '') AS l
+     FROM "alert_subscriptions" s
+   ) k
+   WHERE a."id" = k."id" AND a."filter_key" IS NULL`)
+}
 
 export async function up({ db, payload, req }: MigrateUpArgs): Promise<void> {
   await db.execute(sql`
@@ -16,8 +41,12 @@ export async function up({ db, payload, req }: MigrateUpArgs): Promise<void> {
   ALTER TABLE "tenants" ADD COLUMN "alerts_max_per_email" numeric DEFAULT 10;
   ALTER TABLE "alert_subscriptions" ADD COLUMN "frequency" "enum_alert_subscriptions_frequency" DEFAULT 'daily' NOT NULL;
   ALTER TABLE "alert_subscriptions" ADD COLUMN "active" boolean DEFAULT true;
-  ALTER TABLE "alert_subscriptions" ADD COLUMN "filter_key" varchar;
-  CREATE INDEX "alert_subscriptions_email_idx" ON "alert_subscriptions" USING btree ("email");
+  ALTER TABLE "alert_subscriptions" ADD COLUMN "filter_key" varchar;`)
+
+  await backfillAlertFilterKeys(db)
+
+  await db.execute(sql`
+   CREATE INDEX "alert_subscriptions_email_idx" ON "alert_subscriptions" USING btree ("email");
   CREATE INDEX "alert_subscriptions_active_idx" ON "alert_subscriptions" USING btree ("active");
   CREATE INDEX "alert_subscriptions_filter_key_idx" ON "alert_subscriptions" USING btree ("filter_key");
   CREATE UNIQUE INDEX "tenant_email_filterKey_idx" ON "alert_subscriptions" USING btree ("tenant_id","email","filter_key");
