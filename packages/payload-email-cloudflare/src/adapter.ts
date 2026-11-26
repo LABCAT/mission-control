@@ -128,14 +128,16 @@ export const cloudflareEmail =
 
       if (binding) {
         try {
-          await (binding as { send(m: unknown): Promise<unknown> }).send(mapToCloudflareMessage(message))
+          const result = await (binding as { send(m: unknown): Promise<unknown> }).send(mapToCloudflareMessage(message))
+          // PJ-107: hand the binding's message id back, so the email log can match delivery events.
+          const messageId = (result as { messageId?: unknown } | null | undefined)?.messageId
+          return typeof messageId === 'string' && messageId ? { messageId } : undefined
         } catch (error) {
           if (error instanceof EmailSendError) throw error
           // The binding's own message (e.g. unverified sending domain) is safe: it carries no secrets.
           const reason = error instanceof Error ? error.message : 'send failed'
           throw new EmailSendError('cloudflare', reason)
         }
-        return
       }
 
       if (options.resend) return useResend()

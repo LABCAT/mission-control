@@ -116,6 +116,15 @@ describe('cloudflareEmail adapter', () => {
     expect(info).toHaveBeenCalledOnce()
   })
 
+  it('returns the binding message id so the email log can match delivery events @S-387', async () => {
+    const send = vi.fn().mockResolvedValue({ messageId: '<abc@mail.example>' })
+    const adapter = cloudflareEmail({ binding: { send } })({ payload: payload().payload })
+
+    expect(await adapter.sendEmail({ from: 'a@x.test', to: 'b@x.test' })).toEqual({ messageId: '<abc@mail.example>' })
+    send.mockResolvedValue(undefined)
+    expect(await adapter.sendEmail({ from: 'a@x.test', to: 'b@x.test' })).toBeUndefined()
+  })
+
   it('sends through the binding, applying defaults only when from is missing', async () => {
     const send = vi.fn().mockResolvedValue({})
     const adapter = cloudflareEmail({

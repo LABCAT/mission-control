@@ -1,12 +1,25 @@
 import type { CollectionConfig, CollectionSlug, Field } from 'payload'
 
-import { authenticatedAccess, isSeekerOnly } from '../access'
+import { authenticatedAccess, isSeekerOnly, tenantContentWriteAccess } from '../access'
+import { deliverabilityStats } from './deliverability'
 import { mergeCollectionAccess, type CollectionAccess } from '../slugs'
 
 export const EMAIL_LOG_SLUG = 'email-log'
 
-/** `sent` means handed to the transport. PJ-107 adds delivery states (delivered, bounced). */
-export const EMAIL_LOG_STATUSES = ['sent', 'failed', 'skipped'] as const
+/**
+ * `sent` means handed to the transport. The rest after `skipped` come from the transport's
+ * delivery events (PJ-107) and only ever move a row forward (see `STATUS_RANK` in deliverability).
+ */
+export const EMAIL_LOG_STATUSES = [
+  'sent',
+  'failed',
+  'skipped',
+  'deferred',
+  'delivered',
+  'bounced',
+  'rejected',
+  'complained',
+] as const
 export type EmailLogStatus = (typeof EMAIL_LOG_STATUSES)[number]
 
 export type EmailLogOptions = {
@@ -48,6 +61,20 @@ export const emailLogCollection = ({
     useAsTitle: 'event',
   },
   defaultSort: '-sentAt',
+  // PJ-107: `GET /api/<log slug>/deliverability?days=30` for the admin numbers. The user's own
+  // read access decides which tenants' rows are counted.
+  endpoints: [
+    {
+      handler: async (req) => {
+        if (!tenantContentWriteAccess({ req } as never)) return Response.json({ error: 'Forbidden' }, { status: 403 })
+        const days = Math.min(Math.max(Number(req.searchParams.get('days')) || 30, 1), 365)
+
+        return Response.json(await deliverabilityStats({ days, logSlug: slug, payload: req.payload, req, tenantID: null }))
+      },
+      method: 'get',
+      path: '/deliverability',
+    },
+  ],
   fields: [
     { name: 'event', type: 'text', required: true, index: true, ...readOnly },
     {
@@ -74,6 +101,19 @@ export const emailLogCollection = ({
       options: EMAIL_LOG_STATUSES.map((value) => ({ label: value, value })),
       ...readOnly,
     },
+    {
+      name: 'messageId',
+      type: 'text',
+      index: true,
+      admin: { description: 'The transport’s id for the message (no angle brackets). Matches delivery events.', readOnly: true },
+    },
+    {
+      name: 'bounceType',
+      type: 'select',
+      options: ['hard', 'soft'].map((value) => ({ label: value, value })),
+      admin: { description: 'Set when the message bounced.', readOnly: true },
+    },
+    { name: 'statusAt', type: 'date', admin: { description: 'When the last delivery event arrived.', readOnly: true } },
     { name: 'reason', type: 'text', admin: { description: 'Why it was skipped or failed.', readOnly: true } },
     {
       name: 'redirected',

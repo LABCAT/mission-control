@@ -63,6 +63,7 @@ describe('locations collection @S-120', () => {
       'credit-ledger',
       'email-templates',
       'email-log',
+      'email-suppressions',
     ])
     expect(Locations.slug).toBe('locations')
     expect(Locations.versions).toBe(false)

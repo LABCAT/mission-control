@@ -73,18 +73,18 @@ export type LexicalNodes_FD1CD0FA =
   | SerializedLinkNode<LexicalNodes_FD1CD0FA, LexicalLinkFields>;
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "LexicalNodes_F1CAA341".
+ * via the `definition` "LexicalNodes_C085EA83".
  */
-export type LexicalNodes_F1CAA341 =
+export type LexicalNodes_C085EA83 =
   | SerializedTextNode
   | SerializedTabNode
   | SerializedLineBreakNode
-  | SerializedParagraphNode<LexicalNodes_F1CAA341>
+  | SerializedParagraphNode<LexicalNodes_C085EA83>
   | SerializedHorizontalRuleNode
   | SerializedUploadNode<'media'>
   | SerializedUploadNode<'documents'>
   | SerializedUploadNode<'application-files'>
-  | SerializedQuoteNode<LexicalNodes_F1CAA341>
+  | SerializedQuoteNode<LexicalNodes_C085EA83>
   | SerializedRelationshipNode<
       | 'users'
       | 'folders'
@@ -108,6 +108,7 @@ export type LexicalNodes_F1CAA341 =
       | 'credit-ledger'
       | 'email-templates'
       | 'email-log'
+      | 'email-suppressions'
       | 'audit-log'
       | 'alert-subscriptions'
       | 'xero-settings'
@@ -118,11 +119,11 @@ export type LexicalNodes_F1CAA341 =
       | 'payload-preferences'
       | 'payload-migrations'
     >
-  | SerializedAutoLinkNode<LexicalNodes_F1CAA341, LexicalLinkFields>
-  | SerializedLinkNode<LexicalNodes_F1CAA341, LexicalLinkFields>
-  | SerializedListNode<LexicalNodes_F1CAA341>
-  | SerializedListItemNode<LexicalNodes_F1CAA341>
-  | SerializedHeadingNode<LexicalNodes_F1CAA341>;
+  | SerializedAutoLinkNode<LexicalNodes_C085EA83, LexicalLinkFields>
+  | SerializedLinkNode<LexicalNodes_C085EA83, LexicalLinkFields>
+  | SerializedListNode<LexicalNodes_C085EA83>
+  | SerializedListItemNode<LexicalNodes_C085EA83>
+  | SerializedHeadingNode<LexicalNodes_C085EA83>;
 /**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "LexicalNodes_C0EC2B4B".
@@ -193,6 +194,7 @@ export interface Config {
     'credit-ledger': CreditLedger;
     'email-templates': EmailTemplate;
     'email-log': EmailLog;
+    'email-suppressions': EmailSuppression;
     'audit-log': AuditLog;
     'alert-subscriptions': AlertSubscription;
     'xero-settings': XeroSetting;
@@ -233,6 +235,7 @@ export interface Config {
     'credit-ledger': CreditLedgerSelect<false> | CreditLedgerSelect<true>;
     'email-templates': EmailTemplatesSelect<false> | EmailTemplatesSelect<true>;
     'email-log': EmailLogSelect<false> | EmailLogSelect<true>;
+    'email-suppressions': EmailSuppressionsSelect<false> | EmailSuppressionsSelect<true>;
     'audit-log': AuditLogSelect<false> | AuditLogSelect<true>;
     'alert-subscriptions': AlertSubscriptionsSelect<false> | AlertSubscriptionsSelect<true>;
     'xero-settings': XeroSettingsSelect<false> | XeroSettingsSelect<true>;
@@ -963,7 +966,7 @@ export interface FeatureBoxesBlock {
  */
 export interface RichTextBlock {
   heading?: string | null;
-  content: LexicalRichText<LexicalNodes_F1CAA341>;
+  content: LexicalRichText<LexicalNodes_C085EA83>;
   id?: string | null;
   blockName?: string | null;
   blockType: 'rich-text';
@@ -1018,7 +1021,7 @@ export interface FaqBlock {
   heading?: string | null;
   items: {
     question: string;
-    answer: LexicalRichText<LexicalNodes_F1CAA341>;
+    answer: LexicalRichText<LexicalNodes_C085EA83>;
     id?: string | null;
   }[];
   id?: string | null;
@@ -1078,7 +1081,7 @@ export interface Form {
   fields?: (Checkbox | Country | Email | Message | Number | Select | State | Text | Textarea)[] | null;
   submitButtonLabel?: string | null;
   confirmationType?: ('message' | 'redirect') | null;
-  confirmationMessage?: LexicalRichText<LexicalNodes_F1CAA341>;
+  confirmationMessage?: LexicalRichText<LexicalNodes_C085EA83>;
   redirect?: {
     url: string;
   };
@@ -1090,7 +1093,7 @@ export interface Form {
         replyTo?: string | null;
         emailFrom?: string | null;
         subject: string;
-        message?: LexicalRichText<LexicalNodes_F1CAA341> | null;
+        message?: LexicalRichText<LexicalNodes_C085EA83> | null;
         id?: string | null;
       }[]
     | null;
@@ -1150,7 +1153,7 @@ export interface Email {
  * via the `definition` "Message".
  */
 export interface Message {
-  message?: LexicalRichText<LexicalNodes_F1CAA341> | null;
+  message?: LexicalRichText<LexicalNodes_C085EA83> | null;
   id?: string | null;
   blockName?: string | null;
   blockType: 'message';
@@ -1801,7 +1804,7 @@ export interface Job {
   publishedAt?: string | null;
   expiresAt?: string | null;
   organisation: number | Organisation;
-  description?: LexicalRichText<LexicalNodes_F1CAA341> | null;
+  description?: LexicalRichText<LexicalNodes_C085EA83> | null;
   jobType?: (number | null) | JobType;
   categories?: (number | JobCategory)[] | null;
   salaryBand?: (number | null) | SalaryBand;
@@ -2300,7 +2303,19 @@ export interface EmailLog {
    * Set by the nightly job once the visible period has passed.
    */
   recipientMasked?: boolean | null;
-  status: 'sent' | 'failed' | 'skipped';
+  status: 'sent' | 'failed' | 'skipped' | 'deferred' | 'delivered' | 'bounced' | 'rejected' | 'complained';
+  /**
+   * The transport’s id for the message (no angle brackets). Matches delivery events.
+   */
+  messageId?: string | null;
+  /**
+   * Set when the message bounced.
+   */
+  bounceType?: ('hard' | 'soft') | null;
+  /**
+   * When the last delivery event arrived.
+   */
+  statusAt?: string | null;
   /**
    * Why it was skipped or failed.
    */
@@ -2310,6 +2325,29 @@ export interface EmailLog {
    */
   redirected?: boolean | null;
   sentAt: string;
+  createdBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedBy?: {
+    relationTo: 'users';
+    value: number | User;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * Addresses we no longer email because they bounced or complained. Delete a row to email the address again.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "email-suppressions".
+ */
+export interface EmailSuppression {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  address: string;
+  reason: 'bounce' | 'complaint';
+  suppressedAt: string;
   createdBy?: {
     relationTo: 'users';
     value: number | User;
@@ -2828,6 +2866,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'email-log';
         value: number | EmailLog;
+      } | null)
+    | ({
+        relationTo: 'email-suppressions';
+        value: number | EmailSuppression;
       } | null)
     | ({
         relationTo: 'audit-log';
@@ -3795,9 +3837,26 @@ export interface EmailLogSelect<T extends boolean = true> {
   recipient?: T;
   recipientMasked?: T;
   status?: T;
+  messageId?: T;
+  bounceType?: T;
+  statusAt?: T;
   reason?: T;
   redirected?: T;
   sentAt?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "email-suppressions_select".
+ */
+export interface EmailSuppressionsSelect<T extends boolean = true> {
+  tenant?: T;
+  address?: T;
+  reason?: T;
+  suppressedAt?: T;
   createdBy?: T;
   updatedBy?: T;
   updatedAt?: T;
@@ -4276,6 +4335,7 @@ export interface CollectionQueryWidget {
       | 'credit-ledger'
       | 'email-templates'
       | 'email-log'
+      | 'email-suppressions'
       | 'audit-log'
       | 'alert-subscriptions'
       | 'xero-settings'
@@ -4330,6 +4390,7 @@ export interface ActivityWidget {
           | 'credit-ledger'
           | 'email-templates'
           | 'email-log'
+          | 'email-suppressions'
           | 'audit-log'
           | 'alert-subscriptions'
           | 'xero-settings'

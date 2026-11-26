@@ -34,6 +34,7 @@ import {
   refuseDeleteWhileInCreditLedger,
 } from './credits'
 import { emailLogCollection } from './email-engine/log'
+import { emailSuppressionsCollection } from './email-engine/suppressions'
 import { jobNotificationHook, orderNotificationHook, organisationNotificationHook, type NotificationHookOptions } from './email-engine/notifications'
 import { emailLogRetentionTask } from './email-engine/log-jobs'
 import { createEmailEventRegistry, type EmailTemplateEvent } from './email-engine/events'
@@ -200,6 +201,7 @@ export const payloadJobsTenantCollections = (
   slugs.siteSettings,
   slugs.emailTemplates,
   slugs.emailLog,
+  slugs.emailSuppressions,
 ]
 
 /**
@@ -924,12 +926,18 @@ const jobBoardPlugin =
             templatesSlug: slugs.emailTemplates,
             tenantScoped: tenancy === 'multi',
           }),
+          emailSuppressionsCollection({
+            access: collectionOptions.emailSuppressions?.access,
+            slug: slugs.emailSuppressions,
+            tenantScoped: tenancy === 'multi',
+          }),
         ]
       : []
     const emailEngine: EmailEngineConfig | undefined = emailEnabled
       ? {
           events: emailEvents,
           logSlug: slugs.emailLog,
+          suppressionsSlug: slugs.emailSuppressions,
           redirect: emailOptions.redirect,
           settingsSlug,
           templatesSlug: slugs.emailTemplates,
