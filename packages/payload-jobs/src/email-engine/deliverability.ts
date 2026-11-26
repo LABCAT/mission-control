@@ -49,7 +49,9 @@ export const parseDeliveryEvent = (raw: unknown): DeliveryEvent | null => {
   const id = text(pick('messageId')) ?? text(pick('message_id'))
   if (!id) return null
 
-  const bounce = text(pick('bounceType')) ?? text(pick('bounce_type'))
+  const nestedBounce = pick('bounce')
+  const bounce =
+    (isRecord(nestedBounce) ? text(nestedBounce.type) : undefined) ?? text(pick('bounceType')) ?? text(pick('bounce_type'))
   const occurredAt = text(raw.timestamp) ?? text(raw.occurredAt) ?? text(pick('timestamp'))
 
   return {

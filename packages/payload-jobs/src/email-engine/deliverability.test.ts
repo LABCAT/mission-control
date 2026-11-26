@@ -18,6 +18,11 @@ describe('parseDeliveryEvent @S-385', () => {
     expect(parseDeliveryEvent(eventFor('delivered', 'a'))).not.toHaveProperty('bounceType')
   })
 
+  it('reads the bounce type from the nested payload.bounce.type', () => {
+    expect(parseDeliveryEvent(eventFor('bounced', 'a', { bounce: { type: 'soft' } }))).toMatchObject({ bounceType: 'soft' })
+    expect(parseDeliveryEvent(eventFor('bounced', 'a', { bounce: { type: 'hard' } }))).toMatchObject({ bounceType: 'hard' })
+  })
+
   it('accepts a bare kind and a top-level message id, and rejects what it cannot use', () => {
     expect(parseDeliveryEvent({ type: 'bounced', messageId: 'z' })).toMatchObject({ kind: 'bounced', messageId: 'z' })
     expect(parseDeliveryEvent(eventFor('opened', 'a'))).toBeNull()

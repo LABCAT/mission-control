@@ -106,7 +106,7 @@ describe.skipIf(!databaseUrl)('email deliverability @S-385 @S-386 @S-387', () =>
     await send(tenantA.id, 'later@example.com')
     await send(tenantA.id, 'angry@example.com')
 
-    expect((await apply('bounced', 'msg-1@mail.example', { bounceType: 'soft' })).suppressed).toBe(false)
+    expect((await apply('bounced', 'msg-1@mail.example', { bounce: { type: 'soft' } })).suppressed).toBe(false)
     expect((await apply('deferred', 'msg-2@mail.example')).suppressed).toBe(false)
     expect((await apply('complained', 'msg-3@mail.example')).suppressed).toBe(true)
 
