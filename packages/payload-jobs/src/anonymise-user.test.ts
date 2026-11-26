@@ -37,6 +37,7 @@ const userFields: Field[] = [
   { name: 'lastName', type: 'text' },
   { name: 'phone', type: 'text' },
   { name: 'legacyId', type: 'number' },
+  { name: 'removedFromTenants', type: 'text' },
 ]
 
 /** A stand-in for the alerts add-on's collection: an email and a tenant, nothing more. */
@@ -250,6 +251,7 @@ describe('personal data removal in Postgres @S-311', () => {
       firstName: 'Sera',
       lastName: 'Seeker',
       password: 'test-password',
+      legacyId: 4242,
       phone: '+678 555 1234',
       role: 'user',
       tenants: [{ role: 'seeker', tenant }],
@@ -319,6 +321,10 @@ describe('personal data removal in Postgres @S-311', () => {
     expect(user?.lastName ?? null).toBeNull()
     expect(user?.phone ?? null).toBeNull()
     expect(user?.tenants).toEqual([])
+    // The legacy id stays as a tombstone, with the sites the person belonged to, so a later import
+    // of one of those sites does not re-create them and an import of another site is not blocked (@S-331).
+    expect(user?.legacyId).toBe(4242)
+    expect(user?.removedFromTenants).toBe(String(harness.tenantA.id))
 
     expect(await count('applications', { email: { equals: emails.seeker } })).toBe(0)
     expect(await count(APPLICATION_FILES_SLUG, { id: { in: [ids.cv, ids.coverLetter, ids.guestCv] } })).toBe(0)
@@ -361,6 +367,8 @@ describe('personal data removal in Postgres @S-311', () => {
     expect(result.applicationsRemoved).toBe(0)
     expect(result.filesRemoved).toBe(0)
     expect(result.subscriptionsRemoved).toBe(0)
+    // The tombstone survives a second removal (the tenant list is not rebuilt from an empty row).
+    expect((await read('users', ids.seeker))?.removedFromTenants).toBe(String(harness.tenantA.id))
     expect((await read('users', ids.seeker))?.email).toBe(before?.email)
   })
 

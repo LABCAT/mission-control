@@ -11,12 +11,16 @@ export type ExpiredJobMode = (typeof EXPIRED_JOB_MODES)[number]
 export const DEFAULT_GONE_AFTER_MONTHS = 12
 
 export type TenantJobPageSource = {
+  /** Guests must sign in before applying (PJ-45). Off unless the tenant turns it on. */
+  accountRequiredToApply?: null | boolean
   expiredJobGoneAfterMonths?: null | number
   expiredJobMode?: null | string
   publicJobViews?: null | boolean
 }
 
 export type TenantJobPageSettings = {
+  /** Only signed-in accounts can apply. */
+  accountRequiredToApply: boolean
   /** `notice`: keep the page with a banner and noindex. `gone`: 410 as soon as it expires. */
   expiredJobMode: ExpiredJobMode
   /** Months after the expiry before the URL is 410 Gone. `null` keeps the notice for ever. */
@@ -37,6 +41,7 @@ export const tenantJobPageSettings = (
   const months = source?.expiredJobGoneAfterMonths
 
   return {
+    accountRequiredToApply: source?.accountRequiredToApply === true,
     expiredJobMode: (EXPIRED_JOB_MODES as readonly string[]).includes(mode ?? '')
       ? (mode as ExpiredJobMode)
       : 'notice',

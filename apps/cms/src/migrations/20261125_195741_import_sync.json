@@ -261,6 +261,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "removed_from_tenants": {
+          "name": "removed_from_tenants",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
         "organisation_id": {
           "name": "organisation_id",
           "type": "integer",
@@ -4423,20 +4429,6 @@
           "primaryKey": false,
           "notNull": false,
           "default": false
-        },
-        "session_default_days": {
-          "name": "session_default_days",
-          "type": "numeric",
-          "primaryKey": false,
-          "notNull": false,
-          "default": 1
-        },
-        "session_keep_signed_in_days": {
-          "name": "session_keep_signed_in_days",
-          "type": "numeric",
-          "primaryKey": false,
-          "notNull": false,
-          "default": 30
         },
         "pack_credits_usable_at": {
           "name": "pack_credits_usable_at",
@@ -26203,7 +26195,10 @@
       "schema": "public",
       "values": [
         "job-submitted",
-        "job-approved"
+        "job-approved",
+        "application-received",
+        "application-copy",
+        "application-admin-copy"
       ]
     },
     "public.enum_email_log_status": {
@@ -26286,6 +26281,6 @@
     "tables": {},
     "columns": {}
   },
-  "id": "a5f9b661-82a2-43a1-96c9-f615edb78bae",
+  "id": "1b939722-6776-4c86-a3f6-9686521fe886",
   "prevId": "00000000-0000-0000-0000-000000000000"
 }

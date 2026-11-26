@@ -1,9 +1,10 @@
 ---
 /**
  * The body of `/jobs/{slug}` (PJ-37): title, organisation card, facts, description, PDF, the
- * apply placeholder and, for a closed job, the notice and similar live jobs.
+ * apply section and, for a closed job, the notice and similar live jobs.
  *
- * The apply form belongs to PJ-45, so the apply section is a marked placeholder. Share images
+ * The apply section (PJ-45) is a button to the apply page, or the employer's own instructions when
+ * online applying is off. Share images
  * belong to PJ-105: the page passes `image` through to `BaseLayout` and generates nothing.
  */
 import Alert from '@labcat2020/rocketship/components/Alert'
@@ -14,6 +15,7 @@ import Grid from '@labcat2020/rocketship/components/Grid'
 import Stack from '@labcat2020/rocketship/components/Stack'
 import Typography from '@labcat2020/rocketship/components/Typography'
 
+import { signInPath } from '../jobs/apply'
 import { formatDate } from '../tenant/date'
 import type { JobDetailView } from '../jobs/detail'
 import type { SiteTenant } from '../tenant/types'
@@ -24,8 +26,10 @@ type Props = {
   tenant: SiteTenant
   /** Tenant locale for dates. Defaults to the tenant's default locale. */
   locale?: string
-  /** Where the apply form posts, once PJ-45 builds it. Only rendered as a placeholder today. */
+  /** The apply page (`/jobs/{slug}/apply`). */
   applyHref?: string
+  /** Where a guest signs in when the site requires an account; comes back to `applyHref`. */
+  signInHref?: string
   /** URL the view beacon posts to. Rendered only when the tenant counts public views. */
   viewEndpoint?: string
   /** Template for the count, e.g. `{total} views, {today} today`. */
@@ -36,7 +40,8 @@ type Props = {
 
 export type Labels = {
   apply: string
-  applySoon: string
+  signIn: string
+  signInToApply: string
   categories: string
   closes: string
   expired: string
@@ -55,6 +60,7 @@ const {
   view,
   tenant,
   applyHref,
+  signInHref = applyHref ? signInPath(applyHref) : undefined,
   viewEndpoint,
   labels: overrides,
   locale: requestedLocale,
@@ -64,7 +70,8 @@ const { detail } = view
 
 const labels: Labels = {
   apply: 'Apply for this job',
-  applySoon: 'The application form arrives in a later release.',
+  signIn: 'Sign in to apply',
+  signInToApply: 'You need an account to apply for jobs on this site.',
   categories: 'Categories',
   closes: 'Closes',
   expired: 'No longer accepting applications',
@@ -192,16 +199,26 @@ const facts = [
     }
 
     {
-      /* PJ-45 owns the apply form; until it lands this is the marked placeholder. */
-      !view.expired && (
-        <section class="lp-detail__apply" data-apply-placeholder>
+      /* The apply section (PJ-45). The form lives on its own page so this page keeps shipping no
+         JavaScript (Turnstile is on the form page only). */
+      view.applyMode === 'form' && (
+        <section class="lp-detail__apply" data-apply="form">
           <h2>{labels.apply}</h2>
-          <p>{labels.applySoon}</p>
-          {applyHref && (
-            <Button href={applyHref} size="large">
-              {labels.apply}
-            </Button>
-          )}
+          <Button href={applyHref} size="large">
+            {labels.apply}
+          </Button>
+        </section>
+      )
+    }
+
+    {
+      view.applyMode === 'sign-in' && (
+        <section class="lp-detail__apply" data-apply="sign-in">
+          <h2>{labels.apply}</h2>
+          <p>{labels.signInToApply}</p>
+          <Button href={signInHref} size="large">
+            {labels.signIn}
+          </Button>
         </section>
       )
     }
