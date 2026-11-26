@@ -1,20 +1,16 @@
 import type { Payload } from 'payload'
 
-import type { RateLimiter } from '@mission-control/payload-jobs'
+import { atomicKV, type RateLimiter } from '@mission-control/payload-jobs'
 
 /**
  * A rate limiter every Worker shares (PJ-47). The in-memory limiter lives in one isolate, and
  * Cloudflare's Rate Limiting binding is per location and approximate, so neither can promise "at
- * most 3 emails an hour to one address". This one keeps its counts in Payload's KV store, which
- * is the database.
+ * most 3 emails an hour to one address". This one counts in Payload's KV table, with the atomic
+ * windowed counter PJ-109 added (`countInWindow`): one SQL statement per request, so requests that
+ * arrive together each get their own count and exactly `limit` of them pass.
  *
- * The store has no atomic increment, so a request claims a numbered slot instead: slot 0, 1, ...
- * up to the limit, for this key and this window. Claiming is "create this row", and the store's
- * unique key makes exactly one of several simultaneous requests win each slot; the others see the
- * failure and move on to the next. When every slot is taken the request is over the limit.
- *
- * It fails closed: if the store cannot be reached the answer is "over the limit", so a broken
- * limiter cannot turn into unlimited email. Keys hold a hash, never the address.
+ * It fails closed: with no atomic counter (not Postgres) or an error, the answer is "over the
+ * limit", so a broken limiter cannot turn into unlimited email. Keys hold a hash, never the address.
  */
 
 export const MAIL_SLOT_PREFIX = 'alert-rl:'
@@ -37,31 +33,17 @@ export type KvRateLimiterOptions = {
   windowMs: number
 }
 
-const slotKey = (hash: string, window: number, slot: number): string =>
-  `${MAIL_SLOT_PREFIX}${window}:${hash}:${slot}`
-
 export const createKvRateLimiter =
   ({ limit, now = Date.now, windowMs }: KvRateLimiterOptions) =>
   (payload: Payload): RateLimiter => ({
     limit: async ({ key }) => {
       try {
-        const window = Math.floor(now() / windowMs)
-        const hash = await sha256Hex(key)
+        const atomic = atomicKV(payload)
+        if (!atomic) return { success: false }
 
-        for (let slot = 0; slot < limit; slot += 1) {
-          const slotName = slotKey(hash, window, slot)
-          if (await payload.kv.has(slotName)) continue
+        const count = await atomic.countInWindow(`${MAIL_SLOT_PREFIX}${await sha256Hex(key)}`, windowMs, now())
 
-          try {
-            await payload.kv.set(slotName, { at: now() })
-
-            return { success: true }
-          } catch {
-            // Another request created this slot first: it is taken, try the next one.
-          }
-        }
-
-        return { success: false }
+        return { success: count <= limit }
       } catch {
         return { success: false }
       }
@@ -69,20 +51,21 @@ export const createKvRateLimiter =
   })
 
 /**
- * Delete the slots of windows that are over. The store has no expiry, so the daily task calls
- * this; it returns how many it removed. Only keys with this limiter's prefix are looked at.
+ * Delete counters whose window is over. A counter starts again in place when its window ends, but
+ * an address that never writes again leaves its row behind, and the store has no expiry, so the
+ * daily task calls this. It returns how many it removed; only this limiter's keys are looked at.
  */
 export const purgeStaleMailSlots = async (
   payload: Payload,
-  { now = new Date(), windowMs }: { now?: Date; windowMs: number },
+  { now = new Date() }: { now?: Date } = {},
 ): Promise<number> => {
-  const current = Math.floor(now.getTime() / windowMs)
   let deleted = 0
 
   for (const key of await payload.kv.keys()) {
     if (!key.startsWith(MAIL_SLOT_PREFIX)) continue
-    const window = Number(key.slice(MAIL_SLOT_PREFIX.length).split(':')[0])
-    if (!Number.isFinite(window) || window >= current) continue
+
+    const record = await payload.kv.get<{ windowEnd?: number }>(key)
+    if (typeof record?.windowEnd !== 'number' || record.windowEnd > now.getTime()) continue
 
     await payload.kv.delete(key)
     deleted += 1

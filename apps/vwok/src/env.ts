@@ -33,3 +33,7 @@ export const aiCrawlersAllowed = (env: SiteEnv): boolean => {
   const value = env.AI_CRAWLERS_ALLOWED?.trim().toLowerCase()
   return value !== 'false' && value !== '0'
 }
+
+/** The Turnstile site key to render, or undefined when the deployment has none (the widget is then left out). */
+export const turnstileSiteKey = (env: SiteEnv): string | undefined =>
+  env.PUBLIC_TURNSTILE_SITE_KEY?.trim() || undefined

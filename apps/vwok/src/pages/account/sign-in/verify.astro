@@ -1,0 +1,42 @@
+---
+/**
+ * `/account/sign-in/verify?token=…` (PJ-109): where the email's link lands. It only SHOWS a
+ * button: the sign-in happens on the POST. A mail scanner or link preview that opens the link
+ * therefore cannot spend the one-time token before the person does.
+ */
+import Button from '@labcat2020/rocketship/components/Button'
+import Container from '@labcat2020/rocketship/components/Container'
+import { safeReturnPath, SIGN_IN_PATH } from '@mission-control/launchpad/sign-in'
+
+import SiteLayout from '../../../layouts/SiteLayout.astro'
+import { siteTenant } from '../../../brand'
+
+export const prerender = false
+
+Astro.response.headers.set('cache-control', 'private, no-store')
+Astro.response.headers.set('referrer-policy', 'no-referrer')
+
+const token = Astro.url.searchParams.get('token') ?? ''
+const returnTo = safeReturnPath(Astro.url.searchParams.get('returnTo'))
+const valid = /^[a-f0-9]{64}$/.test(token)
+---
+
+<SiteLayout noindex path="/account/sign-in/verify" title={`Finish signing in | ${siteTenant.name}`}>
+  <Container>
+    <h1>Finish signing in</h1>
+    {
+      valid ? (
+        <form action="/account/sign-in/submit" method="post">
+          <input type="hidden" name="token" value={token} />
+          {returnTo && <input type="hidden" name="returnTo" value={returnTo} />}
+          <p>Press the button to sign in to {siteTenant.name} on this device.</p>
+          <Button type="submit">Sign in</Button>
+        </form>
+      ) : (
+        <p role="alert">
+          This sign-in link is not valid. <a href={SIGN_IN_PATH}>Ask for a new one.</a>
+        </p>
+      )
+    }
+  </Container>
+</SiteLayout>

@@ -4430,6 +4430,20 @@
           "notNull": false,
           "default": false
         },
+        "session_default_days": {
+          "name": "session_default_days",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 1
+        },
+        "session_keep_signed_in_days": {
+          "name": "session_keep_signed_in_days",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 30
+        },
         "pack_credits_usable_at": {
           "name": "pack_credits_usable_at",
           "type": "enum_tenants_pack_credits_usable_at",
@@ -4564,27 +4578,6 @@
           "type": "jsonb",
           "primaryKey": false,
           "notNull": false
-        },
-        "alerts_allow_without_account": {
-          "name": "alerts_allow_without_account",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": false,
-          "default": true
-        },
-        "alerts_double_opt_in": {
-          "name": "alerts_double_opt_in",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": false,
-          "default": true
-        },
-        "alerts_max_per_email": {
-          "name": "alerts_max_per_email",
-          "type": "numeric",
-          "primaryKey": false,
-          "notNull": false,
-          "default": 10
         },
         "updated_at": {
           "name": "updated_at",
@@ -19407,33 +19400,24 @@
           "primaryKey": false,
           "notNull": true
         },
-        "frequency": {
-          "name": "frequency",
-          "type": "enum_alert_subscriptions_frequency",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'daily'"
-        },
-        "active": {
-          "name": "active",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": false,
-          "default": true
-        },
-        "filter_key": {
-          "name": "filter_key",
-          "type": "varchar",
-          "primaryKey": false,
-          "notNull": false
-        },
         "confirmed": {
           "name": "confirmed",
           "type": "boolean",
           "primaryKey": false,
           "notNull": false,
           "default": false
+        },
+        "confirm_token": {
+          "name": "confirm_token",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "manage_token": {
+          "name": "manage_token",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
         },
         "keywords": {
           "name": "keywords",
@@ -19484,51 +19468,6 @@
           "method": "btree",
           "with": {}
         },
-        "alert_subscriptions_email_idx": {
-          "name": "alert_subscriptions_email_idx",
-          "columns": [
-            {
-              "expression": "email",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "alert_subscriptions_active_idx": {
-          "name": "alert_subscriptions_active_idx",
-          "columns": [
-            {
-              "expression": "active",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "alert_subscriptions_filter_key_idx": {
-          "name": "alert_subscriptions_filter_key_idx",
-          "columns": [
-            {
-              "expression": "filter_key",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "alert_subscriptions_confirmed_idx": {
           "name": "alert_subscriptions_confirmed_idx",
           "columns": [
@@ -19540,6 +19479,36 @@
             }
           ],
           "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "alert_subscriptions_confirm_token_idx": {
+          "name": "alert_subscriptions_confirm_token_idx",
+          "columns": [
+            {
+              "expression": "confirm_token",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "alert_subscriptions_manage_token_idx": {
+          "name": "alert_subscriptions_manage_token_idx",
+          "columns": [
+            {
+              "expression": "manage_token",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -19589,8 +19558,8 @@
           "method": "btree",
           "with": {}
         },
-        "tenant_email_filterKey_idx": {
-          "name": "tenant_email_filterKey_idx",
+        "tenant_email_idx": {
+          "name": "tenant_email_idx",
           "columns": [
             {
               "expression": "tenant_id",
@@ -19600,12 +19569,6 @@
             },
             {
               "expression": "email",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "filter_key",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -26258,9 +26221,7 @@
         "organisation-page-approved",
         "application-received",
         "application-copy",
-        "application-admin-copy",
-        "alert-confirm",
-        "alert-manage-link"
+        "application-admin-copy"
       ]
     },
     "public.enum_email_log_status": {
@@ -26270,14 +26231,6 @@
         "sent",
         "failed",
         "skipped"
-      ]
-    },
-    "public.enum_alert_subscriptions_frequency": {
-      "name": "enum_alert_subscriptions_frequency",
-      "schema": "public",
-      "values": [
-        "daily",
-        "weekly"
       ]
     },
     "public.enum_forms_confirmation_type": {
@@ -26297,7 +26250,6 @@
         "expire-job-placements",
         "delete-expired-applications",
         "email-log-retention",
-        "purge-unconfirmed-alerts",
         "xero-invoice-sync"
       ]
     },
@@ -26318,7 +26270,6 @@
         "expire-job-placements",
         "delete-expired-applications",
         "email-log-retention",
-        "purge-unconfirmed-alerts",
         "xero-invoice-sync"
       ]
     },
@@ -26331,7 +26282,6 @@
         "expire-job-placements",
         "delete-expired-applications",
         "email-log-retention",
-        "purge-unconfirmed-alerts",
         "xero-invoice-sync"
       ]
     },
@@ -26354,6 +26304,6 @@
     "tables": {},
     "columns": {}
   },
-  "id": "2c32fbdb-b244-41e8-92ea-e53bbaef315e",
+  "id": "3f724655-2fdf-4bbb-bd8f-35477a2fcc8d",
   "prevId": "00000000-0000-0000-0000-000000000000"
 }

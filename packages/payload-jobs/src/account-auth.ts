@@ -11,7 +11,16 @@ import {
 
 import { getTenantRole, type MissionControlUser, type TenantRole } from './access'
 import { createTenantEmailSender, type TenantEmailSender } from './email'
+import type { FormTurnstileOptions } from './forms'
+import {
+  dropSession,
+  issueSession,
+  renewRollingSession,
+  sessionIDOf,
+  sessionSeconds,
+} from './account-sessions'
 import { createMemoryRateLimiter, type RateLimiter } from './rate-limit'
+import type { SignInEmailSender } from './sign-in'
 import { resolveSiteKey } from './site-keys'
 import { assertNotViewingAs, exitViewAs, getViewAs, redeemViewAsCode } from './view-as'
 
@@ -86,19 +95,32 @@ export type AccountAuthOptions = {
   rateLimiter?: ((req: PayloadRequest) => RateLimiter | undefined) | RateLimiter
   /** Path on the tenant site that receives the reset link. */
   resetPasswordPath?: string
+  /**
+   * Sends a sign-in email through the tenant's email templates: `sendEmail(event, doc)`, the same
+   * shape as `sendTemplate` (PJ-50). Without it the code email is a plain inline message.
+   */
+  sendEmail?: SignInEmailSender
+  /** Path on the tenant site that receives the sign-in link. */
+  signInPath?: string
+  /** Turnstile on the request-code endpoint. Fails closed without a secret. */
+  turnstile?: FormTurnstileOptions
   tenantsSlug?: string
   usersSlug?: string
   /** Path on the tenant site that receives the verification link. */
   verifyEmailPath?: string
 }
 
-type ResolvedOptions = Required<Omit<AccountAuthOptions, 'rateLimiter'>> & {
+export type ResolvedOptions = Required<
+  Omit<AccountAuthOptions, 'rateLimiter' | 'sendEmail' | 'turnstile'>
+> & {
   rateLimiter: AccountAuthOptions['rateLimiter']
+  sendEmail: AccountAuthOptions['sendEmail']
+  turnstile: AccountAuthOptions['turnstile']
 }
 
 type ApiError = { code: string; message: string; status: number }
 
-const ERRORS = {
+export const ERRORS = {
   invalidBody: { code: 'invalid_request', message: 'The request body is not valid.', status: 400 },
   invalidCredentials: {
     code: 'invalid_credentials',
@@ -184,18 +206,21 @@ const errorResponse = (error: AccountAuthError): Response =>
 const DEFAULTS: ResolvedOptions = {
   accountRoles: ['seeker', 'employer'],
   rateLimiter: undefined,
+  sendEmail: undefined,
+  signInPath: '/account/sign-in/verify',
+  turnstile: undefined,
   resetPasswordPath: '/account/reset-password',
   tenantsSlug: 'tenants',
   usersSlug: 'users',
   verifyEmailPath: '/account/verify-email',
 }
 
-const resolveOptions = (options: AccountAuthOptions = {}): ResolvedOptions => ({
+export const resolveOptions = (options: AccountAuthOptions = {}): ResolvedOptions => ({
   ...DEFAULTS,
   ...Object.fromEntries(Object.entries(options).filter(([, value]) => value !== undefined)),
 })
 
-type RawUser = MissionControlUser & {
+export type RawUser = MissionControlUser & {
   _verificationToken?: null | string
   email: string
   firstName?: null | string
@@ -203,7 +228,7 @@ type RawUser = MissionControlUser & {
   lastName?: null | string
 }
 
-const normaliseEmail = (value: unknown): null | string => {
+export const normaliseEmail = (value: unknown): null | string => {
   if (typeof value !== 'string') return null
 
   const email = value.trim().toLowerCase()
@@ -211,7 +236,7 @@ const normaliseEmail = (value: unknown): null | string => {
   return email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : null
 }
 
-const readBody = async (req: PayloadRequest): Promise<Record<string, unknown>> => {
+export const readBody = async (req: PayloadRequest): Promise<Record<string, unknown>> => {
   try {
     const body: unknown = await req.json?.()
 
@@ -323,7 +348,7 @@ export const enforceRateLimit = async ({
   }
 }
 
-const canSignInOn = (
+export const canSignInOn = (
   user: MissionControlUser | null | undefined,
   tenantID: number | string,
   options: Pick<ResolvedOptions, 'accountRoles'>,
@@ -333,7 +358,7 @@ const canSignInOn = (
   return role !== null && options.accountRoles.includes(role)
 }
 
-const findUserByEmail = async (
+export const findUserByEmail = async (
   payload: Payload,
   options: Pick<ResolvedOptions, 'usersSlug'>,
   email: string,
@@ -343,7 +368,7 @@ const findUserByEmail = async (
     where: { email: { equals: email } },
   })) as unknown as RawUser | null
 
-const publicUser = (user: RawUser, tenantID: number | string) => ({
+export const publicUser = (user: RawUser, tenantID: number | string) => ({
   id: user.id,
   email: user.email,
   firstName: user.firstName ?? null,
@@ -554,13 +579,13 @@ const mapLoginError = (error: unknown): AccountAuthError => {
     : (error as AccountAuthError)
 }
 
-type Handler = (args: {
+export type Handler = (args: {
   options: ResolvedOptions
   req: PayloadRequest
   tenant: AccountTenant
 }) => Promise<Response>
 
-const endpoint = (
+export const endpoint = (
   options: ResolvedOptions,
   method: Endpoint['method'],
   path: string,
@@ -588,7 +613,7 @@ const endpoint = (
   path: `${ACCOUNT_AUTH_BASE_PATH}/${path}`,
 })
 
-const SUBMITTED_OK = { ok: true }
+export const SUBMITTED_OK = { ok: true }
 
 const login: Handler = async ({ options, req, tenant }) => {
   const body = await readBody(req)
@@ -620,18 +645,30 @@ const login: Handler = async ({ options, req, tenant }) => {
   }
 
   const user = result.user as unknown as RawUser
-  const token = result.token
-  const exp = result.exp
 
   // Belt and braces: the pre-check above already covers this.
-  if (!token || !canSignInOn(user, tenant.id, options)) {
+  if (!result.token || !canSignInOn(user, tenant.id, options)) {
     throw new AccountAuthError(ERRORS.invalidCredentials)
   }
 
+  // Payload's login session lasts the collection-wide token lifetime. Swap it for one of the
+  // tenant's length, ticked or not (PJ-109).
+  const keepSignedIn = body.keepSignedIn === true
+  const loginSid = sessionIDOf(result.token)
+  const session = await issueSession({
+    keepSignedIn,
+    payload: req.payload,
+    seconds: sessionSeconds(tenant as never, keepSignedIn),
+    userID: user.id,
+    usersSlug: options.usersSlug,
+  })
+  if (loginSid) await dropSession({ payload: req.payload, sid: loginSid, userID: user.id, usersSlug: options.usersSlug })
+
   return accountResponse({
-    exp,
-    expiresIn: typeof exp === 'number' ? Math.max(0, exp - Math.floor(Date.now() / 1000)) : null,
-    token,
+    exp: session.exp,
+    expiresIn: session.expiresIn,
+    keepSignedIn,
+    token: session.token,
     user: publicUser(user, tenant.id),
   })
 }
@@ -679,8 +716,24 @@ const me: Handler = async ({ options, req, tenant }) => {
   // The banner reads this: no personal data beyond the name the user already shows on the site.
   const viewAs = getViewAs(req.user)
 
+  // A "Keep me signed in" session rolls: the site replaces its cookie with the new token.
+  const bearer = /^Bearer\s+(\S+)$/i.exec(req.headers.get('authorization') ?? '')?.[1]
+  const renewed =
+    bearer && !viewAs
+      ? await renewRollingSession({
+          maxSeconds: sessionSeconds(tenant as never, true),
+          payload: req.payload,
+          token: bearer,
+          userID: user.id,
+          usersSlug: options.usersSlug,
+        })
+      : null
+
   return accountResponse({
     ...(viewAs ? { viewAs: { expiresAt: new Date(viewAs.expiresAt).toISOString() } } : {}),
+    ...(renewed
+      ? { session: { exp: renewed.exp, expiresIn: renewed.expiresIn, token: renewed.token } }
+      : {}),
     user: publicUser(user, tenant.id),
   })
 }

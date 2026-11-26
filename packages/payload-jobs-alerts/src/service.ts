@@ -18,7 +18,7 @@ import {
   normaliseSubscriberEmail,
   type AlertFilterValues,
 } from './filters'
-import { ALERT_MAIL_WINDOW_MS, purgeStaleMailSlots } from './kv-rate-limit'
+import { purgeStaleMailSlots } from './kv-rate-limit'
 import { alertSettings } from './settings'
 import { ALERT_FREQUENCIES, type AlertFrequency } from './subscriptions'
 import { ALERT_TOKEN_TTL_MS, signAlertToken, verifyAlertToken, type AlertTokenPurpose } from './tokens'
@@ -648,7 +648,7 @@ export const purgeUnconfirmedAlertsTask = ({
   handler: async ({ req }) => ({
     output: {
       alertsDeleted: await purgeUnconfirmedAlerts(req.payload, { alertsSlug }),
-      mailSlotsDeleted: await purgeStaleMailSlots(req.payload, { windowMs: ALERT_MAIL_WINDOW_MS }),
+      mailSlotsDeleted: await purgeStaleMailSlots(req.payload),
     },
   }),
   outputSchema: [

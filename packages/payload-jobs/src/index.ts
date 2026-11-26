@@ -10,6 +10,7 @@ import type {
 
 import { accountAuthEndpoints, type AccountAuthOptions } from './account-auth'
 import { applicationFileDownloadEndpoint, applyEndpoint, type ApplyOptions } from './apply'
+import { signInEndpoints } from './sign-in'
 import {
   formEndpoints,
   purgeFormSubmissionsTask,
@@ -111,6 +112,7 @@ export * from './credits'
 export * from './email'
 export * from './email-engine'
 export * from './forms'
+export * from './kv-atomic'
 export * from './legacy-password'
 export * from './location-settings'
 export * from './money'
@@ -127,6 +129,8 @@ export * from './job-status'
 export { addLocalDays, endOfLocalDayAfter, validTimeZone } from './local-time'
 export * from './publication'
 export * from './publication-settings'
+export * from './account-sessions'
+export * from './sign-in'
 export * from './legal-pages'
 export * from './add-ons-seed'
 export * from './catalog'
@@ -624,6 +628,8 @@ const jobBoardPlugin =
 
         return [
           ...accountAuthEndpoints(accountAuth),
+          // Email sign-in: magic link + code (PJ-109).
+          ...signInEndpoints(accountAuth),
           // Checkout for the /account dashboard (PJ-31), on the same site key + token contract.
           ...accountCheckoutEndpoints({
             couponsEnabled: features.coupons,

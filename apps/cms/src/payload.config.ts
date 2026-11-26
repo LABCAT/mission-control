@@ -150,7 +150,12 @@ export default buildConfig({
     // mission-control: account auth endpoints (PJ-81) rate limit with the ACCOUNT_RATE_LIMIT
     // binding in Workers, and fall back to an in-memory limiter in dev.
     payloadJobs({
-      accountAuth: { rateLimiter: () => workerEnv?.ACCOUNT_RATE_LIMIT },
+      accountAuth: {
+        rateLimiter: () => workerEnv?.ACCOUNT_RATE_LIMIT,
+        // mission-control: email sign-in (PJ-109) checks Turnstile on "send me a code".
+        // The code email is inline until the email core (PJ-50) is wired in through `sendEmail`.
+        turnstile: { secret: () => workerEnv?.TURNSTILE_SECRET_KEY ?? process.env.TURNSTILE_SECRET_KEY },
+      },
       // mission-control: the alert add-on's email events (PJ-47), editable per tenant (PJ-50).
       email: { events: ALERT_EMAIL_TEMPLATE_EVENTS },
       // mission-control: job page views (PJ-37) limit per visitor in Workers, per isolate in dev.
