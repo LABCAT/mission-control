@@ -6,6 +6,7 @@
   "description": "Astro theme for Mission Control job boards, built on @labcat2020/rocketship",
   "exports": {
     ".": "./src/index.ts",
+    "./alerts": "./src/alerts/index.ts",
     "./components/*": "./src/components/*.astro",
     "./cms": "./src/cms/index.ts",
     "./jobs": "./src/jobs/listing.ts",

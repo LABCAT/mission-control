@@ -215,6 +215,47 @@ export const checkSiteKeyReads = ({ responses, seeded }) => {
   return { failures, notes }
 }
 
+/**
+ * The job alert endpoints (PJ-47) on the deployed preview. Nothing here sends an email or stores
+ * a row: each request is answered before the alert code writes anything.
+ *
+ * - `invalidLink`: tenant A's key and a link that was never issued. It has to get through the key,
+ *   the tenant lookup (which reads the new alert settings columns, so a missing migration is a 500
+ *   here) and the link check (AES-GCM in the Worker), and be refused as an invalid link.
+ * - `otherSite`: tenant B's key on tenant A's address is refused as another site's key.
+ * - `anonymous`, `badKey`: no key, or one that was never stored, is refused.
+ * - `bot`: a filled-in honeypot is answered like a person and does nothing.
+ */
+export const ALERT_EXPECTATIONS = {
+  anonymous: { code: 'invalid_site_key', status: 401 },
+  badKey: { code: 'invalid_site_key', status: 401 },
+  bot: { status: 202 },
+  invalidLink: { code: 'invalid_token', status: 400 },
+  otherSite: { code: 'tenant_mismatch', status: 403 },
+}
+
+export const checkAlertEndpoints = ({ responses }) => {
+  const failures = []
+  const notes = []
+
+  for (const [label, expected] of Object.entries(ALERT_EXPECTATIONS)) {
+    const { code, status } = responses[label]
+
+    if (status >= 500) {
+      failures.push(`${label}: the preview answered HTTP ${status}`)
+    } else if (status !== expected.status || (expected.code && code !== expected.code)) {
+      failures.push(
+        `${label}: answered HTTP ${status}${code ? ` ${code}` : ''}, expected HTTP ${expected.status}` +
+          `${expected.code ? ` ${expected.code}` : ''}`,
+      )
+    } else {
+      notes.push(`alerts ${label}: HTTP ${status}${code ? ` ${code}` : ''}`)
+    }
+  }
+
+  return { failures, notes }
+}
+
 const runPsql = (env, sql) => {
   const childEnv = { ...process.env, ...env }
   delete childEnv.DATABASE_URL
@@ -273,6 +314,17 @@ export const readWithRetry = async (
 
     await wait(stepMs)
   }
+}
+
+const probeAlerts = (path, body) => async (previewUrl, key) => {
+  const response = await fetch(new URL(`/api/tenants/${TENANT_A}/alerts/${path}`, previewUrl), {
+    body: JSON.stringify(body),
+    headers: { 'content-type': 'application/json', ...(key ? { 'x-site-key': key } : {}) },
+    method: 'POST',
+  })
+  const parsed = await response.json().catch(() => null)
+
+  return { code: parsed?.error?.code, status: response.status }
 }
 
 const seed = (env, keys) => {
@@ -355,7 +407,22 @@ const main = async () => {
     spare: await readWithRetry(previewUrl, keys.spare.key),
   }
 
-  const { failures, notes } = checkSiteKeyReads({ responses, seeded })
+  const reads = checkSiteKeyReads({ responses, seeded })
+
+  const unsubscribe = probeAlerts('unsubscribe', { token: 'not.issued' })
+  const alertResponses = {
+    anonymous: await readWithRetry(previewUrl, undefined, { attempt: unsubscribe }),
+    badKey: await readWithRetry(previewUrl, keys.bad, { attempt: unsubscribe }),
+    bot: await readWithRetry(previewUrl, keys.tenantA.key, {
+      attempt: probeAlerts('manage-link', { alert_website: 'filled', email: 'bot@example.com' }),
+    }),
+    invalidLink: await readWithRetry(previewUrl, keys.tenantA.key, { attempt: unsubscribe }),
+    otherSite: await readWithRetry(previewUrl, keys.spare.key, { attempt: unsubscribe }),
+  }
+  const alerts = checkAlertEndpoints({ responses: alertResponses })
+
+  const failures = [...reads.failures, ...alerts.failures]
+  const notes = [...reads.notes, ...alerts.notes]
 
   writeSummary({ failures, notes, responses, seeded })
 

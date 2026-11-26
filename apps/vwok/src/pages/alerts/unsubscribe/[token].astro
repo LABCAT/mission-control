@@ -1,0 +1,23 @@
+---
+/**
+ * `/alerts/unsubscribe/:token` (PJ-47). A GET shows one button and changes nothing, because mail
+ * scanners open every link; a POST unsubscribes. The `List-Unsubscribe` header of every alert
+ * email points here, and a mail client's one-click POST (RFC 8058) gets a bare 200.
+ */
+import AlertsView from '../../../components/AlertsView.astro'
+import { alertsChrome, alertsClientFromEnv, unsubscribePage } from '../../../alerts'
+import { siteEnv } from '../../../env'
+import { cmsFromEnv } from '../../../site'
+
+export const prerender = false
+
+const env = await siteEnv()
+const page = await unsubscribePage(alertsClientFromEnv(env), Astro.request, Astro.params.token ?? '', {
+  clientIp: Astro.clientAddress,
+})
+if (page.kind === 'redirect') return Astro.redirect(page.location)
+if (page.kind === 'one-click') return new Response(null, { status: page.status })
+const menus = await alertsChrome(cmsFromEnv(env))
+---
+
+<AlertsView menus={menus} page={page} path={Astro.url.pathname} />

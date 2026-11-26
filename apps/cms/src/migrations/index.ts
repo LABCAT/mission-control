@@ -40,6 +40,7 @@ import * as migration_20261125_192747_apply_form from './20261125_192747_apply_f
 import * as migration_20261125_195741_import_sync from './20261125_195741_import_sync';
 import * as migration_20261126_052940_job_order_emails from './20261126_052940_job_order_emails';
 import * as migration_20261126_054332_email_sign_in from './20261126_054332_email_sign_in';
+import * as migration_20261126_062949_job_alerts from './20261126_062949_job_alerts';
 
 export const migrations = [
   {
@@ -250,6 +251,11 @@ export const migrations = [
   {
     up: migration_20261126_054332_email_sign_in.up,
     down: migration_20261126_054332_email_sign_in.down,
-    name: '20261126_054332_email_sign_in'
+    name: '20261126_054332_email_sign_in',
+  },
+  {
+    up: migration_20261126_062949_job_alerts.up,
+    down: migration_20261126_062949_job_alerts.down,
+    name: '20261126_062949_job_alerts'
   },
 ];

@@ -276,6 +276,7 @@ export interface Config {
       'expire-job-placements': TaskExpireJobPlacements;
       'delete-expired-applications': TaskDeleteExpiredApplications;
       'email-log-retention': TaskEmailLogRetention;
+      'purge-unconfirmed-alerts': TaskPurgeUnconfirmedAlerts;
       'xero-invoice-sync': TaskXeroInvoiceSync;
       inline: {
         input: unknown;
@@ -672,6 +673,18 @@ export interface Tenant {
     | number
     | boolean
     | null;
+  /**
+   * Let visitors set up job alerts with just an email address. Turn off to require a signed-in account.
+   */
+  alertsAllowWithoutAccount?: boolean | null;
+  /**
+   * New alerts wait until the subscriber follows the link in a confirmation email. Turn off to start them at once.
+   */
+  alertsDoubleOptIn?: boolean | null;
+  /**
+   * How many job alerts one email address can have on this site.
+   */
+  alertsMaxPerEmail?: number | null;
   createdBy?: {
     relationTo: 'users';
     value: number | User;
@@ -2243,7 +2256,9 @@ export interface EmailTemplate {
     | 'organisation-page-approved'
     | 'application-received'
     | 'application-copy'
-    | 'application-admin-copy';
+    | 'application-admin-copy'
+    | 'alert-confirm'
+    | 'alert-manage-link';
   /**
    * Untick to stop sending this email on this site. Skipped sends are logged.
    */
@@ -2391,11 +2406,21 @@ export interface AlertSubscription {
    */
   email: string;
   /**
+   * How often the digest goes out. Daily is the old site’s behaviour.
+   */
+  frequency: 'daily' | 'weekly';
+  /**
+   * Untick, or the subscriber pauses it, to stop this alert’s emails.
+   */
+  active?: boolean | null;
+  /**
+   * The search this alert saves, as a stable key. Set by the system.
+   */
+  filterKey?: string | null;
+  /**
    * Set when the subscriber follows the double opt-in link. Only confirmed subscribers get alerts.
    */
   confirmed?: boolean | null;
-  confirmToken?: string | null;
-  manageToken?: string | null;
   /**
    * Words a job must mention, separated by spaces. Empty means any job.
    */
@@ -2665,6 +2690,7 @@ export interface PayloadJob {
           | 'expire-job-placements'
           | 'delete-expired-applications'
           | 'email-log-retention'
+          | 'purge-unconfirmed-alerts'
           | 'xero-invoice-sync';
         taskID: string;
         input:
@@ -2703,6 +2729,7 @@ export interface PayloadJob {
                 | 'expire-job-placements'
                 | 'delete-expired-applications'
                 | 'email-log-retention'
+                | 'purge-unconfirmed-alerts'
                 | 'xero-invoice-sync'
               )
             | null;
@@ -2718,6 +2745,7 @@ export interface PayloadJob {
         | 'expire-job-placements'
         | 'delete-expired-applications'
         | 'email-log-retention'
+        | 'purge-unconfirmed-alerts'
         | 'xero-invoice-sync'
       )
     | null;
@@ -3244,6 +3272,9 @@ export interface TenantsSelect<T extends boolean = true> {
       };
   formRetentionDays?: T;
   addOns?: T;
+  alertsAllowWithoutAccount?: T;
+  alertsDoubleOptIn?: T;
+  alertsMaxPerEmail?: T;
   createdBy?: T;
   updatedBy?: T;
   updatedAt?: T;
@@ -3854,9 +3885,10 @@ export interface AuditLogSelect<T extends boolean = true> {
 export interface AlertSubscriptionsSelect<T extends boolean = true> {
   tenant?: T;
   email?: T;
+  frequency?: T;
+  active?: T;
+  filterKey?: T;
   confirmed?: T;
-  confirmToken?: T;
-  manageToken?: T;
   keywords?: T;
   categories?: T;
   types?: T;
@@ -4423,6 +4455,17 @@ export interface TaskEmailLogRetention {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "TaskPurge-unconfirmed-alerts".
+ */
+export interface TaskPurgeUnconfirmedAlerts {
+  input?: unknown;
+  output: {
+    alertsDeleted?: number | null;
+    mailSlotsDeleted?: number | null;
+  };
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "TaskXero-invoice-sync".
  */
 export interface TaskXeroInvoiceSync {
@@ -4457,7 +4500,12 @@ export interface Variable {
     | 'message'
     | 'cvLink'
     | 'coverLetterLink'
-    | 'linksExpireAt';
+    | 'linksExpireAt'
+    | 'siteName'
+    | 'alertSummary'
+    | 'frequency'
+    | 'confirmUrl'
+    | 'manageUrl';
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema

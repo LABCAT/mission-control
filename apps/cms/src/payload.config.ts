@@ -11,7 +11,12 @@ import { Tags } from './collections/Tags'
 
 // mission-control: job board plugins. Keep this block small so orbit merges stay clean.
 import { payloadJobs, type RateLimiter } from '@mission-control/payload-jobs'
-import { ALERT_SUBSCRIPTIONS_SLUG, payloadJobsAlerts } from '@mission-control/payload-jobs-alerts'
+import {
+  alertMailRateLimiter,
+  ALERT_EMAIL_TEMPLATE_EVENTS,
+  ALERT_SUBSCRIPTIONS_SLUG,
+  payloadJobsAlerts,
+} from '@mission-control/payload-jobs-alerts'
 import { payloadJobsReports } from '@mission-control/payload-jobs-reports'
 import { payloadJobsXero } from '@mission-control/payload-jobs-xero'
 import { multiTenantPlugin } from '@payloadcms/plugin-multi-tenant'
@@ -151,6 +156,8 @@ export default buildConfig({
         // The code email is inline until the email core (PJ-50) is wired in through `sendEmail`.
         turnstile: { secret: () => workerEnv?.TURNSTILE_SECRET_KEY ?? process.env.TURNSTILE_SECRET_KEY },
       },
+      // mission-control: the alert add-on's email events (PJ-47), editable per tenant (PJ-50).
+      email: { events: ALERT_EMAIL_TEMPLATE_EVENTS },
       // mission-control: job page views (PJ-37) limit per visitor in Workers, per isolate in dev.
       jobViews: { rateLimiter: () => workerEnv?.JOB_VIEW_RATE_LIMIT },
       // mission-control: the apply endpoint (PJ-45) verifies Turnstile with the same Worker secret
@@ -177,7 +184,17 @@ export default buildConfig({
       tenancy: 'multi',
     }),
     // mission-control: add-ons (PJ-115), after payloadJobs(). Tenants switch them with `addOns`.
-    payloadJobsAlerts({ slug: ALERT_SUBSCRIPTIONS_SLUG }),
+    // mission-control: alert subscribe/confirm/manage/unsubscribe endpoints (PJ-47). Turnstile
+    // and the account rate limit are the same ones the forms and account endpoints use. Alert
+    // emails go out through PJ-50's `sendTemplate`; their two events are declared in
+    // `payloadJobs({ email: { events } })` above so site managers can edit them.
+    payloadJobsAlerts({
+      // Per address: 3 alert emails an hour, counted in the KV store every Worker shares.
+      emailRateLimiter: (req) => alertMailRateLimiter(req.payload),
+      rateLimiter: () => workerEnv?.ACCOUNT_RATE_LIMIT,
+      slug: ALERT_SUBSCRIPTIONS_SLUG,
+      turnstile: { secret: () => workerEnv?.TURNSTILE_SECRET_KEY ?? process.env.TURNSTILE_SECRET_KEY },
+    }),
     payloadJobsReports(),
     // mission-control: Xero add-on (PJ-57): settings, OAuth, order invoices and their retry task.
     // Secrets are read per request in Workers; the Node CLI falls back to the XERO_* env vars.
