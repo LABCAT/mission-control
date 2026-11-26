@@ -59,11 +59,11 @@ describe('alerts client @S-085 @S-086 @S-087 @S-373', () => {
     })
   })
 
-  it('forwards a signed-in visitor’s token as the CMS expects', async () => {
+  it('forwards a signed-in visitor’s token the way the account contract says', async () => {
     const { client, seen } = clientWith(() => json({ ok: true, status: 'subscribed' }))
     await client.subscribe({ email: 'a@example.com', userToken: 'jwt-token' })
 
-    expect(seen[0]!.headers.authorization).toBe('JWT jwt-token')
+    expect(seen[0]!.headers.authorization).toBe('Bearer jwt-token')
   })
 
   it('turns a CMS error into a reply instead of throwing', async () => {

@@ -41,7 +41,7 @@ export type SubscribeInput = Call & {
   filters?: AlertFilters
   frequency?: AlertFrequency
   turnstileToken?: string
-  /** A signed-in visitor's CMS token, if the site has one (the alerts-need-an-account setting). */
+  /** The signed-in visitor's session token (the `mc_session` cookie), for the alerts-need-an-account setting. */
   userToken?: string
 }
 
@@ -73,7 +73,8 @@ export const createAlertsClient = (options: AlertsClientOptions): AlertsClient =
       [SITE_KEY_HEADER]: options.siteKey,
     }
     if (clientIp) headers[END_USER_IP_HEADER] = clientIp
-    if (userToken) headers.authorization = `JWT ${userToken}`
+    // The account contract (docs/ACCOUNT-AUTH.md): the token travels as a bearer credential.
+    if (userToken) headers.authorization = `Bearer ${userToken}`
 
     try {
       const response = await doFetch(`${base}/${path}`, {

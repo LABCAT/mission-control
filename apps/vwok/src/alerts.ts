@@ -15,6 +15,8 @@ import type { CmsClient } from '@mission-control/launchpad/cms'
 import { loadSite, type MenuView } from '@mission-control/launchpad/pages'
 import { resolveLocale } from '@mission-control/launchpad/tenant/locale'
 
+import { readCookie, SESSION_COOKIE } from '@mission-control/launchpad/view-as'
+
 import { siteTenant } from './brand'
 import { SITE_COLLECTIONS } from './site'
 
@@ -83,7 +85,10 @@ export const subscribePage = async (
   if (!client) return notConfigured
 
   const form = readSubscribeForm(await request.formData().catch(() => new FormData()))
-  const reply = await client.subscribe({ ...form, clientIp })
+  // A signed-in visitor's session goes to the CMS, which decides what it means: with
+  // "alerts need an account" on, it is the only way in, and the address comes from the account.
+  const userToken = readCookie(request.headers.get('cookie'), SESSION_COOKIE) ?? undefined
+  const reply = await client.subscribe({ ...form, clientIp, userToken })
 
   return { kind: 'notice', notice: subscribeNotice(reply), status: statusFor(reply) }
 }

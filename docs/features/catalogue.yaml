@@ -1580,6 +1580,7 @@ stories:
       - packages/launchpad/src/components/alerts-components.test.ts
       - packages/launchpad/src/alerts/alerts.test.ts
       - apps/vwok/src/alerts.test.ts
+      - .github/scripts/site-key-smoke.test.ts
 
   - id: S-374
     area: Job alerts
@@ -1597,6 +1598,7 @@ stories:
     tests:
       - packages/payload-jobs-alerts/src/service.integration.test.ts
       - packages/payload-jobs-alerts/src/endpoints.integration.test.ts
+      - apps/vwok/src/alerts.test.ts
 
   - id: S-375
     area: Job alerts

@@ -58,6 +58,49 @@ describe('alert pages without JavaScript @S-085 @S-086 @S-087 @S-373', () => {
     expect(page).toMatchObject({ kind: 'notice', notice: { title: 'Check your email' }, status: 200 })
   })
 
+  it('forwards the signed-in visitor’s session, so the account-required setting can be met @S-374', async () => {
+    // A stand-in for the CMS rule: with `alertsAllowWithoutAccount` off, no session means no alert.
+    const accountOnly = clientWith({
+      subscribe: vi.fn(async (input: { userToken?: string }) =>
+        input.userToken === 'member-token'
+          ? ok({ status: 'subscribed' as const })
+          : refused('account_required', 403, 'Sign in to set up job alerts on this site.'),
+      ),
+    })
+    const withSession = new Request('https://vanuatuwok.vu/alerts/subscribe', {
+      body: new URLSearchParams({ email: 'ignored@example.com' }),
+      headers: { cookie: 'theme=dark; mc_session=member-token; other=1' },
+      method: 'POST',
+    })
+
+    expect(await subscribePage(accountOnly, withSession)).toMatchObject({
+      notice: { title: 'Job alert saved' },
+      status: 200,
+    })
+    expect(accountOnly.subscribe).toHaveBeenCalledWith(expect.objectContaining({ userToken: 'member-token' }))
+
+    // The same request without the cookie is refused, and says why.
+    expect(await subscribePage(accountOnly, post('/alerts/subscribe', { email: 'a@b.co' }))).toMatchObject({
+      notice: { kind: 'error', message: 'Sign in to set up job alerts on this site.' },
+      status: 400,
+    })
+    expect(accountOnly.subscribe).toHaveBeenLastCalledWith(expect.objectContaining({ userToken: undefined }))
+  })
+
+  it('does not send any other cookie to the CMS as a session', async () => {
+    const client = clientWith()
+    await subscribePage(
+      client,
+      new Request('https://vanuatuwok.vu/alerts/subscribe', {
+        body: new URLSearchParams({ email: 'a@b.co' }),
+        headers: { cookie: 'impersonating=1; session=nope' },
+        method: 'POST',
+      }),
+    )
+
+    expect(client.subscribe).toHaveBeenCalledWith(expect.objectContaining({ userToken: undefined }))
+  })
+
   it('does not subscribe on a GET: the link in a search result just goes back to the listing', async () => {
     const client = clientWith()
 
