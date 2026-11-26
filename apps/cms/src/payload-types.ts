@@ -683,6 +683,7 @@ export interface User {
   lastName?: string | null;
   legacyPasswordHash?: string | null;
   legacyId?: number | null;
+  removedFromTenants?: string | null;
   /**
    * The organisation this employer belongs to.
    */
@@ -2890,6 +2891,7 @@ export interface UsersSelect<T extends boolean = true> {
   lastName?: T;
   legacyPasswordHash?: T;
   legacyId?: T;
+  removedFromTenants?: T;
   organisation?: T;
   organisationRole?: T;
   tenants?:

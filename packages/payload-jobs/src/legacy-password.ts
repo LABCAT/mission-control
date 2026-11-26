@@ -232,10 +232,26 @@ export const legacyUserIdField: Field = {
   admin: { hidden: true, position: 'sidebar' },
 }
 
+export const REMOVED_FROM_TENANTS_FIELD = 'removedFromTenants'
+
+/**
+ * Left on a user whose personal data was removed (PJ-89): the ids of the sites they belonged to,
+ * comma separated. With the kept `legacyId` it is the tombstone that stops a later import of one
+ * of those sites from re-creating the person, without blocking another site that has a user with
+ * the same WordPress id. Not personal data. Written by the removal only.
+ */
+export const removedFromTenantsField: Field = {
+  name: REMOVED_FROM_TENANTS_FIELD,
+  type: 'text',
+  access: { create: () => false, read: () => false, update: () => false },
+  admin: { hidden: true },
+  index: false,
+}
+
 /** Adds the legacy hash and id fields and the login hook to an auth collection. */
 export const withLegacyPasswords = (collection: CollectionConfig): CollectionConfig => ({
   ...collection,
-  fields: [...collection.fields, legacyPasswordHashField, legacyUserIdField],
+  fields: [...collection.fields, legacyPasswordHashField, legacyUserIdField, removedFromTenantsField],
   hooks: {
     ...collection.hooks,
     beforeValidate: [...(collection.hooks?.beforeValidate ?? []), clearLegacyHashOnPasswordSet],

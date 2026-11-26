@@ -14,6 +14,11 @@ import type { Importer, MappedDoc, SkippedRow } from '../types'
  * group is its owner. Nothing here reads applications, CVs, resumes, logs or `user_IP`.
  */
 
+/** The domain of the address a removed user keeps (`payload-jobs` `REMOVED_USER_EMAIL_DOMAIN`). */
+const REMOVED_USER_EMAIL_DOMAIN = 'removed.invalid'
+/** The tombstone field the removal writes (`payload-jobs` `REMOVED_FROM_TENANTS_FIELD`): site ids, comma separated. */
+export const REMOVED_FROM_TENANTS_FIELD = 'removedFromTenants'
+
 export type UserImportOptions = {
   /** An organisation page stays public when it was public on the legacy site. Default true. */
   keepPageVisibility?: boolean
@@ -487,6 +492,33 @@ export const usersImporters = (
         organisation = found.docs[0]?.id
       }
 
+      // A person whose personal data was removed (PJ-89) keeps an anonymised row with the same
+      // legacy id but no tenant link, so the runner cannot find it. While WordPress still has them,
+      // they must not be created again with their name, email and password hash. The row records
+      // which sites it came from: another site's user with the same WordPress id is someone else.
+      const removed = await ctx.payload.find({
+        collection: options.usersSlug ?? 'users',
+        depth: 0,
+        overrideAccess: true,
+        pagination: false,
+        where: { legacyId: { equals: facts.user.ID } },
+      })
+      const anonymised = removed.docs.filter((doc: Record<string, any>) =>
+        String(doc.email ?? '').endsWith(`@${REMOVED_USER_EMAIL_DOMAIN}`),
+      )
+      const sites = (doc: Record<string, any>) =>
+        String(doc[REMOVED_FROM_TENANTS_FIELD] ?? '')
+          .split(',')
+          .filter(Boolean)
+      if (anonymised.some((doc) => sites(doc).includes(String(ctx.tenant)))) {
+        return { keep: true, legacyId: facts.user.ID, skip: 'anonymised' }
+      }
+      // Fail closed: an anonymised row with no site list could be this person, and we cannot tell.
+      // Privacy wins, so skip them (never create or refresh) until someone reconciles the row.
+      if (anonymised.some((doc) => sites(doc).length === 0)) {
+        return { keep: true, legacyId: facts.user.ID, skip: 'anonymised-unscoped' }
+      }
+
       const hash = String(facts.user.user_pass ?? '').trim()
       const confirmed = !facts.meta.confirmation_key || Boolean(parseLastLogin(facts.meta.last_login))
       const names = {
@@ -499,6 +531,8 @@ export const usersImporters = (
         // the site managers have since changed them.
         data: names,
         legacyId: facts.user.ID,
+        // Sync only: follow a changed WordPress password until the user signs in.
+        ...(hash ? { refreshWhileSet: { legacyPasswordHash: hash } } : {}),
         // Created through the adapter: no hooks, and no Payload password. The account signs in
         // with its WordPress password (PJ-34), which is then rehashed and the hash cleared.
         rawCreate: true,

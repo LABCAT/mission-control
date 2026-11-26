@@ -261,6 +261,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "removed_from_tenants": {
+          "name": "removed_from_tenants",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
         "organisation_id": {
           "name": "organisation_id",
           "type": "integer",
@@ -26189,16 +26195,7 @@
       "schema": "public",
       "values": [
         "job-submitted",
-        "job-submitted-admin",
-        "job-edited-pending",
         "job-approved",
-        "job-expired",
-        "order-created",
-        "order-created-admin",
-        "order-paid",
-        "order-cancelled",
-        "organisation-page-requested",
-        "organisation-page-approved",
         "application-received",
         "application-copy",
         "application-admin-copy"
@@ -26284,6 +26281,6 @@
     "tables": {},
     "columns": {}
   },
-  "id": "54de6670-5847-45e5-86ab-c4075fce4fed",
+  "id": "1b939722-6776-4c86-a3f6-9686521fe886",
   "prevId": "00000000-0000-0000-0000-000000000000"
 }
