@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { emailSuppressionsCollection } from './suppressions'
 
-describe('email suppression list access @S-386', () => {
+describe('email suppression list access @S-388', () => {
   const { access } = emailSuppressionsCollection()
   const as = (user: unknown) => ({ req: { user } }) as never
   const member = (role: string) => ({ role: 'user', tenants: [{ role, tenant: 1 }] })

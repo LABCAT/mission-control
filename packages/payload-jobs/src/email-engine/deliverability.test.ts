@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { eventFor } from './__fixtures__/delivery-events'
 import { consumeDeliveryEvents, normaliseMessageId, parseDeliveryEvent } from './deliverability'
 
-describe('parseDeliveryEvent @S-385', () => {
+describe('parseDeliveryEvent @S-387', () => {
   it('reads each kind and strips angle brackets from the message id', () => {
     for (const kind of ['delivered', 'deferred', 'failed', 'rejected', 'complained']) {
       expect(parseDeliveryEvent(eventFor(kind, '<abc@mail.example>'))).toMatchObject({ kind, messageId: 'abc@mail.example' })
@@ -32,7 +32,7 @@ describe('parseDeliveryEvent @S-385', () => {
   })
 })
 
-describe('consumeDeliveryEvents @S-385', () => {
+describe('consumeDeliveryEvents @S-387', () => {
   const message = (body: unknown, attempts = 1) => ({ ack: vi.fn(), attempts, body, retry: vi.fn() })
   const ctxWith = (find: () => Promise<{ docs: unknown[] }>) =>
     ({

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { emailLogCollection } from './log'
 
-describe('email log deliverability endpoint access @S-387', () => {
+describe('email log deliverability endpoint access @S-389', () => {
   const endpoint = emailLogCollection().endpoints
   const handler = Array.isArray(endpoint) ? endpoint.find((e) => e.path === '/deliverability')!.handler : undefined
   const call = async (user: unknown) =>

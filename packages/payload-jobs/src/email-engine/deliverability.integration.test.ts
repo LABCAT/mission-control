@@ -24,7 +24,7 @@ const events = createEmailEventRegistry([
   } satisfies EmailTemplateEvent,
 ])
 
-describe.skipIf(!databaseUrl)('email deliverability @S-385 @S-386 @S-387', () => {
+describe.skipIf(!databaseUrl)('email deliverability @S-387 @S-388 @S-389', () => {
   let harness: TestHarness
   let payload: Payload
   let nextId = 0
@@ -100,7 +100,7 @@ describe.skipIf(!databaseUrl)('email deliverability @S-385 @S-386 @S-387', () =>
     expect((await send(tenantB.id)).status).toBe('sent')
   })
 
-  it('a complaint suppresses; a soft bounce and a deferral only record @S-386', async () => {
+  it('a complaint suppresses; a soft bounce and a deferral only record @S-388', async () => {
     const { tenantA } = harness
     await send(tenantA.id, 'soft@example.com')
     await send(tenantA.id, 'later@example.com')
@@ -124,7 +124,7 @@ describe.skipIf(!databaseUrl)('email deliverability @S-385 @S-386 @S-387', () =>
     expect((await apply('delivered', 'no-such-message')).outcome).toBe('unknown-message')
   })
 
-  it('counts the last 30 days per tenant @S-387', async () => {
+  it('counts the last 30 days per tenant @S-389', async () => {
     const { tenantA, tenantB } = harness
     for (const n of [1, 2, 3, 4]) await send(tenantA.id, `p${n}@example.com`)
     await send(tenantB.id, 'other@example.com')

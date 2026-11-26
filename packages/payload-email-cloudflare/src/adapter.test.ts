@@ -116,7 +116,7 @@ describe('cloudflareEmail adapter', () => {
     expect(info).toHaveBeenCalledOnce()
   })
 
-  it('returns the binding message id so the email log can match delivery events @S-385', async () => {
+  it('returns the binding message id so the email log can match delivery events @S-387', async () => {
     const send = vi.fn().mockResolvedValue({ messageId: '<abc@mail.example>' })
     const adapter = cloudflareEmail({ binding: { send } })({ payload: payload().payload })
 

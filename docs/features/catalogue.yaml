@@ -4143,6 +4143,37 @@ stories:
       - packages/payload-jobs/src/email-engine/notifications.test.ts
 
   - id: S-385
+    area: Applications
+    role: site manager
+    story: "A site manager exports all applications received in a date range to CSV."
+    steps:
+      - "Choose a start and end date."
+      - "Download the CSV."
+    expected: "Super admins get every tenant (or one chosen tenant); tenant admins and editors get only their own tenants; employers, seekers and anonymous callers are refused. The end date is included, and formulas in applicant text are defused."
+    settings:
+      - applications.fileLinkTtlSeconds
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/application-endpoints.test.ts
+
+  - id: S-386
+    area: Applications
+    role: employer
+    story: "The CMS serves an employer's applications for a job as a list and a CSV, with signed, expiring CV and cover-letter links (the dashboard screen is PJ-82, story S-052)."
+    steps:
+      - "Request the applications for one of the organisation's jobs."
+      - "Request the CSV."
+      - "Request another organisation's job."
+    expected: "Members of the job's organisation, its tenant's staff and super admins get the list and CSV with file links that expire; another organisation, another tenant, seekers and anonymous callers are refused. Formulas in applicant text are defused."
+    settings:
+      - applications.fileLinkTtlSeconds
+    mvp: true
+    status: built
+    tests:
+      - packages/payload-jobs/src/application-endpoints.test.ts
+
+  - id: S-387
     area: Emails
     role: site manager
     story: "Delivery events from Cloudflare Email Sending update the email log row for the message."
@@ -4158,7 +4189,7 @@ stories:
       - packages/payload-jobs/src/email-engine/deliverability.test.ts
       - packages/payload-jobs/src/email-engine/deliverability.integration.test.ts
 
-  - id: S-386
+  - id: S-388
     area: Emails
     role: site manager
     story: "An address that hard-bounces or complains is suppressed for that site and not emailed again; soft bounces are only recorded."
@@ -4173,7 +4204,7 @@ stories:
     tests:
       - packages/payload-jobs/src/email-engine/deliverability.integration.test.ts
 
-  - id: S-387
+  - id: S-389
     area: Emails
     role: site manager
     story: "A site manager filters the email log by status and sees sent, delivered, bounced and complaint numbers for the last 30 days."

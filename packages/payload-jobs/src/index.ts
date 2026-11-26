@@ -9,6 +9,7 @@ import type {
 } from 'payload'
 
 import { accountAuthEndpoints, type AccountAuthOptions } from './account-auth'
+import { withApplicationEndpoints } from './application-endpoints'
 import { applicationFileDownloadEndpoint, applyEndpoint, type ApplyOptions } from './apply'
 import { signInEndpoints } from './sign-in'
 import {
@@ -1058,7 +1059,8 @@ const jobBoardPlugin =
                 // The signed link in the employer's email (PJ-45).
                 endpoints: [applicationFileDownloadEndpoint()],
               },
-              withApplicationDataAction(
+              withApplicationEndpoints(
+                withApplicationDataAction(
                 applicationsCollection({
                   applicantsSlug: usersSlug,
                   jobsSlug: slugs.jobs,
@@ -1066,6 +1068,9 @@ const jobBoardPlugin =
                   tenantScoped: tenancy === 'multi',
                 }),
                 { applicationsSlug: APPLICATIONS_SLUG, filesSlug: APPLICATION_FILES_SLUG },
+              ),
+                // Employer list / CSV and the site-manager export (PJ-46).
+                { fileLinkTtlSeconds: options.apply?.fileLinkTtlSeconds, slugs, tenantScoped: tenancy === 'multi' },
               ),
             ]
           : []),

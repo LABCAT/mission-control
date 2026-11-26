@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { handleEmailEvents } from './emailEvents'
 
-describe('handleEmailEvents @S-385', () => {
+describe('handleEmailEvents @S-387', () => {
   it('acks and drops every message when email is not enabled, without throwing', async () => {
     const messages = [1, 2].map(() => ({ ack: vi.fn(), body: {}, retry: vi.fn() }))
     const payload = { config: { custom: {} } } as never
