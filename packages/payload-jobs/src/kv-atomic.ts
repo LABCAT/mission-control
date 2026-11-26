@@ -21,6 +21,12 @@ export type AtomicKV = {
    */
   claimAttempt: (key: string, max: number, codeHash: string) => Promise<null | number>
   /**
+   * Store `record` at `key` only if nothing is there or what is there was issued at or before
+   * `issuedBefore` (its `issuedAt`). Returns false when a newer record already holds the key, so of
+   * any number of simultaneous requests exactly one reserves the right to issue and send.
+   */
+  reserve: (key: string, record: { issuedAt: number }, issuedBefore: number) => Promise<boolean>
+  /**
    * Add one to a windowed counter at `key` (created on first use) and return the count in the
    * current window. A window that has ended starts again at 1.
    */
@@ -77,6 +83,20 @@ export const atomicKV = (payload: Payload): AtomicKV | null => {
       )
 
       return Number(rows[0]?.count ?? 1)
+    },
+
+    reserve: async (key, record, issuedBefore) => {
+      const { rows } = await query(
+        `INSERT INTO ${table} (key, data)
+              VALUES ($1, $2::jsonb)
+         ON CONFLICT (key) DO UPDATE
+                SET data = EXCLUDED.data
+              WHERE COALESCE((${table}.data->>'issuedAt')::bigint, 0) <= $3::bigint
+        RETURNING key`,
+        [key, JSON.stringify(record), issuedBefore],
+      )
+
+      return rows.length > 0
     },
 
     take: async <T>(key: string, match?: { codeHash?: string; tokenHash?: string }) => {

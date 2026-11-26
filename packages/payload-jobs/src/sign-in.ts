@@ -239,15 +239,12 @@ const requestCode: Handler = async ({ options, req, tenant }) => {
   // Asking again too soon sends nothing new: the first email is still on its way.
   if (existing && now - existing.issuedAt < SIGN_IN_RESEND_SECONDS * 1000) return answer()
 
-  // A new request replaces the old code and link.
-  if (existing) await req.payload.kv.delete(`${TOKEN_PREFIX}${existing.tokenHash}`)
-
   const code = generateSignInCode()
   const token = generateToken()
   const tokenHash = await sha256Hex(`token:${token}`)
   const returnTo = safeReturnPath(body.returnTo)
 
-  await req.payload.kv.set(key, {
+  const record = {
     attempts: 0,
     codeHash: await codeHashOf(tenant.id, email, code),
     email,
@@ -256,7 +253,19 @@ const requestCode: Handler = async ({ options, req, tenant }) => {
     keepSignedIn: body.keepSignedIn === true,
     returnTo,
     tokenHash,
-  } satisfies CodeRecord)
+  } satisfies CodeRecord
+
+  // Reserve the right to send in one atomic step: of several requests that arrive together, only
+  // one stores its record and sends an email. Without the Postgres pool it is read-then-write.
+  const atomic = atomicKV(req.payload)
+  if (atomic) {
+    if (!(await atomic.reserve(key, record, now - SIGN_IN_RESEND_SECONDS * 1000))) return answer()
+  } else {
+    await req.payload.kv.set(key, record)
+  }
+
+  // A new request replaces the old code and link.
+  if (existing) await req.payload.kv.delete(`${TOKEN_PREFIX}${existing.tokenHash}`)
   await req.payload.kv.set(`${TOKEN_PREFIX}${tokenHash}`, { key })
 
   const query = new URLSearchParams({ token })

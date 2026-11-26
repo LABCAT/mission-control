@@ -8,7 +8,7 @@ import {
   type Payload,
   type SanitizedConfig,
 } from 'payload'
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   accountUserHooks,
@@ -407,6 +407,30 @@ describe('email sign-in (PJ-109)', () => {
       await request(tenantA, email)
       expect(emails).toHaveLength(2)
       expect((await verify(tenantA, { code: first, email })).body.error.code).toBe('invalid_code')
+      expect((await verify(tenantA, { code: lastCode(), email })).status).toBe(200)
+    })
+
+    it('sends one email when several requests for the same address arrive together @S-196', async () => {
+      const email = await createUser({ tenant: tenantA })
+
+      // Hold every read of the record for a moment, so all the requests see "nothing sent yet".
+      const get = payload.kv.get.bind(payload.kv)
+      const spy = vi.spyOn(payload.kv, 'get').mockImplementation(async (key: string) => {
+        const value = await get(key)
+        await new Promise((resolve) => setTimeout(resolve, 25))
+
+        return value
+      })
+
+      let results: Awaited<ReturnType<typeof request>>[]
+      try {
+        results = await Promise.all(Array.from({ length: 6 }, () => request(tenantA, email)))
+      } finally {
+        spy.mockRestore()
+      }
+
+      expect(results.map((result) => result.status)).toEqual(Array.from({ length: 6 }, () => 202))
+      expect(emails).toHaveLength(1)
       expect((await verify(tenantA, { code: lastCode(), email })).status).toBe(200)
     })
 
