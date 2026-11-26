@@ -151,7 +151,7 @@ describe('renderEmail @S-180', () => {
 
   it('every built-in event renders with its own defaults', async () => {
     for (const builtIn of BUILT_IN_EMAIL_EVENTS) {
-      const out = await renderEmail({ doc: { firstName: 'Ann', title: 'Cook' }, event: builtIn })
+      const out = await renderEmail({ doc: { firstName: 'Ann', organisationName: 'Ann', title: 'Cook' }, event: builtIn })
       expect(out.subject).not.toContain('{{')
       expect(out.html).toContain('Ann')
       expect(defaultBodyState(builtIn.defaultBody)).toBeTruthy()

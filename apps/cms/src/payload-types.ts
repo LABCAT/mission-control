@@ -2218,7 +2218,21 @@ export interface EmailTemplate {
   /**
    * The email this text is for. The variables you can insert depend on it.
    */
-  event: 'job-submitted' | 'job-approved' | 'application-received' | 'application-copy' | 'application-admin-copy';
+  event:
+    | 'job-submitted'
+    | 'job-submitted-admin'
+    | 'job-edited-pending'
+    | 'job-approved'
+    | 'job-expired'
+    | 'order-created'
+    | 'order-created-admin'
+    | 'order-paid'
+    | 'order-cancelled'
+    | 'organisation-page-requested'
+    | 'organisation-page-approved'
+    | 'application-received'
+    | 'application-copy'
+    | 'application-admin-copy';
   /**
    * Untick to stop sending this email on this site. Skipped sends are logged.
    */
@@ -4359,11 +4373,17 @@ export interface Variable {
   key:
     | 'firstName'
     | 'jobTitle'
+    | 'organisationName'
+    | 'jobUrl'
+    | 'orderNumber'
+    | 'orderTotal'
+    | 'orderStatus'
+    | 'paymentMethod'
+    | 'pageUrl'
     | 'applicantName'
     | 'applicantEmail'
     | 'applicantPhone'
     | 'message'
-    | 'organisationName'
     | 'cvLink'
     | 'coverLetterLink'
     | 'linksExpireAt';
