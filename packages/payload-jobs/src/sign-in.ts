@@ -118,8 +118,33 @@ const generateToken = (): string =>
 const recordKey = async (tenantID: number | string, email: string): Promise<string> =>
   `${RECORD_PREFIX}${await sha256Hex(`${tenantID}:${email}`)}`
 
-const codeHashOf = (tenantID: number | string, email: string, code: string): Promise<string> =>
-  sha256Hex(`code:${tenantID}:${email}:${code}`)
+/**
+ * The stored form of a six-digit code: an HMAC keyed with the server secret, so reading the kv
+ * table is not enough to try the million possible codes offline.
+ */
+const codeHashOf = async (
+  payload: Payload,
+  tenantID: number | string,
+  email: string,
+  code: string,
+): Promise<string> => {
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(payload.secret),
+    { hash: 'SHA-256', name: 'HMAC' },
+    false,
+    ['sign'],
+  )
+  const digest = await crypto.subtle.sign(
+    'HMAC',
+    key,
+    new TextEncoder().encode(`code:${tenantID}:${email}:${code}`),
+  )
+
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('')
+}
 
 /** A same-site path only: nothing that can send the visitor to another site after sign-in. */
 export const safeReturnPath = (value: unknown): null | string => {
@@ -246,7 +271,7 @@ const requestCode: Handler = async ({ options, req, tenant }) => {
 
   const record = {
     attempts: 0,
-    codeHash: await codeHashOf(tenant.id, email, code),
+    codeHash: await codeHashOf(req.payload, tenant.id, email, code),
     email,
     expiresAt: now + SIGN_IN_CODE_TTL_SECONDS * 1000,
     issuedAt: now,
@@ -399,7 +424,7 @@ const verifyCode: Handler = async ({ options, req, tenant }) => {
       throw invalidCode
     }
 
-    if (!sameText(record.codeHash, await codeHashOf(tenant.id, email!, code))) {
+    if (!sameText(record.codeHash, await codeHashOf(req.payload, tenant.id, email!, code))) {
       if (attempts >= SIGN_IN_MAX_ATTEMPTS) {
         await spend(req.payload, key, record)
       } else if (!atomic) {

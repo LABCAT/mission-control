@@ -434,6 +434,17 @@ describe('email sign-in (PJ-109)', () => {
       expect((await verify(tenantA, { code: lastCode(), email })).status).toBe(200)
     })
 
+    it('stores the code only as a keyed digest, not a plain hash of the code @S-196', async () => {
+      const email = await createUser({ tenant: tenantA })
+      await request(tenantA, email)
+
+      const stored = (await readRecord(tenantA, email))!
+      const plain = await sha256Hex(`code:${tenantA.id}:${email}:${lastCode()}`)
+
+      expect(stored.codeHash).not.toBe(plain)
+      expect((await verify(tenantA, { code: lastCode(), email })).status).toBe(200)
+    })
+
     it('keeps a return path only when it stays on the site', async () => {
       const email = await createUser({ tenant: tenantA })
 
