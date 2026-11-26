@@ -15,6 +15,7 @@ import { safeReturnPath } from '@mission-control/launchpad/sign-in'
 
 import SiteLayout from '../../../layouts/SiteLayout.astro'
 import { siteTenant } from '../../../brand'
+import { siteEnv, turnstileSiteKey } from '../../../env'
 
 export const prerender = false
 
@@ -29,7 +30,8 @@ const messages: Record<string, string> = {
   turnstile_failed: 'Complete the verification and try again.',
   unavailable: 'Sign-in is not available right now. Try again in a few minutes.',
 }
-const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY as string | undefined
+// A Worker binding, not a build-time variable: read it the way the apply page does.
+const siteKey = turnstileSiteKey(await siteEnv())
 ---
 
 <SiteLayout noindex path="/account/sign-in" title={`Sign in | ${siteTenant.name}`}>
