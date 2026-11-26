@@ -1,4 +1,4 @@
-import { payloadJobs } from '@mission-control/payload-jobs'
+import { anonymiseUser, payloadJobs } from '@mission-control/payload-jobs'
 import { MysqlReader, runImport, usersImporters } from '@mission-control/payload-wp-import'
 import { postgresAdapter } from '@payloadcms/db-postgres'
 import { multiTenantPlugin } from '@payloadcms/plugin-multi-tenant'
@@ -31,13 +31,14 @@ describe.skipIf(!databaseUrl)('legacy users import (PJ-62) @S-130', () => {
   let tenant: { id: number }
   const run = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
 
-  const importUsers = (dryRun: boolean) => {
+  const importUsers = (dryRun: boolean, refreshCredentials = false) => {
     const connection = createFixtureConnection(userTables)
     return runImport({
       dryRun,
       importers: Object.values(usersImporters({ now: () => NOW })),
       payload: payload as never,
       reader: new MysqlReader({ connect: async () => connection }),
+      refreshCredentials,
       tenant: tenant.id,
     })
   }
@@ -95,7 +96,7 @@ describe.skipIf(!databaseUrl)('legacy users import (PJ-62) @S-130', () => {
       // mission-control: the plugin refuses a real user delete (PJ-89); teardown bypasses it.
       context: { payloadJobsPurge: true },
       overrideAccess: true,
-      where: { email: { like: '@example.com' } },
+      where: { or: [{ email: { like: '@example.com' } }, { email: { like: '@removed.invalid' } }] },
     })
 
   afterAll(async () => {
@@ -170,5 +171,48 @@ describe.skipIf(!databaseUrl)('legacy users import (PJ-62) @S-130', () => {
     // Pat has signed in meanwhile: the re-run must not bring the WordPress hash back.
     expect((await userByLegacyId(2)).legacyPasswordHash).toBeNull()
     expect((await payload.count({ collection: 'users', overrideAccess: true })).totalDocs).toBe(8)
+  })
+
+  it('a sync refreshes the hash of an unclaimed user and never the claimed one @S-331', async () => {
+    const lisa = await userByLegacyId(3)
+    const fixtureHash = lisa.legacyPasswordHash as string
+    expect(fixtureHash).toMatch(/^\$P\$/)
+    await payload.db.updateOne({
+      collection: 'users',
+      data: { legacyPasswordHash: '$P$Bstale' },
+      where: { id: { equals: lisa.id } },
+    } as never)
+
+    const plain = await importUsers(false)
+    expect(plain.errors).toEqual([])
+    expect((await userByLegacyId(3)).legacyPasswordHash).toBe('$P$Bstale') // a normal re-run leaves it
+
+    const dry = await importUsers(true, true)
+    expect(dry.importers.users!.refreshed).toBe(1)
+    expect((await userByLegacyId(3)).legacyPasswordHash).toBe('$P$Bstale')
+
+    const sync = await importUsers(false, true)
+    expect(sync.errors).toEqual([])
+    expect(sync.importers.users!.refreshed).toBe(1)
+    expect((await userByLegacyId(3)).legacyPasswordHash).toBe(fixtureHash)
+    expect((await userByLegacyId(2)).legacyPasswordHash).toBeNull() // Pat signed in: stays consumed
+  })
+
+  it('a sync does not re-create a user whose personal data was removed, and keeps them out of this site only @S-331', async () => {
+    const lisa = await userByLegacyId(3)
+    const before = (await payload.count({ collection: 'users', overrideAccess: true })).totalDocs
+    await anonymiseUser({ actorID: lisa.id, payload, userID: lisa.id })
+
+    const sync = await importUsers(false, true)
+
+    expect(sync.errors).toEqual([])
+    expect(sync.importers.users).toMatchObject({ created: 0, failed: 0 })
+    expect(sync.importers.users!.skipReasons).toMatchObject({ anonymised: 1 })
+    expect((await payload.count({ collection: 'users', overrideAccess: true })).totalDocs).toBe(before)
+    const row = (await payload.findByID({ collection: 'users', id: lisa.id, depth: 0, overrideAccess: true, showHiddenFields: true })) as unknown as Record<string, any>
+    expect(row.legacyId).toBe(3)
+    expect(row.removedFromTenants).toBe(String(tenant.id))
+    expect(row.email).toMatch(/@removed\.invalid$/)
+    expect(row.firstName ?? null).toBeNull()
   })
 })

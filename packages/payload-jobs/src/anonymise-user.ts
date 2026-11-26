@@ -15,6 +15,7 @@ import {
 import { isSuperAdmin, getUserTenantIDsByRole, type MissionControlUser } from './access'
 import { hasAuditLog, writeAuditLog } from './audit-log'
 import { APPLICATION_FILES_SLUG, APPLICATIONS_SLUG } from './collections/applications'
+import { REMOVED_FROM_TENANTS_FIELD } from './legacy-password'
 
 /**
  * Personal data removal (PJ-89, S-311). There is no self-service account deletion in the MVP
@@ -285,8 +286,9 @@ const anonymiseInTransaction = async (
   const scrub: Record<string, unknown> = { email: removedUserEmail(user.id) }
   if (hasField('role')) scrub.role = 'user'
 
+  // `legacyId` stays: it is the tombstone that stops a later import from re-creating the person
+  // from the legacy site (it is an id, not personal data).
   const optional: Record<string, unknown> = {
-    legacyId: null,
     legacyPasswordHash: null,
     lockUntil: null,
     loginAttempts: 0,
@@ -296,6 +298,14 @@ const anonymiseInTransaction = async (
   }
   for (const [name, value] of Object.entries(optional)) {
     if (fieldNames.has(name)) scrub[name] = value
+  }
+  // Remember which sites the person belonged to, keeping what an earlier removal wrote (a second
+  // run sees an empty `tenants`).
+  if (hasField(REMOVED_FROM_TENANTS_FIELD)) {
+    const earlier = String((user as Record<string, unknown>)[REMOVED_FROM_TENANTS_FIELD] ?? '')
+      .split(',')
+      .filter(Boolean)
+    scrub[REMOVED_FROM_TENANTS_FIELD] = [...new Set([...earlier, ...tenantIDs.map(String)])].join(',')
   }
   for (const name of PROFILE_FIELDS) {
     if (fieldNames.has(name)) scrub[name] = null
