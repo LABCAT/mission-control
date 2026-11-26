@@ -82,10 +82,10 @@ export const canReadJobApplications = ({
 /* CSV                                                                         */
 /* -------------------------------------------------------------------------- */
 
-/** One cell. Quoted when needed; a leading `= + - @` is defused so a spreadsheet never runs an applicant's text. */
+/** One cell. Quoted when needed; a leading `= + - @`, even after whitespace, is defused so a spreadsheet never runs an applicant's text. */
 export const csvCell = (value: unknown): string => {
   let text = value === null || value === undefined ? '' : String(value)
-  if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`
+  if (/^[\s\p{Cc}]*[=+\-@]/u.test(text) || /^[\t\r]/.test(text)) text = `'${text}`
 
   return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
 }

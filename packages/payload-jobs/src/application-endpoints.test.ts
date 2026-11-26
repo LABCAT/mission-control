@@ -118,6 +118,10 @@ describe('CSV @S-052', () => {
     expect(csvCell('=1+1')).toBe("'=1+1")
     expect(csvCell('@SUM(A1)')).toBe("'@SUM(A1)")
     expect(csvCell('Ana, "A"')).toBe('"Ana, ""A"""')
+    expect(csvCell(' =1+1')).toBe("' =1+1")
+    expect(csvCell('\u00a0@SUM(A1)')).toBe("'\u00a0@SUM(A1)")
+    expect(csvCell('\n-2+3')).toBe('"\'\n-2+3"')
+    expect(csvCell('hello = world')).toBe('hello = world')
     expect(csvCell(null)).toBe('')
   })
 
