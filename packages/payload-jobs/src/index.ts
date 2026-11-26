@@ -33,6 +33,7 @@ import {
   refuseDeleteWhileInCreditLedger,
 } from './credits'
 import { emailLogCollection } from './email-engine/log'
+import { jobNotificationHook, orderNotificationHook, organisationNotificationHook, type NotificationHookOptions } from './email-engine/notifications'
 import { emailLogRetentionTask } from './email-engine/log-jobs'
 import { createEmailEventRegistry, type EmailTemplateEvent } from './email-engine/events'
 import type { EmailEngineConfig, RedirectConfig } from './email-engine/send'
@@ -825,12 +826,24 @@ const jobBoardPlugin =
       tenantScoped: tenancy === 'multi',
       usersSlug,
     })
+    // The job, order and organisation emails (PJ-51).
+    const notificationOptions: NotificationHookOptions = {
+      jobsSlug: slugs.jobs,
+      ordersSlug: slugs.orders,
+      organisationsSlug: slugs.organisations,
+      tenancy,
+      usersSlug,
+    }
     // Add-ons hear about jobs being published, expired or cancelled (PJ-115).
     const lifecycleJobs: CollectionConfig = {
       ...baseJobs,
       hooks: {
         ...baseJobs.hooks,
-        afterChange: [...(baseJobs.hooks?.afterChange ?? []), jobLifecycleHook(registry, slugs.jobs)],
+        afterChange: [
+          ...(baseJobs.hooks?.afterChange ?? []),
+          jobLifecycleHook(registry, slugs.jobs),
+          ...(options.email === false ? [] : [jobNotificationHook(notificationOptions)]),
+        ],
       },
       // The site manager's Approve action (PJ-32): POST /api/<jobs>/:id/approve.
       endpoints: [
@@ -866,6 +879,7 @@ const jobBoardPlugin =
         afterChange: [
           ...(baseOrders.hooks?.afterChange ?? []),
           orderEventHook(registry),
+          ...(options.email === false ? [] : [orderNotificationHook(notificationOptions)]),
           // Release the jobs an order pays for once it is invoiced or paid (PJ-32).
           releaseJobsOnSettle(slugs),
         ],
@@ -1003,11 +1017,21 @@ const jobBoardPlugin =
             ? withApplicationDeleteGuard(collection, 'organisation', 'organisation')
             : collection
           // The History tab's data (PJ-24): orders, credit movements and job events.
-          return features.credits
+          const withHistory = features.credits
             ? withCreditLedger(guarded, 'organisation', 'organisation', slugs.creditLedger, {
                 endpoints: [organisationHistoryEndpoint({ slugs, tenantScoped: tenancy === 'multi' })],
               })
             : guarded
+          // Page requested / approved emails (PJ-51).
+          return options.email === false
+            ? withHistory
+            : {
+                ...withHistory,
+                hooks: {
+                  ...withHistory.hooks,
+                  afterChange: [...(withHistory.hooks?.afterChange ?? []), organisationNotificationHook(notificationOptions)],
+                },
+              }
         }),
         ...taxonomies,
         plans,

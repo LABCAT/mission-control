@@ -4430,20 +4430,6 @@
           "notNull": false,
           "default": false
         },
-        "session_default_days": {
-          "name": "session_default_days",
-          "type": "numeric",
-          "primaryKey": false,
-          "notNull": false,
-          "default": 1
-        },
-        "session_keep_signed_in_days": {
-          "name": "session_keep_signed_in_days",
-          "type": "numeric",
-          "primaryKey": false,
-          "notNull": false,
-          "default": 30
-        },
         "pack_credits_usable_at": {
           "name": "pack_credits_usable_at",
           "type": "enum_tenants_pack_credits_usable_at",
@@ -26209,7 +26195,16 @@
       "schema": "public",
       "values": [
         "job-submitted",
+        "job-submitted-admin",
+        "job-edited-pending",
         "job-approved",
+        "job-expired",
+        "order-created",
+        "order-created-admin",
+        "order-paid",
+        "order-cancelled",
+        "organisation-page-requested",
+        "organisation-page-approved",
         "application-received",
         "application-copy",
         "application-admin-copy"
@@ -26295,6 +26290,6 @@
     "tables": {},
     "columns": {}
   },
-  "id": "ec6d6109-5df6-4c82-8423-a821bbd3efb6",
+  "id": "06326706-6dec-48e9-85e9-164c7ff6f3a2",
   "prevId": "00000000-0000-0000-0000-000000000000"
 }
