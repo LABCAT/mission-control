@@ -6,6 +6,8 @@
  * Wiring an event to the code that triggers it is PJ-51; this file is only the declaration.
  */
 
+import { NOTIFICATION_EVENTS } from './notification-events'
+
 export type EmailValue = boolean | null | number | string | undefined
 
 /** A value a template can place with a chip, e.g. "First name". */
@@ -47,38 +49,68 @@ export type EmailTemplateEvent = {
 
 const str = (value: unknown): string => (typeof value === 'string' ? value : '')
 
+/** The events payload-jobs ships: the job, order and organisation emails (PJ-51). */
+export const BUILT_IN_EMAIL_EVENTS: EmailTemplateEvent[] = NOTIFICATION_EVENTS
+
+const applicationVariables: EmailVariable[] = [
+  { key: 'applicantName', label: 'Applicant name', resolve: (doc) => str(doc.applicantName) },
+  { key: 'applicantEmail', label: 'Applicant email', resolve: (doc) => str(doc.applicantEmail) },
+  { key: 'applicantPhone', label: 'Applicant phone', resolve: (doc) => str(doc.applicantPhone) },
+  { key: 'message', label: 'Applicant message', resolve: (doc) => str(doc.message) },
+  { key: 'jobTitle', label: 'Job title', resolve: (doc) => str(doc.jobTitle) },
+  { key: 'organisationName', label: 'Organisation name', resolve: (doc) => str(doc.organisationName) },
+]
+
+const applicationLinkVariables: EmailVariable[] = [
+  { key: 'cvLink', label: 'CV download link', resolve: (doc) => str(doc.cvLink) },
+  { key: 'coverLetterLink', label: 'Cover letter download link', resolve: (doc) => str(doc.coverLetterLink) },
+  { key: 'linksExpireAt', label: 'Links expire at', resolve: (doc) => str(doc.linksExpireAt) },
+]
+
 /**
- * The events payload-jobs ships. PJ-51 adds the rest of the legacy set; the engine does not
- * care how many there are.
+ * Job applications (PJ-45). The recipient is chosen on the server and passed as `doc.to`; the
+ * engine's per-tenant switch decides whether each one goes. Only the employer's and the admin's
+ * emails carry signed file links: the applicant already has their files.
  */
-export const BUILT_IN_EMAIL_EVENTS: EmailTemplateEvent[] = [
+export const APPLICATION_EMAIL_EVENTS: EmailTemplateEvent[] = [
   {
-    slug: 'job-submitted',
+    slug: 'application-received',
     defaultBody: [
-      ['Hello ', { variable: 'firstName' }, ','],
-      ['Thanks for submitting ', { variable: 'jobTitle' }, '. We will review it shortly.'],
+      [{ variable: 'applicantName' }, ' applied for ', { variable: 'jobTitle' }, '.'],
+      ['Email: ', { variable: 'applicantEmail' }],
+      ['Phone: ', { variable: 'applicantPhone' }],
+      ['Message: ', { variable: 'message' }],
+      ['CV: ', { variable: 'cvLink' }],
+      ['Cover letter: ', { variable: 'coverLetterLink' }],
+      ['These links work until ', { variable: 'linksExpireAt' }, '.'],
     ],
-    defaultSubject: 'We received your job: {{jobTitle}}',
-    label: 'Job submitted',
-    recipient: (doc) => str(doc.employerEmail) || undefined,
-    variables: [
-      { key: 'firstName', label: 'First name', resolve: (doc) => str(doc.firstName) },
-      { key: 'jobTitle', label: 'Job title', resolve: (doc) => str(doc.title) },
-    ],
+    defaultSubject: 'New application: {{jobTitle}}',
+    label: 'Application received (to the employer)',
+    recipient: (doc) => str(doc.to) || undefined,
+    variables: [...applicationVariables, ...applicationLinkVariables],
   },
   {
-    slug: 'job-approved',
+    slug: 'application-copy',
     defaultBody: [
-      ['Hello ', { variable: 'firstName' }, ','],
-      [{ variable: 'jobTitle' }, ' is now live.'],
+      ['Thanks for applying for ', { variable: 'jobTitle' }, ' at ', { variable: 'organisationName' }, '.'],
+      ['Your message: ', { variable: 'message' }],
     ],
-    defaultSubject: 'Your job is live: {{jobTitle}}',
-    label: 'Job approved',
-    recipient: (doc) => str(doc.employerEmail) || undefined,
-    variables: [
-      { key: 'firstName', label: 'First name', resolve: (doc) => str(doc.firstName) },
-      { key: 'jobTitle', label: 'Job title', resolve: (doc) => str(doc.title) },
+    defaultSubject: 'Your application: {{jobTitle}}',
+    label: 'Application copy (to the applicant)',
+    recipient: (doc) => str(doc.to) || undefined,
+    variables: applicationVariables,
+  },
+  {
+    slug: 'application-admin-copy',
+    defaultBody: [
+      [{ variable: 'applicantName' }, ' applied for ', { variable: 'jobTitle' }, ' at ', { variable: 'organisationName' }, '.'],
+      ['Email: ', { variable: 'applicantEmail' }],
+      ['CV: ', { variable: 'cvLink' }],
     ],
+    defaultSubject: 'Application copy: {{jobTitle}}',
+    label: 'Application copy (to the site admin)',
+    recipient: (doc) => str(doc.to) || undefined,
+    variables: [...applicationVariables, ...applicationLinkVariables],
   },
 ]
 
@@ -89,7 +121,7 @@ export const createEmailEventRegistry = (
   hostEvents: readonly EmailTemplateEvent[] = [],
 ): EmailEventRegistry => {
   const registry = new Map<string, EmailTemplateEvent>()
-  for (const event of [...BUILT_IN_EMAIL_EVENTS, ...hostEvents]) registry.set(event.slug, event)
+  for (const event of [...BUILT_IN_EMAIL_EVENTS, ...APPLICATION_EMAIL_EVENTS, ...hostEvents]) registry.set(event.slug, event)
 
   return registry
 }

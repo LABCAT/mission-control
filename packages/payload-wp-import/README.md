@@ -257,3 +257,39 @@ it links `jobDescriptionPdf` to jobs that now exist.
 The legacy meta key names are in one place (`LEGACY_ORDER_META`, `PACK_META_PREFIX`) and follow AppThemes
 Payments and JobRoller. Confirm them with a dry run against the live copy: a row whose total or pack balance
 cannot be read is counted and named, never guessed.
+
+## Sync mode (PJ-121)
+
+`pnpm wp-import sync --tenant <slug> [--dry-run] [--refresh-credentials] [--apply-deletions]` runs
+every importer in dependency order and prints a summary, to keep a tenant current while the legacy
+site is live. A second run creates nothing: it updates or skips.
+
+- **Re-runs overwrite.** Fields an importer maps are rewritten on every run, so edits made to
+  imported documents in the new site are lost. Sync is for the pre-launch period only. Create-only
+  fields (written once, never refreshed): a user's `email`, `role`, `tenants`, organisation and
+  organisation role, verified flag and login attempts, and the legacy password hash (see below); a
+  coupon's use count; a job's featured `placements`. Ledger-style collections (`matchBy`) are
+  never updated.
+- **Removals are reported, never applied by default.** Imported documents (with a `legacyId`, in
+  the run's tenant) whose legacy row is gone or trashed are listed. With `--apply-deletions`, an
+  importer's `removal` policy runs (`jobs`: a published job becomes `expired`, which can be relisted when the job comes back on the legacy site; a cancelled job could not). Nothing is hard-deleted,
+  and orders, the credit ledger and users have no policy, so they are never touched. Nothing is
+  checked for an importer whose read was incomplete (no rows, a failed row, a skipped row without a
+  `legacyId`, an aborted read). A skipped row can return `{ skip, legacyId }` (its earlier import is
+  treated as removed) or `{ skip, legacyId, keep: true }` (data problem, the earlier import stays).
+- **`--refresh-credentials`** replaces a user's legacy password hash while the user has not signed
+  in (signing in clears it). It is never brought back afterwards, and an empty hash never blanks a
+  stored one.
+- **Removed users stay removed.** A person whose personal data was removed (PJ-89) keeps an
+  anonymised row with their legacy id and the ids of the sites they belonged to
+  (`removedFromTenants`). The users importer skips them for those sites (`anonymised`) and never
+  re-creates them while WordPress still has the account. Another site's user with the same
+  WordPress id is a different person and is imported. An anonymised row with this legacy
+  id but no site list fails closed: the user is skipped (`anonymised-unscoped`), never created or
+  refreshed, and counted in the summary. Rows anonymised before PJ-121 also lost their legacy id,
+  so they cannot be matched at all.
+- Credential refresh also skips a user who has their own Payload password (`hash`).
+- Removal updates carry the context `{ wpImportSync: true }`. Hooks may read it to tell an import action from a staff action; none does yet, so a removal still runs the job lifecycle hooks.
+- `--limit` is refused with `sync`. Logs carry collection, ids and the change only, no personal data.
+- **Not included yet:** media (`wp-import-media` needs the uploads directory) and role/organisation
+  change reporting for users.

@@ -20,9 +20,11 @@ export const createFakePayload = (seed: Record<string, Doc[]> = {}) => {
           : valuesAt(value[path[0]!], path.slice(1))
 
   const matches = (doc: Doc, where: any): boolean =>
-    ((where.and ?? [where]) as Record<string, { equals?: unknown; in?: unknown[] }>[]).every((clause) =>
+    ((where.and ?? [where]) as Record<string, { equals?: unknown; exists?: boolean; in?: unknown[] }>[]).every((clause) =>
       Object.entries(clause).every(([field, condition]) =>
-        'in' in condition
+        'exists' in condition
+          ? valuesAt(doc, field.split('.')).some((value) => value !== null && value !== undefined) === condition.exists
+          : 'in' in condition
           ? valuesAt(doc, field.split('.')).some((value) => condition.in!.includes(value))
           : valuesAt(doc, field.split('.')).includes(condition.equals),
       ),

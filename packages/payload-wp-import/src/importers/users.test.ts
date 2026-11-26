@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
+import { REMOVED_FROM_TENANTS_FIELD as REMOVED_FROM_TENANTS_FIELD_IN_JOBS } from '@mission-control/payload-jobs'
+
 import { MysqlReader } from '../mysql-reader'
 import { runImport } from '../run-import'
 import { createFakePayload } from '../test-utils'
@@ -14,6 +16,7 @@ import {
   normaliseOrganisationName,
   parseCapabilities,
   parseLastLogin,
+  REMOVED_FROM_TENANTS_FIELD,
   tenantRoleFor,
   usersImporters,
   type LegacyUserFacts,
@@ -182,13 +185,14 @@ describe('buildImportPlan @S-130', () => {
   })
 })
 
-const run = async (dryRun: boolean, payload = createFakePayload(), opts = {}) => {
+const run = async (dryRun: boolean, payload = createFakePayload(), opts = {}, refreshCredentials = false) => {
   const importers = usersImporters({ now: () => NOW, ...opts })
   const summary = await runImport({
     dryRun,
     importers: Object.values(importers),
     payload: payload.payload,
     reader: readerFor(),
+    refreshCredentials,
     tenant: 7,
   })
   return { ...payload, summary }
@@ -307,6 +311,73 @@ describe('the users and organisations importers @S-130', () => {
       legacyPasswordHash: null, // a consumed hash is not resurrected
       tenants: [{ role: 'tenant-admin', tenant: 7 }],
     })
+  })
+
+  it('a sync follows a changed WordPress password only while the hash is unclaimed @S-331', async () => {
+    const first = await run(false)
+    const pat = first.store.users!.find((doc) => doc.legacyId === 2)!
+    const lisa = first.store.users!.find((doc) => doc.legacyId === 3)!
+    pat.legacyPasswordHash = '$P$Bold' // not signed in yet; the WordPress password has changed since
+    lisa.legacyPasswordHash = null // signed in since: hash consumed
+
+    const plain = await run(false, first as never)
+    expect(pat.legacyPasswordHash).toBe('$P$Bold') // a normal re-run leaves credentials alone
+    expect(plain.summary.importers.users!.refreshed).toBeUndefined()
+
+    const sync = await run(false, first as never, {}, true)
+    expect(pat.legacyPasswordHash).toBe('$P$Bpat')
+    expect(lisa.legacyPasswordHash).toBeNull()
+    expect(sync.summary.importers.users!.refreshed).toBe(1)
+  })
+
+  const tombstone = (removedFromTenants: string | null) => ({
+    email: 'removed-user-1@removed.invalid',
+    firstName: null,
+    legacyId: 2,
+    legacyPasswordHash: null,
+    removedFromTenants,
+    tenants: [],
+  })
+
+  it('never re-creates a user whose personal data was removed from this site, even though WordPress still has them @S-331', async () => {
+    const first = await run(false)
+    const pat = first.store.users!.find((doc) => doc.legacyId === 2)!
+    // What the personal-data removal leaves: the row, anonymised, no tenant link, the legacy id and the sites it came from.
+    Object.assign(pat, tombstone('3,7'))
+
+    const second = await run(false, first as never, {}, true)
+
+    expect(first.store.users).toHaveLength(8)
+    expect(second.summary.importers.users).toMatchObject({ created: 0, failed: 0 })
+    expect(second.summary.importers.users!.skipReasons).toMatchObject({ anonymised: 1 })
+    expect(pat).toMatchObject({ email: 'removed-user-1@removed.invalid', firstName: null, tenants: [] })
+    expect(JSON.stringify(first.store.users)).not.toContain('pat@example.com')
+  })
+
+  it('does not let a user removed from another site block a different person with the same WordPress id @S-331', async () => {
+    const payload = createFakePayload({ users: [{ id: 1, ...tombstone('99') }] })
+
+    const { store, summary } = await run(false, payload)
+
+    expect(summary.importers.users!.created).toBe(8)
+    expect(summary.importers.users!.skipReasons).not.toHaveProperty('anonymised')
+    expect(store.users!.filter((doc) => doc.legacyId === 2)).toHaveLength(2)
+  })
+
+  it('fails closed on an anonymised row with no site list: it is never re-created or refreshed @S-331', async () => {
+    const payload = createFakePayload({ users: [{ id: 1, ...tombstone(null) }] })
+
+    const { store, summary } = await run(false, payload)
+
+    // Cannot tell which site it came from, so the person is skipped and reported, never created.
+    expect(summary.importers.users!.created).toBe(7)
+    expect(summary.importers.users!.skipReasons).toMatchObject({ 'anonymised-unscoped': 1 })
+    expect(store.users!.filter((doc) => doc.legacyId === 2)).toHaveLength(1)
+    expect(JSON.stringify(store.users)).not.toContain('pat@example.com')
+  })
+
+  it('reads the tombstone field the removal writes', () => {
+    expect(REMOVED_FROM_TENANTS_FIELD).toBe(REMOVED_FROM_TENANTS_FIELD_IN_JOBS)
   })
 
   it('keeps users of another tenant apart even when the legacy id is the same', async () => {

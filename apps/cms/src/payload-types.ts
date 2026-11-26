@@ -696,6 +696,7 @@ export interface User {
   lastName?: string | null;
   legacyPasswordHash?: string | null;
   legacyId?: number | null;
+  removedFromTenants?: string | null;
   /**
    * The organisation this employer belongs to.
    */
@@ -2230,7 +2231,23 @@ export interface EmailTemplate {
   /**
    * The email this text is for. The variables you can insert depend on it.
    */
-  event: 'job-submitted' | 'job-approved' | 'alert-confirm' | 'alert-manage-link';
+  event:
+    | 'job-submitted'
+    | 'job-submitted-admin'
+    | 'job-edited-pending'
+    | 'job-approved'
+    | 'job-expired'
+    | 'order-created'
+    | 'order-created-admin'
+    | 'order-paid'
+    | 'order-cancelled'
+    | 'organisation-page-requested'
+    | 'organisation-page-approved'
+    | 'application-received'
+    | 'application-copy'
+    | 'application-admin-copy'
+    | 'alert-confirm'
+    | 'alert-manage-link';
   /**
    * Untick to stop sending this email on this site. Skipped sends are logged.
    */
@@ -2902,6 +2919,7 @@ export interface UsersSelect<T extends boolean = true> {
   lastName?: T;
   legacyPasswordHash?: T;
   legacyId?: T;
+  removedFromTenants?: T;
   organisation?: T;
   organisationRole?: T;
   tenants?:
@@ -4372,6 +4390,7 @@ export interface TaskPurgeUnconfirmedAlerts {
   input?: unknown;
   output: {
     alertsDeleted?: number | null;
+    mailSlotsDeleted?: number | null;
   };
 }
 /**
@@ -4394,7 +4413,28 @@ export interface TaskXeroInvoiceSync {
 export interface Variable {
   id: string;
   blockType: 'variable';
-  key: 'firstName' | 'jobTitle' | 'siteName' | 'alertSummary' | 'frequency' | 'confirmUrl' | 'manageUrl';
+  key:
+    | 'firstName'
+    | 'jobTitle'
+    | 'organisationName'
+    | 'jobUrl'
+    | 'orderNumber'
+    | 'orderTotal'
+    | 'orderStatus'
+    | 'paymentMethod'
+    | 'pageUrl'
+    | 'applicantName'
+    | 'applicantEmail'
+    | 'applicantPhone'
+    | 'message'
+    | 'cvLink'
+    | 'coverLetterLink'
+    | 'linksExpireAt'
+    | 'siteName'
+    | 'alertSummary'
+    | 'frequency'
+    | 'confirmUrl'
+    | 'manageUrl';
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema

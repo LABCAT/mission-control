@@ -18,9 +18,11 @@ type Props = {
   /** Unique id; defaults to the action name, so set it when a page has two forms. */
   id?: string
   class?: string
+  /** What the visitor reads with JavaScript off; defaults to the shared wording. */
+  noscriptMessage?: string
 }
 
-const { siteKey, action, language, theme, id, class: className } = Astro.props as Props
+const { siteKey, action, language, theme, id, class: className, noscriptMessage } = Astro.props as Props
 
 const widgetId = id ?? `turnstile-${action ?? 'form'}`
 const options = turnstileWidgetOptions({ action, language, siteKey, theme })
@@ -36,7 +38,7 @@ const options = turnstileWidgetOptions({ action, language, siteKey, theme })
     data-turnstile-response
   />
   <noscript>
-    <p class="lp-turnstile__noscript">{TURNSTILE_NOSCRIPT_MESSAGE}</p>
+    <p class="lp-turnstile__noscript">{noscriptMessage ?? TURNSTILE_NOSCRIPT_MESSAGE}</p>
   </noscript>
   <p class="lp-turnstile__error" data-turnstile-error hidden>
     Verification failed. Please reload the page and try again.

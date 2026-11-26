@@ -3,7 +3,6 @@ import type { Endpoint, PayloadRequest } from 'payload'
 import {
   AccountAuthError,
   accountResponse,
-  createMemoryRateLimiter,
   DEFAULT_PAYLOAD_JOBS_SLUGS,
   enforceRateLimit,
   getTenantRole,
@@ -17,6 +16,7 @@ import {
 
 import { createAlertTemplateSender, type AlertEmailSender } from './email'
 import { normaliseSubscriberEmail } from './filters'
+import { ALERT_MAIL_LIMIT, ALERT_MAIL_WINDOW_MS, createKvRateLimiter } from './kv-rate-limit'
 import {
   assertAlertsEnabled,
   confirmAlert,
@@ -67,7 +67,7 @@ export type AlertEndpointsOptions = {
   alertsSlug?: string
   /** Extra domains refused on top of the built-in list of disposable providers. */
   blockedEmailDomains?: readonly string[]
-  /** Limits mail sent to one address (any IP). Defaults to 3 an hour in memory per isolate. */
+  /** Limits mail sent to one address (any IP). Defaults to 3 an hour, shared through the KV store. */
   emailRateLimiter?: LimiterOption
   paths?: AlertPaths
   /** Per visitor IP and address. Pass the Cloudflare Rate Limiting binding in production. */
@@ -105,8 +105,14 @@ const ERRORS = {
 
 const defaultSender = createAlertTemplateSender()
 
-const HOUR_MS = 60 * 60 * 1000
-const defaultEmailLimiter = createMemoryRateLimiter({ limit: 3, windowMs: HOUR_MS })
+/**
+ * At most 3 alert emails an hour to one address, counted in the shared KV store so every Worker
+ * agrees. The host can pass this as `emailRateLimiter`; it is also the default.
+ */
+export const alertMailRateLimiter = createKvRateLimiter({
+  limit: ALERT_MAIL_LIMIT,
+  windowMs: ALERT_MAIL_WINDOW_MS,
+})
 
 const limiterFor = (option: LimiterOption, req: PayloadRequest): RateLimiter | undefined =>
   typeof option === 'function' ? option(req) : option
@@ -201,7 +207,7 @@ const limitMail = async (
   })
 
   if (!email) return
-  const limiter = limiterFor(options.emailRateLimiter, req) ?? defaultEmailLimiter
+  const limiter = limiterFor(options.emailRateLimiter, req) ?? alertMailRateLimiter(req.payload)
   const { success } = await limiter.limit({ key: `alert-mail:${tenant.id}:${email}` })
   if (!success) throw new AccountAuthError(ERRORS.tooManyEmails, { 'retry-after': '3600' })
 }

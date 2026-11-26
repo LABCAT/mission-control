@@ -9,6 +9,7 @@ import type {
 } from 'payload'
 
 import { accountAuthEndpoints, type AccountAuthOptions } from './account-auth'
+import { applicationFileDownloadEndpoint, applyEndpoint, type ApplyOptions } from './apply'
 import {
   formEndpoints,
   purgeFormSubmissionsTask,
@@ -31,6 +32,7 @@ import {
   refuseDeleteWhileInCreditLedger,
 } from './credits'
 import { emailLogCollection } from './email-engine/log'
+import { jobNotificationHook, orderNotificationHook, organisationNotificationHook, type NotificationHookOptions } from './email-engine/notifications'
 import { emailLogRetentionTask } from './email-engine/log-jobs'
 import { createEmailEventRegistry, type EmailTemplateEvent } from './email-engine/events'
 import type { EmailEngineConfig, RedirectConfig } from './email-engine/send'
@@ -92,6 +94,7 @@ export * from './access'
 export * from './admin'
 export * from './account-auth'
 export * from './anonymise-user'
+export * from './apply'
 export * from './audit-log'
 export * from './checkout'
 export * from './contact-page'
@@ -306,6 +309,11 @@ export type PayloadJobsOptions = {
    * Cloudflare Rate Limiting binding so production limits per visitor, not per isolate.
    */
   jobViews?: JobViewOptions
+  /**
+   * The apply endpoint (PJ-45): Turnstile secret, rate limiter and the email seam. Only runs
+   * when applications are enabled.
+   */
+  apply?: Pick<ApplyOptions, 'fileLinkTtlSeconds' | 'rateLimiter' | 'sendEmail' | 'turnstile'>
   /** Slug of the auth collection that gets legacy WordPress password support. Defaults to `users`. */
   usersSlug?: string
   /**
@@ -813,12 +821,24 @@ const jobBoardPlugin =
       tenantScoped: tenancy === 'multi',
       usersSlug,
     })
+    // The job, order and organisation emails (PJ-51).
+    const notificationOptions: NotificationHookOptions = {
+      jobsSlug: slugs.jobs,
+      ordersSlug: slugs.orders,
+      organisationsSlug: slugs.organisations,
+      tenancy,
+      usersSlug,
+    }
     // Add-ons hear about jobs being published, expired or cancelled (PJ-115).
     const lifecycleJobs: CollectionConfig = {
       ...baseJobs,
       hooks: {
         ...baseJobs.hooks,
-        afterChange: [...(baseJobs.hooks?.afterChange ?? []), jobLifecycleHook(registry, slugs.jobs)],
+        afterChange: [
+          ...(baseJobs.hooks?.afterChange ?? []),
+          jobLifecycleHook(registry, slugs.jobs),
+          ...(options.email === false ? [] : [jobNotificationHook(notificationOptions)]),
+        ],
       },
       // The site manager's Approve action (PJ-32): POST /api/<jobs>/:id/approve.
       endpoints: [
@@ -840,6 +860,10 @@ const jobBoardPlugin =
       endpoints: [
         ...(Array.isArray(creditedJobs.endpoints) ? creditedJobs.endpoints : []),
         jobViewEndpoint({ rateLimiter: options.jobViews?.rateLimiter, slugs }),
+        // The apply form posts here (PJ-45): POST /api/<jobs>/:id/apply.
+        ...(features.applications
+          ? [applyEndpoint({ ...options.apply, slugs, tenantScoped: tenancy === 'multi', tenantsSlug, usersSlug })]
+          : []),
       ],
     }
     // Invoice-sync adapters hear about new orders and status changes (PJ-115, PJ-57).
@@ -850,6 +874,7 @@ const jobBoardPlugin =
         afterChange: [
           ...(baseOrders.hooks?.afterChange ?? []),
           orderEventHook(registry),
+          ...(options.email === false ? [] : [orderNotificationHook(notificationOptions)]),
           // Release the jobs an order pays for once it is invoiced or paid (PJ-32).
           releaseJobsOnSettle(slugs),
         ],
@@ -987,11 +1012,21 @@ const jobBoardPlugin =
             ? withApplicationDeleteGuard(collection, 'organisation', 'organisation')
             : collection
           // The History tab's data (PJ-24): orders, credit movements and job events.
-          return features.credits
+          const withHistory = features.credits
             ? withCreditLedger(guarded, 'organisation', 'organisation', slugs.creditLedger, {
                 endpoints: [organisationHistoryEndpoint({ slugs, tenantScoped: tenancy === 'multi' })],
               })
             : guarded
+          // Page requested / approved emails (PJ-51).
+          return options.email === false
+            ? withHistory
+            : {
+                ...withHistory,
+                hooks: {
+                  ...withHistory.hooks,
+                  afterChange: [...(withHistory.hooks?.afterChange ?? []), organisationNotificationHook(notificationOptions)],
+                },
+              }
         }),
         ...taxonomies,
         plans,
@@ -1000,11 +1035,15 @@ const jobBoardPlugin =
         ...coupons,
         ...(features.applications
           ? [
-              applicationFilesCollection({
-                applicantsSlug: usersSlug,
-                organisationsSlug: slugs.organisations,
-                tenantScoped: tenancy === 'multi',
-              }),
+              {
+                ...applicationFilesCollection({
+                  applicantsSlug: usersSlug,
+                  organisationsSlug: slugs.organisations,
+                  tenantScoped: tenancy === 'multi',
+                }),
+                // The signed link in the employer's email (PJ-45).
+                endpoints: [applicationFileDownloadEndpoint()],
+              },
               withApplicationDataAction(
                 applicationsCollection({
                   applicantsSlug: usersSlug,

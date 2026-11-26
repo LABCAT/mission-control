@@ -12,6 +12,7 @@ import { Tags } from './collections/Tags'
 // mission-control: job board plugins. Keep this block small so orbit merges stay clean.
 import { payloadJobs, type RateLimiter } from '@mission-control/payload-jobs'
 import {
+  alertMailRateLimiter,
   ALERT_EMAIL_TEMPLATE_EVENTS,
   ALERT_SUBSCRIPTIONS_SLUG,
   payloadJobsAlerts,
@@ -154,6 +155,14 @@ export default buildConfig({
       email: { events: ALERT_EMAIL_TEMPLATE_EVENTS },
       // mission-control: job page views (PJ-37) limit per visitor in Workers, per isolate in dev.
       jobViews: { rateLimiter: () => workerEnv?.JOB_VIEW_RATE_LIMIT },
+      // mission-control: the apply endpoint (PJ-45) verifies Turnstile with the same Worker secret
+      // and limits per IP and per email with the account limiter. Its three emails go through
+      // PJ-50's sendTemplate (the application-* events), so the per-tenant switches, the
+      // non-production redirect and the email log apply.
+      apply: {
+        rateLimiter: () => workerEnv?.ACCOUNT_RATE_LIMIT,
+        turnstile: { secret: () => workerEnv?.TURNSTILE_SECRET_KEY ?? process.env.TURNSTILE_SECRET_KEY },
+      },
       // mission-control: public form submissions (PJ-102). Turnstile is verified server-side;
       // the secret is a Worker secret, never a tenant field.
       forms: {
@@ -175,6 +184,8 @@ export default buildConfig({
     // emails go out through PJ-50's `sendTemplate`; their two events are declared in
     // `payloadJobs({ email: { events } })` above so site managers can edit them.
     payloadJobsAlerts({
+      // Per address: 3 alert emails an hour, counted in the KV store every Worker shares.
+      emailRateLimiter: (req) => alertMailRateLimiter(req.payload),
       rateLimiter: () => workerEnv?.ACCOUNT_RATE_LIMIT,
       slug: ALERT_SUBSCRIPTIONS_SLUG,
       turnstile: { secret: () => workerEnv?.TURNSTILE_SECRET_KEY ?? process.env.TURNSTILE_SECRET_KEY },

@@ -201,6 +201,20 @@ describe('alert endpoints @S-085 @S-086 @S-087 @S-372', () => {
     expect((await subscribe({}, { ip: '198.51.100.3', key: keyB, slug: harness.tenantB.slug })).status).toBe(200)
   })
 
+  it('limits one address across isolates through the shared store, not memory @S-372', async () => {
+    // A fresh memory limiter per request stands for another isolate; the KV store is shared.
+    options = { rateLimiter: createMemoryRateLimiter({ limit: 1000, windowMs: 60_000 }) }
+    const results = []
+    for (let index = 0; index < 5; index += 1) results.push((await subscribe({}, { ip: `198.51.100.${index}` })).status)
+
+    expect(results).toEqual([200, 200, 200, 429, 429])
+    expect(sent).toHaveLength(3)
+
+    // Other addresses are untouched, and so is the same address on another site.
+    expect((await subscribe({ email: 'al@example.com' })).status).toBe(200)
+    expect((await subscribe({}, { key: keyB, slug: harness.tenantB.slug })).status).toBe(200)
+  })
+
   it('does not rate limit the address when the request is refused for another reason', async () => {
     const limiter = createMemoryRateLimiter({ limit: 1, windowMs: 3_600_000 })
     options = { ...fresh(), emailRateLimiter: limiter }

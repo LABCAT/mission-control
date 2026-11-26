@@ -1,6 +1,7 @@
 import { MysqlReader } from './mysql-reader'
 import type {
   ImportContext,
+  ImportRemoval,
   ImportFailure,
   ImportPayload,
   ImporterResult,
@@ -11,7 +12,18 @@ import type {
 export type RunImportOptions = {
   dryRun?: boolean
   importers: Importer[]
+  /** One line per removal found or applied. Default: silent. */
+  log?: (line: string) => void
   payload: ImportPayload
+  /**
+   * Sync mode: report documents imported earlier whose legacy row is gone (importers with a
+   * `removal` policy only). Nothing is changed unless `applyRemovals` is also set.
+   */
+  syncRemovals?: boolean
+  /** With `syncRemovals`: apply each importer's removal policy (unpublish/archive, never delete). */
+  applyRemovals?: boolean
+  /** Apply `MappedDoc.refreshWhileSet` on re-runs. */
+  refreshCredentials?: boolean
   /** Defaults to a reader configured from `WP_IMPORT_MYSQL_URL`. */
   reader?: MysqlReader
   tenant: number | string
@@ -66,8 +78,10 @@ export const runImport = async (options: RunImportOptions): Promise<ImportSummar
   const { payload, tenant, tenantField = 'tenant' } = options
   const dryRun = options.dryRun ?? false
   const ordered = sortImporters(options.importers)
-  const ctx: ImportContext = { dryRun, payload, tenant }
+  const ctx: ImportContext = { dryRun, payload, refreshCredentials: options.refreshCredentials ?? false, tenant }
+  const log = options.log ?? (() => {})
   const summary: ImportSummary = {
+    removals: [],
     dryRun,
     errors: [],
     importers: {},
@@ -93,10 +107,14 @@ export const runImport = async (options: RunImportOptions): Promise<ImportSummar
       }
 
       try {
+        const seen = new Set<number>()
         for await (const row of importer.read(reader)) {
-          await importRow(importer, row, ctx, tenantField, result, summary.errors)
+          await importRow(importer, row, ctx, tenantField, result, summary.errors, seen)
         }
         if (importer.report) result.report = importer.report()
+        if (options.syncRemovals && importer.removal) {
+          await handleRemovals({ apply: options.applyRemovals ?? false, ctx, importer, log, result, seen, summary, tenantField })
+        }
       } catch (error) {
         result.aborted = `read failed: ${messageOf(error)}`
         summary.errors.push({ importer: importer.name, message: result.aborted })
@@ -107,6 +125,75 @@ export const runImport = async (options: RunImportOptions): Promise<ImportSummar
   }
 
   return summary
+}
+
+const removalRefusal = (importer: Importer, result: ImporterResult, seen: Set<number>): string | undefined => {
+  if (importer.findExisting) return 'the importer adopts existing documents, so it cannot tell which it created'
+  if (importer.matchBy) return 'the importer has no legacyId'
+  if (importer.tenantScope && importer.tenantScope.path !== 'tenant') return 'the importer does not scope by a plain tenant field'
+  if (result.failed > 0) return `${result.failed} row(s) failed, so the source list is incomplete`
+  if (result.skippedUnidentified) return `${result.skippedUnidentified} skipped row(s) gave no legacyId, so the source list is incomplete`
+  if (seen.size === 0) return 'the source returned no rows, so every document would look removed'
+  return undefined
+}
+
+/**
+ * Find documents of `importer` that were imported into the run's tenant but whose legacy row is
+ * gone, report them, and (with `apply`, outside a dry run) apply the importer's `removal` policy.
+ * Scope: the importer's collection, the run's tenant, documents with a `legacyId` (nothing made in
+ * the CMS). Never a hard delete. Refused unless the whole source was read cleanly.
+ */
+const handleRemovals = async (args: {
+  apply: boolean
+  ctx: ImportContext
+  importer: Importer
+  log: (line: string) => void
+  result: ImporterResult
+  seen: Set<number>
+  summary: ImportSummary
+  tenantField: string
+}): Promise<void> => {
+  const { apply, ctx, importer, log, result, seen, summary, tenantField } = args
+  const refusal = removalRefusal(importer, result, seen)
+  if (refusal) {
+    result.removalsRefused = refusal
+    log(`removals ${importer.name}: not checked, ${refusal}`)
+    return
+  }
+
+  const { collection } = importer
+  const found = await ctx.payload.find({
+    collection,
+    depth: 0,
+    overrideAccess: true,
+    pagination: false,
+    where: { and: [{ legacyId: { exists: true } }, { [tenantField]: { equals: ctx.tenant } }] },
+  })
+  for (const doc of found.docs) {
+    const legacyId = doc.legacyId
+    if (!Number.isInteger(legacyId) || seen.has(legacyId)) continue
+    // Belt and braces: the query is already scoped, but a change must never cross tenants.
+    const owner = doc[tenantField]
+    if (String(owner?.id ?? owner) !== String(ctx.tenant)) continue
+    const action = importer.removal!(doc)
+    if (!action) continue // already off the site
+
+    const removal: ImportRemoval = { action, applied: false, collection, id: doc.id, importer: importer.name, legacyId }
+    summary.removals.push(removal)
+    const label = `${collection} legacyId ${legacyId} (id ${doc.id}): ${JSON.stringify(action)}`
+    if (!apply || ctx.dryRun) {
+      log(`removed from legacy, ${apply ? 'would change' : 'no change made'}: ${label}`)
+      continue
+    }
+    try {
+      // The context lets hooks tell an import action from a staff action (no emails, no refunds).
+      await ctx.payload.update({ collection, context: { wpImportSync: true }, data: action, id: doc.id, overrideAccess: true })
+      removal.applied = true
+      log(`removed from legacy, changed: ${label}`)
+    } catch (error) {
+      summary.errors.push({ importer: importer.name, legacyId, message: `removal failed: ${messageOf(error)}` })
+    }
+  }
 }
 
 /** Field names under layout-only containers (tabs without a name, rows, collapsibles). */
@@ -140,6 +227,18 @@ export const wrapLocalizedFields = (
   return out
 }
 
+/** The `refreshWhileSet` fields that still hold a value on the document and now differ. */
+const refreshedFields = (found: Record<string, any>, wanted: Record<string, unknown> | undefined) =>
+  // A document with its own password hash has been claimed (signed in, or password set or reset,
+  // by any route): its legacy value never follows WordPress again.
+  found.hash
+    ? {}
+    : Object.fromEntries(
+        Object.entries(wanted ?? {}).filter(
+          ([field, value]) => value !== undefined && value !== null && value !== '' && found[field] && found[field] !== value,
+        ),
+      )
+
 const importRow = async (
   importer: Importer,
   row: unknown,
@@ -147,6 +246,7 @@ const importRow = async (
   tenantField: string,
   counts: ImporterResult,
   errors: ImportFailure[],
+  seen: Set<number>,
 ): Promise<void> => {
   let legacyId: number | undefined
   try {
@@ -156,11 +256,14 @@ const importRow = async (
       if (mapped) {
         const reasons = (counts.skipReasons ??= {})
         reasons[mapped.skip] = (reasons[mapped.skip] ?? 0) + 1
-      }
+        if (mapped.legacyId === undefined) counts.skippedUnidentified = (counts.skippedUnidentified ?? 0) + 1
+        else if (mapped.keep) seen.add(mapped.legacyId)
+      } else counts.skippedUnidentified = (counts.skippedUnidentified ?? 0) + 1
       return
     }
     legacyId = mapped.legacyId
     if (!Number.isInteger(legacyId)) throw new Error(`legacyId must be an integer, got ${legacyId}`)
+    seen.add(legacyId)
 
     const { collection } = importer
     const scope = importer.tenantScope ?? { path: tenantField, set: true }
@@ -175,6 +278,8 @@ const importRow = async (
       limit: 1,
       overrideAccess: true,
       pagination: false,
+      // Hidden fields (a user's password hash) are needed to decide on `refreshWhileSet`.
+      showHiddenFields: true,
       where: {
         and: [{ [matchField]: { equals: matchValue } }, { [scope.path]: { equals: ctx.tenant } }],
       },
@@ -193,11 +298,13 @@ const importRow = async (
       const reasons = (counts.skipReasons ??= {})
       reasons['already-imported'] = (reasons['already-imported'] ?? 0) + 1
     } else if (found) {
+      const refresh = ctx.refreshCredentials ? refreshedFields(found, mapped.refreshWhileSet) : {}
+      if (Object.keys(refresh).length) counts.refreshed = (counts.refreshed ?? 0) + 1
       if (!ctx.dryRun) {
         await ctx.payload.update({
           collection,
           ...(mapped.updateContext ? { context: mapped.updateContext } : {}),
-          data,
+          data: { ...data, ...refresh },
           id: found.id,
           overrideAccess: true,
         })
