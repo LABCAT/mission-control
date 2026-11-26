@@ -347,9 +347,13 @@ export const applicationsExportEndpoint = (options: ApplicationEndpointOptions =
 
       const link = linkWindow(options, APPLICATION_FILES_SLUG)
       const rows = await Promise.all(docs.map(async (doc) => csvRow(await shape(req, doc, link), link.expiresAt)))
-      const day = (iso: string) => iso.slice(0, 10)
+      // Name the file by the period asked for: `to` as the manager typed it, not the exclusive bound.
+      const label = (value: null | string, fallback: string) => (value && DATE_ONLY.test(value) ? value : fallback.slice(0, 10))
 
-      return csvResponse(applicationsToCSV(rows), `applications-${day(range.from)}-to-${day(range.to)}.csv`)
+      return csvResponse(
+        applicationsToCSV(rows),
+        `applications-${label(params.get('from'), range.from)}-to-${label(params.get('to'), range.to)}.csv`,
+      )
     },
     method: 'get',
     path: APPLICATIONS_EXPORT_PATH,

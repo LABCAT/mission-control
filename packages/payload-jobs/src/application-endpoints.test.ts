@@ -168,6 +168,7 @@ describe('site-manager export @S-385', () => {
     const response = await applicationsExportEndpoint().handler(req as never)
 
     expect(response.status).toBe(200)
+    expect(response.headers.get('content-disposition')).toContain('applications-2026-11-01-to-2026-11-30.csv')
     expect(await response.text()).toContain('ana@example.com')
     expect(find.mock.calls[0]![0].where).toEqual({
       and: [{ createdAt: { greater_than_equal: '2026-11-01T00:00:00.000Z' } }, { createdAt: { less_than: '2026-12-01T00:00:00.000Z' } }],
