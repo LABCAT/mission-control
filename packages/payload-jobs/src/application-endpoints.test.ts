@@ -156,6 +156,10 @@ describe('site-manager export @S-385', () => {
     expect(parseExportRange('2026-11-01', '2026-11-02')).toEqual({ from: '2026-11-01T00:00:00.000Z', to: '2026-11-03T00:00:00.000Z' })
     expect(parseExportRange(null, '2026-11-02')).toHaveProperty('error')
     expect(parseExportRange('nope', '2026-11-02')).toHaveProperty('error')
+    expect(parseExportRange('2026-02-31', '2026-03-05')).toHaveProperty('error')
+    expect(parseExportRange('2026-03-01', '2026-04-31')).toHaveProperty('error')
+    expect(parseExportRange('2026-13-01', '2026-12-05')).toHaveProperty('error')
+    expect(parseExportRange('2028-02-29', '2028-03-01')).not.toHaveProperty('error')
     expect(parseExportRange('2026-11-05', '2026-11-01')).toHaveProperty('error')
   })
 

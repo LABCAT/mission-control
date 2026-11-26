@@ -297,8 +297,15 @@ export const parseExportRange = (
 ): { error: string } | { from: string; to: string } => {
   if (!from || !to) return { error: 'from and to are required (YYYY-MM-DD)' }
 
-  const start = new Date(DATE_ONLY.test(from) ? `${from}T00:00:00.000Z` : from)
-  const end = new Date(DATE_ONLY.test(to) ? `${to}T00:00:00.000Z` : to)
+  // A date-only value must be a real calendar day: `2026-02-31` is rejected, not rolled into March.
+  const parse = (value: string): Date => {
+    if (!DATE_ONLY.test(value)) return new Date(value)
+    const date = new Date(`${value}T00:00:00.000Z`)
+
+    return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value ? date : new Date(Number.NaN)
+  }
+  const start = parse(from)
+  const end = parse(to)
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return { error: 'from and to must be dates' }
 
   const endExclusive = DATE_ONLY.test(to) ? new Date(end.getTime() + 24 * 60 * 60 * 1000) : end
