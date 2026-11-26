@@ -1,6 +1,6 @@
 import type { CollectionConfig, CollectionSlug, Field } from 'payload'
 
-import { authenticatedAccess, isSeekerOnly } from '../access'
+import { authenticatedAccess, isSeekerOnly, tenantContentWriteAccess } from '../access'
 import { deliverabilityStats } from './deliverability'
 import { mergeCollectionAccess, type CollectionAccess } from '../slugs'
 
@@ -66,7 +66,7 @@ export const emailLogCollection = ({
   endpoints: [
     {
       handler: async (req) => {
-        if (!req.user || isSeekerOnly(req.user as never)) return Response.json({ error: 'Forbidden' }, { status: 403 })
+        if (!tenantContentWriteAccess({ req } as never)) return Response.json({ error: 'Forbidden' }, { status: 403 })
         const days = Math.min(Math.max(Number(req.searchParams.get('days')) || 30, 1), 365)
 
         return Response.json(await deliverabilityStats({ days, logSlug: slug, payload: req.payload, req, tenantID: null }))
