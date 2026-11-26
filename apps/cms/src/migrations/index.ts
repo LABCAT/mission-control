@@ -38,6 +38,7 @@ import * as migration_20261124_235856_email_core from './20261124_235856_email_c
 import * as migration_20261125_190333_geo_structured_data from './20261125_190333_geo_structured_data';
 import * as migration_20261125_192747_apply_form from './20261125_192747_apply_form';
 import * as migration_20261125_195741_import_sync from './20261125_195741_import_sync';
+import * as migration_20261126_052940_job_order_emails from './20261126_052940_job_order_emails';
 
 export const migrations = [
   {
@@ -238,6 +239,11 @@ export const migrations = [
   {
     up: migration_20261125_195741_import_sync.up,
     down: migration_20261125_195741_import_sync.down,
-    name: '20261125_195741_import_sync'
+    name: '20261125_195741_import_sync',
+  },
+  {
+    up: migration_20261126_052940_job_order_emails.up,
+    down: migration_20261126_052940_job_order_emails.down,
+    name: '20261126_052940_job_order_emails'
   },
 ];
